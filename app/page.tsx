@@ -3,49 +3,91 @@
 import { useState } from "react";
 
 export default function Home() {
-  const [jd, setJd] = useState<File | null>(null);
-  const [cv, setCv] = useState<File | null>(null);
+  const [jdFile, setJdFile] = useState<File | null>(null);
+  const [cvFile, setCvFile] = useState<File | null>(null);
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async () => {
-    if (!jd || !cv) return alert("Upload files");
-
-    const formData = new FormData();
-    formData.append("jd", jd);
-    formData.append("cv", cv);
+  const handleAnalyze = async () => {
+    if (!jdFile || !cvFile) {
+      alert("Please upload both JD and CV");
+      return;
+    }
 
     setLoading(true);
+    setResult("");
 
-    const res = await fetch("/api/analyze", {
-      method: "POST",
-      body: formData,
-    });
+    try {
+      const formData = new FormData();
+      formData.append("jd", jdFile);
+      formData.append("cv", cvFile);
 
-    const data = await res.json();
-    setResult(data.result || "Error");
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || "Analyze failed");
+        setLoading(false);
+        return;
+      }
+
+      setResult(data.result);
+    } catch (err) {
+      alert("Something went wrong");
+    }
+
     setLoading(false);
   };
 
   return (
-    <main className="p-10 max-w-xl mx-auto">
+    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6">
       <h1 className="text-3xl font-bold mb-6">🤖 AI Recruiter</h1>
 
-      <input type="file" onChange={(e) => setJd(e.target.files?.[0] || null)} />
-      <br /><br />
-      <input type="file" onChange={(e) => setCv(e.target.files?.[0] || null)} />
-      <br /><br />
+      <div className="space-y-4 w-full max-w-md">
+        {/* JD Upload */}
+        <div>
+          <label className="block mb-1">Job Description (PDF)</label>
+          <input
+            type="file"
+            accept="application/pdf"
+            onChange={(e) => setJdFile(e.target.files?.[0] || null)}
+            className="w-full"
+          />
+          {jdFile && <p className="text-sm mt-1">{jdFile.name}</p>}
+        </div>
 
-      <button
-        onClick={handleSubmit}
-        className="bg-blue-500 text-white px-4 py-2 rounded"
-      >
-        {loading ? "Analyzing..." : "Analyze"}
-      </button>
+        {/* CV Upload */}
+        <div>
+          <label className="block mb-1">CV (PDF)</label>
+          <input
+            type="file"
+            accept="application/pdf"
+            onChange={(e) => setCvFile(e.target.files?.[0] || null)}
+            className="w-full"
+          />
+          {cvFile && <p className="text-sm mt-1">{cvFile.name}</p>}
+        </div>
 
-      <pre className="mt-6 bg-gray-100 p-4 whitespace-pre-wrap">
-        {result}
-      </pre>
-    </main>
+        {/* Button */}
+        <button
+          onClick={handleAnalyze}
+          disabled={loading}
+          className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded"
+        >
+          {loading ? "Analyzing..." : "Analyze"}
+        </button>
+
+        {/* Result */}
+        {result && (
+          <div className="mt-4 p-4 bg-white text-black rounded whitespace-pre-wrap">
+            {result}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
