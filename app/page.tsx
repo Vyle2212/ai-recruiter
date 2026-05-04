@@ -3,25 +3,25 @@
 import { useState } from "react";
 
 export default function Home() {
-  const [jdFile, setJdFile] = useState<File | null>(null);
-  const [cvFile, setCvFile] = useState<File | null>(null);
+  const [file1, setFile1] = useState<File | null>(null);
+  const [file2, setFile2] = useState<File | null>(null);
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleAnalyze = async () => {
-    if (!jdFile || !cvFile) {
-      alert("Please upload both JD and CV");
+  const handleSubmit = async () => {
+    if (!file1 || !file2) {
+      alert("Upload both files");
       return;
     }
 
     setLoading(true);
     setResult("");
 
-    try {
-      const formData = new FormData();
-      formData.append("jd", jdFile);
-      formData.append("cv", cvFile);
+    const formData = new FormData();
+    formData.append("file1", file1);
+    formData.append("file2", file2);
 
+    try {
       const res = await fetch("/api/analyze", {
         method: "POST",
         body: formData,
@@ -29,65 +29,49 @@ export default function Home() {
 
       const data = await res.json();
 
-      if (!res.ok) {
-        alert(data.error || "Analyze failed");
-        setLoading(false);
-        return;
+      if (data.error) {
+        setResult("❌ " + data.error);
+      } else {
+        setResult(data.result);
       }
-
-      setResult(data.result);
     } catch (err) {
-      alert("Something went wrong");
+      setResult("❌ Failed to analyze");
     }
 
     setLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6">
-      <h1 className="text-3xl font-bold mb-6">🤖 AI Recruiter</h1>
+    <div style={{ padding: 40, color: "white", background: "black", minHeight: "100vh" }}>
+      <h1>🤖 AI Recruiter</h1>
 
-      <div className="space-y-4 w-full max-w-md">
-        {/* JD Upload */}
-        <div>
-          <label className="block mb-1">Job Description (PDF)</label>
-          <input
-            type="file"
-            accept="application/pdf"
-            onChange={(e) => setJdFile(e.target.files?.[0] || null)}
-            className="w-full"
-          />
-          {jdFile && <p className="text-sm mt-1">{jdFile.name}</p>}
-        </div>
-
-        {/* CV Upload */}
-        <div>
-          <label className="block mb-1">CV (PDF)</label>
-          <input
-            type="file"
-            accept="application/pdf"
-            onChange={(e) => setCvFile(e.target.files?.[0] || null)}
-            className="w-full"
-          />
-          {cvFile && <p className="text-sm mt-1">{cvFile.name}</p>}
-        </div>
-
-        {/* Button */}
-        <button
-          onClick={handleAnalyze}
-          disabled={loading}
-          className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded"
-        >
-          {loading ? "Analyzing..." : "Analyze"}
-        </button>
-
-        {/* Result */}
-        {result && (
-          <div className="mt-4 p-4 bg-white text-black rounded whitespace-pre-wrap">
-            {result}
-          </div>
-        )}
+      <div>
+        <input type="file" onChange={(e) => setFile1(e.target.files?.[0] || null)} />
       </div>
+
+      <div style={{ marginTop: 10 }}>
+        <input type="file" onChange={(e) => setFile2(e.target.files?.[0] || null)} />
+      </div>
+
+      <button
+        onClick={handleSubmit}
+        disabled={loading}
+        style={{ marginTop: 20, padding: "10px 20px" }}
+      >
+        {loading ? "Analyzing..." : "Analyze"}
+      </button>
+
+      <pre
+        style={{
+          marginTop: 30,
+          background: "#eee",
+          color: "black",
+          padding: 20,
+          whiteSpace: "pre-wrap",
+        }}
+      >
+        {result}
+      </pre>
     </div>
   );
 }

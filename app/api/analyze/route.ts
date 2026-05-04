@@ -1,84 +1,66 @@
 import OpenAI from "openai";
-import pdf from "pdf-parse";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-function truncate(text: string, max = 12000) {
-  return text?.slice(0, max) || "";
-}
-
-async function readPDF(file: File) {
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const data = await pdf(buffer);
-  return data.text;
-}
+export const runtime = "nodejs"; // bắt buộc cho pdf-parse
 
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
+    const file1 = formData.get("file1") as File;
+    const file2 = formData.get("file2") as File;
 
-    const jdFile = formData.get("jd") as File;
-    const cvFile = formData.get("cv") as File;
-
-    if (!jdFile || !cvFile) {
+    if (!file1 || !file2) {
       return Response.json({ error: "Missing files" }, { status: 400 });
     }
 
-    // 👉 đọc PDF
-    const jdText = await readPDF(jdFile);
-    const cvText = await readPDF(cvFile);
+    const buffer1 = Buffer.from(await file1.arrayBuffer());
+    const buffer2 = Buffer.from(await file2.arrayBuffer());
 
-    // 👉 check PDF scan (không đọc được)
-    if (!jdText || jdText.length < 50) {
-      return Response.json(
-        { error: "JD PDF không đọc được (có thể là scan)" },
-        { status: 400 }
-      );
-    }
+    // ✅ FIX pdf-parse (dynamic import)
+    const pdfParse = (await import("pdf-parse")).default;
 
-    if (!cvText || cvText.length < 50) {
-      return Response.json(
-        { error: "CV PDF không đọc được (có thể là scan)" },
-        { status: 400 }
-      );
-    }
+    const data1 = await pdfParse(buffer1);
+    const data2 = await pdfParse(buffer2);
 
-    // 👉 tránh token quá lớn
-    const safeJD = truncate(jdText);
-    const safeCV = truncate(cvText);
+    const text1 = data1.text.slice(0, 8000);
+    const text2 = data2.text.slice(0, 8000);
+
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY!,
+    });
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4.1-mini",
       messages: [
+        {
+          role: "system",
+          content: "You are a recruitment AI that compares CV and JD",
+        },
         {
           role: "user",
           content: `
-Compare this CV with Job Description.
-
-Return:
-- Match score (%)
-- Key strengths
-- Missing skills
-
-JD:
-${safeJD}
+Compare these two documents:
 
 CV:
-${safeCV}
+${text1}
+
+JOB DESCRIPTION:
+${text2}
+
+Return:
+- Match score %
+- Strengths
+- Missing skills
+- Final recommendation
           `,
         },
       ],
     });
 
     return Response.json({
-      result: response.choices[0]?.message?.content || "No result",
+      result: response.choices[0].message.content,
     });
-
   } catch (err: any) {
-    console.error("API ERROR:", err);
-
+    console.error(err);
     return Response.json(
       { error: err.message || "Server error" },
       { status: 500 }
