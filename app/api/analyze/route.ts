@@ -1,45 +1,65 @@
 import OpenAI from "openai";
 
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+function truncate(text: string, max = 12000) {
+  return text?.slice(0, max) || "";
+}
+
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
-    const jd = formData.get("jd") as File;
-    const cv = formData.get("cv") as File;
 
-    if (!jd || !cv) {
+    const jdFile = formData.get("jd") as File;
+    const cvFile = formData.get("cv") as File;
+
+    if (!jdFile || !cvFile) {
       return Response.json({ error: "Missing files" }, { status: 400 });
     }
 
-    const jdText = await jd.text();
-    const cvText = await cv.text();
+    // 👉 đọc file (tạm thời chỉ đọc text đơn giản)
+    const jdText = await jdFile.text();
+    const cvText = await cvFile.text();
 
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY!,
-    });
+    const safeJD = truncate(jdText);
+    const safeCV = truncate(cvText);
 
-    const prompt = `
-Compare this CV with job description.
-Return JSON with:
-- score (0-100)
-- strengths
-- gaps
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: `
+Compare this CV with JD.
 
 JD:
-${jdText}
+${safeJD}
 
 CV:
-${cvText}
-`;
+${safeCV}
 
-    const res = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }],
+Give:
+- Match score (%)
+- Key strengths
+- Missing skills
+          `,
+        },
+      ],
     });
 
     return Response.json({
-      result: res.choices[0].message.content,
+      result: response.choices[0]?.message?.content || "No result",
     });
-  } catch (e) {
-    return Response.json({ error: "Analyze failed" }, { status: 500 });
+  } catch (err: any) {
+    console.error("API ERROR:", err);
+
+    return Response.json(
+      {
+        error: err.message || "Server error",
+      },
+      { status: 500 }
+    );
   }
 }
