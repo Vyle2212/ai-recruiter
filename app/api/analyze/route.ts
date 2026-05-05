@@ -1,69 +1,104 @@
 import OpenAI from "openai";
+import { extractPDF } from "@/lib/pdf";
+import { extractTextFromPDF } from "@/lib/ocr";
 
-export const runtime = "nodejs"; // bắt buộc cho pdf-parse
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 export async function POST(req: Request) {
-  try {
-    const formData = await req.formData();
-    const file1 = formData.get("file1") as File;
-    const file2 = formData.get("file2") as File;
+  const formData = await req.formData();
 
-    if (!file1 || !file2) {
-      return Response.json({ error: "Missing files" }, { status: 400 });
+  const jdFile = formData.get("jd") as File;
+  const cvs = formData.getAll("cvs") as File[];
+
+  if (!jdFile || cvs.length === 0) {
+    return Response.json({ error: "Missing files" }, { status: 400 });
+  }
+
+  // 👉 JD
+  const jdBuffer = Buffer.from(await jdFile.arrayBuffer());
+  let jdText = await extractPDF(jdBuffer);
+
+  if (!jdText || jdText.length < 50) {
+    jdText = await extractTextFromPDF(jdBuffer);
+  }
+
+  if (!jdText) {
+    return Response.json({ error: "JD unreadable" }, { status: 400 });
+  }
+
+  const results = [];
+
+  for (const cv of cvs) {
+    const buffer = Buffer.from(await cv.arrayBuffer());
+
+    // 🔥 HYBRID LOGIC
+    let cvText = await extractPDF(buffer);
+
+    if (!cvText || cvText.length < 50) {
+      cvText = await extractTextFromPDF(buffer);
     }
 
-    const buffer1 = Buffer.from(await file1.arrayBuffer());
-    const buffer2 = Buffer.from(await file2.arrayBuffer());
-
-    // ✅ FIX pdf-parse (dynamic import)
-    const pdfParse = (await import("pdf-parse")).default;
-
-    const data1 = await pdfParse(buffer1);
-    const data2 = await pdfParse(buffer2);
-
-    const text1 = data1.text.slice(0, 8000);
-    const text2 = data2.text.slice(0, 8000);
-
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY!,
-    });
+    if (!cvText) {
+      results.push({
+        name: cv.name,
+        score: 0,
+        strengths: [],
+        gaps: ["Cannot read CV"],
+      });
+      continue;
+    }
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4.1-mini",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: "You are a recruitment AI that compares CV and JD",
+          content: `
+You are a strict recruiter.
+
+Return ONLY JSON:
+{
+  "score": number (0-100),
+  "strengths": string[],
+  "gaps": string[]
+}
+          `,
         },
         {
           role: "user",
           content: `
-Compare these two documents:
-
-CV:
-${text1}
-
 JOB DESCRIPTION:
-${text2}
+${jdText}
 
-Return:
-- Match score %
-- Strengths
-- Missing skills
-- Final recommendation
+CANDIDATE CV:
+${cvText}
           `,
         },
       ],
     });
 
-    return Response.json({
-      result: response.choices[0].message.content,
+    let parsed;
+
+    try {
+      parsed = JSON.parse(response.choices[0].message.content || "{}");
+    } catch {
+      parsed = {
+        score: 0,
+        strengths: [],
+        gaps: ["Parsing error"],
+      };
+    }
+
+    results.push({
+      name: cv.name,
+      ...parsed,
     });
-  } catch (err: any) {
-    console.error(err);
-    return Response.json(
-      { error: err.message || "Server error" },
-      { status: 500 }
-    );
   }
+
+  // 🔥 SORT
+  results.sort((a, b) => b.score - a.score);
+
+  return Response.json({ results });
 }

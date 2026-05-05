@@ -3,75 +3,46 @@
 import { useState } from "react";
 
 export default function Home() {
-  const [file1, setFile1] = useState<File | null>(null);
-  const [file2, setFile2] = useState<File | null>(null);
-  const [result, setResult] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [jd, setJd] = useState<File | null>(null);
+  const [cvs, setCvs] = useState<File[]>([]);
+  const [results, setResults] = useState<any[]>([]);
 
   const handleSubmit = async () => {
-    if (!file1 || !file2) {
-      alert("Upload both files");
-      return;
-    }
-
-    setLoading(true);
-    setResult("");
-
     const formData = new FormData();
-    formData.append("file1", file1);
-    formData.append("file2", file2);
 
-    try {
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        body: formData,
-      });
+    if (jd) formData.append("jd", jd);
+    cvs.forEach((cv) => formData.append("cvs", cv));
 
-      const data = await res.json();
+    const res = await fetch("/api/analyze", {
+      method: "POST",
+      body: formData,
+    });
 
-      if (data.error) {
-        setResult("❌ " + data.error);
-      } else {
-        setResult(data.result);
-      }
-    } catch (err) {
-      setResult("❌ Failed to analyze");
-    }
-
-    setLoading(false);
+    const data = await res.json();
+    setResults(data.results);
   };
 
   return (
-    <div style={{ padding: 40, color: "white", background: "black", minHeight: "100vh" }}>
-      <h1>🤖 AI Recruiter</h1>
+    <div className="p-10 text-white bg-black min-h-screen">
+      <h1 className="text-3xl mb-4">🚀 AI Recruiter Pro</h1>
 
-      <div>
-        <input type="file" onChange={(e) => setFile1(e.target.files?.[0] || null)} />
-      </div>
+      <input type="file" onChange={(e) => setJd(e.target.files?.[0] || null)} />
+      <input type="file" multiple onChange={(e) => setCvs(Array.from(e.target.files || []))} />
 
-      <div style={{ marginTop: 10 }}>
-        <input type="file" onChange={(e) => setFile2(e.target.files?.[0] || null)} />
-      </div>
-
-      <button
-        onClick={handleSubmit}
-        disabled={loading}
-        style={{ marginTop: 20, padding: "10px 20px" }}
-      >
-        {loading ? "Analyzing..." : "Analyze"}
+      <button onClick={handleSubmit} className="bg-blue-500 px-4 py-2 mt-4">
+        Analyze
       </button>
 
-      <pre
-        style={{
-          marginTop: 30,
-          background: "#eee",
-          color: "black",
-          padding: 20,
-          whiteSpace: "pre-wrap",
-        }}
-      >
-        {result}
-      </pre>
+      <div className="mt-6">
+        {results.map((r, i) => (
+          <div key={i} className="border p-4 mb-2">
+            <h2>{r.name}</h2>
+            <p>Score: {r.score}</p>
+            <p>Strengths: {r.strengths?.join(", ")}</p>
+            <p>Gaps: {r.gaps?.join(", ")}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

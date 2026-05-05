@@ -44,3 +44,7 @@ next-env.d.ts
 lib/firebase.json
 node_modules
 .next
+
+*.json
+.env
+.env.local
