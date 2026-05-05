@@ -3,7 +3,6 @@ import pdf from "pdf-parse";
 export async function extractPDF(buffer: Buffer): Promise<string> {
   try {
     const data = await pdf(buffer);
-
     const text = data.text?.trim() || "";
 
     console.log("✅ PDF parsed, length:", text.length);
