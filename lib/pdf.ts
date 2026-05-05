@@ -1,15 +1,16 @@
 import pdf from "pdf-parse";
 
-export async function extractPDF(buffer: Buffer) {
+export async function extractPDF(buffer: Buffer): Promise<string> {
   try {
     const data = await pdf(buffer);
 
-    if (data.text && data.text.length > 50) {
-      return data.text;
-    }
+    const text = data.text?.trim() || "";
 
-    return null;
-  } catch {
-    return null;
+    console.log("✅ PDF parsed, length:", text.length);
+
+    return text;
+  } catch (error) {
+    console.error("❌ PDF parse error:", error);
+    return "";
   }
 }
