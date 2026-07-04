@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { buildCanonicalCandidateProfile } from "@/lib/canonicalCandidateProfile";
+import { buildCandidateValidationState } from "@/lib/candidateValidation";
 import { COMPANY_TAXONOMY, COMPANY_TAXONOMY_SUGGESTIONS, SAP_TALENT_SKILL_GROUPS, SAP_SKILL_TAXONOMY, getSapSkillDisplayLabel } from "@/lib/sapTalentTaxonomy";
 
 type AnyRecord = Record<string, any>;
@@ -11,6 +12,17 @@ function canonicalCandidateName(candidate: Candidate | AnyRecord | undefined) {
   if (!candidate) return "Candidate profile pending validation";
   const profile = buildCanonicalCandidateProfile(candidate as AnyRecord);
   return profile.displayName || "Candidate profile pending validation";
+}
+
+function candidateValidationBadge(candidate: Candidate | AnyRecord | undefined) {
+  const state = buildCandidateValidationState((candidate || {}) as AnyRecord);
+  const label = state.status === "Duplicate Suspected" ? "Duplicate" : state.status;
+  const tone = state.status === "Ready"
+    ? "border-emerald-500/35 bg-emerald-950/20 text-emerald-100"
+    : state.status === "Hidden" || state.status === "Archived" || state.status === "Duplicate Suspected"
+      ? "border-red-500/35 bg-red-950/20 text-red-100"
+      : "border-amber-500/35 bg-amber-950/20 text-amber-100";
+  return { label, tone };
 }
 
 type Candidate = {
@@ -2584,6 +2596,7 @@ export default function TalentPoolSearchPage() {
           ].filter(([, value]) => Number(value) > 0);
           const reviewFlag = index < 3;
           const displayName = canonicalCandidateName(candidate);
+          const validationBadge = candidateValidationBadge(candidate);
           const avatarInitials = displayName === "Candidate profile pending validation"
             ? "ID"
             : displayName
@@ -2673,6 +2686,9 @@ export default function TalentPoolSearchPage() {
                         <h2 className="truncate text-[22px] font-extrabold leading-6 text-white">
                           {displayName}
                         </h2>
+                        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] ${validationBadge.tone}`}>
+                          {validationBadge.label}
+                        </span>
                         {reviewFlag ? (
                           <span className="shrink-0 rounded-full border border-amber-500/35 bg-amber-950/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-amber-100/80">
                             Review

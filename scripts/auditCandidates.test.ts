@@ -1,4 +1,5 @@
 import { auditCandidates } from "../lib/candidateAudit";
+import "./candidateValidation.test";
 
 function assert(condition: unknown, message: string) {
   if (!condition) throw new Error(message);

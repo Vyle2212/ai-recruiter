@@ -5,9 +5,11 @@ import Candidate360ExecutiveMatch from "@/components/candidate-360-executive-mat
 import Candidate360Notes from "@/components/candidate-360-notes";
 import Candidate360RiskWorkflow from "@/components/candidate-360-risk-workflow";
 import Candidate360WorkflowStrip from "@/components/candidate-360-workflow-strip";
+import CandidateValidationPanel from "@/components/candidate-validation-panel";
 import { deriveCandidateWorkflow } from "@/components/candidate-360-workflow-machine";
 import { supabase } from "@/lib/supabase";
 import { buildCandidate360, type Candidate360Model } from "@/lib/candidate360Engine";
+import { buildCandidateValidationState } from "@/lib/candidateValidation";
 import { calculateSubmissionConfidence } from "@/lib/submissionConfidence";
 
 export const runtime = "nodejs";
@@ -880,6 +882,7 @@ export default async function Candidate360Page({
 
   candidate = mergeCandidateWithSearchIndex(candidate, indexQuery.data);
   const candidateRaw = candidate as AnyRecord;
+  const validationState = buildCandidateValidationState(candidateRaw);
 
   const matchQuery = await supabase
     .from("matches")
@@ -1298,6 +1301,7 @@ export default async function Candidate360Page({
         </section>
 
         <Candidate360WorkflowStrip candidateId={model.identity.id} initialSnapshot={initialWorkflowSnapshot} />
+        <CandidateValidationPanel candidateId={model.identity.id} initialState={validationState} />
 
 
         <PanelSection title="Submission Confidence" subtitle="Recruiter Readiness">
