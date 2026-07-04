@@ -8,7 +8,9 @@ import { jsPDF } from "jspdf";
 import * as XLSX from "xlsx";
 import { buildCanonicalCandidateProfile, validateCanonicalCandidateProfile } from "@/lib/canonicalCandidateProfile";
 import {
+  clientReadyCompareCandidates,
   normalizeCompareCandidate,
+  isCompareVisibleCandidate,
   rankCompareCandidates,
   type AnyRecord,
   type CandidateCompareSignal,
@@ -222,10 +224,10 @@ function normalizeCandidateDisplayData(candidate: CandidateCompareSignal | undef
   if (!candidate) return { displayName: "", exportName: "", validName: false, currentCompany: "Not disclosed", companyType: "Not disclosed", backgroundExperience: "Not disclosed" };
   const canonical = buildCanonicalCandidateProfile(candidate.raw || candidate);
   return {
-    displayName: canonical.displayName,
+    displayName: canonical.displayName || "Candidate profile pending validation",
     exportName: canonical.exportName,
     validName: !canonical.needsManualReview && canonical.allowedForExecutiveExport && Boolean(canonical.exportName),
-    currentCompany: canonical.currentCompany,
+    currentCompany: candidate.company || canonical.currentCompany || "Not disclosed",
     companyType: canonical.companyType,
     backgroundExperience: canonical.backgroundExperience,
   };
@@ -348,6 +350,17 @@ function presentVisibleValue(value: any, fallback = "Pending Validation") {
   if (/^to confirm$/i.test(clean)) return fallback;
   return clean;
 }
+function validationBadgeClass(candidate: CandidateCompareSignal) {
+  if (candidate.validation.badge === "Ready") return "border-emerald-500/30 bg-emerald-950/20 text-emerald-100";
+  if (candidate.validation.badge === "Duplicate Suspected" || candidate.validation.badge === "Parsing Issue") return "border-red-500/35 bg-red-950/20 text-red-100";
+  if (candidate.validation.badge === "Missing Information") return "border-amber-500/35 bg-amber-950/20 text-amber-100";
+  return "border-slate-600/50 bg-slate-900/45 text-slate-200";
+}
+
+function validationBadgeLabel(candidate: CandidateCompareSignal) {
+  return candidate.validation.badge === "Ready" ? "Ready" : candidate.validation.badge;
+}
+
 function hasText(candidate: CandidateCompareSignal, terms: string[]) {
   return terms.some((term) => candidate.text.includes(term.toLowerCase()));
 }
@@ -3939,6 +3952,8 @@ function SubmissionGeneratorOverlay({ open, ranked, activeModule, notes, onClose
   const [mounted, setMounted] = useState(false);
   const [activeTemplate, setActiveTemplate] = useState<SubmissionTemplateKey>("Client Email");
   const clientContext = activeModule ? `SAP ${normalizeModule(activeModule)} search` : "Current SAP search";
+  const clientReadyRanked = clientReadyCompareCandidates(ranked);
+  const exportBlockedCount = ranked.length - clientReadyRanked.length;
   const [drafts, setDrafts] = useState<Partial<Record<SubmissionTemplateKey, string>>>({});
   const [revision, setRevision] = useState(0);
 
@@ -3953,10 +3968,10 @@ function SubmissionGeneratorOverlay({ open, ranked, activeModule, notes, onClose
   const noteMap: Record<string, string> = {};
   const outputProfile = SUBMISSION_OUTPUT_PROFILES[activeTemplate];
   const submissionConfig = useMemo<SubmissionConfig>(() => ({ ...DEFAULT_SUBMISSION_CONFIG, clientContext }), [clientContext]);
-  const generated = useMemo(() => buildSubmissionContent(ranked, activeModule, noteMap, submissionConfig), [ranked, activeModule, noteMap, submissionConfig, revision]);
+  const generated = useMemo(() => buildSubmissionContent(clientReadyRanked, activeModule, noteMap, submissionConfig), [clientReadyRanked, activeModule, noteMap, submissionConfig, revision]);
   const previewValue = drafts[activeTemplate] ?? generated.templates[activeTemplate];
   const previewContent = useMemo(() => ({ ...generated, templates: { ...generated.templates, ...drafts } } as SubmissionContent), [generated, drafts]);
-  const recommendation = generated.decision ? buildCompareRecommendation(ranked, activeModule, noteMap, submissionConfig) : buildCompareRecommendation(ranked, activeModule);
+  const recommendation = generated.decision ? buildCompareRecommendation(clientReadyRanked, activeModule, noteMap, submissionConfig) : buildCompareRecommendation(clientReadyRanked, activeModule);
   const candidate = recommendation.candidate;
   const coverage = recommendation.coverage;
   const confidence = recommendation.confidence;
@@ -4032,12 +4047,13 @@ function SubmissionGeneratorOverlay({ open, ranked, activeModule, notes, onClose
         </div>
         <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-800/80 bg-[#02070b] px-5 py-3">
           <div className="text-[11px] font-semibold text-slate-500">Everything is generated from Compare, Candidate360-style evidence and validation signals. Internal notes are excluded from client exports.</div>
+          {exportBlockedCount ? <div className="rounded-xl border border-amber-500/25 bg-amber-950/10 px-3 py-2 text-xs font-semibold text-amber-100">Client deliverables use Ready candidates only. {exportBlockedCount} compared candidate{exportBlockedCount === 1 ? "" : "s"} blocked from generated exports.</div> : null}
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => { setDrafts((current) => ({ ...current, [activeTemplate]: generated.templates[activeTemplate] })); onNotify(`${activeTemplate} generated`); }} className="rounded-full bg-cyan-400 px-4 py-2 text-xs font-semibold text-slate-950">Generate</button>
             <button type="button" onClick={() => copyValue(previewContent.templates["Client Email"], "Email copied")} className="rounded-full bg-[#101923] px-4 py-2 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20">Copy Email</button>
             <button type="button" onClick={() => copyValue(previewContent.templates["WhatsApp"], "WhatsApp copied")} className="rounded-full bg-[#101923] px-4 py-2 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20">Copy WhatsApp</button>
-            <button type="button" onClick={() => { exportSelectedSubmissionPdf(candidate, activeTemplate, previewValue); onNotify(`${activeTemplate} PDF exported`); }} className="rounded-full bg-[#101923] px-4 py-2 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20">Export PDF</button>
-            <button type="button" onClick={() => { downloadSelectedSubmissionDoc(candidate, activeTemplate, previewValue); onNotify(`${activeTemplate} DOCX exported`); }} className="rounded-full bg-[#101923] px-4 py-2 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20">Export DOCX</button>
+            <button type="button" disabled={!candidate} onClick={() => { if (!candidate) { onNotify("No Ready candidate available for client PDF export"); return; } exportSelectedSubmissionPdf(candidate, activeTemplate, previewValue); onNotify(`${activeTemplate} PDF exported`); }} className="rounded-full bg-[#101923] px-4 py-2 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50">Export PDF</button>
+            <button type="button" disabled={!candidate} onClick={() => { if (!candidate) { onNotify("No Ready candidate available for client DOCX export"); return; } downloadSelectedSubmissionDoc(candidate, activeTemplate, previewValue); onNotify(`${activeTemplate} DOCX exported`); }} className="rounded-full bg-[#101923] px-4 py-2 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50">Export DOCX</button>
           </div>
         </footer>
       </section>
@@ -4046,6 +4062,9 @@ function SubmissionGeneratorOverlay({ open, ranked, activeModule, notes, onClose
   );
 }
 function ExportActions({ ranked, currentSearchCount, activeModule, searchSessionId, shareUrl, notes, onNotify }: { ranked: CandidateCompareSignal[]; currentSearchCount: number; activeModule: string; searchSessionId: string; shareUrl: string; notes: Record<string, string>; onNotify: (message: string) => void }) {
+  const clientReadyRanked = clientReadyCompareCandidates(ranked);
+  const exportBlockedCount = ranked.length - clientReadyRanked.length;
+  const canClientExport = clientReadyRanked.length >= 1;
   async function copyText(text: string, message: string) {
     try {
       await navigator.clipboard.writeText(text);
@@ -4058,9 +4077,10 @@ function ExportActions({ ranked, currentSearchCount, activeModule, searchSession
     <section className="rounded-[24px] bg-[#0B1118] p-6 ring-1 ring-slate-800/60">
       <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-200">Export</div>
       <div className="mt-4 flex flex-wrap gap-2.5">
-        <button type="button" aria-label="Export PDF" onClick={() => { exportPdf(ranked, currentSearchCount, notes, activeModule, { searchId: searchSessionId, job: activeModule ? `SAP ${normalizeModule(activeModule)}` : "Current Search", primaryModule: activeModule ? `SAP ${normalizeModule(activeModule)}` : "Active Search" }); onNotify("PDF exported"); }} className="inline-flex items-center gap-2 rounded-full bg-[#101923] px-4 py-2.5 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-none focus:ring-2 focus:ring-cyan-400"><FileText size={14} />Export PDF</button>
-        <button type="button" aria-label="Export Excel" onClick={() => { exportWorkbook(ranked, currentSearchCount, notes, activeModule, { searchId: searchSessionId, job: activeModule ? `SAP ${normalizeModule(activeModule)}` : "Current Search", primaryModule: activeModule ? `SAP ${normalizeModule(activeModule)}` : "Active Search" }); onNotify("Excel workbook exported"); }} className="inline-flex items-center gap-2 rounded-full bg-[#101923] px-4 py-2.5 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-none focus:ring-2 focus:ring-cyan-400"><FileSpreadsheet size={14} />Export Excel</button>
-        <button type="button" aria-label="Copy summary" onClick={() => copyText(clientSummaryText(ranked), "Summary copied")} className="inline-flex items-center gap-2 rounded-full bg-[#101923] px-4 py-2.5 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-none focus:ring-2 focus:ring-cyan-400"><Copy size={14} />Copy Summary</button>
+        {exportBlockedCount ? <div className="basis-full rounded-xl border border-amber-500/25 bg-amber-950/10 px-3 py-2 text-xs font-semibold text-amber-100">Client exports include Ready candidates only. {exportBlockedCount} compared candidate{exportBlockedCount === 1 ? "" : "s"} blocked from client export.</div> : null}
+        <button type="button" aria-label="Export PDF" disabled={!canClientExport} onClick={() => { if (!canClientExport) { onNotify("No Ready candidates available for client PDF export"); return; } exportPdf(clientReadyRanked, currentSearchCount, notes, activeModule, { searchId: searchSessionId, job: activeModule ? `SAP ${normalizeModule(activeModule)}` : "Current Search", primaryModule: activeModule ? `SAP ${normalizeModule(activeModule)}` : "Active Search" }); onNotify(exportBlockedCount ? `PDF exported with ${clientReadyRanked.length} Ready candidate${clientReadyRanked.length === 1 ? "" : "s"}; ${exportBlockedCount} blocked` : "PDF exported"); }} className="inline-flex items-center gap-2 rounded-full bg-[#101923] px-4 py-2.5 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-none focus:ring-2 focus:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"><FileText size={14} />Export PDF</button>
+        <button type="button" aria-label="Export Excel" disabled={!canClientExport} onClick={() => { if (!canClientExport) { onNotify("No Ready candidates available for client Excel export"); return; } exportWorkbook(clientReadyRanked, currentSearchCount, notes, activeModule, { searchId: searchSessionId, job: activeModule ? `SAP ${normalizeModule(activeModule)}` : "Current Search", primaryModule: activeModule ? `SAP ${normalizeModule(activeModule)}` : "Active Search" }); onNotify(exportBlockedCount ? `Excel workbook exported with ${clientReadyRanked.length} Ready candidate${clientReadyRanked.length === 1 ? "" : "s"}; ${exportBlockedCount} blocked` : "Excel workbook exported"); }} className="inline-flex items-center gap-2 rounded-full bg-[#101923] px-4 py-2.5 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-none focus:ring-2 focus:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"><FileSpreadsheet size={14} />Export Excel</button>
+        <button type="button" aria-label="Copy summary" disabled={!canClientExport} onClick={() => copyText(clientSummaryText(clientReadyRanked), exportBlockedCount ? `Summary copied for Ready candidates only; ${exportBlockedCount} blocked` : "Summary copied")} className="inline-flex items-center gap-2 rounded-full bg-[#101923] px-4 py-2.5 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-none focus:ring-2 focus:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"><Copy size={14} />Copy Summary</button>
         <button type="button" aria-label="Live Share Link" onClick={() => copyText(shareUrl, "Live share link copied")} className="inline-flex items-center gap-2 rounded-full bg-[#101923] px-4 py-2.5 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-none focus:ring-2 focus:ring-cyan-400"><Link2 size={14} />Live Share Link</button><button type="button" aria-label="Read-only client view" onClick={() => copyText(shareUrl + (shareUrl.includes("?") ? "&" : "?") + "viewOnly=1", "Read-only client view copied")} className="inline-flex items-center gap-2 rounded-full bg-[#101923] px-4 py-2.5 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-none focus:ring-2 focus:ring-cyan-400"><Link2 size={14} />Read-only View</button>
       </div>
     </section>
@@ -4384,7 +4404,7 @@ export function CandidateCompareWorkspace() {
           if (matches.length) window.sessionStorage.setItem(DIRECT_COMPARE_CACHE_KEY, JSON.stringify(matches));
         }
 
-        const normalized = matches.map((candidate: AnyRecord) => normalizeCompareCandidate(candidate)).filter((candidate: CandidateCompareSignal) => buildCanonicalCandidateProfile(candidate.raw || candidate).allowedForRanking);
+        const normalized = matches.map((candidate: AnyRecord) => normalizeCompareCandidate(candidate)).filter(isCompareVisibleCandidate);
         const ordered = searchResultCandidates(normalized, candidateIds);
         if (cancelled) return;
         window.clearTimeout(timeout);
@@ -4676,7 +4696,7 @@ export function CandidateCompareWorkspace() {
                     {showAvailableHeader ? <div className="mb-1.5 mt-2.5 text-[9px] font-black uppercase tracking-[0.16em] text-slate-500">Available candidates</div> : null}
                     <article role="button" tabIndex={0} onClick={() => setDrawerCandidateId(candidate.id)} onKeyDown={(event) => { if (event.key === "Enter") setDrawerCandidateId(candidate.id); }} className={(selectedNow ? "bg-cyan-950/25 ring-cyan-500/30" : atLimit ? "bg-[#101923] ring-slate-800/40" : "bg-[#101923] ring-slate-800/50") + " w-full cursor-pointer rounded-xl p-2.5 text-left ring-1 transition duration-200 hover:bg-[#17222E] hover:ring-slate-700/70"}>
                       <div className="flex min-w-0 items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1"><div className="flex items-center gap-1.5">{candidateRank ? <span className="shrink-0 rounded-full border border-cyan-300/40 bg-cyan-400/12 px-2 py-0.5 text-[10px] font-black leading-4 text-cyan-50 shadow-[0_0_14px_rgba(34,211,238,0.12)]">Rank #{candidateRank}</span> : null}<div className="truncate text-[13px] font-bold leading-5 text-white" title={candidateDisplayName(candidate, candidateRank)}>{candidateDisplayName(candidate, candidateRank)}</div></div><div className="mt-0.5 truncate text-[11px] leading-4 text-slate-400">{slateSubtitle(candidate)}</div></div>
+                        <div className="min-w-0 flex-1"><div className="flex items-center gap-1.5">{candidateRank ? <span className="shrink-0 rounded-full border border-cyan-300/40 bg-cyan-400/12 px-2 py-0.5 text-[10px] font-black leading-4 text-cyan-50 shadow-[0_0_14px_rgba(34,211,238,0.12)]">Rank #{candidateRank}</span> : null}<div className="truncate text-[13px] font-bold leading-5 text-white" title={candidateDisplayName(candidate, candidateRank)}>{candidateDisplayName(candidate, candidateRank)}</div><span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-[0.06em] ${validationBadgeClass(candidate)}`}>{validationBadgeLabel(candidate)}</span></div><div className="mt-0.5 truncate text-[11px] leading-4 text-slate-400">{slateSubtitle(candidate)}</div>{candidate.validation.needsReview ? <div className="mt-1 truncate text-[10px] font-semibold text-amber-100">Internal compare only - {candidate.validation.blockingReasons[0] || "Needs recruiter validation"}</div> : null}</div>
                         <div className="flex shrink-0 flex-col gap-1">
                           {!selectedNow ? <button type="button" onClick={(event) => { event.stopPropagation(); toggleCandidate(candidate); }} className={(atLimit ? "bg-amber-500/10 text-amber-100" : "bg-white/5 text-slate-300") + " rounded-full px-1.5 py-0.5 text-[8.5px] font-bold leading-4 ring-1 ring-slate-700/45"}>Add to Compare</button> : null}
                           {isShortlisted ? <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[8.5px] font-bold leading-4 text-emerald-100 ring-1 ring-emerald-500/25"><CheckCircle2 size={11} className="inline-block align-[-2px]" /> Shortlisted</span> : null}

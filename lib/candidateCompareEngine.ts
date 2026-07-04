@@ -1,5 +1,6 @@
 ﻿import { buildCanonicalCandidateProfile } from "./canonicalCandidateProfile";
 import { dedupeByCanonicalIdentity } from "./identityResolution";
+import { buildCandidateValidationState, type CandidateValidationStatus } from "./candidateValidation";
 
 export type AnyRecord = Record<string, any>;
 
@@ -42,6 +43,14 @@ export type CandidateCompareSignal = {
   text: string;
   dimensions: Record<CompareDimensionKey, DimensionResult>;
   raw: AnyRecord;
+  validation: {
+    status: CandidateValidationStatus;
+    badge: Exclude<CandidateValidationStatus, "Hidden" | "Archived">;
+    score: number;
+    exportEligible: boolean;
+    blockingReasons: string[];
+    needsReview: boolean;
+  };
 };
 
 export type CompareCriterion = {
@@ -168,6 +177,36 @@ function readableEmailName(value: any) {
 
 function candidateName(candidate: AnyRecord) {
   return buildCanonicalCandidateProfile(candidate).displayName || "";
+}
+
+function isModuleOrSkillCompany(value: string) {
+  const normalized = clean(value, "").toLowerCase().replace(/[^a-z0-9/+#& ]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!normalized) return true;
+  if (/^(sap|s\/4hana|s4hana|fico|fi|co|sd|mm|pp|pm|qm|ewm|tm|abap|basis|btp|cpi|pi\/po|successfactors|implementation|rollout|support|ams|greenfield|brownfield|migration|technology consulting|academic background)$/i.test(normalized)) return true;
+  if (/^(sap\s+)?(sd|mm|pp|fico|fi|co|abap|basis|btp|ewm|tm)\s*(module)?$/i.test(normalized)) return true;
+  if (/\b(module|implementation|rollout|support|migration|s\/4hana|s4hana)\b/i.test(normalized) && normalized.length <= 32) return true;
+  return false;
+}
+
+function safeCompareCompany(value: any) {
+  const company = cleanCompanyField(value);
+  return company && !isModuleOrSkillCompany(company) ? company : "Not disclosed";
+}
+
+function compareValidationBadge(status: CandidateValidationStatus, exportEligible: boolean): Exclude<CandidateValidationStatus, "Hidden" | "Archived"> {
+  if (status === "Hidden" || status === "Archived") return "Needs Review";
+  if (status === "Ready" && !exportEligible) return "Needs Review";
+  return status;
+}
+
+export function isCompareVisibleCandidate(candidate: CandidateCompareSignal | AnyRecord) {
+  const raw = (candidate as CandidateCompareSignal).raw || candidate;
+  const validation = buildCandidateValidationState(raw);
+  return validation.status !== "Hidden" && validation.status !== "Archived";
+}
+
+export function clientReadyCompareCandidates(candidates: CandidateCompareSignal[]) {
+  return candidates.filter((candidate) => candidate.validation.exportEligible && candidate.validation.status === "Ready");
 }
 
 function cleanCompanyField(value: any) {
@@ -386,22 +425,32 @@ export function normalizeCompareCandidate(candidate: AnyRecord): CandidateCompar
   const baseScore = numeric(candidate, ["searchFit", "search_fit", "matchScore", "match_score", "finalScore", "calibratedScore", "score", "profile_quality_score", "quality_score"]);
   const evidenceScore = scored.length ? scored.reduce((sum, item) => sum + item.value, 0) / scored.length : baseScore || 45;
   const canonicalProfile = buildCanonicalCandidateProfile(candidate);
+  const validationState = buildCandidateValidationState(candidate);
+  const validationBadge = compareValidationBadge(validationState.status, validationState.exportEligible);
   const parserQuality = Number(candidate.parser_quality_score ?? candidate.profile_quality_score ?? candidate.quality_score ?? canonicalProfile.parserQualityScore ?? 0);
   const qualityCappedScore = canonicalProfile.allowedForRanking ? (baseScore ? baseScore * 0.45 + evidenceScore * 0.55 : evidenceScore) : Math.min(45, parserQuality);
   const score = clamp(qualityCappedScore);
 
   return {
     id: clean(firstValue(candidate, ["id", "candidate_id", "email", "name"], candidateName(candidate))),
-    name: canonicalProfile.displayName || candidateName(candidate),
+    name: canonicalProfile.displayName || candidateName(candidate) || "Candidate profile pending validation",
     title: candidateTitle(candidate),
     module,
-    company: canonicalProfile.currentCompany,
+    company: safeCompareCompany(canonicalProfile.currentCompany || candidateCompany(candidate)),
     location: clean(firstValue(candidate, ["display_location", "location", "country", "current_location"]), "Location to verify"),
     score,
     scoreLabel: score >= 85 ? "Strong Match" : score >= 72 ? "Shortlist Review" : score >= 58 ? "Conditional" : "Hold",
     text,
     dimensions,
     raw: candidate,
+    validation: {
+      status: validationState.status,
+      badge: validationBadge,
+      score: validationState.score,
+      exportEligible: validationState.exportEligible,
+      blockingReasons: validationState.blockingReasons,
+      needsReview: validationBadge !== "Ready",
+    },
   };
 }
 
@@ -428,7 +477,7 @@ function submissionDecisionScore(candidate: CandidateCompareSignal) {
 }
 
 export function rankCompareCandidates(candidates: CandidateCompareSignal[]) {
-  return dedupeByCanonicalIdentity(candidates).filter((candidate) => buildCanonicalCandidateProfile(candidate.raw || candidate).allowedForRanking).sort((a, b) => {
+  return dedupeByCanonicalIdentity(candidates).filter(isCompareVisibleCandidate).sort((a, b) => {
     const aProfile = buildCanonicalCandidateProfile(a.raw || a);
     const bProfile = buildCanonicalCandidateProfile(b.raw || b);
     if (aProfile.needsManualReview !== bProfile.needsManualReview) return aProfile.needsManualReview ? 1 : -1;
