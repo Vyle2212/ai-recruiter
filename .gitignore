@@ -59,3 +59,7 @@ desktop.ini
 .codex-dev-server*.log
 recruiterMatchEngine-full.txt
 sapKnowledgeGraph-full.txt
+# candidate display QA artifacts
+repair-preview.json
+candidate-display-repair-review.csv
+candidate-display-repair-rollback.json

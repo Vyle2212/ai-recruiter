@@ -261,7 +261,7 @@ const COMPANY_DICTIONARY: Array<{ pattern: RegExp; category: CompanyCategory }> 
   { pattern: /telekom malaysia|telekom|celcom|axiata|telco|telecom|singtel|viettel|pldt/i, category: "Telecommunication" },
   { pattern: /bosch|toyota|honda|panasonic|samsung|manufacturing|factory|industrial|siemens|abb|weir minerals|wilmar/i, category: "Manufacturing" },
   { pattern: /hospital|healthcare|roche|novartis|pfizer|gsk|sanofi/i, category: "Healthcare" },
-  { pattern: /retail|7\s*eleven|shopee|lazada|grab|dksh|dksh cssc|unilever|nestl[eé]|\bbat\b|airasia|malaysia airports|maersk|dhl|averis|orisoft|fpt software|\bfpt\b/i, category: "End User" },
+  { pattern: /retail|7\s*eleven|shopee|lazada|grab|dksh|dksh cssc|unilever|nestl[eÃ©]|\bbat\b|airasia|malaysia airports|maersk|dhl|averis|orisoft|fpt software|\bfpt\b/i, category: "End User" },
   { pattern: /freelance|independent consultant|self employed|contractor/i, category: "Staffing/Freelance" },
 ];
 

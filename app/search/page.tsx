@@ -1,28 +1,43 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { buildCanonicalCandidateProfile } from "@/lib/canonicalCandidateProfile";
+import { resolveCanonicalCandidateDisplay } from "@/lib/candidateCanonicalDisplay";
 import { buildCandidateValidationState } from "@/lib/candidateValidation";
+import { buildTalentSearchExecutiveSummary, candidateHasContactInfo, cleanTalentSearchModule, cleanTalentSearchTitle, displayTalentSearchValidationStatus, isTalentSearchReviewBadge, resolveTalentSearchViewerRole, safeTalentSearchCompany, talentSearchSummaryVisibility, type TalentSearchViewerRole } from "@/lib/talentSearchDisplay";
 import { COMPANY_TAXONOMY, COMPANY_TAXONOMY_SUGGESTIONS, SAP_TALENT_SKILL_GROUPS, SAP_SKILL_TAXONOMY, getSapSkillDisplayLabel } from "@/lib/sapTalentTaxonomy";
 
 type AnyRecord = Record<string, any>;
 
 function canonicalCandidateName(candidate: Candidate | AnyRecord | undefined) {
   if (!candidate) return "Candidate profile pending validation";
-  const profile = buildCanonicalCandidateProfile(candidate as AnyRecord);
-  return profile.displayName || "Candidate profile pending validation";
+  return resolveCanonicalCandidateDisplay(candidate as AnyRecord).displayName || "Candidate profile pending validation";
+}
+
+function talentSearchBadgeTone(label: string) {
+  return label === "Ready"
+    ? "border-emerald-500/35 bg-emerald-950/20 text-emerald-100"
+    : label === "Hidden" || label === "Archived" || label === "Duplicate"
+      ? "border-red-500/35 bg-red-950/20 text-red-100"
+      : "border-amber-500/35 bg-amber-950/20 text-amber-100";
 }
 
 function candidateValidationBadge(candidate: Candidate | AnyRecord | undefined) {
-  const state = buildCandidateValidationState((candidate || {}) as AnyRecord);
-  const label = state.status === "Duplicate Suspected" ? "Duplicate" : state.status;
-  const tone = state.status === "Ready"
-    ? "border-emerald-500/35 bg-emerald-950/20 text-emerald-100"
-    : state.status === "Hidden" || state.status === "Archived" || state.status === "Duplicate Suspected"
-      ? "border-red-500/35 bg-red-950/20 text-red-100"
-      : "border-amber-500/35 bg-amber-950/20 text-amber-100";
-  return { label, tone };
+  const raw = (candidate || {}) as AnyRecord;
+  const state = buildCandidateValidationState(raw);
+  const resolved = resolveCanonicalCandidateDisplay(raw);
+  const displayName = resolved.displayName || canonicalCandidateName(raw);
+  const currentEmployer = resolved.currentEmployer || safeTalentSearchCompany(raw.display_company || raw.current_company || raw.currentCompany || raw.company || raw.employer);
+  const title = resolved.displayRole || cleanTalentSearchTitle(raw.display_title || raw.title || raw.current_title || raw.role, raw.primary_module || raw.module || raw.sap_module);
+  const label = displayTalentSearchValidationStatus({
+    status: state.status,
+    score: state.score,
+    displayName,
+    currentEmployer,
+    title,
+  });
+
+  return { label, tone: talentSearchBadgeTone(label) };
 }
 
 type Candidate = {
@@ -113,6 +128,38 @@ const SEARCH_SHORTLIST_ID_KEY = "sap-talent-search-shortlist-id-v1";
 const SEARCH_SHORTLIST_NAME = "Talent Pool Search Shortlist";
 const SEARCH_SESSION_PREFIX = "sapTalentHub.searchSession.v1.";
 const COMPARE_MATCHES_CACHE_KEY = "sapTalentHub.matches.pageState.v1";
+const DEFAULT_SEARCH_PAGE_SIZE = 10;
+const SEARCH_PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
+type TalentSearchPaginationMeta = {
+  totalCandidates: number;
+  totalMatched: number;
+  returnedCount: number;
+  pageSize: number;
+  limit: number;
+  offset: number;
+  page: number;
+  currentPage: number;
+  totalPages: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
+  hasMore: boolean;
+};
+
+const EMPTY_SEARCH_PAGINATION: TalentSearchPaginationMeta = {
+  totalCandidates: 0,
+  totalMatched: 0,
+  returnedCount: 0,
+  pageSize: DEFAULT_SEARCH_PAGE_SIZE,
+  limit: DEFAULT_SEARCH_PAGE_SIZE,
+  offset: 0,
+  page: 1,
+  currentPage: 1,
+  totalPages: 1,
+  hasPrevious: false,
+  hasNext: false,
+  hasMore: false,
+};
 
 type SearchCacheSnapshot = {
   filters: Record<string, any>;
@@ -237,7 +284,7 @@ const COUNTRY_CITY_MAP: Record<string, string[]> = {
     "Munich",
     "Frankfurt",
     "Hamburg",
-    "Düsseldorf",
+    "Dusseldorf",
     "Stuttgart",
   ],
   Netherlands: ["Amsterdam", "Rotterdam", "Utrecht", "Eindhoven"],
@@ -524,7 +571,7 @@ function sapSuggestionLabel(record: AnyRecord): string {
   const name = cleanSapName(record?.name);
   if (!code && !name) return "";
   if (!name) return code;
-  return `${code} — SAP ${name}`;
+  return `${code} - SAP ${name}`;
 }
 
 function companySuggestionLabel(record: AnyRecord): string {
@@ -578,6 +625,35 @@ function getShortlistId(candidate: Candidate) {
       "candidate",
   );
 }
+function buildPaginationPages(currentPage: number, totalPages: number): Array<number | "..."> {
+  const total = Math.max(1, totalPages || 1);
+  const current = Math.max(1, Math.min(currentPage || 1, total));
+  if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1);
+
+  const pages = new Set<number>([1, total, current, current - 1, current + 1]);
+  if (current <= 4) {
+    pages.add(2);
+    pages.add(3);
+    pages.add(4);
+    pages.add(5);
+  }
+  if (current >= total - 3) {
+    pages.add(total - 1);
+    pages.add(total - 2);
+    pages.add(total - 3);
+    pages.add(total - 4);
+  }
+
+  const sorted = Array.from(pages).filter((page) => page >= 1 && page <= total).sort((a, b) => a - b);
+  const out: Array<number | "..."> = [];
+  for (const page of sorted) {
+    const previous = out[out.length - 1];
+    if (typeof previous === "number" && page - previous > 1) out.push("...");
+    out.push(page);
+  }
+  return out;
+}
+
 function buildQuery(params: AnyRecord) {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -725,7 +801,7 @@ function MultiTagInput({
               onClick={() => removeValue(value)}
               className="rounded-full border border-cyan-700 bg-cyan-950/60 px-2.5 py-1 text-xs font-bold text-cyan-100 hover:border-red-400"
             >
-              {value} <span className="text-slate-400">×</span>
+              {value} <span className="text-slate-400">x</span>
             </button>
           ))}
           <input
@@ -755,7 +831,7 @@ function MultiTagInput({
             onClick={() => setOpen((v) => !v)}
             className="px-2 text-slate-400 hover:text-cyan-200"
           >
-            {open ? "▲" : "▼"}
+            {open ? "^" : "v"}
           </button>
         </div>
       </div>
@@ -779,7 +855,7 @@ function MultiTagInput({
               onClick={() => addValue(draft)}
               className="mt-1 block w-full rounded-lg border border-cyan-800 px-3 py-2 text-left text-sm font-bold text-cyan-200 hover:bg-cyan-950"
             >
-              + Add “{draft.trim()}”
+              + Add "{draft.trim()}"
             </button>
           )}
         </div>
@@ -894,7 +970,7 @@ function AccordionSection({
               Clear
             </span>
           )}
-          <span className="text-sm font-black text-sky-200">{open ? "▲" : "▼"}</span>
+          <span className="text-sm font-black text-sky-200">{open ? "^" : "v"}</span>
         </div>
       </button>
       {open && <div className="border-t border-slate-800 p-4">{children}</div>}
@@ -981,7 +1057,7 @@ function LanguageRequirementInput({
                 }
                 className="rounded-full border border-cyan-700 bg-cyan-950/60 px-3 py-1.5 text-xs font-extrabold text-cyan-100 hover:border-red-400"
               >
-                {languageChipLabel(item)} <span className="text-slate-400">×</span>
+                {languageChipLabel(item)} <span className="text-slate-400">x</span>
               </button>
             ))
           ) : (
@@ -1017,7 +1093,7 @@ function FirmTypePresetButton({
       }
       className={`rounded-full border px-3 py-1.5 text-xs font-bold ${active ? "border-cyan-400 bg-cyan-950 text-cyan-100" : "border-slate-700 bg-slate-900 text-sky-100 hover:border-cyan-500"}`}
     >
-      {active ? "✓" : "+"} {label}
+      {active ? "OK" : "+"} {label}
     </button>
   );
 }
@@ -1364,29 +1440,8 @@ function salaryLabel(candidate: Candidate): string {
 }
 
 function cleanCandidateTitle(candidate: Candidate): string {
-  const module = normalize(candidate.primary_module || "SAP");
-  const raw = normalize(
-    candidate.display_title ||
-      candidate.title ||
-      (candidate as AnyRecord).current_title ||
-      (candidate as AnyRecord).headline ||
-      "",
-  );
-
-  const bad =
-    !raw ||
-    /^(current location|professional objective|position level|nationality|personal particulars?|career objective|summary|profile)$/i.test(raw) ||
-    /^career history$/i.test(raw) ||
-    /^for enhancements/i.test(raw) ||
-    /^consultant\s*:\s*candidate name/i.test(raw);
-
-  if (bad) return module && module !== "SAP" ? `SAP ${module} Consultant` : "SAP Consultant";
-
-  return raw
-    .replace(/^Career history\s*/i, "")
-    .replace(/^Career historySAP/i, "SAP")
-    .replace(/\s+/g, " ")
-    .trim();
+  const row = candidate as AnyRecord;
+  return cleanTalentSearchTitle(candidate.display_title || candidate.title || row.current_title || row.headline, candidatePrimaryModule(candidate) || candidate.primary_module || "SAP");
 }
 
 function profileSeniorityTone(years: number): string {
@@ -1417,9 +1472,9 @@ function buildAiInsight(candidate: Candidate): string {
   if (counts.brownfield) evidence.push(`${counts.brownfield} brownfield`);
 
   const parts: string[] = [];
-  parts.push(`${tone} SAP ${module} candidate${title ? ` — ${title}` : ""}`);
+  parts.push(`${tone} SAP ${module} candidate${title ? ` - ${title}` : ""}`);
   if (years) parts.push(`${years} years SAP experience`);
-  if (evidence.length) parts.push(`Evidence: ${evidence.join(" · ")}`);
+  if (evidence.length) parts.push(`Evidence: ${evidence.join(" - ")}`);
   else parts.push("Project delivery scope to validate");
   if (companies.length) parts.push(`Recent background: ${companies.slice(0, 2).join(" / ")}`);
 
@@ -1563,7 +1618,7 @@ function Candidate360Modal({
               {cleanCandidateTitle(candidate)}
             </p>
             <p className="mt-2 text-sm text-slate-300">
-              {location} • {years || "N/A"} years •{" "}
+              {location} - {years || "N/A"} years -{" "}
               {candidate.primary_module || "SAP"}
             </p>
           </div>
@@ -1592,7 +1647,7 @@ function Candidate360Modal({
             </p>
             {candidate.why_matched?.length ? (
               <p className="mt-3 text-sm font-bold text-cyan-300">
-                Matched: {candidate.why_matched.slice(0, 6).join(" • ")}
+                Matched: {candidate.why_matched.slice(0, 6).join(" - ")}
               </p>
             ) : null}
           </div>
@@ -1670,7 +1725,7 @@ function Candidate360Modal({
               Data Quality:{" "}
               {(candidate as AnyRecord).project_extraction_confidence ||
                 "Medium"}{" "}
-              • Source:{" "}
+              - Source:{" "}
               {(candidate as AnyRecord).project_extraction_source ||
                 "AI inferred"}
             </p>
@@ -1679,8 +1734,8 @@ function Candidate360Modal({
             <SectionTitle title="Employment" />
             <p className="text-sm font-semibold text-white">
               {companies.length
-                ? companies.join(" • ")
-                : candidate.display_company || "Company pending validation"}
+                ? companies.join(" - ")
+                : safeTalentSearchCompany(candidate.display_company)}
             </p>
             <p className="mt-2 text-sm text-slate-300">
               {candidate.display_industry || "Industry pending validation"}
@@ -1740,7 +1795,7 @@ function Candidate360Modal({
             onClick={() => onShortlist(candidate)}
             className={`rounded-lg px-5 py-3 text-sm font-black text-white ${shortlisted ? "bg-emerald-700" : "bg-green-600 hover:bg-green-700"}`}
           >
-            {shortlisted ? "Shortlisted ✓" : "Shortlist"}
+            {shortlisted ? "Shortlisted OK" : "Shortlist"}
           </button>
           {candidate.id ? (
             <Link
@@ -1749,7 +1804,7 @@ function Candidate360Modal({
               rel="noopener noreferrer"
               className="rounded-lg bg-sky-600 px-5 py-3 text-sm font-black text-white hover:bg-sky-700"
             >
-              Open Full Profile Page ↗
+              Open Full Profile Page
             </Link>
           ) : null}
         </div>
@@ -1791,9 +1846,10 @@ export default function TalentPoolSearchPage() {
   const [minSalary, setMinSalary] = useState("");
   const [maxSalary, setMaxSalary] = useState("");
   const [qualityTier, setQualityTier] = useState("All");
-  const [minQuality, setMinQuality] = useState("70");
-  const [contactableOnly, setContactableOnly] = useState(true);
+  const [minQuality, setMinQuality] = useState("0");
+  const [hasContactInfoOnly, setHasContactInfoOnly] = useState(false);
   const [showReview, setShowReview] = useState(false);
+  const [viewerRole, setViewerRole] = useState<TalentSearchViewerRole>("recruiter");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -1802,6 +1858,8 @@ export default function TalentPoolSearchPage() {
   );
   const [shortlistedIds, setShortlistedIds] = useState<Set<string>>(new Set());
   const [stats, setStats] = useState<AnyRecord | null>(null);
+  const [pagination, setPagination] = useState<TalentSearchPaginationMeta>(EMPTY_SEARCH_PAGINATION);
+  const [pageSize, setPageSize] = useState(DEFAULT_SEARCH_PAGE_SIZE);
   // Production performance: use local taxonomy suggestions on page load.
   // Do not call /api/admin/taxonomy here; admin taxonomy can refresh in Admin UI/background sync.
   const [sapSkillSuggestions] = useState<string[]>(SAP_SKILL_SUGGESTIONS);
@@ -1809,6 +1867,15 @@ export default function TalentPoolSearchPage() {
   const [openFilterSections, setOpenFilterSections] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      setViewerRole(resolveTalentSearchViewerRole({
+        requestedRole: params.get("viewerRole") || params.get("role"),
+        adminFlag: params.get("internalTalentSearchAdmin") || params.get("adminSummary") || params.get("admin"),
+        adminEnabled: process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_TALENT_SEARCH_ADMIN_SUMMARY === "true",
+      }));
+    } catch {}
+
     try {
       const saved = window.localStorage.getItem(SHORTLIST_STORAGE_KEY);
       if (saved) setShortlistedIds(new Set(JSON.parse(saved)));
@@ -1881,8 +1948,8 @@ export default function TalentPoolSearchPage() {
       setMinSalary(f.minSalary || "");
       setMaxSalary(f.maxSalary || "");
       setQualityTier(f.qualityTier || "All");
-      setMinQuality(String(f.minQuality ?? "70"));
-      setContactableOnly(f.contactableOnly !== false);
+      setMinQuality(String(f.minQuality ?? "0"));
+      setHasContactInfoOnly(Boolean(f.hasContactInfoOnly));
       setShowReview(Boolean(f.showReview));
       const y = Number(cache.scrollY || window.localStorage.getItem(SEARCH_SCROLL_KEY) || 0);
       if (Number.isFinite(y) && y > 0) setTimeout(() => window.scrollTo(0, y), 150);
@@ -1958,7 +2025,7 @@ export default function TalentPoolSearchPage() {
     maxSalary,
     qualityTier,
     minQuality,
-    contactableOnly,
+    hasContactInfoOnly,
     showReview,
   });
 
@@ -2029,11 +2096,12 @@ export default function TalentPoolSearchPage() {
     setMinSalary("");
     setMaxSalary("");
     setQualityTier("All");
-    setMinQuality("70");
-    setContactableOnly(true);
+    setMinQuality("0");
+    setHasContactInfoOnly(false);
     setShowReview(false);
     setCandidates([]);
     setStats(null);
+    setPagination(EMPTY_SEARCH_PAGINATION);
     setError("");
     try {
       window.localStorage.removeItem(SEARCH_CACHE_KEY);
@@ -2043,7 +2111,7 @@ export default function TalentPoolSearchPage() {
     } catch {}
   };
 
-  const search = async () => {
+  const fetchSearchPage = async ({ page = 1, nextPageSize = pageSize }: { page?: number; nextPageSize?: number } = {}) => {
     setLoading(true);
     setError("");
     try {
@@ -2093,20 +2161,39 @@ export default function TalentPoolSearchPage() {
         maxSalary,
         minQuality,
         qualityTier,
-        contactableOnly: contactableOnly ? "true" : "false",
-        contactOnly: contactableOnly ? "true" : "false",
+        hasContactInfoOnly: hasContactInfoOnly ? "true" : "false",
+        contactInfoOnly: hasContactInfoOnly ? "true" : "false",
         showReview: showReview ? "true" : "false",
+        viewerRole,
+        internalTalentSearchAdmin: viewerRole === "admin" ? "true" : "false",
+        page,
+        pageSize: nextPageSize,
       });
       const res = await fetch(`/api/search-candidates?${query}`, {
         cache: "no-store",
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Search failed");
-      const rawCandidates = (json.candidates || json.results || []) as Candidate[];
+      const rawCandidates = (json.items || json.candidates || json.results || []) as Candidate[];
       const nextCandidates = sortCandidatesForRecruiter(rawCandidates);
       const nextStats = json.stats || json.meta || null;
+      const nextPagination: TalentSearchPaginationMeta = {
+        totalCandidates: Number(json.totalCandidates ?? 0) || 0,
+        totalMatched: Number(json.totalMatched ?? rawCandidates.length) || 0,
+        returnedCount: Number(json.returnedCount ?? rawCandidates.length) || 0,
+        pageSize: Number(json.pageSize ?? json.limit ?? nextPageSize) || nextPageSize,
+        limit: Number(json.limit ?? json.pageSize ?? nextPageSize) || nextPageSize,
+        offset: Number(json.offset ?? ((page - 1) * nextPageSize)) || 0,
+        page: Number(json.page ?? json.currentPage ?? page) || page,
+        currentPage: Number(json.currentPage ?? json.page ?? page) || page,
+        totalPages: Number(json.totalPages ?? 1) || 1,
+        hasPrevious: Boolean(json.hasPrevious),
+        hasNext: Boolean(json.hasNext),
+        hasMore: Boolean(json.hasMore ?? json.hasNext),
+      };
       setCandidates(nextCandidates);
-      setStats(nextStats);
+      setStats(nextStats ? { ...nextStats, returnedCount: nextPagination.returnedCount } : { returnedCount: nextPagination.returnedCount });
+      setPagination(nextPagination);
       persistSearchCache(nextCandidates, nextStats);
       try {
         window.history.replaceState(null, "", `${window.location.pathname}?${query}`);
@@ -2115,11 +2202,27 @@ export default function TalentPoolSearchPage() {
       setError(err?.message || "Search failed");
       setCandidates([]);
       setStats(null);
+      setPagination(EMPTY_SEARCH_PAGINATION);
     } finally {
       setLoading(false);
     }
   };
 
+  const search = async () => {
+    await fetchSearchPage({ page: 1, nextPageSize: pageSize });
+  };
+
+  const goToPage = async (page: number) => {
+    const target = Math.max(1, Math.min(page, pagination.totalPages || 1));
+    if (loading || target === pagination.currentPage) return;
+    await fetchSearchPage({ page: target, nextPageSize: pageSize });
+  };
+
+  const changePageSize = async (value: number) => {
+    const nextPageSize = SEARCH_PAGE_SIZE_OPTIONS.includes(value) ? value : DEFAULT_SEARCH_PAGE_SIZE;
+    setPageSize(nextPageSize);
+    await fetchSearchPage({ page: 1, nextPageSize });
+  };
   const ensureSearchShortlist = async (): Promise<string | null> => {
     try {
       const saved = window.localStorage.getItem(SEARCH_SHORTLIST_ID_KEY);
@@ -2198,20 +2301,22 @@ export default function TalentPoolSearchPage() {
     }
   };
 
-  const resultCount = candidates.length;
-  const contactable =
-    stats?.contactable ??
-    candidates.filter(
-      (c) => normalize(c.email) && normalize(c.email) !== "No email",
-    ).length;
-  const highQuality =
-    stats?.highQuality ??
-    candidates.filter((c) => displayNumber(c.profile_quality_score) >= 85)
-      .length;
+  const summaryVisibility = talentSearchSummaryVisibility(viewerRole);
+  const totalPoolCount = summaryVisibility.canSeeTalentPoolTotal ? (pagination.totalCandidates || stats?.totalCandidates || 0) : 0;
+  const resultCount = summaryVisibility.canSeeFilteredTotal ? (pagination.totalMatched || stats?.totalMatched || candidates.length) : candidates.length;
+  const showingCount = candidates.length;
+  const reachable =
+    stats?.reachable ??
+    candidates.filter((candidate) => candidateHasContactInfo(candidate)).length;
+  const ready =
+    stats?.ready ??
+    candidates.filter((candidate) => String((candidate as AnyRecord).validation_badge || (candidate as AnyRecord).validation_status || "") === "Ready").length;
   const reviewNeeded =
-    stats?.reviewNeeded ??
-    candidates.filter((c) => displayNumber(c.profile_quality_score) < 75)
-      .length;
+    stats?.needsReview ??
+    candidates.filter((c) => displayNumber(c.profile_quality_score) < 75 || Boolean((c as AnyRecord).review_needed)).length;
+  const exportBlocked =
+    stats?.exportBlocked ??
+    candidates.filter((candidate) => Boolean((candidate as AnyRecord).excluded_from_client_view)).length;
   const inferredSapSkills = sapSkills.length ? [] : inferSapSkillsFromKeyword(keyword);
   const displayedSapSkills = sapSkills.length
     ? sapSkills.join(", ")
@@ -2236,7 +2341,7 @@ export default function TalentPoolSearchPage() {
           href="/matches"
           className="text-sm font-bold text-sky-300 hover:text-sky-200"
         >
-          ← Back to Matches
+          Back to Matches
         </Link>
       </div>
 
@@ -2251,7 +2356,7 @@ export default function TalentPoolSearchPage() {
             onClick={() => setAdvancedOpen((v) => !v)}
             className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-bold text-sky-100 hover:border-cyan-500"
           >
-            Advanced Filters {advancedOpen ? "▲" : "▼"}
+            Advanced Filters {advancedOpen ? "^" : "v"}
           </button>
         </div>
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
@@ -2303,7 +2408,7 @@ export default function TalentPoolSearchPage() {
             />
           </div>
           <div className="lg:col-span-1">
-            <FieldLabel>Years ≥</FieldLabel>
+            <FieldLabel>{"Years >="}</FieldLabel>
             <NumberField value={minYears} onChange={setMinYears} />
           </div>
         </div>
@@ -2448,50 +2553,31 @@ export default function TalentPoolSearchPage() {
                     <div className="md:col-span-4"><SalaryField value={maxSalary} onChange={setMaxSalary} placeholder="To" /></div>
                   </div>
                 </div>
-                <div className="lg:col-span-5 rounded-xl border border-slate-800 bg-black/20 p-3 text-xs text-slate-400">ⓘ Keep currency as Any for broad sourcing; set currency + range only when client budget is fixed.</div>
+                <div className="lg:col-span-5 rounded-xl border border-slate-800 bg-black/20 p-3 text-xs text-slate-400">Note: Keep currency as Any for broad sourcing; set currency + range only when client budget is fixed.</div>
               </div>
             </AccordionSection>
 
             <AccordionSection
               title="Seniority"
-              activeCount={[roleType !== "All", seniorityLevel !== "All", qualityTier !== "All", minQuality !== "70"].filter(Boolean).length}
+              activeCount={[roleType !== "All", seniorityLevel !== "All", qualityTier !== "All", minQuality !== "0"].filter(Boolean).length}
               open={!!openFilterSections.seniority}
               onToggle={() => setOpenFilterSections((prev) => ({ ...prev, seniority: !prev.seniority }))}
               onClear={() => {
                 setRoleType("All");
                 setSeniorityLevel("All");
                 setQualityTier("All");
-                setMinQuality("70");
+                setMinQuality("0");
               }}
             >
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
                 <div className="lg:col-span-3"><FieldLabel>Role Type</FieldLabel><SelectField value={roleType} onChange={setRoleType}>{ROLE_TYPES.map((v) => <option key={v}>{v}</option>)}</SelectField></div>
                 <div className="lg:col-span-3"><FieldLabel>Seniority Level</FieldLabel><SelectField value={seniorityLevel} onChange={setSeniorityLevel}>{SENIORITY_LEVELS.map((v) => <option key={v}>{v}</option>)}</SelectField></div>
                 <div className="lg:col-span-3"><FieldLabel>Quality Tier</FieldLabel><SelectField value={qualityTier} onChange={setQualityTier}>{QUALITY_TIERS.map((v) => <option key={v}>{v}</option>)}</SelectField></div>
-                <div className="lg:col-span-2"><FieldLabel>Quality ≥</FieldLabel><NumberField value={minQuality} onChange={setMinQuality} /></div>
+                <div className="lg:col-span-2"><FieldLabel>{"Quality >="}</FieldLabel><NumberField value={minQuality} onChange={setMinQuality} /></div>
               </div>
             </AccordionSection>
           </div>
         )}
-
-        <div className="mt-4 flex flex-wrap items-center gap-5 text-sm font-bold">
-          <label className="flex items-center gap-2 text-sky-100">
-            <input
-              type="checkbox"
-              checked={contactableOnly}
-              onChange={(e) => setContactableOnly(e.target.checked)}
-            />
-            Contactable profiles only
-          </label>
-          <label className="flex items-center gap-2 text-yellow-300">
-            <input
-              type="checkbox"
-              checked={showReview}
-              onChange={(e) => setShowReview(e.target.checked)}
-            />
-            Show review records / weak names
-          </label>
-        </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
             type="button"
@@ -2508,24 +2594,18 @@ export default function TalentPoolSearchPage() {
           >
             Reset Filters
           </button>
-          <p className="text-xs text-sky-300">
-            Try: FICO + Malaysia, BASIS + Singapore, Greenfield + S/4,
-            Consulting Firm + Accenture
-          </p>
         </div>
       </section>
 
+      {summaryVisibility.canSeeInternalMetrics ? (
       <section className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-6">
         {[
-          ["Results", resultCount],
-          ["Contactable", contactable],
-          ["High Quality", highQuality],
-          ["Review Needed", reviewNeeded],
-          ["SAP Skills", displayedSapSkills],
-          [
-            "Project Type",
-            displayedProjectTypes,
-          ],
+          ["Filtered Results", resultCount],
+          ["Total Talent Pool", totalPoolCount],
+          ["Reachable", reachable],
+          ["Ready", ready],
+          ["Needs Review", reviewNeeded],
+          ["Export Blocked", exportBlocked],
         ].map(([label, value]) => (
           <div
             key={String(label)}
@@ -2538,6 +2618,7 @@ export default function TalentPoolSearchPage() {
           </div>
         ))}
       </section>
+      ) : null}
       {error && (
         <div className="mt-4 rounded-xl border border-red-900 bg-red-950/40 p-4 text-sm font-bold text-red-200">
           {error}
@@ -2582,8 +2663,11 @@ export default function TalentPoolSearchPage() {
             : "#";
           const skills = candidateSapTags(candidate);
           const companiesMatched = candidateCompanyHighlights(candidate);
-          const currentCompany = companiesMatched[0];
-          const previousCompany = companiesMatched[1];
+          const validationBadge = candidateValidationBadge(candidate);
+          const reviewProfile = isTalentSearchReviewBadge(validationBadge.label);
+          const resolvedCardDisplay = resolveCanonicalCandidateDisplay(candidate as AnyRecord);
+          const verifiedCurrentCompany = resolvedCardDisplay.currentEmployer || safeTalentSearchCompany((candidate as AnyRecord).display_company || (candidate as AnyRecord).current_company || (candidate as AnyRecord).currentCompany || companiesMatched[0]);
+          const currentCompany = verifiedCurrentCompany === "Not disclosed" ? "Not disclosed" : verifiedCurrentCompany;
           const certifications = candidateCertifications(candidate);
           const counts = projectCounts(candidate);
           const projectEvidence = [
@@ -2596,17 +2680,16 @@ export default function TalentPoolSearchPage() {
           ].filter(([, value]) => Number(value) > 0);
           const reviewFlag = index < 3;
           const displayName = canonicalCandidateName(candidate);
-          const validationBadge = candidateValidationBadge(candidate);
           const avatarInitials = displayName === "Candidate profile pending validation"
             ? "ID"
             : displayName
                 .split(/\s+/)
                 .filter(Boolean)
                 .slice(0, 2)
-                .map((part) => part[0])
+                .map((part: string) => part[0])
                 .join("")
                 .toUpperCase() || "?";
-          const moduleSummary = normalize(candidatePrimaryModule(candidate) || candidate.primary_module || "SAP");
+          const moduleSummary = cleanTalentSearchModule(candidatePrimaryModule(candidate)) || "";
           const industrySummary = normalize(
             (candidate as AnyRecord).display_industry ||
               (candidate as AnyRecord).industry ||
@@ -2614,13 +2697,6 @@ export default function TalentPoolSearchPage() {
               (candidate as AnyRecord).company_background ||
               "",
           );
-          const summaryFocus = [
-            counts.greenfield ? "Greenfield" : null,
-            counts.ams ? "AMS" : null,
-            counts.implementation ? "implementation" : null,
-            counts.s4hana ? "S/4HANA" : null,
-            counts.rollout ? "Rollout" : null,
-          ].filter(Boolean).slice(0, 3);
           const aiRecommendationItems = [
             counts.implementation || counts.greenfield || counts.s4hana || counts.ams
               ? "Enterprise Delivery"
@@ -2640,25 +2716,18 @@ export default function TalentPoolSearchPage() {
             : /best|top/i.test(rankBadge.label)
               ? "border-l-emerald-500/80"
               : "border-l-sky-500/80";
-          const employerHistory = [currentCompany, previousCompany].filter(Boolean).join(" → ");
-          const deliveryThemes = [
-            counts.greenfield ? "Greenfield" : null,
-            counts.brownfield ? "Brownfield" : null,
-            counts.s4hana ? "S/4HANA" : null,
-            counts.ams ? "AMS" : null,
-            counts.rollout ? "Rollout" : null,
-          ].filter(Boolean);
-          const summaryLead = counts.greenfield && counts.s4hana
-            ? `Enterprise SAP ${moduleSummary} Architect.`
-            : counts.ams && counts.implementation
-              ? `SAP ${moduleSummary} consultant.`
-              : `Specialized in enterprise SAP ${moduleSummary} delivery.`;
-          const summaryTail = counts.greenfield && counts.s4hana
-            ? `${years ? `${years} years` : "Experience"} across Greenfield, S/4HANA and AMS delivery.`
-            : counts.ams && counts.implementation
-              ? `${years ? `${years} years` : "Experience"} in implementation and AMS programs.`
-              : `${years ? `${years} years` : "Strong delivery experience"} across enterprise programs.`;
-          const executiveSummary = `${summaryLead} ${summaryTail}`.trim();
+          const showValidationBadge = summaryVisibility.canSeeValidationBadge;
+          const executiveSummary = buildTalentSearchExecutiveSummary({
+            module: moduleSummary,
+            years,
+            implementation: counts.implementation,
+            greenfield: counts.greenfield,
+            s4hana: counts.s4hana,
+            ams: counts.ams,
+            reviewBadge: validationBadge.label,
+            certification: certifications[0],
+          });
+          const displayTitle = resolvedCardDisplay.displayRole || (reviewProfile && moduleSummary ? `SAP ${moduleSummary} Consultant` : reviewProfile ? "Role not disclosed" : cleanCandidateTitle(candidate));
           const compactProjectEvidence = projectEvidence.slice(0, 4);
           const whyItems = compactProjectEvidence.slice(0, 3).map(([label, value]) => {
             const shortLabel = String(label)
@@ -2683,23 +2752,17 @@ export default function TalentPoolSearchPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
-                        <h2 className="truncate text-[22px] font-extrabold leading-6 text-white">
+                        <h2 title={displayName} className="break-words text-[20px] font-extrabold leading-6 text-white">
                           {displayName}
                         </h2>
-                        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] ${validationBadge.tone}`}>
-                          {validationBadge.label}
-                        </span>
-                        {reviewFlag ? (
-                          <span className="shrink-0 rounded-full border border-amber-500/35 bg-amber-950/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-amber-100/80">
-                            Review
+                        {showValidationBadge ? (
+                          <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] ${validationBadge.tone}`}>
+                            {validationBadge.label}
                           </span>
                         ) : null}
                       </div>
-                      <p className="mt-1 line-clamp-1 text-[13px] font-semibold leading-4 text-sky-100">
-                        {cleanCandidateTitle(candidate)}
-                      </p>
-                      <p className="mt-1 truncate text-[11px] font-medium text-slate-400">
-                        {location}
+                      <p className="mt-1 line-clamp-1 text-[13px] font-semibold leading-4 text-sky-100" title={displayTitle}>
+                        {displayTitle}
                       </p>
                     </div>
                   </div>
@@ -2707,15 +2770,11 @@ export default function TalentPoolSearchPage() {
                   <div className="mt-2.5 grid gap-1.5 text-[11px] leading-4">
                     <div className="truncate text-slate-300">
                       <span className="font-semibold uppercase tracking-[0.08em] text-slate-500">Contact </span>
-                      {maskEmail(candidate.email)} • {maskPhone(candidate.phone, candidate.phone_status)}
+                      {maskEmail(candidate.email)} - {maskPhone(candidate.phone, candidate.phone_status)}
                     </div>
                     <div className="truncate text-slate-300">
                       <span className="font-semibold uppercase tracking-[0.08em] text-slate-500">Current Employer </span>
-                      <span className="text-slate-100">{currentCompany || "—"}</span>
-                    </div>
-                    <div className="truncate text-slate-300">
-                      <span className="font-semibold uppercase tracking-[0.08em] text-slate-500">Previous Employer </span>
-                      <span className="text-slate-300">{previousCompany || "—"}</span>
+                      <span className="text-slate-100">{currentCompany || "-"}</span>
                     </div>
                   </div>
 
@@ -2728,16 +2787,6 @@ export default function TalentPoolSearchPage() {
                     <span className="inline-flex h-[22px] items-center rounded-full border border-slate-700/55 bg-slate-900/40 px-2 text-[11px] font-semibold text-slate-100">
                       {years} yrs
                     </span>
-                    {currentCompany ? (
-                      <span className="inline-flex h-[22px] items-center rounded-full border border-sky-700/40 bg-sky-950/20 px-2 text-[11px] font-semibold text-sky-100">
-                        Current Company
-                      </span>
-                    ) : null}
-                    {previousCompany ? (
-                      <span className="inline-flex h-[22px] items-center rounded-full border border-slate-700/55 bg-slate-900/40 px-2 text-[11px] font-semibold text-slate-100">
-                        Previous Company
-                      </span>
-                    ) : null}
                   </div>
                 </div>
 
@@ -2747,8 +2796,6 @@ export default function TalentPoolSearchPage() {
                   </div>
                   <p className="mt-1.5 line-clamp-2 text-[14px] leading-5 text-slate-100">
                     {executiveSummary}
-                    {companiesMatched.length ? ` Previously at ${companiesMatched.slice(0, 2).join(" and ")}.` : ""}
-                    {certifications.length ? ` ${certifications[0]}.` : ""}
                   </p>
 
                   <div className="mt-2.5 flex flex-wrap gap-1">
@@ -2787,7 +2834,7 @@ export default function TalentPoolSearchPage() {
                                 key={`${getCandidateKey(candidate, index)}-rec-${recommendationIndex}`}
                                 className="flex items-start gap-1.5 text-[11px] font-semibold leading-4 text-slate-200"
                               >
-                                <span className="text-emerald-300">✓</span>
+                                <span className="text-emerald-300">OK</span>
                                 <span>{item}</span>
                               </div>
                             ))}
@@ -2805,7 +2852,7 @@ export default function TalentPoolSearchPage() {
                                 key={`${getCandidateKey(candidate, index)}-why-${reasonIndex}`}
                                 className="inline-flex h-[22px] items-center gap-1 rounded-full border border-slate-700/40 bg-slate-900/35 px-2 text-[11px] font-semibold text-slate-100"
                               >
-                                <span className="text-emerald-300">✓</span>
+                                <span className="text-emerald-300">OK</span>
                                 <span>{item}</span>
                               </span>
                             ))}
@@ -2891,7 +2938,7 @@ export default function TalentPoolSearchPage() {
                           rel="noopener noreferrer"
                           className="inline-flex h-[32px] w-full items-center justify-center rounded-lg border border-slate-700 bg-slate-900 px-1.5 text-[9px] font-black text-slate-100 hover:border-slate-500 hover:bg-slate-800"
                         >
-                          360°
+                          360
                         </Link>
                       ) : null}
                     </div>
@@ -2900,7 +2947,56 @@ export default function TalentPoolSearchPage() {
               </div>
             </article>          );
         })}
-      </section>      {selectedCandidate ? (
+      </section>
+      {candidates.length ? (
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-4 text-sm font-semibold text-slate-300">
+          <div className="flex items-center gap-2">
+            <span>Page size</span>
+            <select
+              value={pageSize}
+              onChange={(event) => changePageSize(Number(event.target.value))}
+              disabled={loading}
+              className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-sm font-bold text-white disabled:opacity-60"
+            >
+              {SEARCH_PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => goToPage(pagination.currentPage - 1)}
+              disabled={loading || !pagination.hasPrevious}
+              className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-bold text-slate-100 hover:bg-slate-800 disabled:opacity-50"
+            >
+              Previous
+            </button>
+            {buildPaginationPages(pagination.currentPage, pagination.totalPages).map((pageItem, index) => pageItem === "..." ? (
+              <span key={`ellipsis-${index}`} className="px-2 text-slate-500">...</span>
+            ) : (
+              <button
+                key={pageItem}
+                type="button"
+                onClick={() => goToPage(pageItem)}
+                disabled={loading || pageItem === pagination.currentPage}
+                className={`min-w-9 rounded-lg border px-3 py-2 font-bold ${pageItem === pagination.currentPage ? "border-sky-500 bg-sky-950 text-sky-100" : "border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"} disabled:opacity-80`}
+              >
+                {pageItem}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => goToPage(pagination.currentPage + 1)}
+              disabled={loading || !pagination.hasNext}
+              className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-bold text-slate-100 hover:bg-slate-800 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {selectedCandidate ? (
         <Candidate360Modal
           candidate={selectedCandidate}
           shortlisted={shortlistedIds.has(getShortlistId(selectedCandidate))}

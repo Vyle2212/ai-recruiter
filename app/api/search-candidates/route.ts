@@ -1,7 +1,8 @@
-﻿import { NextRequest, NextResponse } from "next/server";
-import { buildCanonicalCandidateProfile } from "@/lib/canonicalCandidateProfile";
-import { evaluateResumeQualityGate } from "@/lib/resumeQualityGate";
+import { NextRequest, NextResponse } from "next/server";
 import { dedupeByCanonicalIdentity } from "@/lib/identityResolution";
+import { buildTalentSearchPaginationMeta } from "@/lib/talentSearchPagination";
+import { buildSearchIndexAudit } from "@/lib/searchIndexAudit";
+import { TALENT_SEARCH_DISPLAY_RESOLVER_VERSION, cleanTalentSearchTitle, classifyTalentSearchQuery, extractTalentSearchExplicitName, isTalentSearchBadDisplayName, isTalentSearchPlaceholderName, resolveTalentSearchViewerRole, safeTalentSearchCompany, talentSearchIdentityRank, talentSearchSummaryVisibility } from "@/lib/talentSearchDisplay";
 import { supabase } from "@/lib/supabase";
 import {
   buildCandidateSapText,
@@ -40,11 +41,6 @@ const CANDIDATE_LIGHT_FIELDS = `
   consulting_level,
   current_company,
   company,
-  summary,
-  experience,
-  raw_text,
-  resume_text,
-  raw_cv,
   expected_salary,
   status,
   profile_quality_score,
@@ -92,7 +88,6 @@ const SEARCH_INDEX_FIELDS = `
   s4_ams_count,
   ams_count,
   quality_score,
-  contactable,
   search_text,
   updated_at,
   source_updated_at,
@@ -104,19 +99,72 @@ const SEARCH_INDEX_FIELDS = `
   phone_masked
 `;
 
+const DEFAULT_SEARCH_PAGE_SIZE = 10;
+const ALLOWED_SEARCH_PAGE_SIZES = new Set([10, 20, 50, 100]);
+const MAX_SEARCH_LIMIT = 100;
+
+type SearchTiming = {
+  startedAt: number;
+  dbQueryMs?: number;
+  candidateCountLoaded?: number;
+  mappingMs?: number;
+  countMs?: number;
+};
+
+function elapsedMs(start: number) {
+  return Math.round(performance.now() - start);
+}
+
+function logSearchTiming(label: string, timing: SearchTiming, extra: AnyRecord = {}) {
+  const totalApiMs = elapsedMs(timing.startedAt);
+  console.log(`[search-candidates] ${label}`, {
+    dbQueryMs: timing.dbQueryMs ?? 0,
+    candidateCountLoaded: timing.candidateCountLoaded ?? 0,
+    mappingMs: timing.mappingMs ?? 0,
+    countMs: timing.countMs ?? 0,
+    totalApiMs,
+    ...extra,
+  });
+}
+
 function chunk<T>(items: T[], size = 200): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
   return out;
 }
 
+function safeSearchDisplayName(...values: any[]) {
+  for (const value of values) {
+    const name = String(value || "")
+      .replace(/\s+/g, " ")
+      .replace(/\b(Gender|Marital|Citizenship|Email|E-mail|H\/?P number)\b[\s\S]*$/i, "")
+      .trim();
+    if (name && !isTalentSearchPlaceholderName(name) && !isTalentSearchBadDisplayName(name)) return name;
+  }
+  return "Candidate profile pending validation";
+}
+
+function safeSearchDisplayCompany(...values: any[]) {
+  for (const value of values) {
+    const company = safeTalentSearchCompany(value);
+    if (company !== "Not disclosed") return company;
+  }
+  return "Not disclosed";
+}
+
 function mergeIndexCandidate(indexRow: AnyRecord, candidate?: AnyRecord): AnyRecord {
   const c = candidate || {};
+  const displayName = safeSearchDisplayName(c.display_name, c.displayName, indexRow.display_name, c.full_name, c.normalized_name, extractTalentSearchExplicitName(c), c.name);
+  const displayCompany = safeSearchDisplayCompany(c.display_company, c.current_company, c.currentCompany, c.current_employer, c.currentEmployer, c.company, c.employer, indexRow.display_company);
+  const displayTitle = cleanTalentSearchTitle(c.display_title || c.current_title || c.currentTitle || c.title || c.headline || indexRow.display_title, indexRow.primary_module || c.primary_module || "SAP");
   return {
     ...c,
     __index: indexRow,
     id: c.id || indexRow.candidate_id,
     candidate_id: indexRow.candidate_id,
+    name: displayName,
+    displayName,
+    display_name: displayName,
     // candidate_search_index is the canonical source after rebuild.
     // Do NOT let stale candidates.primary_module override the strict index primary module.
     primary_module: indexRow.primary_module || c.primary_module,
@@ -126,16 +174,21 @@ function mergeIndexCandidate(indexRow: AnyRecord, candidate?: AnyRecord): AnyRec
     secondary_modules: (indexRow.all_modules || []).filter((module: any) => String(module || "").toUpperCase() !== String(indexRow.primary_module || "").toUpperCase()),
     sap_modules: indexRow.primary_module ? [indexRow.primary_module] : (c.sap_modules || []),
     sap_submodules: indexRow.all_submodules || c.sap_submodules || [],
+    display_title: displayTitle,
+    current_title: displayTitle,
+    title: displayTitle,
     role_type: c.role_type || indexRow.role_type,
     consulting_level: c.consulting_level || indexRow.consulting_level,
     company_type: c.company_type || indexRow.company_type,
-    current_company: c.current_company || indexRow.display_company,
-    company: c.company || indexRow.display_company,
+    current_company: displayCompany,
+    currentCompany: displayCompany,
+    company: displayCompany,
+    displayCompany,
     location: c.location || indexRow.display_location || indexRow.country,
     current_location: c.current_location || indexRow.display_location || indexRow.country,
     years: n(c.years ?? indexRow.years),
     profile_quality_score: n(indexRow.quality_score ?? c.profile_quality_score, c.profile_quality_score ?? 85),
-    contactable: Boolean(indexRow.contactable || c.email || c.phone),
+    hasContactInfo: Boolean(c.email || c.phone),
     index_quality_score: n(indexRow.quality_score ?? c.profile_quality_score, c.profile_quality_score ?? 85),
     email_masked: indexRow.email_masked,
     phone_masked: indexRow.phone_masked,
@@ -151,6 +204,44 @@ function mergeIndexCandidate(indexRow: AnyRecord, candidate?: AnyRecord): AnyRec
   };
 }
 
+function indexRowFromCandidate(candidate: AnyRecord): AnyRecord {
+  const modules = unique([
+    candidate.primary_module,
+    ...arrayFrom(candidate.sap_modules),
+    ...arrayFrom(candidate.secondary_modules),
+  ]);
+  const years = n(candidate.years ?? candidate.years_experience);
+  return {
+    candidate_id: candidate.id,
+    primary_module: candidate.primary_module || modules[0] || "SAP",
+    all_modules: modules,
+    all_submodules: arrayFrom(candidate.sap_submodules),
+    country: candidate.current_location || candidate.location || "",
+    city: candidate.current_city || "",
+    years,
+    role_type: candidate.role_type,
+    consulting_level: candidate.consulting_level,
+    company_type: candidate.company_type || "Not disclosed",
+    consulting_firms: [],
+    project_types: [],
+    greenfield_count: n(candidate.s4_greenfield_count),
+    brownfield_count: 0,
+    rollout_count: n(candidate.rollout_project_count),
+    s4_count: n(candidate.s4hana_project_count ?? candidate.s4_implementation_count),
+    s4_ams_count: n(candidate.s4_support_count),
+    ams_count: n(candidate.ams_support_project_count),
+    quality_score: n(candidate.profile_quality_score, 85),
+    search_text: [candidate.name, candidate.current_title, candidate.title, candidate.headline, candidate.summary, candidate.primary_module, modules.join(" "), candidate.current_company, candidate.company].filter(Boolean).join(" "),
+    updated_at: candidate.updated_at,
+    source_updated_at: candidate.updated_at,
+    display_name: candidate.name,
+    display_title: candidate.current_title || candidate.title || candidate.headline,
+    display_company: safeTalentSearchCompany(candidate.current_company || candidate.company),
+    display_location: candidate.current_location || candidate.location || "",
+    email_masked: maskEmail(candidate.email),
+    phone_masked: maskPhone(candidate.phone),
+  };
+}
 function firstParam(url: URL, keys: string[], fallback = "") {
   for (const key of keys) {
     const value = url.searchParams.get(key);
@@ -222,12 +313,11 @@ function arrayFrom(value: any): string[] {
 function normalizedText(value: any) {
   return String(value || "")
     .toLowerCase()
-    .replace(/[â€â€‘â€’â€“â€”â€•]/g, "-")
+    .replace(/[\u2010-\u2015]/g, "-")
+    .replace(/[^a-z0-9+/#.\s-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
-
-
 function cleanSearchKey(value: any) {
   return String(value || "")
     .toUpperCase()
@@ -298,29 +388,34 @@ function hasStrongSapTitleEvidenceForSearch(value: any) {
   return /\b(SAP\s+FICO|FI\/CO|FICO|SAP\s+FI\b|SAP\s+CO\b|CFIN|CENTRAL\s+FINANCE|SAP\s+SD\b|SD\s+CONSULTANT|SAP\s+MM\b|MM\s+CONSULTANT|SAP\s+PM\b|SAP\s+PS\b|SAP\s+PP\b|SAP\s+ABAP|ABAP\s+DEVELOPER|SAP\s+BASIS|BASIS\s+CONSULTANT|SAP\s+BW|SAP\s+BI|BI\s+CONSULTANT|SAP\s+BTP|SAP\s+SECURITY|SUCCESSFACTORS|SUCCESS\s+FACTORS|SAP\s+SF\b|S\/4HANA|S4HANA|SAP\s+HANA|SAP\s+EWM|SAP\s+TM|SAP\s+IS[-\s]?U|SAP\s+BODS|EWM\/WMS|WM\/EWM)\b/i.test(title);
 }
 
-function shouldHideCandidateFromRecruiterSearch(candidate: AnyRecord, showReview = false) {
+function hiddenReasonForRecruiterSearch(candidate: AnyRecord, showReview = false) {
   const status = cleanSearchKey(candidate.status);
   const primary = candidate.primary_module || candidate.primaryModule || candidate.__index?.primary_module;
   const title = candidate.current_title || candidate.title || candidate.headline || candidate.__index?.display_title;
   const name = candidate.name || candidate.__index?.display_name;
 
-  if (SEARCH_HIDDEN_STATUSES.has(status)) return true;
+  if (SEARCH_HIDDEN_STATUSES.has(status)) return "archivedOrInactive";
 
   // Default production search: never show needs_review unless checkbox/param is on.
-  if (!showReview && SEARCH_REVIEW_STATUSES.has(status)) return true;
+  if (!showReview && SEARCH_REVIEW_STATUSES.has(status)) return "visibility";
 
   // Even when showReview is on, parser-placeholder names should not appear in recruiter results.
   // They can be handled in audit/admin review, not in Talent Pool Search.
-  if (isSearchBadName(name)) return true;
+  if (isTalentSearchPlaceholderName(name)) return "placeholder";
+  if (isSearchBadName(name) || isTalentSearchBadDisplayName(name)) return "invalidName";
 
-  if (isSearchGenericTitle(title) && isSearchUnknownModule(primary)) return true;
+  if (isSearchGenericTitle(title) && isSearchUnknownModule(primary)) return "suppression";
 
   // Generic title + needs_review is too weak for search unless title itself has SAP module evidence.
   if (SEARCH_REVIEW_STATUSES.has(status) && isSearchGenericTitle(title) && !hasStrongSapTitleEvidenceForSearch(title)) {
-    return true;
+    return "suppression";
   }
 
-  return false;
+  return "";
+}
+
+function shouldHideCandidateFromRecruiterSearch(candidate: AnyRecord, showReview = false) {
+  return Boolean(hiddenReasonForRecruiterSearch(candidate, showReview));
 }
 
 
@@ -334,23 +429,8 @@ const BAD_DISPLAY_TITLE_PATTERNS = [
 ];
 
 function cleanDisplayTitle(value: any, primaryModule = "SAP") {
-  let title = String(value || "")
-    .replace(/\s+/g, " ")
-    .replace(/^career history\s*/i, "")
-    .replace(/^(title|position|designation|current position|current title|role|job title)\s*[:\-]\s*/i, "")
-    .replace(/[â€¢|]+/g, " ")
-    .trim();
-
-  if (title.length > 90) title = title.slice(0, 90).replace(/\s+\S*$/, "").trim();
-
-  const bad = !title || BAD_DISPLAY_TITLE_PATTERNS.some((rx) => rx.test(title));
-  if (bad) {
-    const m = String(primaryModule || "SAP").replace(/^SAP\s+/i, "").toUpperCase();
-    return m && m !== "UNKNOWN" && m !== "SAP" ? `SAP ${m} Consultant` : "SAP Consultant";
-  }
-  return title;
+  return cleanTalentSearchTitle(value, primaryModule);
 }
-
 function calibratedProfileQuality(candidate: AnyRecord, years: number, title: string) {
   // Distribution-focused quality score. This avoids 92/100 or 100/100 clustering.
   // Quality = data completeness + confidence, not role strength.
@@ -398,7 +478,7 @@ function calibratedSearchFit(input: {
   s4: number;
   ams: number;
   moduleMatchType?: string;
-  contactable?: boolean;
+  hasContactInfo?: boolean;
 }) {
   // Recruiter Scoring V3:
   // Search Fit = module alignment + delivery proof + profile confidence.
@@ -466,7 +546,7 @@ function calibratedSearchFit(input: {
   else if (input.quality < 70) score -= 5;
   else if (input.quality < 80) score -= 2.5;
 
-  if (input.contactable) score += 0.75;
+  if (input.hasContactInfo) score += 0.75;
   else score -= 2;
 
   if (input.implementation <= 0 && input.rollout <= 0 && input.s4 <= 0 && input.ams <= 0) score -= 7;
@@ -475,7 +555,7 @@ function calibratedSearchFit(input: {
   const isExceptionalExactPrimary =
     exactPrimary &&
     input.quality >= 88 &&
-    input.contactable !== false &&
+    input.hasContactInfo !== false &&
     input.years >= 15 &&
     input.implementation >= 3 &&
     meaningfulDelivery;
@@ -494,7 +574,7 @@ function recruiterPriorityScore(input: {
   rollout: number;
   s4: number;
   ams: number;
-  contactable?: boolean;
+  hasContactInfo?: boolean;
   reviewFirst?: boolean;
 }) {
   // Priority is derived from Search Fit, then adjusted for recruiter usefulness.
@@ -507,15 +587,50 @@ function recruiterPriorityScore(input: {
     Math.min(input.rollout, 5) * 0.9 +
     Math.min(input.ams, 8) * 0.25;
 
-  if (!input.contactable) score -= 4;
+  if (!input.hasContactInfo) score -= 4;
   if (input.reviewFirst) score -= 3;
   return Math.max(40, Math.min(99, Math.round(score)));
+}
+
+function compactSearchText(value: any, maxLength = 320) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1).trim()}...`;
+}
+
+function fastValidationState(candidate: AnyRecord, quality: number, hasContactInfo: boolean) {
+  const rawStatus = cleanSearchKey(candidate.validation_status || candidate.validationStatus || candidate.status);
+  const invalidName = isSearchBadName(candidate.name || candidate.display_name || candidate.__index?.display_name);
+  const missingEmployer = !String(candidate.current_company || candidate.company || candidate.__index?.display_company || "").trim() || /^(not disclosed|unknown|protected)$/i.test(String(candidate.current_company || candidate.company || candidate.__index?.display_company || "").trim());
+  const hidden = rawStatus === "HIDDEN" || rawStatus === "ARCHIVED" || SEARCH_HIDDEN_STATUSES.has(rawStatus);
+  let status = "Ready";
+  if (rawStatus === "DUPLICATE SUSPECTED" || rawStatus === "DUPLICATE_SUSPECTED") status = "Duplicate Suspected";
+  else if (rawStatus === "PARSING ISSUE" || rawStatus === "PARSING_ISSUE") status = "Parsing Issue";
+  else if (rawStatus === "MISSING INFORMATION" || rawStatus === "MISSING_INFORMATION") status = "Missing Information";
+  else if (rawStatus === "NEEDS REVIEW" || rawStatus === "NEEDS_REVIEW") status = "Needs Review";
+  else if (hidden) status = rawStatus === "ARCHIVED" ? "Archived" : "Hidden";
+  else if (invalidName) status = "Parsing Issue";
+  else if (missingEmployer || !hasContactInfo) status = "Missing Information";
+  else if (quality < 75) status = "Needs Review";
+  const exportEligible = status === "Ready" && hasContactInfo && !invalidName && !missingEmployer && quality >= 75;
+  return {
+    status,
+    badge: status === "Ready" && !exportEligible ? "Needs Review" : status,
+    exportEligible,
+    blockedReasons: [
+      status !== "Ready" ? `Validation Status = ${status}` : "",
+      !hasContactInfo ? "Missing critical identity" : "",
+      invalidName ? "Invalid name" : "",
+      missingEmployer ? "Missing employer" : "",
+      quality < 75 ? "Low parser confidence" : "",
+    ].filter(Boolean),
+  };
 }
 
 function shouldRecruiterReviewFirst(input: {
   searchFit: number;
   quality: number;
-  contactable: boolean;
+  hasContactInfo: boolean;
   moduleMatchType?: string;
   implementation: number;
   rollout: number;
@@ -524,7 +639,7 @@ function shouldRecruiterReviewFirst(input: {
   const type = String(input.moduleMatchType || "").toLowerCase();
   const weakModule = ["adjacent", "related", "partial", "weak", "fallback", "cross", "mismatch"].some((token) => type.includes(token));
   if (weakModule) return true;
-  if (!input.contactable) return true;
+  if (!input.hasContactInfo) return true;
   if (input.quality < 80) return true;
   if (input.searchFit < 86) return true;
   if (input.implementation <= 0 && input.rollout <= 0 && input.s4 <= 0) return true;
@@ -552,9 +667,8 @@ function buildNaturalSearchSummary(input: { title: string; primary: string; year
 
   const company = input.companies.length ? ` Recent background: ${input.companies.slice(0, 2).join(" / ")}.` : "";
   const exp = input.years ? `${input.years} years SAP experience` : "SAP experience to confirm";
-  const evidenceText = evidence.length ? ` Evidence: ${evidence.join(" Â· ")}.` : " Project delivery scope to validate.";
-
-  return `${tone} SAP ${module} candidate â€” ${title}. ${exp}.${evidenceText}${company}`;
+  const evidenceText = evidence.length ? ` Evidence: ${evidence.join(" / ")}.` : " Project delivery scope to validate.";
+  return compactSearchText(`${tone} ${title}. ${exp}.${evidenceText}${company}`);
 }
 
 function countryToken(value: any) {
@@ -830,7 +944,7 @@ function normalizeCandidateForSearch(args: {
   const years = candidateYears(candidate);
   const cleanTitle = cleanDisplayTitle(candidate.current_title || candidate.title || candidate.headline || indexRow.display_title, primary);
   const quality = calibratedProfileQuality(candidate, years, cleanTitle);
-  const contactable = Boolean(candidate.contactable || indexRow.contactable || candidate.email || candidate.phone);
+  const hasContactInfo = Boolean(candidate.email || candidate.phone);
   const scoreDetails = debug?.scoreDetails || {};
   const moduleScore = Number(scoreDetails.moduleScore ?? 0);
   const keywordBoost = Number(scoreDetails.keywordBoost ?? 0);
@@ -847,7 +961,7 @@ function normalizeCandidateForSearch(args: {
   const exactPrimary = type.includes("direct") && type.includes("primary");
   const priorityBonus = Math.min(6, Math.max(0, engineBase - moduleBase) * 0.22);
   const moduleBonus = moduleBase;
-  const directPrimaryBonus = exactPrimary && quality >= 88 && contactable !== false && years >= 15 && implementation >= 3 ? 0.75 : 0;
+  const directPrimaryBonus = exactPrimary && quality >= 88 && hasContactInfo !== false && years >= 15 && implementation >= 3 ? 0.75 : 0;
   const consultingBonus = 0;
   const yearsBonus = years >= 18 ? 1.5 : years >= 12 ? 1 : years >= 8 ? 0.5 : 0;
   const qualityBonus = quality >= 92 ? 2.5 : quality >= 88 ? 1.5 : quality >= 82 ? 1 : quality < 70 ? -5 : quality < 80 ? -2.5 : 0;
@@ -878,7 +992,7 @@ function normalizeCandidateForSearch(args: {
     s4: s4Impl,
     ams,
     moduleMatchType,
-    contactable,
+    hasContactInfo,
   });
 
   if (debug?.enabled) {
@@ -890,7 +1004,7 @@ function normalizeCandidateForSearch(args: {
   const reviewFirst = shouldRecruiterReviewFirst({
     searchFit: adjustedSearchFit,
     quality,
-    contactable,
+    hasContactInfo,
     moduleMatchType,
     implementation,
     rollout,
@@ -904,18 +1018,25 @@ function normalizeCandidateForSearch(args: {
     rollout,
     s4: s4Impl,
     ams,
-    contactable,
+    hasContactInfo,
     reviewFirst,
   });
   const companies = unique([candidate.current_company, candidate.company, ...(arrayFrom(indexRow.consulting_firms))]).filter(Boolean);
-  const naturalSummary = buildNaturalSearchSummary({ title: cleanTitle, primary, years, implementation, rollout, s4: s4Impl, ams, companies, quality, searchFit: adjustedSearchFit, consultingLevel: candidate.consulting_level });
-  const canonicalProfile = buildCanonicalCandidateProfile(candidate);
-  const parserQuality = evaluateResumeQualityGate({ ...candidate, name: canonicalProfile.displayName, currentCompany: canonicalProfile.currentCompany });
+  const naturalSummary = compactSearchText(buildNaturalSearchSummary({ title: cleanTitle, primary, years, implementation, rollout, s4: s4Impl, ams, companies, quality, searchFit: adjustedSearchFit, consultingLevel: candidate.consulting_level }));
+  const validation = fastValidationState(candidate, quality, hasContactInfo);
+  const displayName = safeSearchDisplayName(candidate.displayName, candidate.display_name, indexRow.display_name, candidate.full_name, candidate.normalized_name, extractTalentSearchExplicitName(candidate), candidate.name);
+  const currentCompany = safeSearchDisplayCompany(candidate.display_company, candidate.current_company, candidate.currentCompany, candidate.current_employer, candidate.currentEmployer, candidate.company, candidate.employer, indexRow.display_company);
+  const companyType = candidate.company_type || indexRow.company_type || "Not disclosed";
 
   return {
     ...candidate,
     id: candidate.id,
     candidate_id: candidate.id,
+    __index: undefined,
+    search_text: undefined,
+    name: displayName,
+    displayName,
+    display_name: displayName,
     title: cleanTitle,
     display_title: cleanTitle,
     primary_module: primary || candidate.primary_module || "SAP",
@@ -927,15 +1048,17 @@ function normalizeCandidateForSearch(args: {
     seniority_level: candidate.consulting_level || candidate.role_type || "",
     country: inferredCountry(candidate, countries),
     display_location: candidate.location || candidate.current_location || inferredCountry(candidate, countries),
-    display_company: canonicalProfile.currentCompany !== "Not disclosed" ? canonicalProfile.currentCompany : candidate.current_company || candidate.company || "",
-    current_company: canonicalProfile.currentCompany,
-    company_type: canonicalProfile.companyType,
-    background_experience: canonicalProfile.backgroundExperience,
+    display_company: currentCompany,
+    currentCompany,
+    current_company: currentCompany,
+    company: currentCompany,
+    company_type: companyType,
+    background_experience: candidate.background_experience || companyType,
     years,
     years_experience: years,
     email_masked: maskEmail(candidate.email) || indexRow.email_masked,
     phone_masked: maskPhone(candidate.phone) || indexRow.phone_masked,
-    contactable,
+    hasContactInfo,
     review_first: reviewFirst,
     recruiter_review_first: reviewFirst,
     searchFit: adjustedSearchFit,
@@ -944,11 +1067,20 @@ function normalizeCandidateForSearch(args: {
     module_match_type: moduleMatchType,
     why_matched: why,
     matched_tokens: tokens,
-    profile_quality_score: Math.min(quality, parserQuality.parserQualityScore),
-    parser_quality_score: parserQuality.parserQualityScore,
-    parser_quality: parserQuality,
-    review_needed: parserQuality.needsManualReview,
-    excluded_from_client_view: !parserQuality.allowedForExecutiveExport,
+    validation_status: validation.status,
+    validation_badge: validation.badge,
+    validation_export_eligible: validation.exportEligible,
+    client_export_eligible: validation.exportEligible,
+    export_blocking_reasons: validation.blockedReasons,
+    profile_quality_score: quality,
+    parser_quality_score: quality,
+    parser_quality: {
+      parserQualityScore: quality,
+      needsManualReview: validation.badge !== "Ready",
+      allowedForExecutiveExport: validation.exportEligible,
+    },
+    review_needed: validation.badge !== "Ready",
+    excluded_from_client_view: !validation.exportEligible,
     display_quality_score: quality,
     recruiter_priority_score: priorityScore,
     rank_score: priorityScore,
@@ -991,41 +1123,143 @@ function buildSupabaseCountryOr(countries: string[]) {
   return clauses.join(",");
 }
 
-async function fetchIndexRows(args: {
+function applySearchIndexFilters(query: any, args: {
   countries: string[];
-  contactableOnly: boolean;
+  hasContactInfoOnly: boolean;
   minYears: number;
   minQuality: number;
-  limit: number;
 }) {
-  const { countries, contactableOnly, minYears, minQuality, limit } = args;
-  const fetchLimit = Math.max(Math.min(limit * 3, 3000), 1000);
-
-  let query = supabase
-    .from("candidate_search_index")
-    .select(SEARCH_INDEX_FIELDS)
-    .order("source_updated_at", { ascending: false, nullsFirst: false })
-    .limit(fetchLimit);
-
+  const { countries, minYears, minQuality } = args;
   if (countries.length) query = query.or(buildSupabaseCountryOr(countries));
   if (minYears > 0) query = query.gte("years", minYears);
   if (minQuality > 0) query = query.gte("quality_score", minQuality);
-
-  // Search-index gate: remove rows that cannot be recruiter-ready by module.
-  query = query.not("primary_module", "is", null).neq("primary_module", "UNKNOWN").neq("primary_module", "GENERAL_SAP");
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
+  return query;
 }
 
+async function countIndexRows(args: {
+  countries: string[];
+  hasContactInfoOnly: boolean;
+  minYears: number;
+  minQuality: number;
+}) {
+  const query = applySearchIndexFilters(
+    supabase.from("candidate_search_index").select("candidate_id", { count: "exact", head: true }),
+    args,
+  );
+  const { count, error } = await query;
+  if (error) throw error;
+  return count || 0;
+}
+async function countTotalCandidates() {
+  const { count, error } = await supabase.from("candidates").select("id", { count: "exact", head: true });
+  if (error) throw error;
+  return count || 0;
+}
+
+async function fetchAllRows(table: string, columns: string) {
+  const rows: AnyRecord[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const to = from + pageSize - 1;
+    const { data, error } = await supabase.from(table).select(columns).range(from, to);
+    if (error) throw error;
+    const page = data || [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows;
+}
+
+async function fetchSearchIndexCoverageDiagnostics() {
+  const [candidates, indexRows] = await Promise.all([
+    fetchAllRows("candidates", "id,updated_at"),
+    fetchAllRows("candidate_search_index", "candidate_id,updated_at,source_updated_at"),
+  ]);
+  return buildSearchIndexAudit({
+    candidates,
+    indexRows,
+    sampleSize: 10,
+  });
+}
+
+function buildSearchVisibilityDiagnostics(rows: AnyRecord[], showReview: boolean) {
+  const counts = {
+    hiddenRows: 0,
+    hiddenByVisibility: 0,
+    hiddenByPlaceholder: 0,
+    hiddenByInvalidName: 0,
+    hiddenBySuppression: 0,
+    hiddenByArchivedOrInactive: 0,
+  };
+  for (const candidate of rows) {
+    const reason = hiddenReasonForRecruiterSearch(candidate, showReview);
+    if (!reason) continue;
+    counts.hiddenRows += 1;
+    if (reason === "visibility") counts.hiddenByVisibility += 1;
+    if (reason === "placeholder") counts.hiddenByPlaceholder += 1;
+    if (reason === "invalidName") counts.hiddenByInvalidName += 1;
+    if (reason === "suppression") counts.hiddenBySuppression += 1;
+    if (reason === "archivedOrInactive") counts.hiddenByArchivedOrInactive += 1;
+  }
+  return counts;
+}
+
+async function fetchIndexRows(args: {
+  countries: string[];
+  hasContactInfoOnly: boolean;
+  minYears: number;
+  minQuality: number;
+  limit: number;
+  offset: number;
+}) {
+  const rows: AnyRecord[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const to = from + pageSize - 1;
+    let query = applySearchIndexFilters(
+      supabase
+        .from("candidate_search_index")
+        .select(SEARCH_INDEX_FIELDS)
+        .order("source_updated_at", { ascending: false, nullsFirst: false })
+        .range(from, to),
+      args,
+    );
+
+    const { data, error } = await query;
+    if (error) throw error;
+    const page = data || [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows;
+}
+
+async function fetchBroadCandidatePage(args: {
+  limit: number;
+  offset: number;
+  hasContactInfoOnly?: boolean;
+}) {
+  let query = supabase
+    .from("candidates")
+    .select("*", { count: "exact" })
+    .order("updated_at", { ascending: false, nullsFirst: false })
+    .limit(2000);
+  if (args.hasContactInfoOnly) query = query.or("email.not.is.null,phone.not.is.null");
+  const { data, error, count } = await query;
+  if (error) throw error;
+  const rows = data || [];
+  return {
+    rows: rows.map((candidate: AnyRecord) => mergeIndexCandidate(indexRowFromCandidate(candidate), candidate)),
+    totalMatched: count || rows.length,
+  };
+}
 async function fetchCandidateDetailsByIds(ids: string[]) {
   const out: AnyRecord[] = [];
   const uniqueIds = unique(ids).filter(Boolean);
   for (const part of chunk(uniqueIds, 200)) {
     const { data, error } = await supabase
       .from("candidates")
-      .select(CANDIDATE_LIGHT_FIELDS)
+      .select("*")
       .in("id", part);
     if (error) throw error;
     out.push(...(data || []));
@@ -1035,17 +1269,25 @@ async function fetchCandidateDetailsByIds(ids: string[]) {
 
 async function fetchCandidates(args: {
   countries: string[];
-  contactableOnly: boolean;
+  hasContactInfoOnly: boolean;
   minYears: number;
   minQuality: number;
   limit: number;
+  offset: number;
 }) {
-  const indexRows = await fetchIndexRows(args);
+  const [indexRows, totalMatched] = await Promise.all([
+    fetchIndexRows(args),
+    countIndexRows(args),
+  ]);
   const details = await fetchCandidateDetailsByIds(indexRows.map((row: AnyRecord) => row.candidate_id));
-  return indexRows.map((row: AnyRecord) => mergeIndexCandidate(row, details.get(String(row.candidate_id))));
+  return {
+    rows: indexRows.map((row: AnyRecord) => mergeIndexCandidate(row, details.get(String(row.candidate_id)))),
+    totalMatched,
+  };
 }
 
 export async function GET(req: NextRequest) {
+  const timing: SearchTiming = { startedAt: performance.now() };
   try {
     const url = new URL(req.url);
 
@@ -1058,9 +1300,21 @@ export async function GET(req: NextRequest) {
     const city = firstParam(url, ["city"], "");
     const minYears = n(firstParam(url, ["minYears", "years"], "0"), 0);
     const minQuality = n(firstParam(url, ["minQuality"], "0"), 0);
-    const contactableOnly = toBool(firstParam(url, ["contactableOnly", "contactOnly"], "false"));
+    const hasContactInfoOnly = toBool(firstParam(url, ["hasContactInfoOnly", "contactInfoOnly", "contactableOnly", "contactOnly"], "false"));
     const showReview = toBool(firstParam(url, ["showReview"], "false"));
-    const limit = Math.min(n(firstParam(url, ["limit"], "1000"), 1000), 2000);
+    const reviewMode = toBool(firstParam(url, ["reviewMode"], "false"));
+    const includeReviewRecords = showReview || reviewMode;
+    const viewerRole = resolveTalentSearchViewerRole({
+      requestedRole: firstParam(url, ["viewerRole", "role"], ""),
+      adminFlag: firstParam(url, ["internalTalentSearchAdmin", "adminSummary", "admin"], ""),
+      adminEnabled: process.env.NODE_ENV !== "production" || process.env.TALENT_SEARCH_ADMIN_SUMMARY === "true" || process.env.NEXT_PUBLIC_TALENT_SEARCH_ADMIN_SUMMARY === "true",
+    });
+    const summaryVisibility = talentSearchSummaryVisibility(viewerRole);
+    const requestedPageSize = n(firstParam(url, ["pageSize", "limit"], String(DEFAULT_SEARCH_PAGE_SIZE)), DEFAULT_SEARCH_PAGE_SIZE);
+    const pageSize = ALLOWED_SEARCH_PAGE_SIZES.has(requestedPageSize) ? requestedPageSize : DEFAULT_SEARCH_PAGE_SIZE;
+    const limit = Math.min(pageSize, MAX_SEARCH_LIMIT);
+    const currentPage = Math.max(1, n(firstParam(url, ["page", "currentPage"], "1"), 1));
+    const offset = (currentPage - 1) * limit;
 
     const intent = buildSapSearchIntent({
       rawKeyword,
@@ -1068,24 +1322,50 @@ export async function GET(req: NextRequest) {
       explicitProjectTypes: rawProjects,
     });
 
-    const sourceRows = await fetchCandidates({ countries, contactableOnly, minYears, minQuality: showReview ? 0 : minQuality, limit });
-    const visibleRows = sourceRows.filter((candidate: AnyRecord) => !shouldHideCandidateFromRecruiterSearch(candidate, showReview));
+    const broadTalentPoolSearch =
+      hasContactInfoOnly &&
+      !rawKeyword.trim() &&
+      rawModules.length === 0 &&
+      rawProjects.length === 0 &&
+      countries.length === 0 &&
+      !city &&
+      minYears <= 0 &&
+      (includeReviewRecords || minQuality <= 0);
+
+    const dbStart = performance.now();
+    const [fetched, totalCandidates, searchIndexCoverage] = await Promise.all([
+      broadTalentPoolSearch
+        ? fetchBroadCandidatePage({ limit, offset, hasContactInfoOnly })
+        : fetchCandidates({ countries, hasContactInfoOnly, minYears, minQuality: includeReviewRecords ? 0 : minQuality, limit, offset }),
+      countTotalCandidates(),
+      fetchSearchIndexCoverageDiagnostics(),
+    ]);
+    const sourceRows = fetched.rows;
+    timing.dbQueryMs = elapsedMs(dbStart);
+    timing.candidateCountLoaded = sourceRows.length;
+    const mapStart = performance.now();
+    const queryType = classifyTalentSearchQuery(rawKeyword);
+    const searchVisibilityDiagnostics = buildSearchVisibilityDiagnostics(sourceRows, includeReviewRecords);
+    const visibleRows = sourceRows.filter((candidate: AnyRecord) => !shouldHideCandidateFromRecruiterSearch(candidate, includeReviewRecords));
 
     let btpDebugCount = 0;
   const isBtpRequested = intent.requiredModules.some((module) => canonicalSapKey(module) === "BTP");
 
-  const results = visibleRows
+  const allResults = visibleRows
+      .filter((candidate: AnyRecord) => !hasContactInfoOnly || Boolean(candidate.email || candidate.phone))
       .filter((candidate: AnyRecord) => candidateMatchesCountries(candidate, countries))
       .filter((candidate: AnyRecord) => {
         const years = candidateYears(candidate);
         if (minYears > 0 && years < minYears) return false;
         const quality = candidateQuality(candidate);
-        if (!showReview && quality < minQuality) return false;
+        if (!includeReviewRecords && quality < minQuality) return false;
+        if (queryType === "placeholder" && !includeReviewRecords) return false;
         if (!candidateMatchesKeywordTerms(candidate, intent.keywordTerms)) return false;
         if (!candidateHasDirectModuleEvidence(candidate, intent.requiredModules)) return false;
         return true;
       })
       .map((candidate: AnyRecord) => {
+        const identityRank = talentSearchIdentityRank(candidate, rawKeyword);
         const scored = scoreSapSearchCandidate({
           candidate,
           indexRow: candidate.__index,
@@ -1094,30 +1374,35 @@ export async function GET(req: NextRequest) {
           city,
           minYears,
         });
-        return { candidate, scored };
+        return { candidate, scored, identityRank };
       })
-      .filter(({ scored }) => scored.ok)
-      .map(({ candidate, scored }) => {
+      .filter(({ scored }: { candidate: AnyRecord; scored: AnyRecord; identityRank: number }) => scored.ok)
+      .map(({ candidate, scored, identityRank }: { candidate: AnyRecord; scored: AnyRecord; identityRank: number }) => {
         const shouldDebug = isBtpRequested && btpDebugCount < 8;
         if (shouldDebug) btpDebugCount += 1;
-        return normalizeCandidateForSearch({
-          candidate,
-          score: scored.score,
-          why: scored.why,
-          tokens: scored.tokens,
-          moduleMatchType: scored.moduleMatchType,
-          requestedModules: intent.requiredModules,
-          countries,
-          debug: shouldDebug ? {
-            enabled: true,
-            candidateName: buildCanonicalCandidateProfile(candidate).displayName || "Candidate profile pending validation",
-            rawScore: scored.score,
-            scoreDetails: scored.details?.debug,
-            searchContext: intent.requiredModules[0] || "",
-          } : undefined,
-        });
+        return {
+          ...normalizeCandidateForSearch({
+            candidate,
+            score: scored.score,
+            why: scored.why,
+            tokens: scored.tokens,
+            moduleMatchType: scored.moduleMatchType,
+            requestedModules: intent.requiredModules,
+            countries,
+            debug: shouldDebug ? {
+              enabled: true,
+              candidateName: candidate.displayName || candidate.display_name || candidate.name || "Candidate profile pending validation",
+              rawScore: scored.score,
+              scoreDetails: scored.details?.debug,
+              searchContext: intent.requiredModules[0] || "",
+            } : undefined,
+          }),
+          search_identity_rank: identityRank,
+        };
       })
+      .filter((candidate: AnyRecord) => viewerRole !== "client" || candidate.client_export_eligible === true)
       .sort((a: AnyRecord, b: AnyRecord) =>
+        n(b.search_identity_rank) - n(a.search_identity_rank) ||
         n(b.recruiter_priority_score) - n(a.recruiter_priority_score) ||
         n(b.search_fit) - n(a.search_fit) ||
         n(b.profile_quality_score) - n(a.profile_quality_score) ||
@@ -1132,7 +1417,7 @@ export async function GET(req: NextRequest) {
           n(candidate.search_fit) >= 95 && !candidate.review_first && index === 0
             ? "#1 Best Match"
             : n(candidate.search_fit) >= 90 && !candidate.review_first
-              ? `Top ${index + 1} Match`
+              ? "Top " + (index + 1) + " Match"
               : n(candidate.search_fit) >= 84
                 ? "Recommended"
                 : "Module Review",
@@ -1144,25 +1429,92 @@ export async function GET(req: NextRequest) {
               : n(candidate.search_fit) >= 84
                 ? "STRONG_POOL"
                 : "REVIEW_POOL",
-      }))
-      .slice(0, limit);
+      }));
 
-    const stats = {
-      contactable: results.filter((candidate: AnyRecord) => candidate.contactable).length,
+    const totalMatched = allResults.length;
+    const results = allResults
+      .slice(offset, offset + limit)
+      .map((candidate: AnyRecord, index: number) => ({
+        ...candidate,
+        result_rank: offset + index + 1,
+        rank_label:
+          n(candidate.search_fit) >= 95 && !candidate.review_first && offset + index === 0
+            ? "#1 Best Match"
+            : n(candidate.search_fit) >= 90 && !candidate.review_first
+              ? "Top " + (offset + index + 1) + " Match"
+              : n(candidate.search_fit) >= 84
+                ? "Recommended"
+                : "Module Review",
+        rank_tier:
+          n(candidate.search_fit) >= 95 && !candidate.review_first
+            ? "BEST_MATCH"
+            : n(candidate.search_fit) >= 90 && !candidate.review_first
+              ? "TOP_MATCH"
+              : n(candidate.search_fit) >= 84
+                ? "STRONG_POOL"
+                : "REVIEW_POOL",
+      }));
+
+    timing.mappingMs = elapsedMs(mapStart);
+
+    const pagination = buildTalentSearchPaginationMeta({
+      totalCandidates,
+      totalMatched,
+      returnedCount: results.length,
+      pageSize: limit,
+      page: currentPage,
+      limit,
+      offset,
+    });
+
+    const internalStats = {
+      totalCandidates: summaryVisibility.canSeeTalentPoolTotal ? pagination.totalCandidates : null,
+      totalMatched: summaryVisibility.canSeeFilteredTotal ? pagination.totalMatched : null,
+      returnedCount: pagination.returnedCount,
+      reachable: results.filter((candidate: AnyRecord) => candidate.hasContactInfo).length,
+      ready: results.filter((candidate: AnyRecord) => candidate.validation_badge === "Ready" || candidate.validation_status === "Ready").length,
+      needsReview: results.filter((candidate: AnyRecord) => candidate.review_needed || n(candidate.profile_quality_score) < 75).length,
+      exportBlocked: results.filter((candidate: AnyRecord) => candidate.excluded_from_client_view).length,
       highQuality: results.filter((candidate: AnyRecord) => n(candidate.profile_quality_score) >= 85 && !candidate.review_needed).length,
-      reviewNeeded: results.filter((candidate: AnyRecord) => candidate.review_needed || n(candidate.profile_quality_score) < 75).length,
-      excludedFromClientView: results.filter((candidate: AnyRecord) => candidate.excluded_from_client_view).length,
-      clientExportEligible: results.filter((candidate: AnyRecord) => !candidate.excluded_from_client_view && candidate.contactable).length,
+      clientExportEligible: results.filter((candidate: AnyRecord) => !candidate.excluded_from_client_view && candidate.hasContactInfo).length,
     };
+    const stats = summaryVisibility.canSeeInternalMetrics ? internalStats : { returnedCount: pagination.returnedCount };
+
+    logSearchTiming("completed", timing, { pageSize: limit, currentPage: pagination.currentPage, offset, totalMatched, returnedCount: results.length, totalPages: pagination.totalPages, source: "candidate_search_index" });
 
     return NextResponse.json({
       success: true,
       count: results.length,
+      totalCandidates: pagination.totalCandidates,
+      totalMatched: pagination.totalMatched,
+      returnedCount: pagination.returnedCount,
+      pageSize: pagination.pageSize,
+      limit: pagination.limit,
+      offset: pagination.offset,
+      page: pagination.page,
+      currentPage: pagination.currentPage,
+      totalPages: pagination.totalPages,
+      hasPrevious: pagination.hasPrevious,
+      hasNext: pagination.hasNext,
+      hasMore: pagination.hasMore,
+      items: results,
       results,
-      data: results,
+      viewerRole,
       stats,
+      activeFilters: {
+        hasContactInfoOnly,
+        showReview: includeReviewRecords,
+        reviewMode,
+        countries,
+        city: city || null,
+        minYears,
+        minQuality: includeReviewRecords ? 0 : minQuality,
+        modules: intent.requiredModules,
+        projectTypes: intent.projectIntents,
+        keyword: rawKeyword || null,
+      },
       debug: {
-        source: "canonical_sap_module_engine_v70_recruiter_scoring_v3",
+        source: broadTalentPoolSearch ? "candidates_table_page" : "canonical_sap_module_engine_v70_recruiter_scoring_v3",
         rawKeyword,
         cleanedKeyword: intent.cleanedKeyword,
         explicitModules: intent.explicitModules,
@@ -1170,14 +1522,49 @@ export async function GET(req: NextRequest) {
         requiredModules: intent.requiredModules,
         projectIntents: intent.projectIntents,
         keywordTerms: intent.keywordTerms,
+        queryType,
+        displayResolver: TALENT_SEARCH_DISPLAY_RESOLVER_VERSION,
         countries,
         cityMode: city ? "soft_boost_only" : "none",
+        totalCandidates: pagination.totalCandidates,
+        searchIndexRows: searchIndexCoverage.searchIndexRows,
         sourceRows: sourceRows.length,
         visibleRows: visibleRows.length,
-        hiddenRows: sourceRows.length - visibleRows.length,
+        missingFromSearchIndex: searchIndexCoverage.missingIndexRows,
+        staleIndexRows: searchIndexCoverage.staleIndexRows,
+        duplicateIndexRows: searchIndexCoverage.duplicateIndexRows,
+        sampleMissingCandidateIds: searchIndexCoverage.sampleMissingCandidateIds,
+        sampleStaleCandidateIds: searchIndexCoverage.sampleStaleCandidateIds,
+        sampleDuplicateCandidateIds: searchIndexCoverage.sampleDuplicateCandidateIds,
+        searchIndexRecommendation: searchIndexCoverage.recommendation,
+        totalMatched: pagination.totalMatched,
+        returnedCount: pagination.returnedCount,
+        pageSize: pagination.pageSize,
+        limit: pagination.limit,
+        offset: pagination.offset,
+        page: pagination.page,
+        currentPage: pagination.currentPage,
+        totalPages: pagination.totalPages,
+        hasPrevious: pagination.hasPrevious,
+        hasNext: pagination.hasNext,
+        hasMore: pagination.hasMore,
+        timing: {
+          dbQueryMs: timing.dbQueryMs ?? 0,
+          candidateCountLoaded: timing.candidateCountLoaded ?? 0,
+          mappingMs: timing.mappingMs ?? 0,
+          countMs: timing.countMs ?? 0,
+          totalApiMs: elapsedMs(timing.startedAt),
+        },
+        hiddenRows: searchVisibilityDiagnostics.hiddenRows,
+        hiddenByVisibility: searchVisibilityDiagnostics.hiddenByVisibility,
+        hiddenByPlaceholder: searchVisibilityDiagnostics.hiddenByPlaceholder,
+        hiddenByInvalidName: searchVisibilityDiagnostics.hiddenByInvalidName,
+        hiddenBySuppression: searchVisibilityDiagnostics.hiddenBySuppression,
+        hiddenByArchivedOrInactive: searchVisibilityDiagnostics.hiddenByArchivedOrInactive,
       },
     });
   } catch (error: any) {
+    logSearchTiming("failed", timing, { error: error?.message || "Search candidates failed" });
     return NextResponse.json(
       {
         error: error?.message || "Search candidates failed",
