@@ -81,4 +81,9 @@ assert.equal(routeSource.includes("missingFromSearchIndex"), true, "Search API d
 assert.equal(routeSource.includes("sourceRows: sourceRows.length"), true, "Search API debug should include sourceRows");
 assert.equal(routeSource.includes("visibleRows: visibleRows.length"), true, "Search API debug should include visibleRows");
 
+const searchPageSource = fs.readFileSync(new URL("../app/search/page.tsx", import.meta.url), "utf8");
+assert.equal(searchPageSource.includes("sortCandidatesForRecruiter"), false, "Talent Search UI must not client-side resort API results");
+assert.equal(searchPageSource.includes("const nextCandidates = rawCandidates;"), true, "Talent Search UI should preserve API item order exactly");
+assert.equal(searchPageSource.includes("summaryVisibility.canSeeInternalMetrics"), true, "internal diagnostics should remain role-gated and hidden from recruiter UI");
+
 console.log("Search quality gate tests passed");

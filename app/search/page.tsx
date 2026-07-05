@@ -1544,27 +1544,6 @@ function getQualityLabel(score: number) {
   return { label: "Review", grade: "C", tone: "yellow" };
 }
 
-function sortCandidatesForRecruiter(items: Candidate[]) {
-  return [...items].sort((a, b) => {
-    const scoreA = getSearchScore(a);
-    const scoreB = getSearchScore(b);
-    const priorityA = getPRIORITYScore(a, scoreA);
-    const priorityB = getPRIORITYScore(b, scoreB);
-    const qualityA = getQualityScore(a, scoreA);
-    const qualityB = getQualityScore(b, scoreB);
-    const yearsA = displayNumber(a.years ?? a.years_experience, 0);
-    const yearsB = displayNumber(b.years ?? b.years_experience, 0);
-
-    return (
-      priorityB - priorityA ||
-      scoreB - scoreA ||
-      qualityB - qualityA ||
-      yearsB - yearsA ||
-      normalize(a.display_name || a.name).localeCompare(normalize(b.display_name || b.name))
-    );
-  });
-}
-
 function RankBadge({ label, tone }: { label: string; tone: string }) {
   const cls =
     tone === "gold"
@@ -2175,7 +2154,7 @@ export default function TalentPoolSearchPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Search failed");
       const rawCandidates = (json.items || json.candidates || json.results || []) as Candidate[];
-      const nextCandidates = sortCandidatesForRecruiter(rawCandidates);
+      const nextCandidates = rawCandidates;
       const nextStats = json.stats || json.meta || null;
       const nextPagination: TalentSearchPaginationMeta = {
         totalCandidates: Number(json.totalCandidates ?? 0) || 0,
