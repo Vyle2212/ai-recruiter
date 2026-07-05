@@ -1,3 +1,4 @@
+import { candidateProfileTimestampLabels } from "./candidateDuplicateIdentity";
 type AnyRecord = Record<string, any>;
 
 export type Candidate360Section = {
@@ -99,6 +100,11 @@ export type Candidate360Model = {
     cvOpenCount: number;
     profileComments: number;
     lastUpdated: string;
+    profileLastUpdatedAt: string;
+    latestCvUploadedAt: string;
+    latestCandidateSelfUpdateAt: string;
+    updatedLabel: string;
+    latestCvLabel: string;
   };
   marketBenchmark: {
     currency: string;
@@ -1120,6 +1126,8 @@ export function buildCandidate360(
         })
       : buildWatchouts([], implementation, s4hana, Boolean(email || phone));
 
+  const timestampLabels = candidateProfileTimestampLabels(d);
+
   return {
     identity: {
       id: text(d.id || d.candidate_id, ""),
@@ -1227,8 +1235,13 @@ export function buildCandidate360(
       cvOpenCount: n(d.cvOpenCount ?? d.cv_open_count),
       profileComments: n(d.profileComments ?? d.profile_comments),
       lastUpdated: formatDisplayDate(
-        d.updated_at || d.status_updated_at || d.created_at,
+        timestampLabels.profileLastUpdatedAt || d.updated_at || d.status_updated_at || d.created_at,
       ),
+      profileLastUpdatedAt: timestampLabels.profileLastUpdatedAt,
+      latestCvUploadedAt: timestampLabels.latestCvUploadedAt,
+      latestCandidateSelfUpdateAt: timestampLabels.latestCandidateSelfUpdateAt,
+      updatedLabel: timestampLabels.updatedLabel,
+      latestCvLabel: timestampLabels.latestCvLabel,
     },
     marketBenchmark,
     explainability: {

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { resolveCanonicalCandidateDisplay } from "@/lib/candidateCanonicalDisplay";
 import { buildCandidateValidationState } from "@/lib/candidateValidation";
+import { candidateProfileTimestampLabels } from "@/lib/candidateDuplicateIdentity";
 import { buildTalentSearchExecutiveSummary, candidateHasContactInfo, cleanTalentSearchModule, cleanTalentSearchTitle, displayTalentSearchValidationStatus, isTalentSearchReviewBadge, resolveTalentSearchViewerRole, safeTalentSearchCompany, talentSearchSummaryVisibility, type TalentSearchViewerRole } from "@/lib/talentSearchDisplay";
 import { COMPANY_TAXONOMY, COMPANY_TAXONOMY_SUGGESTIONS, SAP_TALENT_SKILL_GROUPS, SAP_SKILL_TAXONOMY, getSapSkillDisplayLabel } from "@/lib/sapTalentTaxonomy";
 
@@ -2708,6 +2709,7 @@ export default function TalentPoolSearchPage() {
           });
           const displayTitle = resolvedCardDisplay.displayRole || (reviewProfile && moduleSummary ? `SAP ${moduleSummary} Consultant` : reviewProfile ? "Role not disclosed" : cleanCandidateTitle(candidate));
           const compactProjectEvidence = projectEvidence.slice(0, 4);
+          const timestampLabels = candidateProfileTimestampLabels(candidate as AnyRecord);
           const whyItems = compactProjectEvidence.slice(0, 3).map(([label, value]) => {
             const shortLabel = String(label)
               .replace("Implementation", "Implementations")
@@ -2758,6 +2760,16 @@ export default function TalentPoolSearchPage() {
                   </div>
 
                   <div className="mt-2 flex flex-wrap gap-1">
+                    {timestampLabels.updatedLabel ? (
+                      <span className="inline-flex h-[22px] items-center rounded-full border border-slate-700/55 bg-slate-900/40 px-2 text-[11px] font-semibold text-slate-100">
+                        {timestampLabels.updatedLabel}
+                      </span>
+                    ) : null}
+                    {timestampLabels.latestCvLabel ? (
+                      <span className="inline-flex h-[22px] items-center rounded-full border border-slate-700/55 bg-slate-900/40 px-2 text-[11px] font-semibold text-slate-100">
+                        {timestampLabels.latestCvLabel}
+                      </span>
+                    ) : null}
                     {country ? (
                       <span className="inline-flex h-[22px] items-center rounded-full border border-slate-700/55 bg-slate-900/40 px-2 text-[11px] font-semibold text-slate-100">
                         {country}

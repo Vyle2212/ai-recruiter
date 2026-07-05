@@ -3,6 +3,7 @@ import { dedupeByCanonicalIdentity } from "@/lib/identityResolution";
 import { classifyCandidateSearchVisibility } from "@/lib/candidateSearchVisibility";
 import { buildTalentSearchPaginationMeta } from "@/lib/talentSearchPagination";
 import { buildSearchIndexAudit } from "@/lib/searchIndexAudit";
+import { candidateProfileTimestampLabels } from "@/lib/candidateDuplicateIdentity";
 import { TALENT_SEARCH_DISPLAY_RESOLVER_VERSION, cleanTalentSearchTitle, classifyTalentSearchQuery, extractTalentSearchExplicitName, isTalentSearchBadDisplayName, isTalentSearchPlaceholderName, resolveTalentSearchViewerRole, safeTalentSearchCompany, talentSearchIdentityRank, talentSearchSummaryVisibility } from "@/lib/talentSearchDisplay";
 import { supabase } from "@/lib/supabase";
 import {
@@ -1044,6 +1045,7 @@ function normalizeCandidateForSearch(args: {
   const displayName = safeSearchDisplayName(candidate.displayName, candidate.display_name, indexRow.display_name, candidate.full_name, candidate.normalized_name, extractTalentSearchExplicitName(candidate), candidate.name);
   const currentCompany = safeSearchDisplayCompany(candidate.display_company, candidate.current_company, candidate.currentCompany, candidate.current_employer, candidate.currentEmployer, candidate.company, candidate.employer, indexRow.display_company);
   const companyType = candidate.company_type || indexRow.company_type || "Not disclosed";
+  const timestampLabels = candidateProfileTimestampLabels(candidate);
 
   return {
     ...candidate,
@@ -1127,12 +1129,17 @@ function normalizeCandidateForSearch(args: {
     project_extraction_confidence: "Candidate table + candidate_search_index canonical fallback",
     project_extraction_source: projects.source,
     visa_status: candidate.status || "New",
+    profileLastUpdatedAt: timestampLabels.profileLastUpdatedAt,
+    latestCvUploadedAt: timestampLabels.latestCvUploadedAt,
+    latestCandidateSelfUpdateAt: timestampLabels.latestCandidateSelfUpdateAt,
+    updatedLabel: timestampLabels.updatedLabel,
+    latestCvLabel: timestampLabels.latestCvLabel,
   };
 }
 
 
 const SEARCH_LIST_ALLOWED_FIELDS = new Set([
-  "id", "candidate_id", "name", "displayName", "display_name", "title", "display_title", "primary_module", "primaryModule", "secondary_modules", "submodules", "selected_modules", "search_context_module", "role_type", "seniority_level", "country", "location", "current_location", "display_location", "display_company", "currentCompany", "current_company", "company", "company_type", "background_experience", "years", "years_experience", "email_masked", "phone_masked", "hasContactInfo", "review_first", "recruiter_review_first", "searchFit", "search_fit", "search_score", "module_match_type", "why_matched", "matched_tokens", "validation_status", "validation_badge", "validation_export_eligible", "client_export_eligible", "export_blocking_reasons", "profile_quality_score", "parser_quality_score", "parser_quality", "review_needed", "excluded_from_client_view", "display_quality_score", "recruiter_priority_score", "rank_score", "recommendation_summary", "summary", "quality_grade", "implementation_projects", "ams_projects", "greenfield_projects", "rollout_projects", "brownfield_projects", "selective_transformation_projects", "s4hana_projects", "s4_implementation_projects", "s4_ams_projects", "project_counts", "project_extraction_confidence", "project_extraction_source", "visa_status", "search_identity_rank", "result_rank", "rank_label", "rank_tier"
+  "id", "candidate_id", "name", "displayName", "display_name", "title", "display_title", "primary_module", "primaryModule", "secondary_modules", "submodules", "selected_modules", "search_context_module", "role_type", "seniority_level", "country", "location", "current_location", "display_location", "display_company", "currentCompany", "current_company", "company", "company_type", "background_experience", "years", "years_experience", "email_masked", "phone_masked", "hasContactInfo", "review_first", "recruiter_review_first", "searchFit", "search_fit", "search_score", "module_match_type", "why_matched", "matched_tokens", "validation_status", "validation_badge", "validation_export_eligible", "client_export_eligible", "export_blocking_reasons", "profile_quality_score", "parser_quality_score", "parser_quality", "review_needed", "excluded_from_client_view", "display_quality_score", "recruiter_priority_score", "rank_score", "recommendation_summary", "summary", "quality_grade", "implementation_projects", "ams_projects", "greenfield_projects", "rollout_projects", "brownfield_projects", "selective_transformation_projects", "s4hana_projects", "s4_implementation_projects", "s4_ams_projects", "project_counts", "project_extraction_confidence", "project_extraction_source", "visa_status", "profileLastUpdatedAt", "latestCvUploadedAt", "latestCandidateSelfUpdateAt", "updatedLabel", "latestCvLabel", "search_identity_rank", "result_rank", "rank_label", "rank_tier"
 ]);
 
 function toSearchListItem(candidate: AnyRecord): AnyRecord {

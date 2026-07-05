@@ -1227,6 +1227,14 @@ export default async function Candidate360Page({
                   </p>
 
                   <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400">
+                    {model.governance.updatedLabel ? <span>{model.governance.updatedLabel}</span> : null}
+                    {model.governance.latestCvLabel ? (
+                      <>
+                        <span className="text-slate-600">&bull;</span>
+                        <span>{model.governance.latestCvLabel}</span>
+                      </>
+                    ) : null}
+                    {(model.governance.updatedLabel || model.governance.latestCvLabel) ? <span className="text-slate-600">&bull;</span> : null}
                     <span>{model.identity.location || "Needs Verification"}</span>
                     <span className="text-slate-600">&bull;</span>
                     <span>
