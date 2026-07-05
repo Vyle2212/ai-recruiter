@@ -1,4 +1,3 @@
-import { buildCanonicalCandidateProfile } from "./canonicalCandidateProfile";
 import { isTalentSearchBadDisplayName, isTalentSearchPlaceholderName, safeTalentSearchCompany } from "./talentSearchDisplay";
 
 type AnyRecord = Record<string, any>;
@@ -86,9 +85,7 @@ function validationStatus(candidate: AnyRecord) {
 }
 
 export function classifyCandidateSearchVisibility(candidate: AnyRecord): CandidateSearchVisibility {
-
-  const profile = buildCanonicalCandidateProfile(candidate);
-  const name = rawName(candidate) || profile.displayName;
+  const name = rawName(candidate);
   const title = rawTitle(candidate);
   const company = rawCompany(candidate);
   const safeCompany = safeTalentSearchCompany(company);
@@ -101,8 +98,7 @@ export function classifyCandidateSearchVisibility(candidate: AnyRecord): Candida
   const invalidYears = years < 0 || years > 45 || (!years && /\b(19|20)\d{2}\b/.test(clean(candidate.raw_text || candidate.resume_text || candidate.raw_cv || candidate.summary)));
   const qualityScore = numeric(candidate.raw_profile_quality_score ?? candidate.profile_quality_score ?? candidate.parser_quality_score ?? candidate.quality_score ?? candidate.index_quality_score ?? candidate.__index?.quality_score);
   const lowQuality = qualityScore > 0 && qualityScore < 55;
-  const identityNotTrusted = invalidName || isTalentSearchPlaceholderName(profile.displayName) || isTalentSearchBadDisplayName(profile.displayName) || candidate.name_review_required === true;
-  const exportEligible = Boolean(profile.allowedForExecutiveExport && !profile.identityReviewRequired && !invalidName);
+  const identityNotTrusted = invalidName || candidate.name_review_required === true;
 
   if (invalidName) return blocked("invalid-display-name");
   if (invalidTitle) return blocked("invalid-title");
@@ -110,7 +106,6 @@ export function classifyCandidateSearchVisibility(candidate: AnyRecord): Candida
   if (missingModules) return blocked("missing-sap-module");
   if (invalidYears) return blocked("invalid-years");
   if (lowQuality) return blocked("low-profile-quality");
-  if (!exportEligible && invalidName) return blocked("client-export-blocked-identity");
   if (/missing information/i.test(validationStatus(candidate)) && identityNotTrusted) return blocked("missing-information-untrusted-identity");
 
   return {
@@ -126,4 +121,56 @@ function blocked(reason: string): CandidateSearchVisibility {
     validation_queue_reason: reason,
     blocked_from_recruiter_search: true,
   };
+}
+export type ValidationQueueIssueKey =
+  | "invalid-name"
+  | "missing-contact"
+  | "missing-sap-module"
+  | "missing-location"
+  | "invalid-title"
+  | "invalid-company"
+  | "low-quality"
+  | "invalid-years"
+  | "identity-review";
+
+export type ValidationQueueIssue = {
+  key: ValidationQueueIssueKey;
+  label: string;
+  evidence: string;
+};
+
+function hasContact(candidate: AnyRecord) {
+  return Boolean(clean(candidate.email || candidate.phone || candidate.email_masked || candidate.phone_masked));
+}
+
+function locationValue(candidate: AnyRecord) {
+  return clean(candidate.country || candidate.current_country || candidate.location_country || candidate.current_location || candidate.location || candidate.__index?.country || candidate.__index?.display_location);
+}
+
+function issue(key: ValidationQueueIssueKey, label: string, evidence: string): ValidationQueueIssue {
+  return { key, label, evidence };
+}
+
+export function getCandidateValidationQueueIssues(candidate: AnyRecord): ValidationQueueIssue[] {  const name = rawName(candidate);
+  const title = rawTitle(candidate);
+  const company = rawCompany(candidate);
+  const safeCompany = safeTalentSearchCompany(company);
+  const candidateModules = modules(candidate);
+  const years = numeric(candidate.years ?? candidate.years_experience ?? candidate.sap_years ?? candidate.__index?.years);
+  const qualityScore = numeric(candidate.raw_profile_quality_score ?? candidate.profile_quality_score ?? candidate.parser_quality_score ?? candidate.quality_score ?? candidate.index_quality_score ?? candidate.__index?.quality_score);
+  const validation = classifyCandidateSearchVisibility(candidate);
+  const issues: ValidationQueueIssue[] = [];
+
+  if (isTalentSearchPlaceholderName(name) || isTalentSearchBadDisplayName(name)) issues.push(issue("invalid-name", "Invalid name", name || "No trusted display name"));
+  if (!hasContact(candidate)) issues.push(issue("missing-contact", "Missing contact", "No email or phone available"));
+  if (candidateModules.length === 0 || candidateModules.every(isUnknownModule)) issues.push(issue("missing-sap-module", "Missing SAP module", candidateModules.join(", ") || "No trusted SAP module"));
+  if (!locationValue(candidate)) issues.push(issue("missing-location", "Missing location", "No country or location available"));
+  if (isRecruiterSearchBadTitle(title)) issues.push(issue("invalid-title", "Invalid title", title || "No trusted title"));
+  if (company && !/^(not disclosed|unknown|protected|n\/a|na)$/i.test(company) && safeCompany === "Not disclosed") issues.push(issue("invalid-company", "Invalid company", company));
+  if (years < 0 || years > 45) issues.push(issue("invalid-years", "Invalid years", String(years)));
+  if (qualityScore > 0 && qualityScore < 55) issues.push(issue("low-quality", "Low profile quality", String(qualityScore)));
+  if (/missing information/i.test(validationStatus(candidate)) && validation.blocked_from_recruiter_search) issues.push(issue("identity-review", "Identity review", validation.validation_queue_reason));
+
+  if (!issues.length && validation.blocked_from_recruiter_search) issues.push(issue("identity-review", "Identity review", validation.validation_queue_reason || "Blocked from recruiter search"));
+  return issues;
 }
