@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "tsx scripts/nameParser.test.ts && tsx scripts/employerParser.test.ts && tsx scripts/identityResolution.test.ts && tsx scripts/deliveryMetricsParser.test.ts && tsx scripts/executiveCompareState.test.ts && tsx scripts/candidateQualityGate.test.ts && tsx scripts/validationQueue.test.ts && tsx scripts/candidateValidation.test.ts && tsx scripts/candidateDisplayAudit.test.ts && tsx scripts/candidateDisplayRepairApply.test.ts && tsx scripts/pdfExportQuality.test.ts && tsx scripts/auditCandidates.test.ts",
+    "test": "tsx scripts/nameParser.test.ts && tsx scripts/employerParser.test.ts && tsx scripts/identityResolution.test.ts && tsx scripts/deliveryMetricsParser.test.ts && tsx scripts/executiveCompareState.test.ts && tsx scripts/candidateQualityGate.test.ts && tsx scripts/validationQueue.test.ts && tsx scripts/candidateDataRepair.test.ts && tsx scripts/candidateValidation.test.ts && tsx scripts/candidateDisplayAudit.test.ts && tsx scripts/candidateDisplayRepairApply.test.ts && tsx scripts/pdfExportQuality.test.ts && tsx scripts/auditCandidates.test.ts",
     "audit:candidates": "tsx scripts/audit-candidates.ts",
     "audit:display": "tsx scripts/auditCandidateDisplay.ts",
     "audit:display:preview": "tsx scripts/previewCandidateDisplayRepairs.ts",
@@ -15,7 +15,8 @@
     "audit:search-index": "tsx scripts/auditSearchIndex.ts",
     "audit:extraction": "tsx scripts/auditCandidateExtractionQuality.ts",
     "search-index:rebuild": "tsx scripts/rebuildSearchIndexSafe.ts",
-    "test:search": "tsx scripts/searchQualityGate.test.ts"
+    "test:search": "tsx scripts/searchQualityGate.test.ts",
+    "audit:repair": "tsx scripts/auditCandidateDataRepair.ts"
   },
   "dependencies": {
     "@google-cloud/vision": "^5.3.6",
