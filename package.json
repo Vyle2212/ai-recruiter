@@ -13,6 +13,7 @@
     "audit:display:preview": "tsx scripts/previewCandidateDisplayRepairs.ts",
     "audit:display:apply": "tsx scripts/applyCandidateDisplayRepairs.ts",
     "audit:search-index": "tsx scripts/auditSearchIndex.ts",
+    "audit:extraction": "tsx scripts/auditCandidateExtractionQuality.ts",
     "search-index:rebuild": "tsx scripts/rebuildSearchIndexSafe.ts",
     "test:search": "tsx scripts/searchQualityGate.test.ts"
   },

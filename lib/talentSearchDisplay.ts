@@ -61,8 +61,9 @@ export function isUnconfirmedTalentSearchEmployer(value: any) {
   if (!raw) return true;
   const normalized = raw.toLowerCase().replace(/[().,_/\\|&+-]+/g, " ").replace(/\s+/g, " ").trim();
   if (!normalized || ["not disclosed", "non disclosed", "non-disclosed", "unknown", "protected", "n/a", "na", "none", "no details"].includes(normalized)) return true;
-  if (/^(creation of|applying for the position|apply for the position|applying for|created by|responsible for|worked on|supporting|currently serving|currently at|based in)\b/i.test(raw)) return true;
-  if (/\b(position|responsibilities|responsibility|project|module|skill|tools|platforms|creation of|applying for the position|non[- ]disclosed|no details)\b/i.test(raw)) return true;
+  if (/^(january|february|march|april|may|june|july|august|september|october|november|december)$/.test(normalized)) return true;
+  if (/^(creation of|applying for the position|apply for the position|applying for|created by|responsible for|worked on|supporting|currently serving|currently at|based in|in the world|where as|whereas|my goal|managed\b|roles?\b)\b/i.test(raw)) return true;
+  if (/\b(date of birth|personal details|profile summary|career history|employment history|curriculum vitae|professional synopsis|personal particular|professional objective|authorization concepts|achievement artifacts available for viewing|education|certificate|roles and|managed &|where as my goal|in the world|goal in|generic resume text|responsibilities|responsibility|project|module|skill|tools|platforms|creation of|applying for the position|non[- ]disclosed|no details)\b/i.test(raw)) return true;
   if (raw.length > 70 || raw.split(/\s+/).filter(Boolean).length > 8) return true;
   if (/^sap$/.test(normalized) || /^sap sap$/.test(normalized)) return true;
   if (/^(sap )?(fi|co|fico|sd|mm|pp|pm|ps|abap|basis|bw|bi|btp|ewm|tm|wm|hana|s4hana|s 4hana|successfactors|sf)( module)?$/.test(normalized)) return true;
@@ -85,8 +86,8 @@ export function isTalentSearchPlaceholderName(value: any) {
   return /profile under review|candidate profile pending validation|name requires validation|identity under review|pending validation/i.test(text(value));
 }
 
-const TALENT_SEARCH_BAD_DISPLAY_NAME = /profile under review|candidate profile pending validation|name requires validation|identity under review|current location|technology consulting|academic background|nationality|gender|father'?s name|\bbachelor\b|\bmaster\b|\bdegree\b|\bdiploma\b|\bcertificate\b|\bcertification\b|\bprofessional certificate\b|\bkey competencies\b|\bresponsibilities\b|\bemployment history\b|\bcareer history\b|\bsoftware\b|\bsolutions\b|\btechnolog(?:y|ies)\b|\bconsulting\b|\bconsultancy\b|\bsdn\s*bhd\b|\bpte\s*ltd\b|\bltd\b|\binc\b|\bcorp\b|\bcorporation\b/i;
-const TALENT_SEARCH_GENERIC_NAME_START = /^(currently|experience|experienced|tools|responsibilities|responsibility|project|projects|for|with|and|each|installation|strictly|willing|light|extended)\b/i;
+const TALENT_SEARCH_BAD_DISPLAY_NAME = /profile under review|candidate profile pending validation|name requires validation|identity under review|current location|technology consulting|academic background|nationality|gender|father'?s name|date of birth|subjectmatterex|mdmanalyst|curriculum vitae|\bcv\b|\bresume\b|personal particular|professional objective|professional synopsis|authorization concepts|relevant mast(?: ewm)?|from date|to date|from data acquisition|data acquisition to reporting|company profile|project section|education section|certification section|roles and|managed\s*&|managed and|\bbachelor\b|\bmaster\b|\bdegree\b|\bdiploma\b|\buniversity\b|\bcertificate\b|\bcertification\b|\bprofessional certificate\b|\bkey competencies\b|\bresponsibilities\b|\bemployment history\b|\bcareer history\b|\bsoftware\b|\bsolutions\b|\btechnolog(?:y|ies)\b|\bconsulting\b|\bconsultancy\b|\bsdn\s*bhd\b|\bpte\s*ltd\b|\bltd\b|\binc\b|\bcorp\b|\bcorporation\b/i;
+const TALENT_SEARCH_GENERIC_NAME_START = /^(currently|experience|experienced|tools|responsibilities|responsibility|project|projects|for|from|with|and|each|installation|strictly|willing|light|extended|managed|roles?|curriculum|personal|professional|authorization|relevant)\b/i;
 
 export function normalizeTalentSearchIdentity(value: any) {
   return text(value)

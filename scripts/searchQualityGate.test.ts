@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
+import { classifyCandidateSearchVisibility } from "../lib/candidateSearchVisibility";
 import { buildSearchIndexAudit } from "../lib/searchIndexAudit";
 import { buildTalentSearchPaginationMeta } from "../lib/talentSearchPagination";
-import { classifyTalentSearchQuery, talentSearchIdentityRank } from "../lib/talentSearchDisplay";
+import { classifyTalentSearchQuery, isTalentSearchBadDisplayName, isTalentSearchPlaceholderName, safeTalentSearchCompany, talentSearchIdentityRank } from "../lib/talentSearchDisplay";
 
 const candidates = [
   { id: "lee", updated_at: "2026-01-02T00:00:00.000Z" },
@@ -55,6 +56,39 @@ assert.equal(apiShape.totalPages, Math.ceil(apiShape.totalMatched / apiShape.pag
 assert.equal(apiShape.debug.sourceRows, apiShape.debug.searchIndexRows, "sourceRows should equal candidate_search_index count when index is source");
 assert.equal(typeof apiShape.debug.missingFromSearchIndex, "number", "debug should include missingFromSearchIndex");
 
+const visibilityFixture = [
+  { id: "ready", name: "Lee Wah Ken", current_company: "Accenture Malaysia", current_title: "SAP MM Consultant", primary_module: "MM", email: "lee@example.com", years: 12, profile_quality_score: 82 },
+  { id: "blocked", name: "Candidate profile pending validation", current_company: "Accenture Malaysia", current_title: "SAP MM Consultant", primary_module: "MM", email: "blocked@example.com", years: 8, profile_quality_score: 82 },
+  { id: "missing-module", name: "Aina Rahman", current_company: "Accenture Malaysia", current_title: "SAP Consultant", primary_module: "UNKNOWN", email: "aina@example.com", years: 7, profile_quality_score: 82 },
+];
+const recruiterVisibleFixture = visibilityFixture.filter((candidate) => !classifyCandidateSearchVisibility(candidate).blocked_from_recruiter_search);
+assert.deepEqual(recruiterVisibleFixture.map((candidate) => candidate.id), ["ready"], "API default visibility should exclude Validation Queue candidates");
+assert.equal(classifyCandidateSearchVisibility(visibilityFixture[1]).search_visibility, "VALIDATION_QUEUE", "placeholder profiles should be Validation Queue only");
+
+
+for (const badName of [
+  "Candidate profile pending validation",
+  "Profile Under Review",
+  "From Data Acquisition To Reporting",
+  "Date Of Birth 01 Jan 1980",
+  "Managed & Delivered Projects",
+  "Roles and Responsibilities",
+  "Professional Certificate SAP",
+  "Bachelor Of Information Technology",
+  "Curriculum Vitae ROA R. Maroda",
+  "Personal Particular",
+  "Professional Objective",
+  "Authorization Concepts",
+  "Relevant MAST EWM",
+  "Subjectmatterex Mdmanalyst",
+]) {
+  assert.equal(isTalentSearchPlaceholderName(badName) || isTalentSearchBadDisplayName(badName), true, `${badName} should be hidden from default recruiter search`);
+}
+
+for (const badEmployer of ["in the world", "where as my goal in", "Managed &", "Roles and", "Achievement artifacts available for viewing", "Date Of Birth", "Personal Particular", "Professional Objective", "Authorization Concepts", "March", "April", "September", "October", "November", "Project Responsibilities", "SAP", "MM module"]) {
+  assert.equal(safeTalentSearchCompany(badEmployer), "Not disclosed", `${badEmployer} should not display as current employer`);
+}
+assert.equal(safeTalentSearchCompany("Accenture Malaysia"), "Accenture Malaysia", "trusted company-like employer should remain displayable");
 const lee = { id: "lee", displayName: "Lee Wah Ken", name: "Other Name", currentCompany: "Accenture", title: "SAP MM Consultant", search_text: "someone else mentioned Dainiel Paulo P. Dizon" };
 const leeRawOnly = { id: "lee-raw", displayName: "Other Person", name: "Other Person", currentCompany: "Lee Wah Ken Consulting", title: "SAP Consultant", search_text: "Lee Wah Ken" };
 const dainiel = { id: "dainiel", displayName: "Dainiel Paulo P. Dizon", name: "Dainiel Paulo P. Dizon", currentCompany: "DXC", title: "SAP PS Consultant", search_text: "SAP PS" };
@@ -73,6 +107,9 @@ assert.equal(rankFirst("Kaarthi Duraisamy Chandrasakar", [leeRawOnly, kaarthi]),
 assert.equal(talentSearchIdentityRank(lee, "Lee Wah Ken") > talentSearchIdentityRank(leeRawOnly, "Lee Wah Ken"), true, "exact displayName should outrank employer/title/search_text matches");
 assert.equal(classifyTalentSearchQuery("Candidate profile pending validation"), "placeholder", "placeholder query should be classified as placeholder");
 assert.equal(talentSearchIdentityRank({ displayName: "Candidate profile pending validation", search_text: "SAP FICO" }, "Candidate profile pending validation") < 0, true, "placeholder query should not return default recruiter results");
+for (const badQuery of ["Candidate profile pending validation", "Date Of Birth", "Professional Objective", "Personal Particular", "Authorization Concepts", "From Data Acquisition To Reporting", "Curriculum Vitae", "Subjectmatterex", "Mdmanalyst"]) {
+  assert.equal(isTalentSearchPlaceholderName(badQuery) || isTalentSearchBadDisplayName(badQuery) || classifyTalentSearchQuery(badQuery) === "placeholder", true, `${badQuery} should not produce normal recruiter results`);
+}
 
 const routeSource = fs.readFileSync(new URL("../app/api/search-candidates/route.ts", import.meta.url), "utf8");
 assert.equal(routeSource.includes("totalCandidates: pagination.totalCandidates"), true, "Search API should return top-level totalCandidates");
@@ -80,6 +117,22 @@ assert.equal(routeSource.includes("searchIndexRows"), true, "Search API debug sh
 assert.equal(routeSource.includes("missingFromSearchIndex"), true, "Search API debug should include missingFromSearchIndex");
 assert.equal(routeSource.includes("sourceRows: sourceRows.length"), true, "Search API debug should include sourceRows");
 assert.equal(routeSource.includes("visibleRows: visibleRows.length"), true, "Search API debug should include visibleRows");
+assert.equal(routeSource.includes("toSearchListItem"), true, "Search API should sanitize list response items");
+assert.equal(routeSource.includes("classifyCandidateSearchVisibility"), true, "Search API should use shared recruiter-search visibility gate");
+assert.equal(routeSource.includes("select(CANDIDATE_LIGHT_FIELDS"), true, "Search API list path should use lightweight candidate fields");
+assert.equal(routeSource.includes("delete out.raw_text"), true, "Search API list response should remove raw_text");
+assert.equal(routeSource.includes("delete out.resume_text"), true, "Search API list response should remove resume_text");
+assert.equal(routeSource.includes("delete out.parsed_json"), true, "Search API list response should remove parsed_json");
+assert.equal(routeSource.includes("delete out.embedding"), true, "Search API list response should remove embedding");
+assert.equal(routeSource.includes("raw_cv"), true, "Search API should explicitly strip raw_cv from list responses");
+const visibilityHelperSource = fs.readFileSync(new URL("../lib/candidateSearchVisibility.ts", import.meta.url), "utf8");
+assert.equal(visibilityHelperSource.includes("blocked_from_recruiter_search"), true, "Shared visibility helper should classify Validation Queue blocks internally");
+const allowedFieldsBlock = routeSource.match(/const SEARCH_LIST_ALLOWED_FIELDS = new Set\(\[([\s\S]*?)\]\);/)?.[1] || "";
+assert.equal(allowedFieldsBlock.includes("blocked_from_recruiter_search"), false, "default search list payload should not include blocked_from_recruiter_search");
+assert.equal(allowedFieldsBlock.includes("search_visibility"), false, "default search list payload should not include search_visibility");
+assert.equal(allowedFieldsBlock.includes("validation_queue_reason"), false, "default search list payload should not include validation_queue_reason");
+const extractionAuditSource = fs.readFileSync(new URL("../scripts/auditCandidateExtractionQuality.ts", import.meta.url), "utf8");
+assert.equal(extractionAuditSource.includes("classifyCandidateSearchVisibility"), true, "Extraction audit should use shared recruiter-search visibility gate");
 
 const searchPageSource = fs.readFileSync(new URL("../app/search/page.tsx", import.meta.url), "utf8");
 assert.equal(searchPageSource.includes("sortCandidatesForRecruiter"), false, "Talent Search UI must not client-side resort API results");

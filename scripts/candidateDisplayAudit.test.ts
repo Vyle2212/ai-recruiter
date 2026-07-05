@@ -18,7 +18,7 @@ assert.equal(classifyDisplayNameIssue("Epicor Software"), "company-used-as-name"
 assert.equal(classifyDisplayNameIssue("Key Competencies"), "title-used-as-name", "section header must not be accepted as candidate name");
 assert.equal(classifyDisplayNameIssue("Candidate profile pending validation"), "", "safe placeholder should not be an invalid display-name classification");
 assert.equal(classifyDisplayNameIssue("Candidate Profile Pending Validation"), "", "safe placeholder casing variant should not be invalid display-name classification");
-for (const badName of ["Extended Star Schema Models", "Installation Status", "Strictly Confidential", "For Mechanical Turnkey Projects", "Willing To Travel", "Each Type", "And Need For Resources", "Light Mechanics Roles", "Dxc Technology", "Accenture", "Abeam Consulting", "Currently Supporting", "Experience Summary", "Tools Used", "Responsibilities Include", "Project Experience", "With Integration Team", "And Support Team"]) {
+for (const badName of ["Extended Star Schema Models", "Installation Status", "Strictly Confidential", "For Mechanical Turnkey Projects", "Willing To Travel", "Each Type", "And Need For Resources", "Light Mechanics Roles", "Dxc Technology", "Accenture", "Abeam Consulting", "Currently Supporting", "Experience Summary", "Tools Used", "Responsibilities Include", "Project Experience", "With Integration Team", "And Support Team", "Curriculum Vitae ROA R. Maroda", "Personal Particular", "Professional Objective", "Authorization Concepts", "Relevant MAST EWM", "Date Of Birth 01 Jan 1980", "Subjectmatterex Mdmanalyst", "From Data Acquisition To Reporting", "Professional Synopsis"]) {
   assert.equal(isValidDisplayHumanName(badName), false, badName + " must not be treated as a display-safe human name");
   assert.equal(suggestDisplayName({ name: badName }).value, "Candidate profile pending validation", badName + " must fall back to safe placeholder");
 }
@@ -28,7 +28,7 @@ for (const employer of ["SAP", "FICO", "MM", "SD", "ABAP", "BASIS", "S/4HANA", "
   assert.equal(isForbiddenEmployer(employer), true, `${employer} must not be accepted as employer`);
 }
 assert.equal(isForbiddenEmployer("Accenture Malaysia"), false, "real company should be accepted as employer");
-for (const fakeEmployer of ["Business Process", "Petronas based in", "From Date To Date", "towards improving its", "Menara TM, Jalan Pantai Baharu"]) {
+for (const fakeEmployer of ["Business Process", "Petronas based in", "From Date To Date", "towards improving its", "Menara TM, Jalan Pantai Baharu", "in the world", "where as my goal in", "Managed &", "Roles and", "Achievement artifacts available for viewing", "Date Of Birth", "Personal Particular", "Professional Objective", "Authorization Concepts", "March", "April", "September", "October", "November"]) {
   assert.equal(resolveCanonicalCandidateDisplay({ name: "Aina Rahman", currentCompany: fakeEmployer, email: "a@example.com", title: "SAP FICO Consultant" }).currentEmployer, "Not disclosed", fakeEmployer + " must not be displayed as current employer");
 }
 

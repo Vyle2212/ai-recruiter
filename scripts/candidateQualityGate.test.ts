@@ -123,7 +123,7 @@ const renderedTalentSearchLabels = [
 assert.equal(hasTalentSearchMojibake(renderedTalentSearchLabels), false, "Talent Search labels should not contain mojibake");
 assert.equal(safeTalentSearchCompany("SAP"), "Not disclosed", "SAP alone is not a confirmed employer");
 assert.equal(safeTalentSearchCompany("SAP SAP"), "Not disclosed", "SAP SAP is not a confirmed employer");
-for (const badEmployer of ["Creation of", "Applying for the position of SAP Consultant", "Non-disclosed", "No details", "SAP", "MM module", "raw sentence fragment applying for the position"]) {
+for (const badEmployer of ["Creation of", "Applying for the position of SAP Consultant", "Non-disclosed", "No details", "SAP", "MM module", "raw sentence fragment applying for the position", "in the world", "where as my goal in", "Managed &", "Roles and", "Achievement artifacts available for viewing", "Date Of Birth", "Personal Particular", "Professional Objective", "Authorization Concepts", "March", "April", "September", "October", "November"]) {
   assert.equal(safeTalentSearchCompany(badEmployer), "Not disclosed", badEmployer + " should not be displayed as current employer");
 }
 assert.equal(cleanTalentSearchTitle("Employment SAP PS Solutions Consultant (", "PS"), "SAP PS Solutions Consultant", "dangling title punctuation should be removed");
@@ -166,6 +166,23 @@ assert.equal(displayTalentSearchValidationStatus({ status: "Ready", score: 95, d
 assert.equal(isTalentSearchPlaceholderName("Profile Under Review"), true, "raw Profile Under Review should be treated as placeholder/review-only");
 assert.equal(isTalentSearchPlaceholderName("Candidate profile pending validation"), true, "safe placeholder should be review-only in default Talent Search");
 assert.equal(isTalentSearchBadDisplayName("Bachelor Of Science In Information"), true, "education heading should be excluded from default Talent Search");
+for (const badDisplayName of [
+  "Candidate profile pending validation",
+  "Personal Particular",
+  "Professional Objective",
+  "Authorization Concepts",
+  "Relevant MAST EWM",
+  "Curriculum Vitae ROA R. Maroda",
+  "Date Of Birth 01 Jan 1980",
+  "Subjectmatterex Mdmanalyst",
+  "From Data Acquisition To Reporting",
+  "Professional Synopsis",
+]) {
+  assert.equal(isTalentSearchPlaceholderName(badDisplayName) || isTalentSearchBadDisplayName(badDisplayName), true, `${badDisplayName} should be blocked from normal Talent Search`);
+}
+for (const badQuery of ["Candidate profile pending validation", "Date Of Birth", "Professional Objective", "Personal Particular", "Authorization Concepts", "From Data Acquisition To Reporting", "Curriculum Vitae", "Subjectmatterex", "Mdmanalyst"]) {
+  assert.equal(isTalentSearchPlaceholderName(badQuery) || isTalentSearchBadDisplayName(badQuery) || classifyTalentSearchQuery(badQuery) === "placeholder", true, `${badQuery} should be routed away from default recruiter results`);
+}
 assert.equal(isTalentSearchBadDisplayName("Aina Rahman"), false, "valid human names should remain searchable");
 assert.equal(displayTalentSearchValidationStatus({ status: "Ready", score: 95, displayName: "Aina Rahman", currentEmployer: "Not disclosed", title: "SAP FICO Consultant" }), "Missing Information", "Not disclosed employer should display Missing Information");
 assert.equal(displayTalentSearchValidationStatus({ status: "Ready", score: 95, displayName: "Aina Rahman", currentEmployer: "ACME Consulting", title: "SAP FICO Consultant" }), "Ready", "Ready display requires valid name and employer");

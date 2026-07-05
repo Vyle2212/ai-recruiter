@@ -1,5 +1,5 @@
-﻿import { resolveCanonicalCandidateDisplay } from "./candidateCanonicalDisplay";
-import { TALENT_SEARCH_DISPLAY_RESOLVER_VERSION, cleanTalentSearchModule, cleanTalentSearchTitle, safeTalentSearchCompany } from "./talentSearchDisplay";
+import { resolveCanonicalCandidateDisplay } from "./candidateCanonicalDisplay";
+import { TALENT_SEARCH_DISPLAY_RESOLVER_VERSION, cleanTalentSearchModule, cleanTalentSearchTitle, isTalentSearchBadDisplayName, isTalentSearchPlaceholderName, safeTalentSearchCompany } from "./talentSearchDisplay";
 
 type AnyRecord = Record<string, any>;
 
@@ -63,13 +63,13 @@ export type CandidateDisplayAuditResult = {
 const PLACEHOLDER_NAME = "Candidate profile pending validation";
 const NOT_DISCLOSED = "Not disclosed";
 const FORBIDDEN_EMPLOYER_PATTERN = /^(sap|fico|fi|co|mm|sd|pp|pm|ps|abap|basis|btp|ewm|tm|wm|hana|s\/?4hana|s4hana|greenfield|brownfield|rollout|ams|implementation|migration|transformation|support|project)$/i;
-const EDUCATION_NAME_PATTERN = /\b(bachelor|master|degree|diploma|university|college|faculty|academic|science|information technology|applied statistics|computer science)\b/i;
-const CERTIFICATE_NAME_PATTERN = /\b(certificate|certification|certified|professional certificate|training)\b/i;
-const TITLE_NAME_PATTERN = /\b(experienced|senior|consultant|manager|lead|specialist|architect|developer|analyst|engineer|internally|externally|key competencies|competencies|responsibilities|employment history|career history)\b/i;
+const EDUCATION_NAME_PATTERN = /\b(bachelor|master|degree|diploma|university|college|faculty|academic|science|information technology|applied statistics|computer science|education section)\b/i;
+const CERTIFICATE_NAME_PATTERN = /\b(certificate|certification|certified|professional certificate|training|certification section)\b/i;
+const TITLE_NAME_PATTERN = /\b(experienced|senior|consultant|manager|lead|specialist|architect|developer|analyst|engineer|internally|externally|key competencies|competencies|responsibilities|employment history|career history|curriculum vitae|resume|personal particular|professional objective|professional synopsis|authorization concepts|relevant mast|date of birth|subjectmatterex|mdmanalyst|from data acquisition|company profile|project section)\b/i;
 const COMPANY_NAME_PATTERN = /\b(software|systems|solutions|technologies|technology|consulting|consultancy|group|sdn\s*bhd|pte\s*ltd|limited|ltd|inc|corp|corporation|berhad|plc|llc|gmbh)\b/i;
-const NAME_FORBIDDEN_PATTERN = /profile under review|name requires validation|identity under review|current location|technology consulting|academic background|nationality|gender|father'?s name/i;
-const BAD_NAME_PHRASE_PATTERN = /^(extended star schema models|installation status|strictly confidential|for mechanical turnkey projects|willing to travel|each type|and need for resources|light mechanics roles|dxc technology|accenture|abeam consulting)$/i;
-const GENERIC_NAME_START_PATTERN = /^(currently|experience|experienced|tools|responsibilities|responsibility|project|projects|for|with|and|each|installation|strictly|willing|light|extended)\b/i;
+const NAME_FORBIDDEN_PATTERN = /profile under review|name requires validation|identity under review|current location|technology consulting|academic background|nationality|gender|father'?s name|curriculum vitae|\bcv\b|\bresume\b|personal particular|professional objective|professional synopsis|authorization concepts|relevant mast|date of birth|subjectmatterex|mdmanalyst|from data acquisition/i;
+const BAD_NAME_PHRASE_PATTERN = /^(extended star schema models|installation status|strictly confidential|for mechanical turnkey projects|willing to travel|each type|and need for resources|light mechanics roles|dxc technology|accenture|abeam consulting|personal particular|professional objective|authorization concepts|relevant mast ewm|professional synopsis|from data acquisition to reporting)$/i;
+const GENERIC_NAME_START_PATTERN = /^(currently|experience|experienced|tools|responsibilities|responsibility|project|projects|for|from|with|and|each|installation|strictly|willing|light|extended|managed|roles?|curriculum|personal|professional|authorization|relevant)\b/i;
 
 function text(value: any): string {
   if (value === null || value === undefined) return "";
@@ -123,7 +123,7 @@ function cleanEmployerCandidate(value: any): string {
 function isPlausibleEmployer(value: any): boolean {
   const company = cleanEmployerCandidate(value);
   if (!company || company.length < 2 || company.length > 60 || isForbiddenEmployer(company)) return false;
-  if (/\b(german company|makes electric|assigned|responsib|project role|period|tools|platforms|module|consultant|developer|analyst|manager|lead|senior|business process|based in|towards improving|from date to date|passionate in|employment history|managed demand|pallet positions|jalan|wilayah|menara)\b/i.test(company)) return false;
+  if (/\b(german company|makes electric|assigned|responsib|project role|period|tools|platforms|module|consultant|developer|analyst|manager|lead|senior|business process|based in|towards improving|from date to date|passionate in|employment history|curriculum vitae|personal particular|professional objective|professional synopsis|authorization concepts|achievement artifacts available for viewing|managed demand|managed &|roles and|in the world|where as my goal|pallet positions|jalan|wilayah|menara)\b/i.test(company)) return false;
   const words = company.split(/\s+/).filter(Boolean);
   if (words.length > 6) return false;
   if (/\b(ltd|limited|inc|corp|corporation|sdn|bhd|pte|plc|llc|gmbh|berhad|group|systems|solutions|consulting|technologies|technology|software|energy|bank|aerospace|manufacturing)\b/i.test(company)) return true;
@@ -132,17 +132,18 @@ function isPlausibleEmployer(value: any): boolean {
 
 export function isDisplayNamePlaceholder(value: any): boolean {
   const name = clean(value);
-  return !name || NAME_FORBIDDEN_PATTERN.test(name) || /^candidate\s*#?\d+$/i.test(name);
+  return !name || isTalentSearchPlaceholderName(name) || NAME_FORBIDDEN_PATTERN.test(name) || /^candidate\s*#?\d+$/i.test(name);
 }
 
 function classifyDisplayNameIssueWithoutRecursion(name: string): DisplayIssueType | "" {
   if (/^candidate profile pending validation$/i.test(name)) return "";
   if (isDisplayNamePlaceholder(name)) return "placeholder-name";
-  if (BAD_NAME_PHRASE_PATTERN.test(name) || GENERIC_NAME_START_PATTERN.test(name)) return "title-used-as-name";
+  if (BAD_NAME_PHRASE_PATTERN.test(name)) return "title-used-as-name";
   if (EDUCATION_NAME_PATTERN.test(name)) return "education-used-as-name";
   if (CERTIFICATE_NAME_PATTERN.test(name)) return "certificate-used-as-name";
   if (COMPANY_NAME_PATTERN.test(name)) return "company-used-as-name";
-  if (TITLE_NAME_PATTERN.test(name)) return "title-used-as-name";
+  if (TITLE_NAME_PATTERN.test(name) || GENERIC_NAME_START_PATTERN.test(name)) return "title-used-as-name";
+  if (isTalentSearchBadDisplayName(name)) return "title-used-as-name";
   return "";
 }
 

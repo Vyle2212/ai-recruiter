@@ -1,6 +1,6 @@
-﻿import { buildCanonicalCandidateProfile } from "./canonicalCandidateProfile";
+import { buildCanonicalCandidateProfile } from "./canonicalCandidateProfile";
 import { normalizeValidationStatus, type CandidateValidationStatus } from "./candidateValidation";
-import { cleanTalentSearchModule, cleanTalentSearchTitle, displayTalentSearchValidationStatus, safeTalentSearchCompany } from "./talentSearchDisplay";
+import { cleanTalentSearchModule, cleanTalentSearchTitle, displayTalentSearchValidationStatus, isTalentSearchBadDisplayName, isTalentSearchPlaceholderName, safeTalentSearchCompany } from "./talentSearchDisplay";
 
 type AnyRecord = Record<string, any>;
 
@@ -16,9 +16,9 @@ export type CanonicalDisplayResolution = {
 const SAFE_PLACEHOLDER = "Candidate profile pending validation";
 const NOT_DISCLOSED = "Not disclosed";
 const FORBIDDEN_EMPLOYER = /^(sap|fico|fi|co|mm|sd|pp|pm|ps|abap|basis|btp|ewm|wm|hana|s\/?4hana|s4hana|greenfield|brownfield|rollout|ams|implementation|migration|transformation)$/i;
-const BAD_NAME_PHRASE = /^(extended star schema models|installation status|strictly confidential|for mechanical turnkey projects|willing to travel|each type|and need for resources|light mechanics roles|dxc technology|accenture|abeam consulting)$/i;
-const NAME_SECTION_OR_COMPANY = /\b(bachelor|master|degree|diploma|university|college|faculty|academic|certificate|certification|certified|professional certificate|training|competencies|responsibilities|employment history|career history|software|systems|solutions|technologies|technology|consulting|consultancy|group|sdn\s*bhd|pte\s*ltd|limited|ltd|inc|corp|corporation|berhad|plc|llc|gmbh)\b/i;
-const GENERIC_NAME_START = /^(currently|experience|experienced|tools|responsibilities|responsibility|project|projects|for|with|and|each|installation|strictly|willing|light|extended)\b/i;
+const BAD_NAME_PHRASE = /^(extended star schema models|installation status|strictly confidential|for mechanical turnkey projects|willing to travel|each type|and need for resources|light mechanics roles|dxc technology|accenture|abeam consulting|personal particular|professional objective|authorization concepts|relevant mast ewm|professional synopsis)$/i;
+const NAME_SECTION_OR_COMPANY = /\b(bachelor|master|degree|diploma|university|college|faculty|academic|certificate|certification|certified|professional certificate|training|competencies|responsibilities|employment history|career history|curriculum vitae|resume|personal particular|professional objective|professional synopsis|authorization concepts|relevant mast|date of birth|subjectmatterex|mdmanalyst|company profile|project section|education section|certification section|software|systems|solutions|technologies|technology|consulting|consultancy|group|sdn\s*bhd|pte\s*ltd|limited|ltd|inc|corp|corporation|berhad|plc|llc|gmbh)\b/i;
+const GENERIC_NAME_START = /^(currently|experience|experienced|tools|responsibilities|responsibility|project|projects|for|from|with|and|each|installation|strictly|willing|light|extended|managed|roles?|curriculum|personal|professional|authorization|relevant)\b/i;
 const displayResolutionCache = new WeakMap<AnyRecord, CanonicalDisplayResolution>();
 
 function clean(value: any) {
@@ -28,6 +28,7 @@ function clean(value: any) {
 function isDisplaySafeHumanName(value: any) {
   const name = clean(value).replace(/^['"]+|['"]+$/g, "");
   if (!name || /^candidate profile pending validation$/i.test(name) || name.length < 4 || name.length > 80) return false;
+  if (isTalentSearchPlaceholderName(name) || isTalentSearchBadDisplayName(name)) return false;
   if (/profile under review|name requires validation|identity under review|current location|technology consulting|academic background|nationality|gender|father'?s name/i.test(name)) return false;
   if (BAD_NAME_PHRASE.test(name) || NAME_SECTION_OR_COMPANY.test(name) || GENERIC_NAME_START.test(name)) return false;
   const parts = name.split(/\s+/).filter(Boolean);
@@ -52,7 +53,7 @@ function isAmbiguousEmployer(value: any) {
   if (openParens !== closeParens) return true;
   if (/[-|,;:]\s*$/.test(employer)) return true;
   if (/\.\s*(he|she|they|it|is|was|leads?|has|sap)\b/i.test(employer)) return true;
-  if (/\b(strictly confidential|innovation|capital market|authorization matrix|preferred working location|manufacturing domain|business process|based in|towards improving|from date to date|passionate in|employment history|managed demand|pallet positions|jalan|wilayah|menara)\b/i.test(employer)) return true;
+  if (/\b(strictly confidential|innovation|capital market|authorization matrix|authorization concepts|preferred working location|manufacturing domain|business process|based in|towards improving|from date to date|passionate in|employment history|curriculum vitae|personal particular|professional objective|professional synopsis|achievement artifacts available for viewing|managed demand|managed &|roles and|in the world|where as my goal|pallet positions|jalan|wilayah|menara)\b/i.test(employer)) return true;
   if (/\b(consultant|manager|developer|analyst|lead|senior|role|responsibilities|tools|platforms|module)\b/i.test(employer)) return true;
   return false;
 }

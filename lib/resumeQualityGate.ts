@@ -68,8 +68,8 @@ function titleCaseName(value: string) {
   }).join(" ");
 }
 
-const NAME_METADATA_SUFFIX_RE = /\b(gender|nationality|father'?s name|mother'?s name|original|seniorassociate|businessanalyst|changemanagement|technicallead|subjectmatterexpert|functionalconsultant|embeddedsystemsengineer|consultant|sap|current location|availability|notice period|professional summary|resume|cv)\b.*$/i;
-const FORBIDDEN_NAME_RE = /current location|nationality|languages?|technology consulting|academic background|capital market|current position|worked on|industry|summary|projects?|responsibilities|skills?|modules?|headings?|section titles?|company names?|software testing|authorization matrix|customer request|extended star schema|roll out|information technology|quality of outcomes|device management|master data governance|period end closing|preferred working location|installation status|strictly confidential|manufacturing domain|contact education|external stakeholders|identity under review|needs manual name review|profile manual review|profile under review|name requires validation|candidate\s*#|academic qualification|professional summary|career summary|employment history|work experience|education|certifications?|gender|father'?s name|mother'?s name|original|\bams\b|\bsap\b|functional consultant|senior consultant|employment|designation|position title/i;
+const NAME_METADATA_SUFFIX_RE = /\b(gender|nationality|father'?s name|mother'?s name|original|seniorassociate|businessanalyst|changemanagement|technicallead|subjectmatterexpert|subjectmatterex|mdmanalyst|functionalconsultant|embeddedsystemsengineer|consultant|sap|current location|availability|notice period|professional summary|professional synopsis|curriculum vitae|personal particular|professional objective|authorization concepts|relevant mast|resume|cv|date of birth)\b.*$/i;
+const FORBIDDEN_NAME_RE = /current location|nationality|languages?|technology consulting|academic background|capital market|current position|worked on|industry|summary|projects?|responsibilities|skills?|modules?|headings?|section titles?|company names?|company profile|project section|education section|certification section|software testing|authorization matrix|authorization concepts|customer request|extended star schema|roll out|information technology|quality of outcomes|device management|master data governance|period end closing|preferred working location|installation status|strictly confidential|manufacturing domain|contact education|external stakeholders|identity under review|needs manual name review|profile manual review|profile under review|candidate profile pending validation|name requires validation|candidate\s*#|academic qualification|professional summary|professional synopsis|career summary|curriculum vitae|personal particular|professional objective|relevant mast|from data acquisition to reporting|date of birth|subjectmatterex|mdmanalyst|employment history|work experience|education|certifications?|gender|father'?s name|mother'?s name|original|\bams\b|\bsap\b|functional consultant|senior consultant|employment|designation|position title/i;
 const ROLE_NAME_RE = /\b(sap|sd|fico|fi|co|mm|abap|basis|functional|technical|consultant|developer|architect|manager|lead|tester|testing|engineer|analyst|specialist|subject matter|business analyst|current position|designation|position title)\b/i;
 const LOCATION_RE = /\b(malaysia|petaling jaya|kuala lumpur|selangor|singapore|india|indonesia|philippines|current location|preferred working location)\b/i;
 const KNOWN_BAD_EXACT = new Set([
@@ -113,6 +113,17 @@ const KNOWN_BAD_EXACT = new Set([
   "employment",
   "designation",
   "position title",
+  "candidate profile pending validation",
+  "curriculum vitae",
+  "personal particular",
+  "professional objective",
+  "professional synopsis",
+  "authorization concepts",
+  "relevant mast ewm",
+  "from data acquisition to reporting",
+  "date of birth",
+  "subjectmatterex",
+  "mdmanalyst",
 ]);
 
 const COMPANY_WORD_RE = /\b(sdn\s*bhd|berhad|ltd|limited|inc|corp|corporation|company|group|services|solutions|technologies|technology|consulting|bank|airports|petronas|telekom|capgemini|wipro|deloitte|accenture|pwc|kpmg|infosys|cognizant|bosch|shell|dksh|abeam)\b/i;
