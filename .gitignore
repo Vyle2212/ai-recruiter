@@ -63,3 +63,6 @@ sapKnowledgeGraph-full.txt
 repair-preview.json
 candidate-display-repair-review.csv
 candidate-display-repair-rollback.json
+
+# searchable profile quality review artifact
+reports/searchable-profile-quality-review.json
