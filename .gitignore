@@ -67,3 +67,4 @@ candidate-display-repair-rollback.json
 # searchable profile quality review artifact
 reports/searchable-profile-quality-review.json
 reports/must-repair-before-search.json
+reports/candidate-reextraction-review.json

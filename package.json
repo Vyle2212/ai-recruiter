@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "tsx scripts/nameParser.test.ts && tsx scripts/employerParser.test.ts && tsx scripts/identityResolution.test.ts && tsx scripts/deliveryMetricsParser.test.ts && tsx scripts/executiveCompareState.test.ts && tsx scripts/candidateQualityGate.test.ts && tsx scripts/validationQueue.test.ts && tsx scripts/candidateDataRepair.test.ts && tsx scripts/candidateDuplicateIdentity.test.ts && tsx scripts/repairReview.test.ts && tsx scripts/searchableProfileQualityGate.test.ts && tsx scripts/mustRepairBeforeSearch.test.ts && tsx scripts/candidateValidation.test.ts && tsx scripts/candidateDisplayAudit.test.ts && tsx scripts/candidateDisplayRepairApply.test.ts && tsx scripts/pdfExportQuality.test.ts && tsx scripts/auditCandidates.test.ts",
+    "test": "tsx scripts/nameParser.test.ts && tsx scripts/employerParser.test.ts && tsx scripts/identityResolution.test.ts && tsx scripts/deliveryMetricsParser.test.ts && tsx scripts/executiveCompareState.test.ts && tsx scripts/candidateQualityGate.test.ts && tsx scripts/validationQueue.test.ts && tsx scripts/candidateDataRepair.test.ts && tsx scripts/candidateReExtraction.test.ts && tsx scripts/candidateDuplicateIdentity.test.ts && tsx scripts/repairReview.test.ts && tsx scripts/searchableProfileQualityGate.test.ts && tsx scripts/mustRepairBeforeSearch.test.ts && tsx scripts/candidateValidation.test.ts && tsx scripts/candidateDisplayAudit.test.ts && tsx scripts/candidateDisplayRepairApply.test.ts && tsx scripts/pdfExportQuality.test.ts && tsx scripts/auditCandidates.test.ts",
     "audit:candidates": "tsx scripts/audit-candidates.ts",
     "audit:display": "tsx scripts/auditCandidateDisplay.ts",
     "audit:display:preview": "tsx scripts/previewCandidateDisplayRepairs.ts",
@@ -17,7 +17,9 @@
     "search-index:rebuild": "tsx scripts/rebuildSearchIndexSafe.ts",
     "test:search": "tsx scripts/searchQualityGate.test.ts",
     "audit:repair": "tsx scripts/auditCandidateDataRepair.ts",
+    "audit:reextract": "tsx scripts/auditCandidateReExtraction.ts",
     "export:repair-review": "tsx scripts/exportCandidateRepairReview.ts",
+    "export:reextract": "tsx scripts/exportCandidateReExtractionReview.ts",
     "audit:searchable-quality": "tsx scripts/auditSearchableProfileQuality.ts",
     "export:searchable-quality": "tsx scripts/exportSearchableProfileQualityReview.ts",
     "export:must-repair": "tsx scripts/exportMustRepairBeforeSearch.ts"

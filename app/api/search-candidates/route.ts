@@ -4,6 +4,8 @@ import { classifyCandidateSearchVisibility } from "@/lib/candidateSearchVisibili
 import { buildTalentSearchPaginationMeta } from "@/lib/talentSearchPagination";
 import { buildSearchIndexAudit } from "@/lib/searchIndexAudit";
 import { candidateProfileTimestampLabels } from "@/lib/candidateDuplicateIdentity";
+import { classifySearchableProfileQuality } from "@/lib/searchableProfileQualityGate";
+import { talentSearchEmployerDisplay, talentSearchExpectedSalaryDisplay } from "@/lib/talentSearchCardDisplay";
 import { TALENT_SEARCH_DISPLAY_RESOLVER_VERSION, cleanTalentSearchTitle, classifyTalentSearchQuery, extractTalentSearchExplicitName, isTalentSearchBadDisplayName, isTalentSearchPlaceholderName, resolveTalentSearchViewerRole, safeTalentSearchCompany, talentSearchIdentityRank, talentSearchSummaryVisibility } from "@/lib/talentSearchDisplay";
 import { supabase } from "@/lib/supabase";
 import {
@@ -423,7 +425,18 @@ function hiddenReasonForRecruiterSearch(candidate: AnyRecord, showReview = false
   return visibility.blocked_from_recruiter_search ? visibility.validation_queue_reason : "";
 }
 
+function marketSearchQualityBlockReason(candidate: AnyRecord, includeReview = false) {
+  if (includeReview) return "";
+  const quality = classifySearchableProfileQuality(candidate);
+  if (quality.reviewCategory === "must_repair_before_search") return "must_repair_before_search";
+  if (quality.reviewCategory === "blocked_validation_queue") return "blocked_validation_queue";
+  if (!quality.searchableFields.modules.length || !quality.searchableFields.keywords.length) return "incomplete_searchable_fields";
+  return "";
+}
+
 function shouldHideCandidateFromRecruiterSearch(candidate: AnyRecord, showReview = false, rawKeyword = "") {
+  const marketReason = marketSearchQualityBlockReason(candidate, showReview);
+  if (marketReason) return true;
   const reason = hiddenReasonForRecruiterSearch(candidate, showReview);
   if (!reason) return false;
   const queryType = classifyTalentSearchQuery(rawKeyword);
@@ -1046,6 +1059,8 @@ function normalizeCandidateForSearch(args: {
   const currentCompany = safeSearchDisplayCompany(candidate.display_company, candidate.current_company, candidate.currentCompany, candidate.current_employer, candidate.currentEmployer, candidate.company, candidate.employer, indexRow.display_company);
   const companyType = candidate.company_type || indexRow.company_type || "Not disclosed";
   const timestampLabels = candidateProfileTimestampLabels(candidate);
+  const employerDisplay = talentSearchEmployerDisplay(candidate);
+  const expectedSalaryDisplay = talentSearchExpectedSalaryDisplay(candidate);
 
   return {
     ...candidate,
@@ -1071,6 +1086,9 @@ function normalizeCandidateForSearch(args: {
     currentCompany,
     current_company: currentCompany,
     company: currentCompany,
+    currentEmployerDisplay: employerDisplay.currentEmployer.label,
+    previousEmployerDisplay: employerDisplay.previousEmployer.label,
+    expectedSalaryDisplay,
     company_type: companyType,
     background_experience: candidate.background_experience || companyType,
     years,
@@ -1130,16 +1148,14 @@ function normalizeCandidateForSearch(args: {
     project_extraction_source: projects.source,
     visa_status: candidate.status || "New",
     profileLastUpdatedAt: timestampLabels.profileLastUpdatedAt,
-    latestCvUploadedAt: timestampLabels.latestCvUploadedAt,
     latestCandidateSelfUpdateAt: timestampLabels.latestCandidateSelfUpdateAt,
     updatedLabel: timestampLabels.updatedLabel,
-    latestCvLabel: timestampLabels.latestCvLabel,
   };
 }
 
 
 const SEARCH_LIST_ALLOWED_FIELDS = new Set([
-  "id", "candidate_id", "name", "displayName", "display_name", "title", "display_title", "primary_module", "primaryModule", "secondary_modules", "submodules", "selected_modules", "search_context_module", "role_type", "seniority_level", "country", "location", "current_location", "display_location", "display_company", "currentCompany", "current_company", "company", "company_type", "background_experience", "years", "years_experience", "email_masked", "phone_masked", "hasContactInfo", "review_first", "recruiter_review_first", "searchFit", "search_fit", "search_score", "module_match_type", "why_matched", "matched_tokens", "validation_status", "validation_badge", "validation_export_eligible", "client_export_eligible", "export_blocking_reasons", "profile_quality_score", "parser_quality_score", "parser_quality", "review_needed", "excluded_from_client_view", "display_quality_score", "recruiter_priority_score", "rank_score", "recommendation_summary", "summary", "quality_grade", "implementation_projects", "ams_projects", "greenfield_projects", "rollout_projects", "brownfield_projects", "selective_transformation_projects", "s4hana_projects", "s4_implementation_projects", "s4_ams_projects", "project_counts", "project_extraction_confidence", "project_extraction_source", "visa_status", "profileLastUpdatedAt", "latestCvUploadedAt", "latestCandidateSelfUpdateAt", "updatedLabel", "latestCvLabel", "search_identity_rank", "result_rank", "rank_label", "rank_tier"
+  "id", "candidate_id", "name", "displayName", "display_name", "title", "display_title", "primary_module", "primaryModule", "secondary_modules", "submodules", "selected_modules", "search_context_module", "role_type", "seniority_level", "country", "location", "current_location", "display_location", "display_company", "currentCompany", "current_company", "company", "company_type", "background_experience", "years", "years_experience", "email_masked", "phone_masked", "hasContactInfo", "review_first", "recruiter_review_first", "searchFit", "search_fit", "search_score", "module_match_type", "why_matched", "matched_tokens", "validation_status", "validation_badge", "validation_export_eligible", "client_export_eligible", "export_blocking_reasons", "profile_quality_score", "parser_quality_score", "parser_quality", "review_needed", "excluded_from_client_view", "display_quality_score", "recruiter_priority_score", "rank_score", "recommendation_summary", "summary", "quality_grade", "implementation_projects", "ams_projects", "greenfield_projects", "rollout_projects", "brownfield_projects", "selective_transformation_projects", "s4hana_projects", "s4_implementation_projects", "s4_ams_projects", "project_counts", "project_extraction_confidence", "project_extraction_source", "visa_status", "profileLastUpdatedAt", "latestCandidateSelfUpdateAt", "updatedLabel", "currentEmployerDisplay", "previousEmployerDisplay", "expectedSalaryDisplay", "search_identity_rank", "result_rank", "rank_label", "rank_tier"
 ]);
 
 function toSearchListItem(candidate: AnyRecord): AnyRecord {
@@ -1387,7 +1403,8 @@ export async function GET(req: NextRequest) {
     const hasContactInfoOnly = toBool(firstParam(url, ["hasContactInfoOnly", "contactInfoOnly", "contactableOnly", "contactOnly"], "false"));
     const showReview = toBool(firstParam(url, ["showReview"], "false"));
     const reviewMode = toBool(firstParam(url, ["reviewMode"], "false"));
-    const includeReviewRecords = showReview || reviewMode;
+    const includeReview = toBool(firstParam(url, ["includeReview"], "false"));
+    const includeReviewRecords = showReview || reviewMode || includeReview;
     const viewerRole = resolveTalentSearchViewerRole({
       requestedRole: firstParam(url, ["viewerRole", "role"], ""),
       adminFlag: firstParam(url, ["internalTalentSearchAdmin", "adminSummary", "admin"], ""),
@@ -1593,6 +1610,7 @@ export async function GET(req: NextRequest) {
         hasContactInfoOnly,
         showReview: includeReviewRecords,
         reviewMode,
+        includeReview,
         countries,
         city: city || null,
         minYears,

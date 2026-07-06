@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 import { classifyCandidateSearchVisibility } from "../lib/candidateSearchVisibility";
+import { classifySearchableProfileQuality } from "../lib/searchableProfileQualityGate";
+import { talentSearchEmployerDisplay, talentSearchExpectedSalaryDisplay } from "../lib/talentSearchCardDisplay";
 import { buildSearchIndexAudit } from "../lib/searchIndexAudit";
 import { buildTalentSearchPaginationMeta } from "../lib/talentSearchPagination";
 import { classifyTalentSearchQuery, isTalentSearchBadDisplayName, isTalentSearchPlaceholderName, safeTalentSearchCompany, talentSearchIdentityRank } from "../lib/talentSearchDisplay";
@@ -111,6 +113,32 @@ for (const badQuery of ["Candidate profile pending validation", "Date Of Birth",
   assert.equal(isTalentSearchPlaceholderName(badQuery) || isTalentSearchBadDisplayName(badQuery) || classifyTalentSearchQuery(badQuery) === "placeholder", true, `${badQuery} should not produce normal recruiter results`);
 }
 
+
+const marketGateFixture = [
+  { id: "market-ready", name: "Lee Wah Ken", current_company: "Accenture Malaysia", current_title: "SAP MM Consultant", primary_module: "MM", email: "lee@example.com", phone: "+60 12 345 6789", location: "Malaysia", profile_quality_score: 85, raw_text: "SAP MM S/4HANA ECC rollout support AMS migration" },
+  { id: "placeholder-market", name: "Candidate profile pending validation", current_company: "Accenture Malaysia", current_title: "SAP MM Consultant", primary_module: "MM", email: "hidden@example.com", location: "Malaysia", profile_quality_score: 85, raw_text: "SAP MM S/4HANA" },
+  { id: "must-repair-market", name: "Tojo Tomy", current_company: "Not disclosed", current_title: "SAP PP Certified PP consultant having 14+ years of professional SAP experience.", primary_module: "PP", email: "tojo@example.com", location: "Malaysia", profile_quality_score: 85, raw_text: "SAP PP S/4HANA implementation support" },
+];
+const marketVisibleFixture = marketGateFixture.filter((candidate) => {
+  const quality = classifySearchableProfileQuality(candidate);
+  return quality.reviewCategory === "search_ready" || quality.reviewCategory === "searchable_but_needs_enrichment";
+});
+assert.deepEqual(marketVisibleFixture.map((candidate) => candidate.id), ["market-ready"], "default Talent Search should exclude placeholder and must_repair_before_search candidates");
+assert.equal(classifySearchableProfileQuality(marketGateFixture[0]).reviewCategory, "search_ready", "valid searchable profiles still appear");
+assert.equal(classifySearchableProfileQuality(marketGateFixture[2]).reviewCategory, "must_repair_before_search", "long summary title is must_repair_before_search");
+
+const employerDisplay = talentSearchEmployerDisplay({
+  current_company: "Fallback Current",
+  experience: [
+    { company: "Current Co", start_date: "2022-01-01", end_date: "Present", current: true },
+    { company: "Previous Co", start_date: "2018-02-01", end_date: "2021-12-01" },
+  ],
+});
+assert.equal(employerDisplay.currentEmployer.label.includes("Current Co"), true, "search card renders current employer when available");
+assert.equal(employerDisplay.currentEmployer.label.includes("Present"), true, "current employer includes date range when available");
+assert.equal(employerDisplay.previousEmployer.label.includes("Previous Co"), true, "search card renders previous employer when available");
+assert.equal(talentSearchExpectedSalaryDisplay({ expected_salary: "8000+", expected_salary_currency: "MYR" }), "MYR 8,000+ monthly", "expected salary renders only when available and formatted");
+assert.equal(talentSearchExpectedSalaryDisplay({}), "", "expected salary hides when unavailable");
 const routeSource = fs.readFileSync(new URL("../app/api/search-candidates/route.ts", import.meta.url), "utf8");
 assert.equal(routeSource.includes("totalCandidates: pagination.totalCandidates"), true, "Search API should return top-level totalCandidates");
 assert.equal(routeSource.includes("searchIndexRows"), true, "Search API debug should include searchIndexRows");
@@ -119,6 +147,9 @@ assert.equal(routeSource.includes("sourceRows: sourceRows.length"), true, "Searc
 assert.equal(routeSource.includes("visibleRows: visibleRows.length"), true, "Search API debug should include visibleRows");
 assert.equal(routeSource.includes("toSearchListItem"), true, "Search API should sanitize list response items");
 assert.equal(routeSource.includes("classifyCandidateSearchVisibility"), true, "Search API should use shared recruiter-search visibility gate");
+assert.equal(routeSource.includes("classifySearchableProfileQuality"), true, "Search API should enforce Searchable Profile Quality Gate v2");
+assert.equal(routeSource.includes("must_repair_before_search"), true, "Search API should exclude must_repair_before_search by default");
+assert.equal(routeSource.includes("includeReview"), true, "Search API should support includeReview admin/debug mode alias");
 assert.equal(routeSource.includes("select(CANDIDATE_LIGHT_FIELDS"), true, "Search API list path should use lightweight candidate fields");
 assert.equal(routeSource.includes("delete out.raw_text"), true, "Search API list response should remove raw_text");
 assert.equal(routeSource.includes("delete out.resume_text"), true, "Search API list response should remove resume_text");
@@ -131,6 +162,10 @@ const allowedFieldsBlock = routeSource.match(/const SEARCH_LIST_ALLOWED_FIELDS =
 assert.equal(allowedFieldsBlock.includes("blocked_from_recruiter_search"), false, "default search list payload should not include blocked_from_recruiter_search");
 assert.equal(allowedFieldsBlock.includes("search_visibility"), false, "default search list payload should not include search_visibility");
 assert.equal(allowedFieldsBlock.includes("validation_queue_reason"), false, "default search list payload should not include validation_queue_reason");
+assert.equal(allowedFieldsBlock.includes("latestCvLabel"), false, "search list payload should not include Latest CV label");
+assert.equal(allowedFieldsBlock.includes("currentEmployerDisplay"), true, "search list payload should include current employer display field");
+assert.equal(allowedFieldsBlock.includes("previousEmployerDisplay"), true, "search list payload should include previous employer display field");
+assert.equal(allowedFieldsBlock.includes("expectedSalaryDisplay"), true, "search list payload should include expected salary display field");
 const extractionAuditSource = fs.readFileSync(new URL("../scripts/auditCandidateExtractionQuality.ts", import.meta.url), "utf8");
 assert.equal(extractionAuditSource.includes("classifyCandidateSearchVisibility"), true, "Extraction audit should use shared recruiter-search visibility gate");
 
@@ -138,5 +173,10 @@ const searchPageSource = fs.readFileSync(new URL("../app/search/page.tsx", impor
 assert.equal(searchPageSource.includes("sortCandidatesForRecruiter"), false, "Talent Search UI must not client-side resort API results");
 assert.equal(searchPageSource.includes("const nextCandidates = rawCandidates;"), true, "Talent Search UI should preserve API item order exactly");
 assert.equal(searchPageSource.includes("summaryVisibility.canSeeInternalMetrics"), true, "internal diagnostics should remain role-gated and hidden from recruiter UI");
+assert.equal(searchPageSource.includes("Latest CV"), false, "search card does not render Latest CV");
+assert.equal(searchPageSource.includes("updatedLine"), true, "search card renders Updated month/year");
+assert.equal(searchPageSource.includes("Current Employer:"), true, "search card renders current employer");
+assert.equal(searchPageSource.includes("Previous Employer:"), true, "search card renders previous employer");
+assert.equal(searchPageSource.includes("Expected Salary:"), true, "search card renders expected salary conditionally");
 
 console.log("Search quality gate tests passed");

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { resolveCanonicalCandidateDisplay } from "@/lib/candidateCanonicalDisplay";
 import { buildCandidateValidationState } from "@/lib/candidateValidation";
 import { candidateProfileTimestampLabels } from "@/lib/candidateDuplicateIdentity";
+import { talentSearchEmployerDisplay, talentSearchExpectedSalaryDisplay } from "@/lib/talentSearchCardDisplay";
 import { buildTalentSearchExecutiveSummary, candidateHasContactInfo, cleanTalentSearchModule, cleanTalentSearchTitle, displayTalentSearchValidationStatus, isTalentSearchReviewBadge, resolveTalentSearchViewerRole, safeTalentSearchCompany, talentSearchSummaryVisibility, type TalentSearchViewerRole } from "@/lib/talentSearchDisplay";
 import { COMPANY_TAXONOMY, COMPANY_TAXONOMY_SUGGESTIONS, SAP_TALENT_SKILL_GROUPS, SAP_SKILL_TAXONOMY, getSapSkillDisplayLabel } from "@/lib/sapTalentTaxonomy";
 
@@ -85,6 +86,10 @@ type Candidate = {
   expected_salary?: number | string;
   expected_salary_currency?: string;
   salary_currency?: string;
+  currentEmployerDisplay?: string;
+  previousEmployerDisplay?: string;
+  expectedSalaryDisplay?: string;
+  updatedLabel?: string;
   visa_status?: string;
   work_authorization?: string;
   languages?: string[] | string;
@@ -1431,6 +1436,15 @@ function workPreference(candidate: Candidate): string {
       "Not verified",
   );
 }
+function contactStatusLabel(candidate: Candidate): string {
+  const email = maskEmail(candidate.email);
+  const phone = maskPhone(candidate.phone, candidate.phone_status);
+  if (email && phone) return `${email} / ${phone}`;
+  if (email) return `${email} / Phone not disclosed`;
+  if (phone) return `Email not disclosed / ${phone}`;
+  return "Email not disclosed / Phone not disclosed";
+}
+
 function salaryLabel(candidate: Candidate): string {
   const amount =
     candidate.expected_salary ||
@@ -2710,6 +2724,11 @@ export default function TalentPoolSearchPage() {
           const displayTitle = resolvedCardDisplay.displayRole || (reviewProfile && moduleSummary ? `SAP ${moduleSummary} Consultant` : reviewProfile ? "Role not disclosed" : cleanCandidateTitle(candidate));
           const compactProjectEvidence = projectEvidence.slice(0, 4);
           const timestampLabels = candidateProfileTimestampLabels(candidate as AnyRecord);
+          const employerDisplay = talentSearchEmployerDisplay(candidate as AnyRecord);
+          const currentEmployerLine = normalize((candidate as AnyRecord).currentEmployerDisplay) || employerDisplay.currentEmployer.label;
+          const previousEmployerLine = normalize((candidate as AnyRecord).previousEmployerDisplay) || employerDisplay.previousEmployer.label;
+          const expectedSalaryLine = normalize((candidate as AnyRecord).expectedSalaryDisplay) || talentSearchExpectedSalaryDisplay(candidate as AnyRecord);
+          const updatedLine = normalize(candidate.updatedLabel) || timestampLabels.updatedLabel;
           const whyItems = compactProjectEvidence.slice(0, 3).map(([label, value]) => {
             const shortLabel = String(label)
               .replace("Implementation", "Implementations")
@@ -2748,36 +2767,26 @@ export default function TalentPoolSearchPage() {
                     </div>
                   </div>
 
-                  <div className="mt-2.5 grid gap-1.5 text-[11px] leading-4">
+                  <div className="mt-3 grid gap-1.5 text-[12px] leading-4">
                     <div className="truncate text-slate-300">
-                      <span className="font-semibold uppercase tracking-[0.08em] text-slate-500">Contact </span>
-                      {maskEmail(candidate.email)} - {maskPhone(candidate.phone, candidate.phone_status)}
+                      <span className="font-semibold text-slate-500">Contact: </span>
+                      <span className="text-slate-100">{contactStatusLabel(candidate)}</span>
                     </div>
                     <div className="truncate text-slate-300">
-                      <span className="font-semibold uppercase tracking-[0.08em] text-slate-500">Current Employer </span>
-                      <span className="text-slate-100">{currentCompany || "-"}</span>
+                      <span className="font-semibold text-slate-500">Current Employer: </span>
+                      <span className="text-slate-100">{currentEmployerLine || currentCompany || "Not disclosed"}</span>
+                    </div>
+                    <div className="truncate text-slate-300">
+                      <span className="font-semibold text-slate-500">Previous Employer: </span>
+                      <span className="text-slate-100">{previousEmployerLine || "Not disclosed"}</span>
                     </div>
                   </div>
 
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {timestampLabels.updatedLabel ? (
-                      <span className="inline-flex h-[22px] items-center rounded-full border border-slate-700/55 bg-slate-900/40 px-2 text-[11px] font-semibold text-slate-100">
-                        {timestampLabels.updatedLabel}
-                      </span>
-                    ) : null}
-                    {timestampLabels.latestCvLabel ? (
-                      <span className="inline-flex h-[22px] items-center rounded-full border border-slate-700/55 bg-slate-900/40 px-2 text-[11px] font-semibold text-slate-100">
-                        {timestampLabels.latestCvLabel}
-                      </span>
-                    ) : null}
-                    {country ? (
-                      <span className="inline-flex h-[22px] items-center rounded-full border border-slate-700/55 bg-slate-900/40 px-2 text-[11px] font-semibold text-slate-100">
-                        {country}
-                      </span>
-                    ) : null}
-                    <span className="inline-flex h-[22px] items-center rounded-full border border-slate-700/55 bg-slate-900/40 px-2 text-[11px] font-semibold text-slate-100">
-                      {years} yrs
-                    </span>
+                  <div className="mt-3 grid gap-1.5 text-[12px] leading-4 text-slate-300">
+                    {updatedLine ? <div className="font-semibold text-slate-100">{updatedLine}</div> : null}
+                    <div>{location}</div>
+                    <div>Total YOE: <span className="font-semibold text-slate-100">{years} yrs</span></div>
+                    {expectedSalaryLine ? <div>Expected Salary: <span className="font-semibold text-slate-100">{expectedSalaryLine}</span></div> : null}
                   </div>
                 </div>
 
