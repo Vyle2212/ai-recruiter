@@ -41,12 +41,14 @@ export type CandidateReExtractionSuggestion = {
   confidence: Record<string, number>;
   evidence: Record<string, { source: string; text: string }>;
   sources: {
+    nameCleanupSource: string;
     currentCompanySource: string;
     previousCompanySource: string;
     titleSource: string;
     moduleSource: string;
   };
   rejectReasons: {
+    name: string[];
     company: string[];
     title: string[];
   };
@@ -57,6 +59,10 @@ export type CandidateReExtractionSuggestion = {
     invalidCurrentCompanyFragment: boolean;
     employerLinesSanitized: number;
     employerExtractedFromLongLine: boolean;
+    suspiciousNamesCleaned: number;
+    suspiciousNamesRejected: number;
+    suspiciousCompaniesRejected: number;
+    suspiciousTitlesRejected: number;
   };
   employerSanitizations: Array<{ original: string; sanitized: string }>;
   likelySapProfileRecovered: boolean;
@@ -71,7 +77,9 @@ const MONTH = "Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Ju
 const DATE_RANGE = new RegExp(`(?:(${MONTH})\\s*)?((?:19|20)\\d{2})\\s*(?:-|\\u2013|\\u2014|to|until)\\s*(?:(present|current|now|ongoing|till\\s+date|to\\s+date)|(?:(${MONTH})\\s*)?((?:19|20)\\d{2}))`, "ig");
 const BAD_NAME_RE = /candidate profile pending validation|profile under review|professional objective|personal particular|curriculum vitae|summary|work experience|education|skills|strictly confidential|date of birth/i;
 const TITLE_WORD_RE = /\b(sap|consultant|manager|developer|analyst|architect|lead|specialist|engineer|basis|fico|abap|functional|technical)\b/i;
-const BAD_COMPANY_RE = /administered|data enablement|over\s+\d+\s+years|many project|july\s+2008|implementation|migration|module|experience|domain of|as an(?:\s+SAP)?|sap including functional|in the world|where as my goal|managed\s*&|roles and|responsibilities|business process|application development|work experience|working on global|handles\b|^work$|^project$|^provided$|^overall and$|analysed finance|^sap finance$|tool$|^led$|^position$|^supported$|^product$|^provided\b|bachelor|degree|university|information technology|appointed\b|assign group|^in the\b|with various|mobile services|credit and collections officer|^year\s+/i;
+const NAME_SUFFIX_RE = /(?:[-\s]+(?:ep\s+)?(?:erp|pm|fico|sapsd|sapmm|sapfico|consultant|manager|lead|analyst))+$/i;
+const NAME_MODULE_PREFIX_RE = /^(?:fi|pp|sd|mm|fico|erp)\s+(?:ar|ap|asset|erp|pm)\b/i;
+const BAD_COMPANY_RE = /administered|data enablement|over\s+\d+\s+years|many project|july\s+2008|implementation|migration|module|experience|domain of|as an(?:\s+SAP)?|sap including functional|in the world|where as my goal|managed\s*&|roles and|responsibilities|business process|application development|work experience|working on global|handles\b|^work$|^project$|^provided$|^overall and$|analysed finance|^sap finance$|tool$|^led$|^position$|^supported$|^product$|^provided\b|bachelor|degree|university|information technology|appointed\b|assign group|^in the\b|^by\s+|achieving|requirements|analy[sz]ed|designed new solutions|with various|mobile services|credit and collections officer|^year\s+|client services|client name|action is growing fast|creating functional designs|implemented solutions|^s\s+east\s+zone/i;
 const BAD_TITLE_RE = /professional objective|personal particular|curriculum vitae|summary|work experience|education|skills|strictly confidential|date of birth|responsible for|experience in|having|worked on|implementation cycles|\d+\s+years\s+as|certified|cleared/i;
 const COMPANY_MODULE_LIST_RE = /\b(?:SAP\s+)?(?:ECC|S\/4HANA|FICO|FI\/?CO|MM|SD|PP|QM|PM|PS|ABAP|BASIS|BTP|EWM|WM|MDG|GRC|BW|P2P|MDM)\b.*[,/&].*\b(?:FICO|MM|SD|PP|ABAP|BASIS|P2P|MDM|HANA)\b/i;
 const BAD_COMPANY_SECTION_RE = /\b(skills?|technical skills?|tools?|platforms?|projects?|project experience|certifications?|education|training|professional summary|profile summary|responsibilities|achievements)\b/i;
@@ -111,32 +119,51 @@ function confidence(value: string | string[], score: number, source: string, tex
 function unique(values: string[]) { return Array.from(new Set(values.map(clean).filter(Boolean))); }
 
 function cleanNameCandidate(value: string) {
-  return clean(value)
+  let name = clean(value)
     .replace(/\b(?:email|e-mail|mobile|phone|telephone|tel|contact|address|nationality|date of birth|dob)\b.*$/i, "")
-    .replace(/\s+(?:Functional Consultant|SAP Consultant|Senior Consultant|Sr\.? Consultant|Sr\.?|Senior|Consultant|Manager|Lead|Analyst)$/i, "")
     .replace(/\s+/g, " ")
     .trim();
+  const labelled = name.match(/^Name\s+([A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){1,5})$/i)?.[1] || "";
+  if (labelled && !NAME_MODULE_PREFIX_RE.test(labelled)) name = labelled;
+  name = name.replace(NAME_SUFFIX_RE, "").replace(/[,:;|]+$/g, "").trim();
+  return name;
+}
+
+function nameRejectReason(value: string) {
+  const original = clean(value);
+  const name = cleanNameCandidate(value);
+  const words = name.split(/\s+/).filter(Boolean);
+  if (!name) return "empty_name";
+  if (BAD_NAME_RE.test(name) || isTalentSearchPlaceholderName(name) || isTalentSearchBadDisplayName(name)) return `placeholder_or_section_name:${name}`;
+  if (NAME_MODULE_PREFIX_RE.test(original) || NAME_MODULE_PREFIX_RE.test(name)) return `module_prefix_name:${name}`;
+  if (/\b(?:erp|pm|fico|sapsd|sapmm|sapfico|consultant|manager|lead|analyst)\b/i.test(name)) return `role_or_module_name_token:${name}`;
+  if (TITLE_WORD_RE.test(name)) return `title_word_in_name:${name}`;
+  if (words.length < 2 || words.length > 6) return `name_word_count:${name}`;
+  if (name.length > 70) return `name_too_long:${name}`;
+  if (/[,:;]|\b(responsible|experience|project|module|certified|consultant|position)\b/i.test(name)) return `resume_text_name:${name}`;
+  if (/\b(?:sdn|bhd|ltd|inc|corp|corporation|technologies|solutions|consulting|services|group)\b/i.test(name)) return `company_like_name:${name}`;
+  return "";
 }
 
 function isBadName(value: string) {
-  const name = cleanNameCandidate(value);
-  const words = name.split(/\s+/).filter(Boolean);
-  return !name || BAD_NAME_RE.test(name) || TITLE_WORD_RE.test(name) || words.length < 2 || words.length > 6 || name.length > 70 || /[,:;]|\b(responsible|experience|project|module|certified|consultant)\b/i.test(name) || isTalentSearchPlaceholderName(name) || isTalentSearchBadDisplayName(name);
+  return Boolean(nameRejectReason(value));
 }
 
 function extractName(candidate: AnyRecord, raw: string) {
-  const structured = cleanNameCandidate(candidate.full_name || candidate.candidate_name || candidate.source_name || candidate.display_name || candidate.name);
-  if (!isBadName(structured)) return confidence(structured, 88, "structured_identity", structured);
+  const structuredRaw = clean(candidate.full_name || candidate.candidate_name || candidate.source_name || candidate.display_name || candidate.name);
+  const structured = cleanNameCandidate(structuredRaw);
+  if (!nameRejectReason(structuredRaw)) return confidence(structured, structured !== structuredRaw ? 90 : 88, structured !== structuredRaw ? "structured_identity_cleaned" : "structured_identity", structuredRaw || structured);
   const lines = raw.split(/\r?\n| {3,}/).map(clean).filter(Boolean).slice(0, 20);
-  const labelled = cleanNameCandidate(raw.match(/\b(?:Full\s*Name|Candidate\s*Name|Name)\s*[:\-]\s*([^\r\n]{3,100})/i)?.[1] || "");
-  if (labelled && !isBadName(labelled)) return confidence(labelled, 94, "parsed_identity_section", labelled);
+  const labelledRaw = raw.match(/\b(?:Full\s*Name|Candidate\s*Name|Name)\s*[:\-]\s*([^\r\n]{3,100})/i)?.[1] || "";
+  const labelled = cleanNameCandidate(labelledRaw);
+  if (labelled && !nameRejectReason(labelledRaw)) return confidence(labelled, labelled !== labelledRaw ? 95 : 94, labelled !== labelledRaw ? "parsed_identity_section_cleaned" : "parsed_identity_section", labelledRaw || labelled);
   for (const line of lines) {
-    const candidateName = cleanNameCandidate(line.replace(/^(curriculum vitae|resume|cv)\s*(of)?\s*/i, ""));
-    if (!isBadName(candidateName)) return confidence(candidateName, 92, "resume_header", line);
+    const headerRaw = line.replace(/^(curriculum vitae|resume|cv)\s*(of)?\s*/i, "");
+    const candidateName = cleanNameCandidate(headerRaw);
+    if (!nameRejectReason(headerRaw)) return confidence(candidateName, candidateName !== headerRaw ? 93 : 92, candidateName !== headerRaw ? "resume_header_cleaned" : "resume_header", line);
   }
   return confidence("", 0, "none", "no safe name evidence");
 }
-
 function extractEmail(candidate: AnyRecord, raw: string) {
   const current = clean(candidate.email || candidate.contact_email);
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(current)) return confidence(current.toLowerCase(), 100, "structured_email", current);
@@ -203,7 +230,14 @@ function companyRejectReason(value: string, context = "") {
   const words = company.split(/\s+/).filter(Boolean);
   const commaCount = (company.match(/,/g) || []).length;
   if (!company) return "empty_company";
-  if (/^(?:Jan|Feb|Mar|Apr|April|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(?:19|20)\d{2}$/i.test(company) || /^(?:19|20)\d{2}$/.test(company)) return `date_fragment:${company}`;
+  if (/^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*(?:-|to)\s*(?:present|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+)?\d{0,4}$/i.test(company)) return `date_fragment:${company}`;
+  if (/^(?:Jan|Feb|Mar|Apr|April|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(?:19|20)\d{2}$/i.test(company) || /^(?:19|20)\d{2}$/.test(company) || /^(?:19|20)\d{2}\s*(?:-|to)\s*(?:19|20)\d{2}$/i.test(company)) return `date_fragment:${company}`;
+  if (/^[a-z],\s*\w+/i.test(company)) return `truncated_sentence_fragment:${company}`;
+  if (/\bORGANISATION\b.*\b(?:pvt|ltd|sdn|bhd|inc|corp|technologies|solutions|consulting)\b/i.test(company)) return `organisation_combined_company:${company}`;
+  if (/\b(?:SAP|HANA|FICO|FI\/CO|MM|SD|PP|BW|ABAP|BASIS)\b.*\bsystem solutions\b/i.test(company)) return `sap_system_phrase:${company}`;
+  if (/^implemented solutions$/i.test(company) || /^s\s+east\s+zone\b/i.test(company) || /^by\s+|achieving|requirements|analy[sz]ed|designed new solutions|action is growing fast|creating functional designs|client services|client name/i.test(company)) return `resume_fragment:${company}`;
+  if (/\b(?:SAP|HANA|FICO|FI\/CO|MM|SD|PP|BW|ABAP|BASIS)\b.*\bsolutions\b/i.test(company)) return `sap_solution_phrase:${company}`;
+  if (/^Client\s+/i.test(company)) return `client_project_company:${company}`;
   if (/^(?:skills?|technical skills?|tools?|platforms?|projects?|project experience|certifications?|education|training|professional summary|profile summary|responsibilities|achievements)\b/i.test(context)) return `section_not_employment:${company}`;
   if (/^(?:CO|FI|MM|SD|PP|ABAP|BASIS)\s+solutions$/i.test(company) || COMPANY_MODULE_LIST_RE.test(company) || (/\b(?:SAP|S4|S\/4HANA|HANA|FICO|FI\/?CO|MM|SD|PP|ABAP|BASIS)\b/i.test(company) && !/\b(?:sdn|bhd|ltd|limited|inc|corp|corporate|consulting|technologies|technology|solutions|services|group|systems|bank|tcs|wipro|infosys|accenture|deloitte|cognizant|capgemini|ibm)\b/i.test(company)) || commaCount >= 2) return `module_or_list_fragment:${company}`;
     if (/\b(?:summary|confidential|core expertise|profile)\b|^page\s+\d+\b|^\[[^\]]+\]/i.test(company)) return `resume_header_fragment:${company}`;
@@ -224,10 +258,28 @@ function companySafe(value: string, context = "") {
   return companyRejectReason(sanitized.sanitized, context) ? "" : sanitized.sanitized;
 }
 
+function moduleSpecificTitleFromContext(title: string, context: string) {
+  const raw = clean(title);
+  if (!/^SAP Consultant$/i.test(raw) && !/^Consultant$/i.test(raw)) return raw;
+  const module = [
+    ["FICO", /\b(?:FICO|FI\/?CO|SAP\s+FI|SAP\s+CO)\b/i],
+    ["MM", /\bMM\b/i],
+    ["SD", /\bSD\b/i],
+    ["ABAP", /\bABAP\b/i],
+    ["Basis", /\bBASIS\b/i],
+    ["EWM", /\bEWM\b/i],
+    ["BTP", /\bBTP\b/i],
+  ].find(([, rx]) => (rx as RegExp).test(context))?.[0];
+  return module ? `SAP ${module} Consultant` : raw;
+}
 function titleRejectReason(value: string) {
   const raw = clean(value).replace(/^[|,;:\-\s]+/g, "").replace(/[|,;:\-]+$/g, "").trim();
   if (!raw) return "empty_title";
   if (BAD_TITLE_RE.test(raw)) return `bad_title_phrase:${raw}`;
+  if (/^(?:worked as|recently worked|i am)\b/i.test(raw)) return `bad_title_phrase:${raw}`;
+  if (/\b(?:19|20)\d{2}\b|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b/i.test(raw)) return `date_fragment_title:${raw}`;
+  if (/\b(?:sdn|bhd|ltd|inc|corp|technologies|solutions|consulting|services)\b/i.test(raw)) return `company_fragment_title:${raw}`;
+  if (/^(?:SAP Consultant|project manager|solution architect)$/i.test(raw)) return `generic_title:${raw}`;
   if (raw.length > 100 || raw.split(/\s+/).length > 12) return `long_summary_title:${raw}`;
   if (!/\b(?:SAP|FICO|FI\/?CO|MM|SD|PP|QM|PM|PS|EWM|WM|ABAP|BASIS|BTP|HCM|SuccessFactors|Solution|Project)\b/i.test(raw)) return `not_sap_specific_title:${raw}`;
   if (GENERIC_TITLE_RE.test(raw)) return `generic_title:${raw}`;
@@ -262,7 +314,7 @@ function findCompanyCandidates(line: string, context: string) {
 
 function titleCandidates(context: string) {
   const rx = /\b((?:SAP\s+)?(?:Senior\s+|Sr\.?\s+|Lead\s+|Principal\s+)?(?:FICO|FI\/?CO|MM|SD|PP|QM|PM|PS|EWM|WM|ABAP|BASIS|BTP|HCM|SuccessFactors|Solution|Project)?\s*(?:Consultant|Analyst|Manager|Lead|Developer|Architect|Specialist))\b/ig;
-  const found = Array.from(context.matchAll(rx)).map((match) => clean(match[1]));
+  const found = Array.from(context.matchAll(rx)).map((match) => moduleSpecificTitleFromContext(clean(match[1]), context));
   found.sort((a, b) => Number(!/\b(?:SAP|FICO|FI\/?CO|MM|SD|PP|QM|PM|PS|EWM|WM|ABAP|BASIS|BTP|Solution|Project)\b/i.test(a)) - Number(!/\b(?:SAP|FICO|FI\/?CO|MM|SD|PP|QM|PM|PS|EWM|WM|ABAP|BASIS|BTP|Solution|Project)\b/i.test(b)) || b.length - a.length);
   return unique(found);
 }
@@ -394,18 +446,25 @@ export function reExtractCandidate(candidate: AnyRecord): CandidateReExtractionS
   const structuredCompanyReason = candidate.current_company || candidate.company ? companyRejectReason(candidate.current_company || candidate.company || "") : "";
   const rejectedCompanies = [...roles.flatMap((role) => role.rejectedCompanies || []), structuredCompanyReason].filter(Boolean);
   const rejectedTitles = [...roles.flatMap((role) => role.rejectedTitles || []), titleRejectReason(candidate.current_title || candidate.title || "")].filter(Boolean);
+  const suggestedNameReason = nameRejectReason(suggested.displayName || candidate.name || "");
+  const suggestedCompanyReason = suggested.currentCompany !== "Not disclosed" ? companyRejectReason(suggested.currentCompany) : "";
+  const suggestedPreviousCompanyReason = suggested.previousCompany ? companyRejectReason(suggested.previousCompany) : "";
+  const suggestedTitleReason = titleRejectReason(suggested.currentTitle);
+  const rejectedNames = [suggestedNameReason].filter(Boolean);
   const invalidCurrentCompanyFragment = Boolean((candidate.current_company || candidate.company) && !companySafe(candidate.current_company || candidate.company || ""));
   const likelySapProfileRecovered = modules.length > 0 || skills.length > 1 || projects.length > 0;
   const currentSearchable = !classifyCandidateSearchVisibility(candidate).blocked_from_recruiter_search;
-  const selectedCompanyInvalid = suggested.currentCompany !== "Not disclosed" && Boolean(companyRejectReason(suggested.currentCompany));
-  const hardCompanyReject = selectedCompanyInvalid || invalidCurrentCompanyFragment;
+  const selectedCompanyInvalid = Boolean(suggestedCompanyReason || suggestedPreviousCompanyReason);
+  const selectedTitleInvalid = Boolean(suggestedTitleReason);
+  const selectedNameInvalid = Boolean(suggestedNameReason);
+  const hardCompanyReject = selectedCompanyInvalid;
   const contactAvailable = Boolean(suggested.email || suggested.phone || candidate.email || candidate.phone);
   const locationAvailable = Boolean(suggested.city || suggested.country || candidate.city || candidate.country || candidate.location);
   const keywordEvidenceAvailable = Boolean(modules.length || skills.length || projects.length);
   const whyBlockedAfterReExtraction = [
-    isBadName(suggested.displayName) ? "invalid_or_placeholder_name" : "",
+    selectedNameInvalid ? "invalid_or_placeholder_name" : "",
     !isKnownSapModule(modules) ? "missing_known_sap_module" : "",
-    !isValidSearchableTitle(suggested.currentTitle) ? "invalid_title" : "",
+    selectedTitleInvalid || !isValidSearchableTitle(suggested.currentTitle) ? "invalid_title" : "",
     hardCompanyReject ? "invalid_company_fragment" : "",
     !keywordEvidenceAvailable ? "missing_keyword_evidence" : "",
     !(locationAvailable || contactAvailable) ? "missing_location_or_contact" : "",
@@ -414,12 +473,16 @@ export function reExtractCandidate(candidate: AnyRecord): CandidateReExtractionS
   const couldBecomeSearchableAfterReExtraction = Boolean(likelySapProfileRecovered && whyBlockedAfterReExtraction.length === 0);
   const newlyRecoverable = couldBecomeSearchableAfterReExtraction && !currentSearchable;
   const current = currentSnapshot(candidate);
-  const recoveredFields = Object.entries({ displayName: suggested.displayName, email: suggested.email, phone: suggested.phone, city: suggested.city, country: suggested.country, currentTitle: suggested.currentTitle, currentCompany: suggested.currentCompany, previousCompany: suggested.previousCompany, sapModules: suggested.sapModules.join(", "), sapSkills: suggested.sapSkills.join(", "), totalYearsExperience: suggested.totalYearsExperience, expectedSalary: suggested.expectedSalary }).filter(([key, value]) => value && value !== (current as AnyRecord)[key]).map(([key]) => key);
+  const recoveredFields = Object.entries({ displayName: suggested.displayName, email: suggested.email, phone: suggested.phone, city: suggested.city, country: suggested.country, currentTitle: suggested.currentTitle, currentCompany: suggested.currentCompany, previousCompany: suggested.previousCompany, sapModules: suggested.sapModules.join(", "), sapSkills: suggested.sapSkills.join(", "), totalYearsExperience: suggested.totalYearsExperience, expectedSalary: suggested.expectedSalary }).filter(([key, value]) => {
+    if (!value || value === (current as AnyRecord)[key]) return false;
+    if (key === "currentCompany" && suggested.currentCompany === "Not disclosed" && structuredCompanyReason) return false;
+    return true;
+  }).map(([key]) => key);
   return {
     candidateId: candidateId(candidate), hasRawCvText: Boolean(raw), current, suggested, confidence: confidenceMap, evidence: evidenceMap,
-    sources: { currentCompanySource: String(currentCompany.source), previousCompanySource: String(previousCompany.source), titleSource: String(currentTitle.source), moduleSource: modules.length ? "resume_module_tokens" : "none" },
-    rejectReasons: { company: rejectedCompanies, title: rejectedTitles },
-    auditFlags: { invalidCompanySuggestionsRejected: rejectedCompanies.length, previousCompanyDeduplicated: previous.deduplicated || (roles.length > 1 && !previousRole?.company), genericTitleAvoided: rejectedTitles.some((reason) => reason.includes("generic_title")), invalidCurrentCompanyFragment, employerLinesSanitized: employerSanitizations.length, employerExtractedFromLongLine: employerSanitizations.some((item) => item.original.length > item.sanitized.length) },
+    sources: { nameCleanupSource: String(name.source), currentCompanySource: String(currentCompany.source), previousCompanySource: String(previousCompany.source), titleSource: String(currentTitle.source), moduleSource: modules.length ? "resume_module_tokens" : "none" },
+    rejectReasons: { name: rejectedNames, company: [...rejectedCompanies, suggestedCompanyReason, suggestedPreviousCompanyReason].filter(Boolean), title: [...rejectedTitles, suggestedTitleReason].filter(Boolean) },
+    auditFlags: { invalidCompanySuggestionsRejected: rejectedCompanies.length, previousCompanyDeduplicated: previous.deduplicated || (roles.length > 1 && !previousRole?.company), genericTitleAvoided: rejectedTitles.some((reason) => reason.includes("generic_title")), invalidCurrentCompanyFragment, employerLinesSanitized: employerSanitizations.length, employerExtractedFromLongLine: employerSanitizations.some((item) => item.original.length > item.sanitized.length), suspiciousNamesCleaned: /cleaned/.test(String(name.source)) ? 1 : 0, suspiciousNamesRejected: rejectedNames.length, suspiciousCompaniesRejected: [...rejectedCompanies, suggestedCompanyReason, suggestedPreviousCompanyReason].filter(Boolean).length, suspiciousTitlesRejected: [...rejectedTitles, suggestedTitleReason].filter(Boolean).length },
     employerSanitizations,
     likelySapProfileRecovered, couldBecomeSearchableAfterReExtraction, currentSearchable, newlyRecoverable, whyBlockedAfterReExtraction, recoveredFields,
   };
@@ -458,6 +521,8 @@ export function auditCandidateReExtraction(candidates: AnyRecord[]) {
   const summary = buildCandidateReExtractionSummary(suggestions);
   const newlyRecoverableItems = suggestions.filter((item) => item.couldBecomeSearchableAfterReExtraction && !item.currentSearchable);
   const topMissingFieldsRecovered = suggestions.flatMap((item) => item.recoveredFields).reduce<Record<string, number>>((acc, field) => { acc[field] = (acc[field] || 0) + 1; return acc; }, {});
+  const rejectedNameExamples = suggestions.flatMap((item) => item.rejectReasons.name.map((reason) => ({ candidateId: item.candidateId, reason, displayName: item.suggested.displayName })));
+  const cleanedNameExamples = suggestions.filter((item) => /cleaned/.test(item.sources.nameCleanupSource)).map((item) => ({ candidateId: item.candidateId, displayName: item.suggested.displayName, source: item.sources.nameCleanupSource, evidence: item.evidence.name.text }));
   const rejectedCompanyExamples = suggestions.flatMap((item) => item.rejectReasons.company.map((reason) => ({ candidateId: item.candidateId, reason })));
   const acceptedCompanyExamples = suggestions.filter((item) => item.suggested.currentCompany && item.suggested.currentCompany !== "Not disclosed").map((item) => ({ candidateId: item.candidateId, company: item.suggested.currentCompany, source: item.sources.currentCompanySource }));
   const sanitizedEmployerExamples = suggestions.flatMap((item) => item.employerSanitizations.map((example) => ({ candidateId: item.candidateId, ...example })));
@@ -476,6 +541,11 @@ export function auditCandidateReExtraction(candidates: AnyRecord[]) {
     newlyRecoverableNotCurrentlySearchableCount: summary.newlyRecoverableNotCurrentlySearchable,
     stillBlockedAfterReExtractionCount: summary.stillBlockedAfterReExtraction,
     potentialSearchableCountAfterReExtraction: summary.potentialSearchableAfterReExtraction,
+    suspiciousNamesCleanedCount: suggestions.reduce((sum, item) => sum + item.auditFlags.suspiciousNamesCleaned, 0),
+    suspiciousNamesRejectedCount: suggestions.reduce((sum, item) => sum + item.auditFlags.suspiciousNamesRejected, 0),
+    suspiciousCompaniesRejectedCount: suggestions.reduce((sum, item) => sum + item.auditFlags.suspiciousCompaniesRejected, 0),
+    suspiciousTitlesRejectedCount: suggestions.reduce((sum, item) => sum + item.auditFlags.suspiciousTitlesRejected, 0),
+    safeSearchableAfterCount: suggestions.filter((item) => item.couldBecomeSearchableAfterReExtraction && !item.whyBlockedAfterReExtraction.length).length,
     invalidCompanySuggestionsRejected: rejectedCompanyExamples.length,
     employerLinesSanitizedCount: sanitizedEmployerExamples.length,
     employerExtractedFromLongLineCount: suggestions.filter((item) => item.auditFlags.employerExtractedFromLongLine).length,
@@ -485,7 +555,10 @@ export function auditCandidateReExtraction(candidates: AnyRecord[]) {
     previousCompanyRecoveredCount: suggestions.filter((item) => item.recoveredFields.includes("previousCompany")).length,
     previousCompanyDeduplicatedCount: suggestions.filter((item) => item.auditFlags.previousCompanyDeduplicated).length,
     genericTitleAvoidedCount: suggestions.filter((item) => item.auditFlags.genericTitleAvoided).length,
+    topCleanedNameExamples: cleanedNameExamples.slice(0, 20),
+    topRejectedNameExamples: rejectedNameExamples.slice(0, 20),
     topRejectedCompanyExamples: rejectedCompanyExamples.slice(0, 20),
+    topRejectedTitleExamples: suggestions.flatMap((item) => item.rejectReasons.title.map((reason) => ({ candidateId: item.candidateId, reason, title: item.suggested.currentTitle }))).slice(0, 20),
     topAcceptedCompanyExamples: acceptedCompanyExamples.slice(0, 20),
     topSanitizedEmployerExamples: sanitizedEmployerExamples.slice(0, 20),
     topRecoveredCompanyExamples: recoveredCompanyExamples.slice(0, 20),

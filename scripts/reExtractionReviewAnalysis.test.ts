@@ -40,6 +40,9 @@ assert.equal(Boolean(suspiciousReExtractionCompanyReason("HANA system solutions"
 assert.equal(Boolean(suspiciousReExtractionCompanyReason("s East Zone DELAWARE MANAGED SERVICES")), true, "s East Zone company is suspicious");
 assert.equal(Boolean(suspiciousReExtractionCompanyReason("Implemented solutions")), true, "Implemented solutions is suspicious company");
 assert.equal(Boolean(suspiciousReExtractionCompanyReason("Jul 2024 to Jun 2025")), true, "date text is suspicious company");
+assert.equal(Boolean(suspiciousReExtractionCompanyReason("2013- 2014")), true, "year-only date range is suspicious company");
+assert.equal(Boolean(suspiciousReExtractionCompanyReason("by achieving 2nd")), true, "achievement fragment is suspicious company");
+assert.equal(Boolean(suspiciousReExtractionCompanyReason("form requirements Analyzed and designed new solutions")), true, "requirements/responsibility fragment is suspicious company");
 assert.equal(suspiciousReExtractionCompanyReason("Osram Opto Semiconductors Malaysia SDN BHD"), "", "clean Osram company is accepted");
 assert.equal(suspiciousReExtractionCompanyReason("DXC Technologies"), "", "clean DXC Technologies company is accepted");
 

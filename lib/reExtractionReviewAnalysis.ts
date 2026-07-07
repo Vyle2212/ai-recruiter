@@ -80,13 +80,14 @@ export function suspiciousReExtractionNameReason(value: any) {
 export function suspiciousReExtractionCompanyReason(value: any) {
   const company = clean(value);
   if (!company || company === "Not disclosed") return "";
-  if (/^jul\s+2024\s+to\s+jun\s+2025$/i.test(company) || /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{4}\s+(?:-|to)\s+(?:present|\d{4})$/i.test(company)) return "date_text_company";
+  if (/^jul\s+2024\s+to\s+jun\s+2025$/i.test(company) || /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{4}\s+(?:-|to)\s+(?:present|\d{4})$/i.test(company) || /^(?:19|20)\d{2}\s*(?:-|to)\s*(?:19|20)\d{2}$/i.test(company)) return "date_text_company";
   if (/^implemented solutions$/i.test(company)) return "implemented_solutions_fragment";
   if (/^s\s+east\s+zone\b|^months?\)/i.test(company)) return "truncated_region_fragment";
   if (/\bORGANISATION\b.*\b(?:pvt|ltd|sdn|bhd|inc|corp|technologies|solutions|consulting)\b/i.test(company)) return "organisation_combined_company_fragment";
   if (/\bsystem solutions\b/i.test(company)) return "system_phrase_company";
   if (/\b(?:SAP|S\/4HANA|HANA|ECC|FICO|FI\/CO|MM|SD|PP|ABAP|BASIS|module|migration|implementation|rollout|support|configured|responsibilities|project description|client description)\b/i.test(company) && !/\b(?:SAP SE|SAP Malaysia)\b/i.test(company)) return "sap_or_project_text_company";
   if (/\b(?:project|client|industry|background|responsibilities|about the company|about the project|general clerk)\b/i.test(company)) return "project_or_client_description";
+  if (/^by\s+|achieving|requirements|analy[sz]ed|designed new solutions/i.test(company)) return "responsibility_or_achievement_fragment";
   if (/\b(?:worked as|recently worked|i am|more than|over \d+ years|years of)\b/i.test(company)) return "sentence_like_company";
   if (company.length > 80 || company.split(/\s+/).length > 9) return "too_long_company";
   return "";

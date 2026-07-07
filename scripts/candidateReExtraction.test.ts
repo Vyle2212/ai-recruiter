@@ -188,7 +188,9 @@ const invalidCompanySearchable = reExtractCandidate({
   country: "Malaysia",
   raw_text: "Jane Fruelda\nEmail: jane@example.com\nKuala Lumpur, Malaysia\nSAP FICO Consultant\nS/4HANA implementation data migration",
 });
-assert.equal(invalidCompanySearchable.couldBecomeSearchableAfterReExtraction, false, "searchableAfter=false when company is an invalid fragment");
+assert.equal(invalidCompanySearchable.suggested.currentCompany, "Not disclosed", "invalid company is downgraded to Not disclosed");
+assert.equal(invalidCompanySearchable.recoveredFields.includes("currentCompany"), false, "downgraded invalid company is not marked as recovered company");
+assert.equal(invalidCompanySearchable.couldBecomeSearchableAfterReExtraction, true, "searchableAfter=true when invalid company is reset and other fields are clean");
 
 const cleanSearchable = reExtractCandidate({
   id: "clean-searchable",
@@ -219,6 +221,56 @@ const educationCompanyFragment = reExtractCandidate({
   raw_text: "Jane Fruelda\nEmail: jane@example.com\nSAP FICO Consultant\nJan 2020 - Present Bachelor of Science in Information Technology SAP FICO Consultant\nS/4HANA support migration",
 });
 assert.equal(educationCompanyFragment.suggested.currentCompany, "Not disclosed", "education text is rejected as employer");
+const cleanedNameCharlie = reExtractCandidate({ id: "name-charlie", name: "Name Charlie A.J", raw_text: "Name Charlie A.J\nEmail: charlie@example.com\nSAP FICO Consultant\nS/4HANA implementation" });
+assert.equal(cleanedNameCharlie.suggested.displayName, "Charlie A.J", "Name prefix is stripped from a real person name");
+assert.equal(cleanedNameCharlie.sources.nameCleanupSource.includes("cleaned"), true, "name cleanup source is recorded");
+
+const cleanedNameTreesa = reExtractCandidate({ id: "name-treesa", name: "Name TREESA MARY GEORGE", raw_text: "Name TREESA MARY GEORGE\nEmail: treesa@example.com\nSAP SD Consultant\nS/4HANA support" });
+assert.equal(cleanedNameTreesa.suggested.displayName, "TREESA MARY GEORGE", "Name prefix is stripped for uppercase person name");
+
+const cleanedNameCha = reExtractCandidate({ id: "name-cha", name: "Cha Hui Fung-ep Pm", raw_text: "Cha Hui Fung-ep Pm\nEmail: cha@example.com\nSAP FICO Consultant\nS/4HANA support" });
+assert.equal(cleanedNameCha.suggested.displayName, "Cha Hui Fung", "role/module suffix is stripped from name");
+
+for (const badName of ["Fi Ar Asset Abdul", "Pp Erp Benjamin"]) {
+  const parsed = reExtractCandidate({ id: `bad-name-${badName}`, name: badName, current_title: "SAP FICO Consultant", primary_module: "FICO", email: "bad@example.com", country: "Malaysia", raw_text: `${badName}\nEmail: bad@example.com\nSAP FICO Consultant\nS/4HANA support` });
+  assert.equal(parsed.couldBecomeSearchableAfterReExtraction, false, `${badName} is suspicious and not searchableAfter`);
+  assert.equal(parsed.whyBlockedAfterReExtraction.includes("invalid_or_placeholder_name"), true, `${badName} has identity block reason`);
+}
+
+const suspiciousCompanies = [
+  "Michael Kors ORGANISATION Capgemini Pvt. Ltd",
+  "HANA system solutions",
+  "s East Zone DELAWARE MANAGED SERVICES",
+  "Implemented solutions",
+  "Jul 2024 to Jun 2025",
+  "Client Name Yash Technologies",
+  "Global Media and Non-Media Agency client services",
+  "Action is growing fast - in fact we're the fastest growing retail chain",
+  "m, creating Functional Designs including medium and complex objects",
+  "by achieving 2nd",
+  "form requirements Analyzed and designed new solutions",
+];
+for (const company of suspiciousCompanies) {
+  const parsed = reExtractCandidate({ id: `bad-company-${company}`, name: "Jane Fruelda", current_company: company, current_title: "SAP FICO Consultant", primary_module: "FICO", email: "jane@example.com", country: "Malaysia", raw_text: `Jane Fruelda\nEmail: jane@example.com\nKuala Lumpur, Malaysia\nSAP FICO Consultant\nJan 2023 - Present ${company} SAP FICO Consultant\nS/4HANA implementation` });
+  assert.equal(parsed.suggested.currentCompany, "Not disclosed", `${company} is rejected as current employer`);
+  assert.equal(parsed.recoveredFields.includes("currentCompany"), false, `${company} is not marked as recovered company`);
+  assert.equal(parsed.couldBecomeSearchableAfterReExtraction, true, `${company} can be searchableAfter after downgrade to Not disclosed when other fields are clean`);
+}
+
+for (const company of ["Osram Opto Semiconductors Malaysia SDN BHD", "DXC Technologies", "TDI APJ Vietnam Co., Ltd"]) {
+  const parsed = reExtractCandidate({ id: `clean-company-${company}`, name: "Jane Fruelda", raw_text: `Jane Fruelda\nEmail: jane@example.com\nSAP FICO Consultant\nJan 2023 - Present ${company} SAP FICO Consultant\nS/4HANA implementation` });
+  assert.equal(parsed.suggested.currentCompany, company, `${company} is accepted as employer`);
+}
+
+const genericSapConsultantWithFico = reExtractCandidate({ id: "generic-fico-title", name: "Jane Fruelda", raw_text: "Jane Fruelda\nEmail: jane@example.com\nJan 2023 - Present Deloitte SAP Consultant FICO implementation S/4HANA" });
+assert.equal(genericSapConsultantWithFico.suggested.currentTitle, "SAP FICO Consultant", "generic SAP Consultant is enriched only with nearby FICO evidence");
+
+const genericTitleNoSapEvidence = reExtractCandidate({ id: "generic-title-no-sap", name: "Jane Fruelda", raw_text: "Jane Fruelda\nEmail: jane@example.com\nJan 2023 - Present Deloitte project manager delivery operations" });
+assert.equal(genericTitleNoSapEvidence.couldBecomeSearchableAfterReExtraction, false, "generic title without SAP evidence is rejected");
+assert.equal(genericTitleNoSapEvidence.whyBlockedAfterReExtraction.includes("invalid_title"), true, "generic title has invalid_title block");
+
+const suspiciousTitleSearchable = reExtractCandidate({ id: "suspicious-title-searchable", name: "Jane Fruelda", current_title: "Worked as SAP Consultant at Wipro Technologies Hyderabad from July 13th 2015 to", primary_module: "FICO", email: "jane@example.com", country: "Malaysia", raw_text: "Jane Fruelda\nEmail: jane@example.com\nKuala Lumpur, Malaysia\nS/4HANA implementation" });
+assert.equal(suspiciousTitleSearchable.couldBecomeSearchableAfterReExtraction, false, "searchableAfter=false when title is suspicious");
 const audit = auditCandidateReExtraction([candidate, noSalary]);
 assert.equal(audit.totalCandidatesAudited, 2, "audit counts total candidates");
 assert.equal(audit.candidatesWithRawCvText >= 1, true, "audit counts raw CV/resume text availability");

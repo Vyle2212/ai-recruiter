@@ -68,3 +68,6 @@ candidate-display-repair-rollback.json
 reports/searchable-profile-quality-review.json
 reports/must-repair-before-search.json
 reports/candidate-reextraction-review.json
+
+# AI extraction cache
+reports/ai-extraction-cache/
