@@ -30,13 +30,26 @@ export function formatAiCandidateExtractionAudit(report: Awaited<ReturnType<type
     `AI extraction succeeded: ${s.aiExtractionSucceeded}`,
     `Fallback parser used: ${s.fallbackParserUsed}`,
     `OpenAI extraction used: ${s.openAiExtractionUsed}`,
+    `OpenAI request attempted count: ${s.openAiRequestAttempted}`,
+    `OpenAI request succeeded count: ${s.openAiRequestSucceeded}`,
+    `Identity evidence block used count: ${s.identityEvidenceBlockUsedCount || 0}`,
+    `OpenAI name recovered from identity evidence: ${s.openAiNameRecoveredFromIdentityEvidence || 0}`,
+    `OpenAI still missing name despite evidence: ${s.openAiStillMissingNameDespiteEvidence || 0}`,
+    `OpenAI request failed count: ${s.openAiRequestFailed}`,
+    `Fallback-on-error count: ${s.fallbackOnError}`,
     `Cache hits: ${s.cacheHits}`,
+    `Cache hits openai: ${s.cacheHitsOpenAi}`,
+    `Cache hits fallback: ${s.cacheHitsFallback}`,
     `Valid full name extracted: ${s.validFullNameExtracted}`,
     `Valid email extracted: ${s.validEmailExtracted}`,
     `Valid phone extracted: ${s.validPhoneExtracted}`,
     `Valid title extracted: ${s.validTitleExtracted}`,
     `Valid current employer extracted: ${s.validCurrentEmployerExtracted}`,
+    `Current employer tenure extracted: ${s.currentEmployerTenureExtracted || 0}`,
     `Valid previous employer extracted: ${s.validPreviousEmployerExtracted}`,
+    `Previous employer tenure extracted: ${s.previousEmployerTenureExtracted || 0}`,
+    `Total YOE extracted count: ${s.totalYoeExtracted || 0}`,
+    `SAP YOE extracted count: ${s.sapYoeExtracted || 0}`,
     `SAP module extracted: ${s.sapModuleExtracted}`,
     `Primary module extracted: ${s.primaryModuleExtracted}`,
     `Salary extracted: ${s.salaryExtracted}`,
@@ -62,8 +75,15 @@ export function formatAiCandidateExtractionAudit(report: Awaited<ReturnType<type
     `SAP module recovered: ${s.sapModuleRecovered}`,
     `Salary recovered: ${s.salaryRecovered}`,
     "",
-    "Review Classification Distribution",
   ];
+  if (report.providerMode === "openai" && Number(s.openAiExtractionUsed || 0) === 0) lines.push("", "WARNING: OpenAI provider was enabled but no OpenAI calls were made.");
+  lines.push("", "Provider Used Distribution");
+  for (const [key, value] of top(report.distributions.providerUsed || {})) lines.push(`- ${key}: ${value}`);
+  lines.push("", "Fallback Reason Distribution");
+  for (const [key, value] of top(report.distributions.fallbackReason || {})) lines.push(`- ${key}: ${value}`);
+  lines.push("", "OpenAI Error Type Distribution");
+  for (const [key, value] of top(report.distributions.openAiErrorType || {})) lines.push(`- ${key}: ${value}`);
+  lines.push("", "Review Classification Distribution");
   for (const [key, value] of top(report.distributions.reviewClassification)) lines.push(`- ${key}: ${value}`);
   lines.push("", "Primary SAP Module Distribution");
   for (const [key, value] of top(report.distributions.primarySapModule, 20)) lines.push(`- ${key}: ${value}`);
@@ -96,7 +116,10 @@ async function main() {
   console.log(formatAiCandidateExtractionAudit(await auditAiCandidateExtraction(selected, provider, options)));
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+if (process.argv[1]?.replace(/\\/g, "/").endsWith("scripts/auditAiCandidateExtraction.ts")) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}
+

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "tsx scripts/nameParser.test.ts && tsx scripts/employerParser.test.ts && tsx scripts/identityResolution.test.ts && tsx scripts/deliveryMetricsParser.test.ts && tsx scripts/executiveCompareState.test.ts && tsx scripts/candidateQualityGate.test.ts && tsx scripts/validationQueue.test.ts && tsx scripts/candidateDataRepair.test.ts && tsx scripts/candidateReExtraction.test.ts && tsx scripts/reExtractionReviewAnalysis.test.ts && tsx scripts/fullCandidateExtraction.test.ts && tsx scripts/aiCandidateExtraction.test.ts && tsx scripts/openAiCandidateExtractionProvider.test.ts && tsx scripts/selectiveAiExtractionQueue.test.ts && tsx scripts/cvExtractionBenchmark.test.ts && tsx scripts/candidateDuplicateIdentity.test.ts && tsx scripts/repairReview.test.ts && tsx scripts/searchableProfileQualityGate.test.ts && tsx scripts/mustRepairBeforeSearch.test.ts && tsx scripts/candidateValidation.test.ts && tsx scripts/candidateDisplayAudit.test.ts && tsx scripts/candidateDisplayRepairApply.test.ts && tsx scripts/pdfExportQuality.test.ts && tsx scripts/auditCandidates.test.ts",
+    "test": "tsx scripts/nameParser.test.ts && tsx scripts/employerParser.test.ts && tsx scripts/identityResolution.test.ts && tsx scripts/deliveryMetricsParser.test.ts && tsx scripts/executiveCompareState.test.ts && tsx scripts/candidateQualityGate.test.ts && tsx scripts/validationQueue.test.ts && tsx scripts/candidateDataRepair.test.ts && tsx scripts/candidateReExtraction.test.ts && tsx scripts/reExtractionReviewAnalysis.test.ts && tsx scripts/fullCandidateExtraction.test.ts && tsx scripts/aiCandidateExtraction.test.ts && tsx scripts/openAiCandidateExtractionProvider.test.ts && tsx scripts/rawIdentityEvidenceAudit.test.ts && tsx scripts/selectiveAiExtractionQueue.test.ts && tsx scripts/cvExtractionBenchmark.test.ts && tsx scripts/candidateDuplicateIdentity.test.ts && tsx scripts/repairReview.test.ts && tsx scripts/searchableProfileQualityGate.test.ts && tsx scripts/mustRepairBeforeSearch.test.ts && tsx scripts/candidateValidation.test.ts && tsx scripts/candidateDisplayAudit.test.ts && tsx scripts/candidateDisplayRepairApply.test.ts && tsx scripts/pdfExportQuality.test.ts && tsx scripts/auditCandidates.test.ts",
     "audit:candidates": "tsx scripts/audit-candidates.ts",
     "audit:display": "tsx scripts/auditCandidateDisplay.ts",
     "audit:display:preview": "tsx scripts/previewCandidateDisplayRepairs.ts",
@@ -31,7 +31,17 @@
     "export:ai-extraction": "tsx scripts/exportAiCandidateExtraction.ts",
     "benchmark:ai-extraction": "tsx scripts/benchmarkAiCandidateExtraction.ts",
     "audit:selective-ai-extraction": "tsx scripts/auditSelectiveAiExtraction.ts",
-    "export:selective-ai-extraction": "tsx scripts/exportSelectiveAiExtractionQueue.ts"
+    "audit:raw-identity": "tsx scripts/auditRawIdentityEvidence.ts",
+    "export:raw-identity": "tsx scripts/exportRawIdentityEvidence.ts",
+    "export:selective-ai-extraction": "tsx scripts/exportSelectiveAiExtractionQueue.ts",
+    "audit:batch-upload-extraction": "tsx scripts/auditBatchUploadExtraction.ts",
+    "export:batch-upload-extraction": "tsx scripts/exportBatchUploadExtraction.ts",
+    "audit:field-qa": "tsx scripts/auditFieldLevelExtractionQa.ts",
+    "export:field-qa": "tsx scripts/exportFieldLevelExtractionQa.ts",
+    "audit:parser-fix-priority": "tsx scripts/auditParserFixPriority.ts",
+    "export:parser-fix-priority": "tsx scripts/exportParserFixPriority.ts",
+    "audit:extraction-decision": "tsx scripts/auditExtractionDecisionLayer.ts",
+    "export:extraction-decision": "tsx scripts/exportExtractionDecisionLayer.ts"
   },
   "dependencies": {
     "@google-cloud/vision": "^5.3.6",
@@ -50,3 +60,9 @@
     "typescript": "6.0.3"
   }
 }
+
+
+
+
+
+

@@ -16,7 +16,7 @@ function rawExtraction(name = "Priya Raman"): RawAiCandidateExtraction {
     contact: { email: field("priya.raman@example.com", 95, "contact", "Email: priya.raman@example.com"), phone: field<string>(null, 0, "", ""), linkedInUrl: field<string>(null, 0, "", "") },
     location: { city: field<string>(null, 0, "", ""), country: field("Malaysia", 82, "contact", "Malaysia") },
     role: { currentTitle: field("SAP FICO Consultant", 92, "experience", "SAP FICO Consultant"), seniorityLevel: "consultant" },
-    employer: { currentEmployer: field("Not disclosed", 60, "not_disclosed", ""), previousEmployer: field<string>(null, 0, "", ""), employerHistory: [] },
+    employer: { currentEmployer: field("Not disclosed", 60, "not_disclosed", ""), currentCompanyStartDate: field<string>(null, 0, "", ""), currentCompanyEndDate: field<string>(null, 0, "", ""), currentCompanyYearsExperience: field<number>(null, 0, "", ""), currentCompanyTenureText: field<string>(null, 0, "", ""), previousEmployer: field<string>(null, 0, "", ""), previousCompanyStartDate: field<string>(null, 0, "", ""), previousCompanyEndDate: field<string>(null, 0, "", ""), previousCompanyYearsExperience: field<number>(null, 0, "", ""), previousCompanyTenureText: field<string>(null, 0, "", ""), employerHistory: [] },
     clientProjects: { clientCompanies: [], projectCompanies: [], projectHistory: [], clientVsEmployerDecision: "", clientVsEmployerEvidence: "" },
     sap: { primarySapModule: field("FICO", 90, "skills", "SAP FICO Consultant"), secondarySapModules: [], sapModules: ["FICO"], sapSkills: ["S/4HANA"], functionalSkills: [], technicalSkills: [], integrationSkills: [], businessProcesses: [], projectTypes: ["Implementation"], s4hanaEvidence: "S/4HANA", eccEvidence: "", riseEvidence: "" },
     experience: { totalYearsExperience: field<number>(null, 0, "", ""), sapYearsExperience: field<number>(null, 0, "", ""), implementationCount: 1, rolloutCount: 0, supportCount: 1, amsExperience: false, employmentHistory: [], projectHistory: [] },
@@ -43,17 +43,22 @@ try {
   assert.equal(getDefaultAiExtractionProvider().mode, "openai", "default provider becomes openai with env vars");
 
   const key = buildAiExtractionCacheKey(candidate("cache-1"), candidate("cache-1").raw_text, "test-model");
+  const fallbackKey = buildAiExtractionCacheKey(candidate("cache-1"), candidate("cache-1").raw_text, "test-model", undefined, "fallback");
   assert.equal(key.includes("cache-1"), true, "cache key includes candidate id");
   assert.equal(key.includes("test-model"), true, "cache key includes model");
+  assert.notEqual(key, fallbackKey, "fallback cache key is not reused for OpenAI provider");
 
   const cacheDir = path.join(process.cwd(), AI_EXTRACTION_CACHE_DIR);
   fs.mkdirSync(cacheDir, { recursive: true });
   const cacheFile = path.join(cacheDir, key);
-  fs.writeFileSync(cacheFile, JSON.stringify(rawExtraction("Priya Raman"), null, 2));
+  const openAiCached = rawExtraction("Priya Raman");
+  openAiCached.providerMeta = { mode: "openai", providerUsed: "openai", model: "test-model", cacheHit: false, fallbackParserUsed: false, openAiExtractionUsed: true, openAiRequestAttempted: true, openAiRequestSucceeded: true };
+  fs.writeFileSync(cacheFile, JSON.stringify(openAiCached, null, 2));
   const provider = createOpenAiCandidateExtractionProvider();
   const cached = await provider.extractCandidateFromCv(candidate("cache-1").raw_text, candidate("cache-1"));
   assert.equal(cached.identity.fullName.value, "Priya Raman", "cache hit returns cached extraction");
   assert.equal(cached.providerMeta?.cacheHit, true, "cache hit is recorded");
+  assert.equal(cached.providerMeta?.providerUsed, "openai", "OpenAI cache hit records provider used");
   if (fs.existsSync(cacheFile)) fs.unlinkSync(cacheFile);
 
   const selected = filterAiExtractionCandidates([candidate("1"), candidate("2"), candidate("3")], { limit: 2 }, "openai");
@@ -67,10 +72,11 @@ try {
   const fallbackRaw = await fallbackAiExtractionProvider.extractCandidateFromCv("", candidate("fallback"));
   assert.equal(fallbackRaw.providerMeta?.fallbackParserUsed, true, "fallback provider records fallback usage");
 
-  const parsed = parseAiExtractionArgs(["--onlyBlockedIdentity", "--limit=30", "--candidateIds=a,b"]);
+  const parsed = parseAiExtractionArgs(["--onlyBlockedIdentity", "--limit=30", "--candidateIds=a,b", "--noFallbackOnError"]);
   assert.equal(parsed.onlyBlockedIdentity, true, "CLI blocked identity flag parses");
   assert.equal(parsed.limit, 30, "CLI limit parses");
   assert.deepEqual(parsed.candidateIds, ["a", "b"], "CLI candidate IDs parse");
+  assert.equal(parsed.noFallbackOnError, true, "CLI noFallbackOnError flag parses");
 } finally {
   if (oldProvider === undefined) delete process.env.AI_EXTRACTION_PROVIDER; else process.env.AI_EXTRACTION_PROVIDER = oldProvider;
   if (oldKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = oldKey;

@@ -40,7 +40,15 @@ export type RawAiCandidateExtraction = {
   };
   employer: {
     currentEmployer: FieldValue;
+    currentCompanyStartDate: FieldValue;
+    currentCompanyEndDate: FieldValue;
+    currentCompanyYearsExperience: FieldValue<number>;
+    currentCompanyTenureText: FieldValue;
     previousEmployer: FieldValue;
+    previousCompanyStartDate: FieldValue;
+    previousCompanyEndDate: FieldValue;
+    previousCompanyYearsExperience: FieldValue<number>;
+    previousCompanyTenureText: FieldValue;
     employerHistory: AnyRecord[];
   };
   clientProjects: {
@@ -94,6 +102,7 @@ export type RawAiCandidateExtraction = {
 
 export type ValidatedAiCandidateExtraction = RawAiCandidateExtraction & {
   candidateId: string;
+  displayName: string;
   existingDisplayName: string;
   normalizedFullName: string;
   nameConfidence: number;
@@ -108,11 +117,14 @@ export type ValidatedAiCandidateExtraction = RawAiCandidateExtraction & {
   contactConfidence: number;
   contactEvidence: string;
   city: string;
+  locationCity: string;
   country: string;
+  locationCountry: string;
   normalizedCountry: string;
   currentLocationEvidence: string;
   locationConfidence: number;
   currentTitle: string;
+  title: string;
   normalizedCurrentTitle: string;
   seniorityLevel: string;
   titleConfidence: number;
@@ -121,8 +133,21 @@ export type ValidatedAiCandidateExtraction = RawAiCandidateExtraction & {
   isTitleValid: boolean;
   titleRejectReason: string;
   currentEmployer: string;
+  currentCompany: string;
   normalizedCurrentEmployer: string;
+  currentCompanyStartDate: string;
+  currentCompanyEndDate: string;
+  currentCompanyYearsExperience: number;
+  currentCompanyTenureText: string;
   previousEmployer: string;
+  previousCompany: string;
+  previousCompanyStartDate: string;
+  previousCompanyEndDate: string;
+  previousCompanyYearsExperience: number;
+  previousCompanyTenureText: string;
+  employmentHistory: AnyRecord[];
+  clientCompanies: string[];
+  projectCompanies: string[];
   currentEmployerEvidence: string;
   employerConfidence: number;
   isEmployerValid: boolean;
@@ -135,6 +160,7 @@ export type ValidatedAiCandidateExtraction = RawAiCandidateExtraction & {
   fieldCompletenessScore: number;
   searchReadiness: boolean;
   reviewClassification: ReviewClassification;
+  validationStatus: string;
   reviewReasons: string[];
   safeToApply: boolean;
   requiresManualReview: boolean;
@@ -147,10 +173,17 @@ export type ValidatedAiCandidateExtraction = RawAiCandidateExtraction & {
   currentParserSearchReady: boolean;
   provider: string;
   providerMode: AiExtractionProviderMode;
+  providerUsed: AiExtractionProviderMode;
   model: string;
+  modelUsed: string;
   cacheHit: boolean;
   fallbackParserUsed: boolean;
+  fallbackReason: string;
   openAiExtractionUsed: boolean;
+  openAiRequestAttempted: boolean;
+  openAiRequestSucceeded: boolean;
+  openAiErrorType: string;
+  openAiErrorMessage: string;
 };
 
 export type AiExtractionProviderMode = "mock" | "fallback" | "openai";
@@ -161,6 +194,12 @@ export type AiExtractionProviderMeta = {
   cacheHit?: boolean;
   fallbackParserUsed?: boolean;
   openAiExtractionUsed?: boolean;
+  providerUsed?: AiExtractionProviderMode;
+  fallbackReason?: string;
+  openAiRequestAttempted?: boolean;
+  openAiRequestSucceeded?: boolean;
+  openAiErrorType?: string;
+  openAiErrorMessage?: string;
   error?: string;
 };
 

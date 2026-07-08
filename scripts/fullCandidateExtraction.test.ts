@@ -3,6 +3,7 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { auditFullCandidateExtraction, extractFullCandidateProfile } from "../lib/fullCandidateExtractionEngine";
 import { writeFullCandidateExtractionReport, FULL_CANDIDATE_EXTRACTION_PATH } from "./exportFullCandidateExtraction";
+import { auditBatchUploadExtractionSimulation } from "../lib/batchUploadExtractionSimulator";
 
 function cv(overrides: Record<string, any> = {}) {
   return {
@@ -108,6 +109,47 @@ for (const company of ["by achieving 2nd", "form requirements Analyzed and desig
   assert.equal(item.extractedCurrentCompany, "Not disclosed", `${company} rejected as current employer`);
 }
 
+for (const company of ["L3 Specialist", "2024 - present", "Led IT systems", "Maker at CIMB Thai Bank", "Business & Industrial Imaging Products", "PETRONAS Malaysia from"]) {
+  const item = extractFullCandidateProfile(cv({ id: `invalid-current-${company}`, name: "Jane Fruelda", current_company: company, raw_text: `Jane Fruelda\nEmail: jane@example.com\nKuala Lumpur Malaysia\nSAP FICO Consultant\nSAP FICO S/4HANA implementation support data migration UAT SIT project experience education skills\nJan 2024 - Present ${company}` }));
+  assert.equal(item.extractedCurrentCompany, "Not disclosed", `${company} is rejected as current employer`);
+  assert.equal(item.currentCompanyYearsExperience, null, `${company} has no current company tenure`);
+  assert.equal(Boolean(item.companyRejectReason), true, `${company} records current employer reject reason`);
+}
+
+for (const company of ["nguagesBahasa Malaysia, English Current statusCurrent", "Research issues on various computer systems", "cultures both at onsite", "Nov 2016 - April 2022)"]) {
+  const item = extractFullCandidateProfile(cv({ id: `invalid-previous-${company}`, name: "Jane Fruelda", raw_text: `Jane Fruelda\nEmail: jane@example.com\nKuala Lumpur Malaysia\nSAP FICO Consultant at Deloitte Jan 2023 - Present\nSAP FICO Consultant at ${company} Jun 2020 - Dec 2022\nSAP FICO S/4HANA implementation support data migration UAT SIT project experience education skills` }));
+  assert.notEqual(item.previousCompany, company, `${company} is rejected as previous employer`);
+  assert.equal(item.previousCompanyYearsExperience, null, `${company} has no previous company tenure`);
+}
+
+for (const company of ["TDI APJ Vietnam Co., Ltd", "Deloitte Consulting", "ABeam Consulting", "NTT DATA Business Solutions Malaysia", "Bluefin Solutions Sdn. Bhd", "Cognizant Technologies", "IBM India Pvt Ltd", "Innovation Associates Consulting", "KPMG VIET NAM", "Accenture Solutions Sdn Bhd"]) {
+  const item = extractFullCandidateProfile(cv({ id: `accepted-employer-${company}`, name: "Jane Fruelda", raw_text: `Jane Fruelda\nEmail: jane@example.com\nKuala Lumpur Malaysia\nSAP FICO Consultant at ${company} Jan 2023 - Present\nSAP FICO S/4HANA implementation support data migration UAT SIT project experience education skills` }));
+  assert.equal(item.extractedCurrentCompany, company, `${company} accepted as employer with role/date evidence`);
+  assert.equal(item.currentCompanyYearsExperience > 0, true, `${company} tenure is calculated`);
+}
+
+for (const [text, expectedTotal, expectedSap] of [
+  ["15+ years of experience", "15", ""],
+  ["over 10 years of SAP experience", "", "10"],
+  ["12 years in SAP FICO", "", "12"],
+  ["Overall 11+ years in SAP", "11", ""],
+  ["having 5.1 years of SAP FICO", "", "5.1"],
+] as Array<[string,string,string]>) {
+  const item = extractFullCandidateProfile(cv({ id: `yoe-accept-${text}`, name: "Jane Fruelda", raw_text: `Jane Fruelda\nEmail: jane@example.com\nKuala Lumpur Malaysia\nSAP FICO Consultant\n${text}\nSAP FICO S/4HANA implementation support data migration UAT SIT project experience education skills` }));
+  if (expectedTotal) assert.equal(item.totalYearsExperience, expectedTotal, `${text} extracts total YOE`);
+  if (expectedSap) assert.equal(item.sapYearsExperience, expectedSap, `${text} extracts SAP YOE`);
+}
+
+for (const text of ["over 1000 users", "13 subsidiaries", "RM70 mil over 5 years", "200 SAP team members", "2017 - 2020", "+60 12 345 6789"]) {
+  const item = extractFullCandidateProfile(cv({ id: `yoe-reject-${text}`, name: "Jane Fruelda", raw_text: `Jane Fruelda\nEmail: jane@example.com\nKuala Lumpur Malaysia\nSAP FICO Consultant\n${text}\nSAP FICO S/4HANA implementation support data migration UAT SIT project experience education skills` }));
+  assert.equal(item.totalYearsExperience, "", `${text} does not extract total YOE`);
+  assert.equal(item.sapYearsExperience, "", `${text} does not extract SAP YOE`);
+}
+
+for (const badName of ["Lamkieumy Work", "OP process, collaborating with", "cultures both at onsite", "B EVENT MARKETING", "Shermaan Vijayasekaran Technicallea"]) {
+  const item = extractFullCandidateProfile(cv({ id: `bad-identity-${badName}`, name: badName, raw_text: `${badName}\nEmail: bad.identity@example.com\nKuala Lumpur Malaysia\nSAP FICO Consultant\nSAP FICO S/4HANA implementation support data migration UAT SIT project experience education skills` }));
+  assert.notEqual(item.reviewClassification, "search_ready_after_extraction", `${badName} is not search ready as identity`);
+}
 const summaryTitle = extractFullCandidateProfile(cv({ id: "summary-title", name: "Fakhrin bin Mohd Ramli", current_title: "11 years as SAP Consultant: 5 new implementation projects, 2 roll-out projects,", raw_text: "Fakhrin bin Mohd Ramli\nEmail: fakhrin@example.com\nKuala Lumpur Malaysia\n11 years as SAP Consultant: 5 new implementation projects, 2 roll-out projects,\nSAP MM Consultant implementation rollout support S/4HANA migration data migration UAT SIT project experience education skills and repeated SAP implementation responsibilities across finance modules" }));
 assert.equal(summaryTitle.isTitleSuspicious, true, "summary experience sentence is invalid as title");
 assert.notEqual(summaryTitle.reviewClassification, "search_ready_after_extraction", "summary title cannot be search ready");
@@ -134,7 +176,7 @@ const genericSapNoModule = extractFullCandidateProfile(cv({ id: "generic-sap-no-
 assert.equal(genericSapNoModule.isTitleSuspicious, true, "generic SAP Consultant without module evidence is suspicious");
 assert.notEqual(genericSapNoModule.reviewClassification, "search_ready_after_extraction", "generic SAP Consultant without module evidence cannot be search ready");
 const titleAtCompany = extractFullCandidateProfile(cv({ id: "title-at-company", name: "Jane Fruelda", current_title: "SAP BI Consultant at Bluefin Solutions Sdn. Bhd.", raw_text: "Jane Fruelda\nEmail: jane@example.com\nKuala Lumpur Malaysia\nSAP BI Consultant at Bluefin Solutions Sdn. Bhd.\nSAP BW BI BW implementation support S/4HANA data migration UAT SIT project experience education skills and repeated SAP implementation responsibilities" }));
-assert.equal(titleAtCompany.extractedCurrentTitle, "SAP BI Consultant", "title at company is split to clean title");
+assert.equal(titleAtCompany.extractedCurrentTitle, "SAP BW Consultant", "title at company is split and normalized to clean SAP BW title");
 assert.notEqual(titleAtCompany.extractedCurrentCompany, "Bluefin Solutions Sdn. Bhd.", "company fragment is not accepted without employer evidence");
 
 const notDisclosedSearchReady = extractFullCandidateProfile(cv({ id: "not-disclosed-ready", name: "Jane Fruelda", current_company: "", raw_text: "Jane Fruelda\nEmail: jane@example.com\nKuala Lumpur Malaysia\nSAP FICO Consultant\nS/4HANA FICO implementation support data migration UAT SIT project experience education skills and repeated SAP implementation responsibilities across finance, controlling, rollout, enhancement, hypercare, integration testing, cutover preparation, user training, configuration documentation, defect triage, stakeholder workshops, and production support" }));
@@ -143,7 +185,7 @@ assert.equal(notDisclosedSearchReady.reviewClassification, "search_ready_after_e
 
 const flavorCompany = extractFullCandidateProfile(cv({ id: "flavor-company", name: "Nguyen Minh Thu", current_company: "Food Flavor & Fragrance Solutions", raw_text: "Nguyen Minh Thu\nEmail: thu.nguyen@example.com\nHo Chi Minh Vietnam\nSAP FICO Consultant\nFood Flavor & Fragrance Solutions\nSAP FICO implementation support S/4HANA data migration UAT SIT project experience education skills and repeated SAP implementation responsibilities" }));
 assert.equal(flavorCompany.extractedCurrentCompany, "Not disclosed", "Food Flavor & Fragrance Solutions is not accepted as employer without label evidence");
-assert.equal(flavorCompany.reviewClassification, "parser_recoverable", "dirty employer reset is parser recoverable, not search ready");
+assert.equal(flavorCompany.reviewClassification, "search_ready_after_extraction", "dirty employer reset to Not disclosed can be search ready when other fields are clean");
 const clientSeparated = extractFullCandidateProfile(cv());
 assert.equal(clientSeparated.clientCompanies.includes("Yash Technologies"), true, "Client Name Yash Technologies stored as client/project company");
 assert.notEqual(clientSeparated.extractedCurrentCompany, "Yash Technologies", "client is not current employer by default");
@@ -168,6 +210,98 @@ assert.equal(manualReview.reviewReasons.includes("blocked_status_existing_db"), 
 const reupload = extractFullCandidateProfile({ id: "short", name: "Jane Fruelda", raw_text: "Jane Fruelda SAP" });
 assert.equal(reupload.reviewClassification, "likely_reupload_required", "short raw text is likely reupload required");
 
+const currentTenure = extractFullCandidateProfile(cv({ id: "current-tenure", name: "Jane Fruelda", raw_text: "Jane Fruelda\nEmail: jane@example.com\nKuala Lumpur Malaysia\nSenior SAP BI Consultant at Bluefin Solutions Sdn. Bhd. Sep 2015 - Present\nSAP BW BI S/4HANA implementation support data migration UAT SIT project experience education skills and repeated SAP analytics implementation responsibilities" }));
+assert.equal(currentTenure.extractedCurrentCompany, "Bluefin Solutions Sdn. Bhd", "current company is extracted from title at company date range");
+assert.equal(currentTenure.currentCompanyStartDate, "Sep 2015", "current company start date is extracted");
+assert.equal(currentTenure.currentCompanyEndDate, "Present", "current company end date preserves Present");
+assert.equal(currentTenure.currentCompanyYearsExperience > 0, true, "current company years experience is calculated");
+assert.equal(Boolean(currentTenure.currentCompanyTenureText), true, "current company tenure text is present");
+
+const multipleEmployment = extractFullCandidateProfile(cv({ id: "multiple-employment", name: "Jane Fruelda", raw_text: "Jane Fruelda\nEmail: jane@example.com\nKuala Lumpur Malaysia\nCareer history SAP Consultant at Abeam Consulting Jun 2023 - Present SAP FICO Consultant at Deloitte May 2020 - May 2023\nSAP FICO S/4HANA implementation support data migration UAT SIT project experience education skills and repeated SAP finance implementation responsibilities" }));
+assert.equal(multipleEmployment.extractedCurrentCompany, "Abeam Consulting", "latest/current employer is selected from employment history");
+assert.equal(multipleEmployment.previousCompany, "Deloitte", "previous employer is second distinct employer");
+assert.equal(multipleEmployment.previousCompanyStartDate, "May 2020", "previous company start date is extracted");
+assert.equal(multipleEmployment.previousCompanyEndDate, "May 2023", "previous company end date is extracted");
+assert.equal(Math.abs(Number(multipleEmployment.previousCompanyYearsExperience) - 3) < 0.2, true, "previous company years experience is approximately 3 years");
+
+const clientEmployerTenure = extractFullCandidateProfile(cv({ id: "client-employer-tenure", name: "Jane Fruelda", raw_text: "Jane Fruelda\nEmail: jane@example.com\nKuala Lumpur Malaysia\nClient: PETRONAS Project: S/4HANA Implementation Employer: Deloitte Consulting Jan 2022 - Present\nSAP FICO S/4HANA implementation support data migration UAT SIT project experience education skills and repeated SAP finance implementation responsibilities" }));
+assert.equal(clientEmployerTenure.extractedCurrentCompany, "Deloitte Consulting", "employer label is used for current company");
+assert.equal(clientEmployerTenure.clientCompanies.includes("PETRONAS"), true, "client company remains separated from employer");
+assert.equal(clientEmployerTenure.currentCompanyYearsExperience > 0, true, "employer labelled tenure is calculated");
+
+const totalYoe = extractFullCandidateProfile(cv({ id: "total-yoe", name: "Jane Fruelda", raw_text: "Jane Fruelda\nEmail: jane@example.com\nKuala Lumpur Malaysia\nSAP FICO Consultant\n15+ years of experience in SAP FICO and 12 years SAP implementation\nS/4HANA implementation support data migration UAT SIT project experience education skills and repeated SAP finance implementation responsibilities" }));
+assert.equal(totalYoe.totalYearsExperience, "15", "explicit total years of experience is extracted");
+assert.equal(totalYoe.sapYearsExperience, "12", "explicit SAP years of experience is extracted");
+
+const yearOnlyRange = extractFullCandidateProfile(cv({ id: "year-only-range", name: "Jane Fruelda", raw_text: "Jane Fruelda\nEmail: jane@example.com\nKuala Lumpur Malaysia\nSAP FICO Consultant at Deloitte 2020 - Present\nSAP FICO S/4HANA implementation support data migration UAT SIT project experience education skills and repeated SAP finance implementation responsibilities" }));
+assert.equal(yearOnlyRange.currentCompanyStartDate, "2020", "year-only start date is extracted");
+assert.equal(yearOnlyRange.currentCompanyEndDate, "Present", "year-only current end date is extracted");
+assert.equal(yearOnlyRange.currentCompanyYearsExperience > 0, true, "year-only tenure is calculated with lower precision");
+
+const wanNur = extractFullCandidateProfile(cv({ id: "wan-nur", name: "Wan Nur Hayatiyaakob", current_title: "SAP FICO Consultant", raw_text: "Wan Nur Hayatiyaakob\nEmail: wan@example.com\nKuala Lumpur Malaysia\nSAP FICO Consultant\nSAP BW BW reporting exposure plus SAP FICO finance controlling S/4HANA implementation support data migration UAT SIT project experience education skills" }));
+assert.equal(wanNur.primarySapModule, "FICO", "Wan Nur Hayatiyaakob SAP FICO title does not resolve to BW");
+
+const sanjayRk = extractFullCandidateProfile(cv({ id: "sanjay-rk", name: "Sanjay Rk", current_title: "SAP FICO Consultant", raw_text: "Sanjay Rk\nEmail: sanjay@example.com\nIndia\nSAP FICO Consultant\nSAP SD SD order to cash exposure plus SAP FICO finance controlling S/4HANA implementation support data migration UAT SIT project experience education skills" }));
+assert.equal(sanjayRk.primarySapModule, "FICO", "Sanjay Rk SAP FICO title does not resolve to SD");
+
+const superPheung = extractFullCandidateProfile(cv({ id: "super-pheung", name: "Super Pheung", current_title: "SAP BW Consultant", raw_text: "Super Pheung\nEmail: super@example.com\nSingapore\nSAP BW Consultant\nSAP FICO finance exposure plus SAP BW BI reporting analytics implementation support data migration UAT SIT project experience education skills" }));
+assert.equal(superPheung.primarySapModule, "BW", "Super Pheung SAP BW title does not resolve to FICO");
+
+const shewaramani = extractFullCandidateProfile(cv({ id: "shewaramani", name: "Shewaramani Devendra Ramesh", current_title: "SAP ABAP Consultant", raw_text: "Shewaramani Devendra Ramesh\nEmail: shewaramani@example.com\nIndia\nSAP ABAP Consultant\nSAP SD sales exposure plus ABAP BAPI BADI OData CDS IDoc WRICEF S/4HANA implementation support data migration UAT SIT project experience education skills" }));
+assert.equal(shewaramani.primarySapModule, "ABAP", "Shewaramani SAP ABAP title does not resolve to SD");
+
+const muhammadWasim = extractFullCandidateProfile(cv({ id: "muhammad-wasim", name: "Muhammad Wasim Qureshi", current_title: "SAP Functional Consultant", raw_text: "Muhammad Wasim Qureshi\nEmail: wasim@example.com\nKuala Lumpur Malaysia\nSAP EWM Consultant at Deloitte Consulting Jan 2023 - Present\nSAP EWM warehouse management S/4HANA implementation support data migration UAT SIT project experience education skills" }));
+assert.equal(muhammadWasim.extractedCurrentTitle, "SAP EWM Consultant", "Muhammad Wasim Qureshi recovers EWM title");
+assert.equal(muhammadWasim.primarySapModule, "EWM", "Muhammad Wasim Qureshi recovers EWM module");
+assert.notEqual(muhammadWasim.reviewClassification, "blocked_title", "Muhammad Wasim Qureshi is near search-ready, not title-blocked");
+
+const drJames = extractFullCandidateProfile(cv({ id: "dr-james", name: "Candidate profile pending validation", raw_text: "Name: Dr James Paul Asirvatham\nEmail: james@example.com\nKuala Lumpur Malaysia\nSAP Project Manager at EY Consulting Jan 2022 - Present\nSAP FICO S/4HANA implementation rollout support migration UAT SIT project experience education skills" }));
+assert.equal(drJames.extractedFullName.includes("James Paul Asirvatham"), true, "Dr James Paul Asirvatham identity is extracted");
+assert.equal(drJames.extractedCurrentCompany, "EY Consulting", "Dr James Paul Asirvatham employer is extracted");
+assert.equal(drJames.primarySapModule, "FICO", "Dr James Paul Asirvatham SAP module is extracted");
+
+const mariaTeresa = extractFullCandidateProfile(cv({ id: "maria-teresa", name: "Maria Teresa Briñas", current_title: "SAP FICO Consultant", raw_text: "Maria Teresa Briñas\nEmail: maria@example.com\nManila Philippines\nSAP FICO Consultant\nSAP FICO finance controlling implementation support data migration UAT SIT project experience education skills" }));
+assert.equal(mariaTeresa.extractedCurrentTitle, "SAP FICO Consultant", "Maria Teresa Briñas title is SAP FICO Consultant");
+assert.equal(mariaTeresa.primarySapModule, "FICO", "Maria Teresa Briñas primary module is FICO");
+
+const abdulHadie = extractFullCandidateProfile(cv({ id: "abdul-hadie", name: "Abdul Hadie Bin Noorudin", current_title: "SAP FICO Consultant", raw_text: "Abdul Hadie Bin Noorudin\nEmail: abdul.hadie@example.com\nKuala Lumpur Malaysia\nSAP FICO Consultant at EY Consulting Jan 2021 - Present\nSAP FICO finance controlling S/4HANA implementation support data migration UAT SIT project experience education skills" }));
+assert.equal(abdulHadie.extractedCurrentCompany, "EY Consulting", "Abdul Hadie Bin Noorudin employer EY Consulting is extracted");
+assert.equal(abdulHadie.primarySapModule, "FICO", "Abdul Hadie Bin Noorudin primary module is FICO");
+
+const surachai = extractFullCandidateProfile(cv({ id: "surachai", name: "Surachai Siripreechavidh", current_title: "SAP FICO Consultant", raw_text: "Surachai Siripreechavidh\nEmail: surachai@example.com\nBangkok Thailand\nPosition: SAP FICO Consultant\nSAP FICO finance controlling implementation support data migration UAT SIT project experience education skills" }));
+assert.notEqual(surachai.reviewClassification, "blocked_title", "Surachai does not fail title when SAP title evidence exists");
+
+const shayne = extractFullCandidateProfile(cv({ id: "shayne", name: "Shayne Huang", current_title: "Project Lead", raw_text: "Shayne Huang\nEmail: shayne@example.com\nSingapore\nProject Lead\nSAP implementation stakeholder coordination documentation support data migration UAT SIT project experience education skills" }));
+assert.equal(shayne.isTitleSuspicious, true, "Shayne Huang Project Lead is low confidence without SAP title evidence");
+assert.notEqual(shayne.reviewClassification, "search_ready_after_extraction", "Shayne Huang generic Project Lead is not search-ready");
+
+const dirtyEmploymentHistoryCompany = extractFullCandidateProfile(cv({ id: "dirty-employment-history-company", name: "Md Husaimi Abd Wahab", current_title: "SAP FICO Consultant", current_company: "enhancement and consultation EMPLOYMENT HISTORY Date Company Name Role", raw_text: "Md Husaimi Abd Wahab\nEmail: husaimi@example.com\nKuala Lumpur Malaysia\nSAP FICO Consultant\nSAP FICO implementation support data migration UAT SIT project experience education skills" }));
+assert.equal(dirtyEmploymentHistoryCompany.extractedCurrentCompany, "Not disclosed", "dirty employment history employer is rejected");
+assert.equal(Boolean(dirtyEmploymentHistoryCompany.companyRejectReason), true, "dirty employment history employer records reject reason");
+
+const dirtyCimbCompany = extractFullCandidateProfile(cv({ id: "dirty-cimb-company", name: "Zuhelmiza Zullkefli", current_title: "SAP FICO Consultant", current_company: "yahoo.com PROFESSIONAL EXPERIENCES CIMB Bank Berhad", raw_text: "Zuhelmiza Zullkefli\nEmail: zuhelmiza@yahoo.com\nKuala Lumpur Malaysia\nSAP FICO Consultant\nyahoo.com PROFESSIONAL EXPERIENCES CIMB Bank Berhad Jan 2021 - Present SAP FICO Consultant\nSAP FICO implementation support data migration UAT SIT project experience education skills" }));
+assert.equal(dirtyCimbCompany.extractedCurrentCompany, "CIMB Bank Berhad", "CIMB Bank Berhad is recovered from dirty employer text");
+
+const hpAlmName = extractFullCandidateProfile(cv({ id: "hp-alm-name", name: "HP ALM, Service Now", raw_text: "HP ALM, Service Now\nEmail: hp@example.com\nSingapore\nSAP Solution Architect\nSAP SD implementation support data migration UAT SIT project experience education skills" }));
+assert.equal(hpAlmName.reviewClassification, "blocked_identity", "tool list name HP ALM, Service Now is rejected");
+
+const smartGasCompany = extractFullCandidateProfile(cv({ id: "smart-gas-company", name: "Jane Fruelda", current_title: "SAP SD Consultant", current_company: "technology enablement solutions to clients. Smart-Gas Pte. Ltd., Singapore", raw_text: "Jane Fruelda\nEmail: jane@example.com\nSingapore\nSAP SD Consultant\ntechnology enablement solutions to clients. Smart-Gas Pte. Ltd., Singapore Jan 2022 - Present SAP SD Consultant\nSAP SD implementation support data migration UAT SIT project experience education skills" }));
+assert.equal(smartGasCompany.extractedCurrentCompany, "Smart-Gas Pte. Ltd", "Smart-Gas Pte. Ltd is recovered from dirty employer text");
+
+const bwDominates = extractFullCandidateProfile(cv({ id: "bw-dominates", name: "Super Pheung", current_title: "SAP BW Consultant", raw_text: "Super Pheung\nEmail: super@example.com\nSingapore\nSAP BW Consultant\nFICO FICO finance exposure and SAP BW reporting implementation support data migration UAT SIT project experience education skills" }));
+assert.equal(bwDominates.primarySapModule, "BW", "SAP BW Consultant resolves to BW, not FICO");
+
+const abapDominates = extractFullCandidateProfile(cv({ id: "abap-dominates", name: "Tran Quoc Trieu", current_title: "SAP ABAP Consultant", raw_text: "Tran Quoc Trieu\nEmail: tran@example.com\nVietnam\nSAP ABAP Consultant\nMM MM logistics exposure and ABAP BAPI BADI OData CDS IDoc implementation support data migration UAT SIT project experience education skills" }));
+assert.equal(abapDominates.primarySapModule, "ABAP", "SAP ABAP Consultant resolves to ABAP, not MM");
+
+const ficoDominates = extractFullCandidateProfile(cv({ id: "fico-dominates", name: "Jane Fruelda", current_title: "SAP FICO Consultant", raw_text: "Jane Fruelda\nEmail: jane@example.com\nKuala Lumpur Malaysia\nSAP FICO Consultant\nBW BW reporting exposure and SAP FICO finance controlling implementation support data migration UAT SIT project experience education skills" }));
+assert.equal(ficoDominates.primarySapModule, "FICO", "SAP FICO Consultant resolves to FICO, not BW or SD");
+
+const piPoDominates = extractFullCandidateProfile(cv({ id: "pi-po-dominates", name: "Aaron Jakegutierrez", current_title: "SAP PI Consultant", raw_text: "Aaron Jakegutierrez\nEmail: aaron@example.com\nManila Philippines\nSAP PI Consultant\nSAP PI/PO integration support implementation data migration UAT SIT project experience education skills" }));
+assert.equal(piPoDominates.primarySapModule, "PI/PO", "SAP PI Consultant resolves to PI/PO");
+
+const keepExistingGuardrail = auditBatchUploadExtractionSimulation([cv({ id: "keep-existing", name: "Patrick Lawrence Esposo Chico", current_title: "SAP FICO Consultant", current_company: "Deloitte Consulting", sap_modules: ["FICO"], country: "Malaysia", raw_text: "Patrick Lawrence Esposo Chico\nEmail: patrick@example.com\nKuala Lumpur Malaysia\nSAP FICO Consultant\nSAP FICO implementation support data migration UAT SIT project experience education skills" })], { limit: 1, useExistingRawText: true, noOpenAI: true });
+assert.equal(keepExistingGuardrail.items[0].recommendedAction === "keep_existing_record" || keepExistingGuardrail.items[0].safeToOverwrite === true, true, "existing search-ready records are kept or only overwritten when simulated extraction is safe");
 const audit = auditFullCandidateExtraction([cv(), parserRecoverable, reupload, cv({ id: "audit-bad-title", name: "Fakhrin bin Mohd Ramli", current_title: "11 years as SAP Consultant: 5 new implementation projects, 2 roll-out projects,", raw_text: "Fakhrin bin Mohd Ramli\nEmail: fakhrin@example.com\nKuala Lumpur Malaysia\n11 years as SAP Consultant: 5 new implementation projects, 2 roll-out projects,\nSAP MM Consultant implementation rollout support S/4HANA migration data migration UAT SIT project experience education skills and repeated SAP implementation responsibilities across finance modules" })]);
 assert.equal(audit.summary.totalCandidates, 4, "audit counts candidates");
 assert.equal(audit.searchReadyItems.length >= 1, true, "audit includes search ready items");

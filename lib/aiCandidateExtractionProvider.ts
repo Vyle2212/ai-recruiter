@@ -9,6 +9,7 @@ export type AiExtractionRunOptions = {
   candidateIds?: string[];
   onlyBlockedIdentity?: boolean;
   onlyParserRecoverable?: boolean;
+  noFallbackOnError?: boolean;
 };
 
 function clean(value: any) { return String(value || "").replace(/\s+/g, " ").trim(); }
@@ -22,6 +23,7 @@ export function parseAiExtractionArgs(argv = process.argv.slice(2)): AiExtractio
     else if (arg.startsWith("--candidateIds=")) out.candidateIds = arg.split("=")[1].split(",").map(clean).filter(Boolean);
     else if (arg === "--onlyBlockedIdentity") out.onlyBlockedIdentity = true;
     else if (arg === "--onlyParserRecoverable") out.onlyParserRecoverable = true;
+    else if (arg === "--noFallbackOnError") out.noFallbackOnError = true;
     else if (arg.startsWith("--provider=")) out.providerMode = arg.split("=")[1] as AiExtractionRunOptions["providerMode"];
   }
   return out;

@@ -3,6 +3,8 @@ import { extractFullCandidateProfile, auditFullCandidateExtraction } from "./ful
 import { field, type AiCandidateExtractionReport, type AiExtractionProvider, type AnyRecord, type RawAiCandidateExtraction, type ValidatedAiCandidateExtraction } from "./cvExtractionSchema";
 import { validateAiCandidateExtraction } from "./cvExtractionValidator";
 import { getAiExtractionConcurrency, selectAiExtractionProvider, type AiExtractionRunOptions } from "./aiCandidateExtractionProvider";
+import { emptyRawAiExtraction, sanitizeOpenAiError } from "./openAiCandidateExtractionProvider";
+import { buildIdentityEvidenceBlock } from "./rawIdentityEvidenceRecovery";
 
 function clean(value: any) {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -26,6 +28,7 @@ function fallbackTitleFromRaw(raw: string) {
   return clean(match?.[0] || "").replace(/\bFI\/CO\b/i, "FICO").replace(/\bBI\b/i, "BW");
 }
 export function buildAiExtractionPrompt(rawText: string, existingCandidateData: AnyRecord) {
+  const identityEvidenceBlock = buildIdentityEvidenceBlock(rawText);
   return [
     "You are extracting a SAP recruiter candidate profile from a CV.",
     "Extract only information explicitly present in the CV. Do not hallucinate.",
@@ -36,14 +39,16 @@ export function buildAiExtractionPrompt(rawText: string, existingCandidateData: 
     "Prefer labelled fields such as Full Name, Email, Phone, Current Position, Employer.",
     "If current employer is not explicit, use Not disclosed.",
     "If title is a summary sentence, reject it.",
+    "Use the identity evidence candidates only when the name is explicitly supported by the CV text.",
     "Return valid JSON only using the PRIMUS CV extraction schema.",
     "",
     `Existing candidate data: ${JSON.stringify(existingCandidateData).slice(0, 4000)}`,
     "",
+    identityEvidenceBlock,
+    "",
     `CV text: ${rawText.slice(0, 12000)}`,
   ].join("\n");
 }
-
 export function fallbackRawExtraction(candidate: AnyRecord): RawAiCandidateExtraction {
   const raw = candidateRawCvText(candidate);
   const full = extractFullCandidateProfile(candidate);
@@ -73,7 +78,15 @@ export function fallbackRawExtraction(candidate: AnyRecord): RawAiCandidateExtra
     },
     employer: {
       currentEmployer: field(full.extractedCurrentCompany || "Not disclosed", full.companyConfidence || 40, full.companySource || "fallback_company", full.companyEvidence || "", full.extractedCurrentCompany || "Not disclosed", full.companyRejectReason || ""),
+      currentCompanyStartDate: field(full.currentCompanyStartDate || null, full.currentCompanyStartDate ? 82 : 0, "fallback_current_company_tenure", full.companyEvidence || ""),
+      currentCompanyEndDate: field(full.currentCompanyEndDate || null, full.currentCompanyEndDate ? 82 : 0, "fallback_current_company_tenure", full.companyEvidence || ""),
+      currentCompanyYearsExperience: field(full.currentCompanyYearsExperience ? Number(full.currentCompanyYearsExperience) : null, full.currentCompanyYearsExperience ? 82 : 0, "fallback_current_company_tenure", full.currentCompanyTenureText || full.companyEvidence || ""),
+      currentCompanyTenureText: field(full.currentCompanyTenureText || null, full.currentCompanyTenureText ? 82 : 0, "fallback_current_company_tenure", full.companyEvidence || ""),
       previousEmployer: field(full.previousCompany || null, full.previousCompany ? 75 : 0, "fallback_previous_company", full.previousCompany || ""),
+      previousCompanyStartDate: field(full.previousCompanyStartDate || null, full.previousCompanyStartDate ? 78 : 0, "fallback_previous_company_tenure", full.previousCompany || ""),
+      previousCompanyEndDate: field(full.previousCompanyEndDate || null, full.previousCompanyEndDate ? 78 : 0, "fallback_previous_company_tenure", full.previousCompany || ""),
+      previousCompanyYearsExperience: field(full.previousCompanyYearsExperience ? Number(full.previousCompanyYearsExperience) : null, full.previousCompanyYearsExperience ? 78 : 0, "fallback_previous_company_tenure", full.previousCompanyTenureText || full.previousCompany || ""),
+      previousCompanyTenureText: field(full.previousCompanyTenureText || null, full.previousCompanyTenureText ? 78 : 0, "fallback_previous_company_tenure", full.previousCompany || ""),
       employerHistory: full.employerHistory || [],
     },
     clientProjects: {
@@ -131,7 +144,7 @@ export const fallbackAiExtractionProvider: AiExtractionProvider = {
   model: "deterministic-fallback",
   async extractCandidateFromCv(_rawText: string, existingCandidateData: AnyRecord) {
     const raw = fallbackRawExtraction(existingCandidateData);
-    raw.providerMeta = { mode: "fallback", model: "deterministic-fallback", cacheHit: false, fallbackParserUsed: true, openAiExtractionUsed: false };
+    raw.providerMeta = { mode: "fallback", providerUsed: "fallback", model: "deterministic-fallback", cacheHit: false, fallbackParserUsed: true, fallbackReason: "forced_fallback", openAiExtractionUsed: false, openAiRequestAttempted: false, openAiRequestSucceeded: false };
     return raw;
   },
 };
@@ -142,7 +155,7 @@ export function createMockAiExtractionProvider(raw: RawAiCandidateExtraction): A
     mode: "mock",
     model: "mock",
     async extractCandidateFromCv() {
-      raw.providerMeta = { mode: "mock", model: "mock", cacheHit: false, fallbackParserUsed: false, openAiExtractionUsed: false };
+      raw.providerMeta = { mode: "mock", providerUsed: "mock", model: "mock", cacheHit: false, fallbackParserUsed: false, openAiExtractionUsed: false, openAiRequestAttempted: false, openAiRequestSucceeded: false };
       return raw;
     },
   };
@@ -152,19 +165,24 @@ export function getDefaultAiExtractionProvider(options: AiExtractionRunOptions =
   return selectAiExtractionProvider(fallbackAiExtractionProvider, options);
 }
 
-export async function extractAiCandidateProfile(candidate: AnyRecord, provider = getDefaultAiExtractionProvider()): Promise<ValidatedAiCandidateExtraction> {
+export async function extractAiCandidateProfile(candidate: AnyRecord, provider = getDefaultAiExtractionProvider(), options: AiExtractionRunOptions = {}): Promise<ValidatedAiCandidateExtraction> {
   const rawText = candidateRawCvText(candidate);
   let raw: RawAiCandidateExtraction;
   try {
     raw = await provider.extractCandidateFromCv(rawText, candidate);
   } catch (error) {
-    raw = fallbackRawExtraction(candidate);
-    raw.providerMeta = { mode: provider.mode, model: provider.model || "unknown", cacheHit: false, fallbackParserUsed: true, openAiExtractionUsed: false, error: error instanceof Error ? error.message : String(error) };
+    const sanitized = sanitizeOpenAiError(error);
+    if (provider.mode === "openai" && options.noFallbackOnError) {
+      raw = emptyRawAiExtraction(sanitized.type);
+      raw.providerMeta = { mode: "openai", providerUsed: "openai", model: provider.model || "unknown", cacheHit: false, fallbackParserUsed: false, fallbackReason: "", openAiExtractionUsed: false, openAiRequestAttempted: true, openAiRequestSucceeded: false, openAiErrorType: sanitized.type, openAiErrorMessage: sanitized.message, error: sanitized.message };
+    } else {
+      raw = fallbackRawExtraction(candidate);
+      raw.providerMeta = { mode: provider.mode, providerUsed: "fallback", model: provider.model || "unknown", cacheHit: false, fallbackParserUsed: true, fallbackReason: provider.mode === "openai" ? sanitized.type : "forced_fallback", openAiExtractionUsed: false, openAiRequestAttempted: provider.mode === "openai", openAiRequestSucceeded: false, openAiErrorType: provider.mode === "openai" ? sanitized.type : "", openAiErrorMessage: provider.mode === "openai" ? sanitized.message : "", error: sanitized.message };
+    }
   }
-  const meta = raw.providerMeta || { mode: provider.mode, model: provider.model || provider.name, cacheHit: false, fallbackParserUsed: provider.mode === "fallback", openAiExtractionUsed: provider.mode === "openai" };
+  const meta = raw.providerMeta || { mode: provider.mode, providerUsed: provider.mode, model: provider.model || provider.name, cacheHit: false, fallbackParserUsed: provider.mode === "fallback", fallbackReason: provider.mode === "fallback" ? "forced_fallback" : "", openAiExtractionUsed: provider.mode === "openai", openAiRequestAttempted: false, openAiRequestSucceeded: false };
   return validateAiCandidateExtraction(raw, candidate, rawText, provider.name, Boolean(meta.fallbackParserUsed), meta);
 }
-
 async function mapWithConcurrency<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>) {
   const results: R[] = [];
   let index = 0;
@@ -180,7 +198,7 @@ async function mapWithConcurrency<T, R>(items: T[], concurrency: number, fn: (it
 
 export async function auditAiCandidateExtraction(candidates: AnyRecord[], provider = getDefaultAiExtractionProvider(), options: AiExtractionRunOptions = {}): Promise<AiCandidateExtractionReport> {
   const currentReport = auditFullCandidateExtraction(candidates);
-  const items = await mapWithConcurrency(candidates, getAiExtractionConcurrency(), (candidate) => extractAiCandidateProfile(candidate, provider));
+  const items = await mapWithConcurrency(candidates, getAiExtractionConcurrency(), (candidate) => extractAiCandidateProfile(candidate, provider, options));
   const searchReadyItems = items.filter((item) => item.reviewClassification === "search_ready_after_extraction");
   const parserRecoverableItems = items.filter((item) => item.reviewClassification === "parser_recoverable");
   const manualReviewItems = items.filter((item) => item.reviewClassification === "manual_review_required");
@@ -195,13 +213,26 @@ export async function auditAiCandidateExtraction(candidates: AnyRecord[], provid
     aiExtractionSucceeded: items.filter((item) => item.nameEvidence || item.titleEvidence || item.sapModules.length || item.hasContact).length,
     fallbackParserUsed: items.filter((item) => item.fallbackParserUsed).length,
     openAiExtractionUsed: items.filter((item) => item.openAiExtractionUsed).length,
+    openAiRequestAttempted: items.filter((item) => item.openAiRequestAttempted).length,
+    openAiRequestSucceeded: items.filter((item) => item.openAiRequestSucceeded).length,
+    identityEvidenceBlockUsedCount: provider.mode === "openai" ? items.length : 0,
+    openAiNameRecoveredFromIdentityEvidence: items.filter((item) => item.openAiExtractionUsed && item.isNameValid && /raw_identity_/i.test(item.nameSourceSection || "")).length,
+    openAiStillMissingNameDespiteEvidence: items.filter((item) => item.openAiExtractionUsed && !item.isNameValid).length,
+    openAiRequestFailed: items.filter((item) => item.openAiRequestAttempted && !item.openAiRequestSucceeded).length,
+    fallbackOnError: items.filter((item) => item.fallbackParserUsed && item.fallbackReason && item.providerMode === "openai").length,
     cacheHits: items.filter((item) => item.cacheHit).length,
+    cacheHitsOpenAi: items.filter((item) => item.cacheHit && item.providerUsed === "openai").length,
+    cacheHitsFallback: items.filter((item) => item.cacheHit && item.providerUsed === "fallback").length,
     validFullNameExtracted: items.filter((item) => item.isNameValid).length,
     validEmailExtracted: items.filter((item) => item.email).length,
     validPhoneExtracted: items.filter((item) => item.phone).length,
     validTitleExtracted: items.filter((item) => item.isTitleValid && item.currentTitle).length,
     validCurrentEmployerExtracted: items.filter((item) => item.currentEmployer && item.currentEmployer !== "Not disclosed" && item.isEmployerValid).length,
+    currentEmployerTenureExtracted: items.filter((item) => item.currentCompanyYearsExperience > 0).length,
     validPreviousEmployerExtracted: items.filter((item) => item.previousEmployer).length,
+    previousEmployerTenureExtracted: items.filter((item) => item.previousCompanyYearsExperience > 0).length,
+    totalYoeExtracted: items.filter((item) => item.experience.totalYearsExperience.value).length,
+    sapYoeExtracted: items.filter((item) => item.experience.sapYearsExperience.value).length,
     sapModuleExtracted: items.filter((item) => item.sapModules.length).length,
     primaryModuleExtracted: items.filter((item) => item.primarySapModule && item.primarySapModule !== "UNKNOWN").length,
     salaryExtracted: items.filter((item) => item.compensation.expectedSalary.value || item.compensation.currentSalary.value).length,
@@ -245,6 +276,9 @@ export async function auditAiCandidateExtraction(candidates: AnyRecord[], provid
       reviewClassification: countBy(items, "reviewClassification"),
       primarySapModule: countBy(items, "primarySapModule"),
       provider: countBy(items, "provider"),
+      providerUsed: countBy(items, "providerUsed"),
+      fallbackReason: countBy(items.filter((item) => item.fallbackReason), "fallbackReason"),
+      openAiErrorType: countBy(items.filter((item) => item.openAiErrorType), "openAiErrorType"),
     },
     items,
     searchReadyItems,
@@ -277,3 +311,7 @@ function example(item: ValidatedAiCandidateExtraction) {
 
 export const AI_EXTRACTION_SKILLS = ["S/4HANA", "ECC", "RISE", "Fiori", "CPI", "PI/PO", "CDS", "OData", "WRICEF", "IDoc", "BAPI", "BADI", "HANA", "UAT", "SIT", "cutover", "data migration"];
 export const extractSkillKeywords = (raw: string) => keywordList(raw, AI_EXTRACTION_SKILLS);
+
+
+
+
