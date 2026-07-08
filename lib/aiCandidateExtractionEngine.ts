@@ -231,12 +231,12 @@ export async function auditAiCandidateExtraction(candidates: AnyRecord[], provid
     currentEmployerTenureExtracted: items.filter((item) => item.currentCompanyYearsExperience > 0).length,
     validPreviousEmployerExtracted: items.filter((item) => item.previousEmployer).length,
     previousEmployerTenureExtracted: items.filter((item) => item.previousCompanyYearsExperience > 0).length,
-    totalYoeExtracted: items.filter((item) => item.experience.totalYearsExperience.value).length,
-    sapYoeExtracted: items.filter((item) => item.experience.sapYearsExperience.value).length,
+    totalYoeExtracted: items.filter((item) => item.experience?.totalYearsExperience?.value).length,
+    sapYoeExtracted: items.filter((item) => item.experience?.sapYearsExperience?.value).length,
     sapModuleExtracted: items.filter((item) => item.sapModules.length).length,
     primaryModuleExtracted: items.filter((item) => item.primarySapModule && item.primarySapModule !== "UNKNOWN").length,
-    salaryExtracted: items.filter((item) => item.compensation.expectedSalary.value || item.compensation.currentSalary.value).length,
-    noticePeriodExtracted: items.filter((item) => item.compensation.noticePeriod.value).length,
+    salaryExtracted: items.filter((item) => item.compensation?.expectedSalary?.value || item.compensation?.currentSalary?.value).length,
+    noticePeriodExtracted: items.filter((item) => item.compensation?.noticePeriod?.value).length,
     searchReadyAfterAiExtraction: searchReadyItems.length,
     parserRecoverable: parserRecoverableItems.length,
     manualReviewRequired: manualReviewItems.length,
@@ -254,7 +254,7 @@ export async function auditAiCandidateExtraction(candidates: AnyRecord[], provid
     contactRecovered: items.filter((item) => item.hasContact).length,
     locationRecovered: items.filter((item) => item.normalizedCountry || item.city).length,
     sapModuleRecovered: items.filter((item) => item.sapModules.length).length,
-    salaryRecovered: items.filter((item) => item.compensation.expectedSalary.value || item.compensation.currentSalary.value).length,
+    salaryRecovered: items.filter((item) => item.compensation?.expectedSalary?.value || item.compensation?.currentSalary?.value).length,
     previousEmployerImproved: items.filter((item) => item.previousEmployer).length,
   };
   const examples = {
@@ -295,8 +295,8 @@ export async function auditAiCandidateExtraction(candidates: AnyRecord[], provid
 function example(item: ValidatedAiCandidateExtraction) {
   return {
     candidateId: item.candidateId,
-    name: item.identity.fullName.value,
-    title: item.currentTitle || item.role.currentTitle.value,
+    name: item.identity?.fullName?.value,
+    title: item.currentTitle || item.role?.currentTitle?.value,
     employer: item.currentEmployer,
     primarySapModule: item.primarySapModule,
     reviewClassification: item.reviewClassification,

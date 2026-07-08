@@ -135,6 +135,37 @@ function titleModule(title: string) {
   return "";
 }
 
+
+type NormalizedExtractionField = { value: any; normalizedValue?: any; confidence: number; sourceSection: string; evidence: string; rejectReason?: string };
+
+export function normalizeAiExtractionField(field: any): NormalizedExtractionField {
+  if (field == null) return { value: null, confidence: 0, sourceSection: "", evidence: "", rejectReason: "missing_field" };
+  if (typeof field === "string" || typeof field === "number" || typeof field === "boolean") return { value: field, confidence: 0, sourceSection: "", evidence: "" };
+  if (Array.isArray(field)) return { value: field, confidence: 0, sourceSection: "", evidence: field.map(clean).filter(Boolean).join(", ") };
+  if (typeof field === "object") return { value: field.value ?? null, normalizedValue: field.normalizedValue ?? null, confidence: Number(field.confidence || 0), sourceSection: clean(field.sourceSection), evidence: clean(field.evidence), rejectReason: clean(field.rejectReason) };
+  return { value: null, confidence: 0, sourceSection: "", evidence: "", rejectReason: "invalid_field_shape" };
+}
+
+function normalizeAiExtractionResult(raw: any): RawAiCandidateExtraction & { normalizationWarnings: string[] } {
+  const warnings: string[] = [];
+  const warn = (path: string, value: any) => { if (value == null || typeof value !== "object" || Array.isArray(value)) warnings.push(`normalized_null_or_invalid_field:${path}`); return normalizeAiExtractionField(value); };
+  const out: any = {
+    ...raw,
+    identity: { ...(raw?.identity || {}), fullName: warn("identity.fullName", raw?.identity?.fullName || raw?.identity?.name), alternateNames: Array.isArray(raw?.identity?.alternateNames) ? raw.identity.alternateNames : [] },
+    contact: { ...(raw?.contact || {}), email: warn("contact.email", raw?.contact?.email), phone: warn("contact.phone", raw?.contact?.phone), linkedInUrl: warn("contact.linkedInUrl", raw?.contact?.linkedInUrl) },
+    location: { ...(raw?.location || {}), city: warn("location.city", raw?.location?.city), country: warn("location.country", raw?.location?.country || raw?.location) },
+    role: { ...(raw?.role || {}), currentTitle: warn("role.currentTitle", raw?.role?.currentTitle || raw?.currentTitle), seniorityLevel: clean(raw?.role?.seniorityLevel) },
+    employer: { ...(raw?.employer || {}), currentEmployer: warn("employer.currentEmployer", raw?.employer?.currentEmployer || raw?.currentEmployer), currentCompanyStartDate: warn("employer.currentCompanyStartDate", raw?.employer?.currentCompanyStartDate), currentCompanyEndDate: warn("employer.currentCompanyEndDate", raw?.employer?.currentCompanyEndDate), currentCompanyYearsExperience: warn("employer.currentCompanyYearsExperience", raw?.employer?.currentCompanyYearsExperience), currentCompanyTenureText: warn("employer.currentCompanyTenureText", raw?.employer?.currentCompanyTenureText), previousEmployer: warn("employer.previousEmployer", raw?.employer?.previousEmployer || raw?.previousEmployer), previousCompanyStartDate: warn("employer.previousCompanyStartDate", raw?.employer?.previousCompanyStartDate), previousCompanyEndDate: warn("employer.previousCompanyEndDate", raw?.employer?.previousCompanyEndDate), previousCompanyYearsExperience: warn("employer.previousCompanyYearsExperience", raw?.employer?.previousCompanyYearsExperience), previousCompanyTenureText: warn("employer.previousCompanyTenureText", raw?.employer?.previousCompanyTenureText), employerHistory: Array.isArray(raw?.employer?.employerHistory) ? raw.employer.employerHistory : [] },
+    clientProjects: { ...(raw?.clientProjects || {}), clientCompanies: Array.isArray(raw?.clientProjects?.clientCompanies) ? raw.clientProjects.clientCompanies : [], projectCompanies: Array.isArray(raw?.clientProjects?.projectCompanies) ? raw.clientProjects.projectCompanies : [], projectHistory: Array.isArray(raw?.clientProjects?.projectHistory) ? raw.clientProjects.projectHistory : [], clientVsEmployerDecision: clean(raw?.clientProjects?.clientVsEmployerDecision), clientVsEmployerEvidence: clean(raw?.clientProjects?.clientVsEmployerEvidence) },
+    sap: { ...(raw?.sap || {}), primarySapModule: warn("sap.primarySapModule", raw?.sap?.primarySapModule || raw?.primarySapModule), secondarySapModules: Array.isArray(raw?.sap?.secondarySapModules) ? raw.sap.secondarySapModules : [], sapModules: Array.isArray(raw?.sap?.sapModules) ? raw.sap.sapModules : [], sapSkills: Array.isArray(raw?.sap?.sapSkills) ? raw.sap.sapSkills : [], functionalSkills: Array.isArray(raw?.sap?.functionalSkills) ? raw.sap.functionalSkills : [], technicalSkills: Array.isArray(raw?.sap?.technicalSkills) ? raw.sap.technicalSkills : [], integrationSkills: Array.isArray(raw?.sap?.integrationSkills) ? raw.sap.integrationSkills : [], businessProcesses: Array.isArray(raw?.sap?.businessProcesses) ? raw.sap.businessProcesses : [], projectTypes: Array.isArray(raw?.sap?.projectTypes) ? raw.sap.projectTypes : [], s4hanaEvidence: clean(raw?.sap?.s4hanaEvidence), eccEvidence: clean(raw?.sap?.eccEvidence), riseEvidence: clean(raw?.sap?.riseEvidence) },
+    experience: { ...(raw?.experience || {}), totalYearsExperience: warn("experience.totalYearsExperience", raw?.experience?.totalYearsExperience), sapYearsExperience: warn("experience.sapYearsExperience", raw?.experience?.sapYearsExperience), implementationCount: Number(raw?.experience?.implementationCount || 0), rolloutCount: Number(raw?.experience?.rolloutCount || 0), supportCount: Number(raw?.experience?.supportCount || 0), amsExperience: Boolean(raw?.experience?.amsExperience), employmentHistory: Array.isArray(raw?.experience?.employmentHistory) ? raw.experience.employmentHistory : [], projectHistory: Array.isArray(raw?.experience?.projectHistory) ? raw.experience.projectHistory : [] },
+    compensation: { ...(raw?.compensation || {}), currentSalary: warn("compensation.currentSalary", raw?.compensation?.currentSalary), expectedSalary: warn("compensation.expectedSalary", raw?.compensation?.expectedSalary || raw?.salary), salaryCurrency: clean(raw?.compensation?.salaryCurrency), salaryPeriod: clean(raw?.compensation?.salaryPeriod), noticePeriod: warn("compensation.noticePeriod", raw?.compensation?.noticePeriod || raw?.noticePeriod), availability: warn("compensation.availability", raw?.compensation?.availability), compensationEvidence: clean(raw?.compensation?.compensationEvidence) },
+    quality: { ...(raw?.quality || {}), extractionConfidenceOverall: Number(raw?.quality?.extractionConfidenceOverall || 0), fieldCompletenessScore: Number(raw?.quality?.fieldCompletenessScore || 0), rawTextQuality: clean(raw?.quality?.rawTextQuality), evidenceSummary: raw?.quality?.evidenceSummary || {} },
+    providerMeta: raw?.providerMeta,
+    normalizationWarnings: warnings,
+  };
+  return out;
+}
 function alignPrimaryModule(title: string, primary: string, modules: string[], rawText: string) {
   const fromTitle = titleModule(title);
   if (!fromTitle) return primary || modules[0] || "UNKNOWN";
@@ -151,22 +182,25 @@ function currentParser(candidate: AnyRecord) {
   }
 }
 
-export function validateAiCandidateExtraction(raw: RawAiCandidateExtraction, candidate: AnyRecord, rawText: string, provider: string, fallbackParserUsed: boolean, providerMeta?: AiExtractionProviderMeta): ValidatedAiCandidateExtraction {
+export function validateAiCandidateExtraction(raw: RawAiCandidateExtraction, candidate: AnyRecord, rawText: string, provider: string, fallbackParserUsed: boolean, providerMeta?: AiExtractionProviderMeta): ValidatedAiCandidateExtraction {
+
+  raw = normalizeAiExtractionResult(raw);
+  const normalizationWarnings = (raw as any).normalizationWarnings || [];
   const current = currentParser(candidate);
-  const nameValue = clean(raw.identity.fullName.value);
+  const nameValue = clean(raw.identity.fullName?.value);
   let nameReason = nameRejectReason(nameValue);
-  if (!nameReason && !evidenceSupports(nameValue, raw.identity.fullName.evidence, rawText, candidate)) nameReason = "hallucinated_name_not_in_cv";
+  if (!nameReason && !evidenceSupports(nameValue, raw.identity.fullName?.evidence, rawText, candidate)) nameReason = "hallucinated_name_not_in_cv";
   const modules = normalizeSapModules(raw.sap.sapModules || [], rawText);
-  let primarySapModule = clean(raw.sap.primarySapModule.value) || modules[0] || "UNKNOWN";
-  primarySapModule = alignPrimaryModule(clean(raw.role.currentTitle.value), primarySapModule, modules, rawText);
+  let primarySapModule = clean(raw.sap.primarySapModule?.value) || modules[0] || "UNKNOWN";
+  primarySapModule = alignPrimaryModule(clean(raw.role.currentTitle?.value), primarySapModule, modules, rawText);
   if (primarySapModule !== "UNKNOWN" && !modules.includes(primarySapModule)) modules.unshift(primarySapModule);
-  const titleValue = clean(raw.role.currentTitle.normalizedValue || raw.role.currentTitle.value);
+  const titleValue = clean(raw.role.currentTitle?.normalizedValue || raw.role.currentTitle?.value);
   let titleReason = titleRejectReason(titleValue, modules);
-  if (!titleReason && !evidenceSupports(titleValue, raw.role.currentTitle.evidence, rawText, candidate)) titleReason = "hallucinated_title_not_in_cv";
+  if (!titleReason && !evidenceSupports(titleValue, raw.role.currentTitle?.evidence, rawText, candidate)) titleReason = "hallucinated_title_not_in_cv";
   const clientCompanies = uniq(raw.clientProjects.clientCompanies || []);
-  const employerValue = clean(raw.employer.currentEmployer.value) || "Not disclosed";
+  const employerValue = clean(raw.employer.currentEmployer?.value) || "Not disclosed";
   let employerReason = employerRejectReason(employerValue, clientCompanies);
-  if (!employerReason && !evidenceSupports(employerValue, raw.employer.currentEmployer.evidence, rawText, candidate)) employerReason = "hallucinated_employer_not_in_cv";
+  if (!employerReason && !evidenceSupports(employerValue, raw.employer.currentEmployer?.evidence, rawText, candidate)) employerReason = "hallucinated_employer_not_in_cv";
   const currentEmployer = employerReason ? "Not disclosed" : employerValue;
   const currentCompanyStartDate = clean(raw.employer.currentCompanyStartDate?.value);
   const currentCompanyEndDate = clean(raw.employer.currentCompanyEndDate?.value);
@@ -178,16 +212,16 @@ export function validateAiCandidateExtraction(raw: RawAiCandidateExtraction, can
   const previousCompanyYearsExperience = Number(raw.employer.previousCompanyYearsExperience?.value || 0);
   const previousCompanyTenureText = clean(raw.employer.previousCompanyTenureText?.value);
 
-  const email = clean(raw.contact.email.value);
-  const phone = clean(raw.contact.phone.value);
-  const linkedInUrl = clean(raw.contact.linkedInUrl.value);
+  const email = clean(raw.contact.email?.value);
+  const phone = clean(raw.contact.phone?.value);
+  const linkedInUrl = clean(raw.contact.linkedInUrl?.value);
   const validEmail = !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const validPhone = !phone || phone.replace(/\D/g, "").length >= 8;
-  const normalizedCountry = normalizeCountry(clean(raw.location.country.value), rawText);
+  const normalizedCountry = normalizeCountry(clean(raw.location.country?.value), rawText);
   const hasContact = Boolean(validEmail && email || validPhone && phone || /linkedin\.com/i.test(linkedInUrl));
-  const hasLocation = Boolean(clean(raw.location.city.value) || normalizedCountry);
-  const rawTextQuality = raw.quality.rawTextQuality || (rawText.length < 250 ? "raw_text_too_short" : "");
-  const hasSapEvidence = Boolean(modules.length || raw.sap.sapSkills.length || raw.sap.projectTypes.length || /\bSAP\b/i.test(rawText));
+  const hasLocation = Boolean(clean(raw.location.city?.value) || normalizedCountry);
+  const rawTextQuality = raw.quality?.rawTextQuality || (rawText.length < 250 ? "raw_text_too_short" : "");
+  const hasSapEvidence = Boolean(modules.length || (raw.sap.sapSkills || []).length || (raw.sap.projectTypes || []).length || /\bSAP\b/i.test(rawText));
   const hasKnownPrimaryModule = Boolean(primarySapModule && primarySapModule !== "UNKNOWN");
   const reviewReasons = [
     nameReason ? `identity_rejected:${nameReason}` : "",
@@ -198,7 +232,7 @@ export function validateAiCandidateExtraction(raw: RawAiCandidateExtraction, can
     !hasContact ? "contact_missing" : "",
     !hasLocation ? "location_missing" : "",
     rawTextQuality ? `raw_text_quality:${rawTextQuality}` : "",
-  ].filter(Boolean);
+  ].filter(Boolean).concat(normalizationWarnings);
   let reviewClassification: ValidatedAiCandidateExtraction["reviewClassification"] = "manual_review_required";
   if (rawTextQuality) reviewClassification = "likely_reupload_required";
   else if (nameReason) reviewClassification = "blocked_identity";
@@ -208,17 +242,17 @@ export function validateAiCandidateExtraction(raw: RawAiCandidateExtraction, can
   else if (employerReason) reviewClassification = "parser_recoverable";
   else reviewClassification = "search_ready_after_extraction";
   const searchReadiness = reviewClassification === "search_ready_after_extraction";
-  const fieldCompletenessScore = Math.round([!nameReason, !titleReason, modules.length, raw.sap.sapSkills.length, hasContact, hasLocation, Boolean(currentEmployer), raw.experience.totalYearsExperience.value, raw.compensation.expectedSalary.value].filter(Boolean).length / 9 * 100);
-  const contactConfidence = Math.max(email ? raw.contact.email.confidence : 0, phone ? raw.contact.phone.confidence : 0, linkedInUrl ? raw.contact.linkedInUrl.confidence : 0);
+  const fieldCompletenessScore = Math.round([!nameReason, !titleReason, modules.length, (raw.sap.sapSkills || []).length, hasContact, hasLocation, Boolean(currentEmployer), raw.experience.totalYearsExperience?.value, raw.compensation.expectedSalary?.value].filter(Boolean).length / 9 * 100);
+  const contactConfidence = Math.max(email ? raw.contact.email?.confidence || 0 : 0, phone ? raw.contact.phone?.confidence || 0 : 0, linkedInUrl ? raw.contact.linkedInUrl?.confidence || 0 : 0);
   return {
     ...raw,
     candidateId: candidateId(candidate),
     displayName: nameReason ? "" : nameValue,
     existingDisplayName: clean(candidate.display_name || candidate.full_name || candidate.candidate_name || candidate.name),
     normalizedFullName: norm(nameValue),
-    nameConfidence: nameReason ? 0 : raw.identity.fullName.confidence,
-    nameEvidence: raw.identity.fullName.evidence,
-    nameSourceSection: raw.identity.fullName.sourceSection,
+    nameConfidence: nameReason ? 0 : raw.identity.fullName?.confidence || 0,
+    nameEvidence: raw.identity.fullName?.evidence,
+    nameSourceSection: raw.identity.fullName?.sourceSection || "",
     isNameValid: !nameReason,
     nameRejectReason: nameReason,
     email: validEmail ? email : "",
@@ -226,23 +260,23 @@ export function validateAiCandidateExtraction(raw: RawAiCandidateExtraction, can
     linkedInUrl: /linkedin\.com/i.test(linkedInUrl) ? linkedInUrl : "",
     hasContact,
     contactConfidence,
-    contactEvidence: clean([raw.contact.email.evidence, raw.contact.phone.evidence, raw.contact.linkedInUrl.evidence].filter(Boolean).join(" | ")),
-    city: clean(raw.location.city.value),
-    locationCity: clean(raw.location.city.value),
+    contactEvidence: clean([raw.contact.email?.evidence, raw.contact.phone?.evidence, raw.contact.linkedInUrl?.evidence].filter(Boolean).join(" | ")),
+    city: clean(raw.location.city?.value),
+    locationCity: clean(raw.location.city?.value),
 
-    country: clean(raw.location.country.value),
-    locationCountry: clean(raw.location.country.value),
+    country: clean(raw.location.country?.value),
+    locationCountry: clean(raw.location.country?.value),
     normalizedCountry,
-    currentLocationEvidence: clean([raw.location.city.evidence, raw.location.country.evidence].filter(Boolean).join(" | ")),
-    locationConfidence: hasLocation ? Math.max(raw.location.city.confidence, raw.location.country.confidence) : 0,
+    currentLocationEvidence: clean([raw.location.city?.evidence, raw.location.country?.evidence].filter(Boolean).join(" | ")),
+    locationConfidence: hasLocation ? Math.max(raw.location.city?.confidence || 0, raw.location.country?.confidence || 0) : 0,
     currentTitle: titleReason ? "" : titleValue,
     title: titleReason ? "" : titleValue,
 
     normalizedCurrentTitle: norm(titleReason ? "" : titleValue),
     seniorityLevel: raw.role.seniorityLevel || "",
-    titleConfidence: titleReason ? 0 : raw.role.currentTitle.confidence,
-    titleEvidence: raw.role.currentTitle.evidence,
-    titleSourceSection: raw.role.currentTitle.sourceSection,
+    titleConfidence: titleReason ? 0 : raw.role.currentTitle?.confidence || 0,
+    titleEvidence: raw.role.currentTitle?.evidence,
+    titleSourceSection: raw.role.currentTitle?.sourceSection || "",
     isTitleValid: !titleReason,
     titleRejectReason: titleReason,
     currentEmployer,
@@ -263,15 +297,15 @@ export function validateAiCandidateExtraction(raw: RawAiCandidateExtraction, can
     employmentHistory: raw.experience.employmentHistory || raw.employer.employerHistory || [],
     clientCompanies,
     projectCompanies: raw.clientProjects.projectCompanies || [],
-    currentEmployerEvidence: raw.employer.currentEmployer.evidence,
-    employerConfidence: employerReason ? 0 : raw.employer.currentEmployer.confidence,
+    currentEmployerEvidence: raw.employer.currentEmployer?.evidence,
+    employerConfidence: employerReason ? 0 : raw.employer.currentEmployer?.confidence || 0,
     isEmployerValid: !employerReason,
     employerRejectReason: employerReason,
     primarySapModule,
     secondarySapModules: uniq(raw.sap.secondarySapModules || []).filter((m) => m !== primarySapModule),
     sapModules: modules,
     sapSkills: uniq(raw.sap.sapSkills || []),
-    extractionConfidenceOverall: Math.round([nameReason ? 0 : raw.identity.fullName.confidence, titleReason ? 0 : raw.role.currentTitle.confidence, modules.length ? 85 : 0, contactConfidence, hasLocation ? 80 : 0].reduce((a, b) => a + b, 0) / 5),
+    extractionConfidenceOverall: Math.round([nameReason ? 0 : raw.identity.fullName?.confidence || 0, titleReason ? 0 : raw.role.currentTitle?.confidence || 0, modules.length ? 85 : 0, contactConfidence, hasLocation ? 80 : 0].reduce((a, b) => a + b, 0) / 5),
     fieldCompletenessScore,
     searchReadiness,
     reviewClassification,
@@ -283,7 +317,7 @@ export function validateAiCandidateExtraction(raw: RawAiCandidateExtraction, can
     requiresReupload: reviewClassification === "likely_reupload_required",
     parserRecoverable: reviewClassification === "parser_recoverable",
     rawTextQuality,
-    evidenceSummary: raw.quality.evidenceSummary,
+    evidenceSummary: raw.quality?.evidenceSummary || {},
     recoveredByAiFromCurrentParserBlocked: searchReadiness && current.reviewClassification !== "search_ready_after_extraction",
     currentParserClassification: String(current.reviewClassification || ""),
     currentParserSearchReady: Boolean(current.searchReadiness),
