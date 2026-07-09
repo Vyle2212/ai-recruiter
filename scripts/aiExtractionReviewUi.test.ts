@@ -178,7 +178,11 @@ assert.equal(loaded.candidates.length, 2, "loader should project candidate list"
 
 const pageSource = fs.readFileSync(new URL("../app/recruiter/ai-extraction-review/page.tsx", import.meta.url), "utf8");
 assert.equal(pageSource.includes("/api/recruiter/ai-extraction-review"), true, "page should load read-only review API");
-assert.equal(pageSource.includes("Preview approved changes"), true, "page should expose dry-run apply preview");
+assert.equal(pageSource.includes("Generate apply preview"), true, "page should expose dry-run apply preview");
+assert.equal(pageSource.includes("Save review decisions"), true, "page should expose approval persistence action");
+assert.equal(pageSource.includes("Unsaved changes"), true, "page should show unsaved changes badge");
+assert.equal(pageSource.includes("/api/recruiter/ai-extraction-review/approvals"), true, "page should load and save approval API");
+assert.equal(pageSource.includes("/api/recruiter/ai-extraction-review/apply-preview"), true, "page should call safe apply preview API");
 assert.equal(pageSource.includes("Suggested fields"), true, "page should expose suggested field view toggle");
 assert.equal(pageSource.includes("Risky/rejected"), true, "page should expose risky/rejected field view toggle");
 assert.equal(pageSource.includes("Approval blocked:"), true, "page should explain disabled approval controls");
@@ -193,5 +197,6 @@ assert.equal(/supabase|\.update\(|\.delete\(|\.insert\(/i.test(getRouteSource + 
 assert.equal(/from ["']openai["']|OpenAI/.test(getRouteSource + previewRouteSource), false, "review APIs must not call OpenAI");
 
 console.log("AI extraction review UI tests passed");
+
 
 

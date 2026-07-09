@@ -5,6 +5,22 @@ import { useEffect, useMemo, useState } from "react";
 import { buildLocalApprovalSummary, filterFieldsForView, getApprovalDisabledReason, type FieldViewMode } from "@/lib/aiExtractionReviewClient";
 import type { ApprovalState, ApplyPreview, FieldApprovalAction, ReviewFilter, ReviewWorkspace, WorkspaceCandidate, WorkspaceField } from "@/lib/aiExtractionReviewUi";
 
+type SavedApproval = {
+  approvalId?: string;
+  candidateId: string;
+  fieldName: string;
+  currentValue: string;
+  suggestedValue: string;
+  parserValue: string;
+  aiEvidence: string;
+  aiConfidence: number;
+  decision: "approve_suggestion" | "reject_suggestion" | "keep_existing" | "mark_for_review" | "manual_override_approve";
+  riskLevel: "safe" | "risky" | "rejected" | "conflict";
+  reviewerNote: string;
+  overrideReason: string;
+  reason?: string;
+};
+
 const FILTERS: Array<{ key: ReviewFilter; label: string }> = [
   { key: "all", label: "All" },
   { key: "safe", label: "Safe suggestions" },
@@ -43,6 +59,56 @@ function approvalKey(candidateId: string, field: string) {
   return `${candidateId}:${field}`;
 }
 
+function localActionFromSaved(decision: SavedApproval["decision"]): FieldApprovalAction {
+  if (decision === "approve_suggestion" || decision === "manual_override_approve") return "approve";
+  if (decision === "reject_suggestion") return "reject";
+  if (decision === "keep_existing") return "keep";
+  return "manual_review";
+}
+
+function riskLevelForField(field: WorkspaceField): SavedApproval["riskLevel"] {
+  if (field.decision === "reject") return "rejected";
+  if (field.decision === "conflict") return "conflict";
+  if (field.decision === "safe_accept") return "safe";
+  return "risky";
+}
+
+function persistedDecisionFor(field: WorkspaceField, action: FieldApprovalAction, overrideReason: string): SavedApproval["decision"] {
+  if (action === "approve" && field.canApprove) return "approve_suggestion";
+  if (action === "approve" && overrideReason.trim()) return "manual_override_approve";
+  if (action === "reject") return "reject_suggestion";
+  if (action === "keep") return "keep_existing";
+  return "mark_for_review";
+}
+
+function buildSavedApprovals(workspace: ReviewWorkspace, approvals: ApprovalState): SavedApproval[] {
+  const fieldsByKey = new Map<string, WorkspaceField>();
+  for (const candidate of workspace.candidates) {
+    for (const field of candidate.fields) fieldsByKey.set(approvalKey(candidate.candidateId, field.field), field);
+  }
+  return Object.entries(approvals).flatMap(([key, approval]) => {
+    const index = key.indexOf(":");
+    const candidateId = key.slice(0, index);
+    const fieldName = key.slice(index + 1);
+    const field = fieldsByKey.get(key);
+    if (!field || !approval?.action || approval.action === "pending") return [];
+    return [{
+      approvalId: key,
+      candidateId,
+      fieldName,
+      currentValue: field.existingValue,
+      suggestedValue: field.aiValue,
+      parserValue: field.parserValue,
+      aiEvidence: field.evidence,
+      aiConfidence: field.confidence,
+      decision: persistedDecisionFor(field, approval.action, approval.overrideReason || ""),
+      riskLevel: riskLevelForField(field),
+      reviewerNote: "",
+      overrideReason: approval.overrideReason || "",
+      reason: field.reason,
+    }];
+  });
+}
 function matchesFilter(candidate: WorkspaceCandidate, filter: ReviewFilter) {
   if (filter === "all") return true;
   if (filter === "safe") return candidate.safeCount > 0;
@@ -75,6 +141,9 @@ export default function AiExtractionReviewPage() {
   const [fieldView, setFieldView] = useState<FieldViewMode>("suggested");
   const [query, setQuery] = useState("");
   const [approvals, setApprovals] = useState<ApprovalState>({});
+  const [savedApprovals, setSavedApprovals] = useState<SavedApproval[]>([]);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [saveStatus, setSaveStatus] = useState("");
   const [overrideReasons, setOverrideReasons] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<ApplyPreview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,17 +151,24 @@ export default function AiExtractionReviewPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("ai-extraction-review-approvals-v1");
-    if (saved) {
+    const controller = new AbortController();
+    async function loadApprovals() {
       try {
-        setApprovals(JSON.parse(saved));
-      } catch {}
+        const res = await fetch("/api/recruiter/ai-extraction-review/approvals", { signal: controller.signal });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Unable to load saved approvals");
+        const loaded = Array.isArray(json.approvals) ? json.approvals as SavedApproval[] : [];
+        setSavedApprovals(loaded);
+        setApprovals(Object.fromEntries(loaded.map((approval) => [approvalKey(approval.candidateId, approval.fieldName), { action: localActionFromSaved(approval.decision), overrideReason: approval.overrideReason }] as const)));
+        setOverrideReasons(Object.fromEntries(loaded.filter((approval) => approval.overrideReason).map((approval) => [approvalKey(approval.candidateId, approval.fieldName), approval.overrideReason] as const)));
+        setHasUnsavedChanges(false);
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") setSaveStatus(err instanceof Error ? err.message : "Unable to load saved approvals");
+      }
     }
+    loadApprovals();
+    return () => controller.abort();
   }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem("ai-extraction-review-approvals-v1", JSON.stringify(approvals));
-  }, [approvals]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -129,14 +205,36 @@ export default function AiExtractionReviewPage() {
 
   const localSummary = useMemo(() => (workspace ? buildLocalApprovalSummary(workspace, approvals) : { approvedFields: 0, rejectedFields: 0, manualReviewFields: 0, readyForApplyPreview: 0 }), [workspace, approvals]);
 
+  async function saveReviewDecisions() {
+    if (!workspace) return;
+    setSaveStatus("");
+    const payload = buildSavedApprovals(workspace, approvals);
+    try {
+      const res = await fetch("/api/recruiter/ai-extraction-review/approvals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approvals: payload }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error((json.errors || [json.error || "Unable to save approvals"]).join("; "));
+      const loaded = Array.isArray(json.approvals) ? json.approvals as SavedApproval[] : [];
+      setSavedApprovals(loaded);
+      setHasUnsavedChanges(false);
+      setSaveStatus("Review decisions saved");
+    } catch (err) {
+      setSaveStatus(err instanceof Error ? err.message : "Unable to save approvals");
+    }
+  }
+
   async function buildPreview() {
     setPreviewLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/recruiter/ai-extraction-review/preview-approval", {
+      const previewApprovals = workspace ? buildSavedApprovals(workspace, approvals) : savedApprovals;
+      const res = await fetch("/api/recruiter/ai-extraction-review/apply-preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ approvals }),
+        body: JSON.stringify({ approvals: previewApprovals }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Unable to build apply preview");
@@ -153,6 +251,8 @@ export default function AiExtractionReviewPage() {
     const reason = overrideReasons[key] || "";
     if (action === "approve" && field.requiresOverride && !reason.trim()) return;
     setApprovals((current) => ({ ...current, [key]: { action, overrideReason: reason } }));
+    setHasUnsavedChanges(true);
+    setSaveStatus("");
   }
 
   const cards = [
@@ -200,7 +300,7 @@ export default function AiExtractionReviewPage() {
               ))}
             </div>
 
-            <StickyApprovalSummary summary={localSummary} previewLoading={previewLoading} onPreview={buildPreview} />
+            <StickyApprovalSummary summary={localSummary} previewLoading={previewLoading} onPreview={buildPreview} onSave={saveReviewDecisions} hasUnsavedChanges={hasUnsavedChanges} saveStatus={saveStatus} />
 
             <div className="mt-5 flex flex-wrap items-center gap-2 border border-slate-800 bg-[#0B0F16] p-4">
               {FILTERS.map((item) => (
@@ -224,6 +324,8 @@ export default function AiExtractionReviewPage() {
                   overrideReasons={overrideReasons}
                   setOverrideReasons={setOverrideReasons}
                   setFieldApproval={setFieldApproval}
+                  setHasUnsavedChanges={setHasUnsavedChanges}
+                  setSaveStatus={setSaveStatus}
                   preview={preview}
                 />
               ) : (
@@ -248,7 +350,7 @@ export default function AiExtractionReviewPage() {
   );
 }
 
-function StickyApprovalSummary({ summary, previewLoading, onPreview }: { summary: { approvedFields: number; rejectedFields: number; manualReviewFields: number; readyForApplyPreview: number }; previewLoading: boolean; onPreview: () => void }) {
+function StickyApprovalSummary({ summary, previewLoading, onPreview, onSave, hasUnsavedChanges, saveStatus }: { summary: { approvedFields: number; rejectedFields: number; manualReviewFields: number; readyForApplyPreview: number }; previewLoading: boolean; onPreview: () => void; onSave: () => void; hasUnsavedChanges: boolean; saveStatus: string }) {
   const items = [
     ["Approved fields", summary.approvedFields],
     ["Rejected fields", summary.rejectedFields],
@@ -264,9 +366,14 @@ function StickyApprovalSummary({ summary, previewLoading, onPreview }: { summary
             <div className="text-xl font-semibold text-white">{value}</div>
           </div>
         ))}
-        <button onClick={onPreview} disabled={previewLoading} className="ml-auto rounded-md bg-cyan-500 px-4 py-3 text-sm font-bold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50">
-          {previewLoading ? "Building preview..." : "Preview approved changes"}
-        </button>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {hasUnsavedChanges ? <span className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-amber-100">Unsaved changes</span> : null}
+          {saveStatus ? <span className="max-w-sm text-xs text-slate-300">{saveStatus}</span> : null}
+          <button onClick={onSave} className="rounded-md border border-slate-600 px-4 py-3 text-sm font-bold text-slate-100 hover:border-cyan-400 hover:text-cyan-100">Save review decisions</button>
+          <button onClick={onPreview} disabled={previewLoading} className="rounded-md bg-cyan-500 px-4 py-3 text-sm font-bold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50">
+            {previewLoading ? "Building preview..." : "Generate apply preview"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -309,6 +416,8 @@ function CandidateDetail({
   overrideReasons,
   setOverrideReasons,
   setFieldApproval,
+  setHasUnsavedChanges,
+  setSaveStatus,
   preview,
 }: {
   candidate: WorkspaceCandidate;
@@ -318,6 +427,8 @@ function CandidateDetail({
   overrideReasons: Record<string, string>;
   setOverrideReasons: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   setFieldApproval: (candidateId: string, field: WorkspaceField, action: FieldApprovalAction) => void;
+  setHasUnsavedChanges: (value: boolean) => void;
+  setSaveStatus: (value: string) => void;
   preview: ApplyPreview | null;
 }) {
   const fields = filterFieldsForView(candidate.fields, fieldView);
@@ -348,7 +459,11 @@ function CandidateDetail({
             field={field}
             approval={approvals[approvalKey(candidate.candidateId, field.field)]?.action || "pending"}
             overrideReason={overrideReasons[approvalKey(candidate.candidateId, field.field)] || ""}
-            setOverrideReason={(value) => setOverrideReasons((current) => ({ ...current, [approvalKey(candidate.candidateId, field.field)]: value }))}
+            setOverrideReason={(value) => {
+              setOverrideReasons((current) => ({ ...current, [approvalKey(candidate.candidateId, field.field)]: value }));
+              setHasUnsavedChanges(true);
+              setSaveStatus("");
+            }}
             setFieldApproval={setFieldApproval}
           />
         ))}
@@ -472,4 +587,7 @@ function ApplyPreviewPanel({ preview }: { preview: ApplyPreview | null }) {
     </section>
   );
 }
+
+
+
 
