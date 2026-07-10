@@ -72,7 +72,7 @@ function employerFromRecord(record: AnyRecord): TalentSearchEmployerDisplay | nu
   const end = monthYear(record.end_date || record.endDate || record.to || record.to_date || (record.is_current || record.current ? "Present" : ""));
   const duration = start ? durationLabel(record.start_date || record.startDate || record.from || record.from_date, record.end_date || record.endDate || record.to || record.to_date || (record.is_current || record.current ? "Present" : "")) : "";
   const range = start && end ? `${start} - ${end}` : "";
-  return { company, start, end, duration, label: range ? `${company} — ${range}${duration ? ` (${duration})` : ""}` : company };
+  return { company, start, end, duration, label: range ? `${company} â€” ${range}${duration ? ` (${duration})` : ""}` : company };
 }
 
 function experienceRecords(candidate: AnyRecord) {

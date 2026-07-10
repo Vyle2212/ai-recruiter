@@ -5,6 +5,20 @@ import { useEffect, useMemo, useState } from "react";
 import { buildLocalApprovalSummary, filterFieldsForView, getApprovalDisabledReason, type FieldViewMode } from "@/lib/aiExtractionReviewClient";
 import type { ApprovalState, ApplyPreview, FieldApprovalAction, ReviewFilter, ReviewWorkspace, WorkspaceCandidate, WorkspaceField } from "@/lib/aiExtractionReviewUi";
 
+type StagingPreview = {
+  mode: string;
+  validStagingItems: number;
+  warnings: number;
+  rejectedStagingItems: number;
+  blockedCandidates: number;
+  stagedSafeCount: number;
+  manualReviewCount: number;
+  items: Array<{ stagingId: string; candidateId: string; candidateName: string; fieldName: string; currentValue: string; approvedValue: string; applyReadiness: string; validationStatus: string; validationReasons: string[]; appliedToCandidate: false }>;
+  rejectedItems: Array<{ sourceApprovalId: string; candidateId: string; fieldName: string; approvedValue: string; validationReasons: string[] }>;
+  beforeAfterPreview: Array<{ candidateId: string; fieldName: string; beforeValue: string; afterValue: string; validationStatus: string; validationReasons: string[] }>;
+  existingStagedIds?: string[];
+};
+
 type SavedApproval = {
   approvalId?: string;
   candidateId: string;
@@ -146,6 +160,9 @@ export default function AiExtractionReviewPage() {
   const [saveStatus, setSaveStatus] = useState("");
   const [overrideReasons, setOverrideReasons] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<ApplyPreview | null>(null);
+  const [stagingPreview, setStagingPreview] = useState<StagingPreview | null>(null);
+  const [stagingStatus, setStagingStatus] = useState("");
+  const [stagingLoading, setStagingLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -246,6 +263,47 @@ export default function AiExtractionReviewPage() {
     }
   }
 
+  async function previewStaging() {
+    setStagingLoading(true);
+    setStagingStatus("");
+    try {
+      const stagingApprovals = workspace ? buildSavedApprovals(workspace, approvals) : savedApprovals;
+      const res = await fetch("/api/recruiter/ai-extraction-review/staging-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approvals: stagingApprovals, dryRun: true, noApply: true }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Unable to build staging preview");
+      setStagingPreview(json);
+      setStagingStatus("Staging preview ready. No Talent Search data was changed.");
+    } catch (err) {
+      setStagingStatus(err instanceof Error ? err.message : "Unable to build staging preview");
+    } finally {
+      setStagingLoading(false);
+    }
+  }
+
+  async function stageApprovedChanges() {
+    setStagingLoading(true);
+    setStagingStatus("");
+    try {
+      const stagingApprovals = workspace ? buildSavedApprovals(workspace, approvals) : savedApprovals;
+      const res = await fetch("/api/recruiter/ai-extraction-review/stage-approved", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approvals: stagingApprovals, dryRun: true, noApply: true }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Unable to stage approved changes");
+      setStagingPreview(json);
+      setStagingStatus("Dry-run staging complete. This only saves to staging when explicitly run with writeStaging; Talent Search was not updated.");
+    } catch (err) {
+      setStagingStatus(err instanceof Error ? err.message : "Unable to stage approved changes");
+    } finally {
+      setStagingLoading(false);
+    }
+  }
   function setFieldApproval(candidateId: string, field: WorkspaceField, action: FieldApprovalAction) {
     const key = approvalKey(candidateId, field.field);
     const reason = overrideReasons[key] || "";
@@ -300,7 +358,7 @@ export default function AiExtractionReviewPage() {
               ))}
             </div>
 
-            <StickyApprovalSummary summary={localSummary} previewLoading={previewLoading} onPreview={buildPreview} onSave={saveReviewDecisions} hasUnsavedChanges={hasUnsavedChanges} saveStatus={saveStatus} />
+            <StickyApprovalSummary summary={localSummary} previewLoading={previewLoading} stagingLoading={stagingLoading} onPreview={buildPreview} onSave={saveReviewDecisions} onPreviewStaging={previewStaging} onStageApproved={stageApprovedChanges} hasUnsavedChanges={hasUnsavedChanges} saveStatus={saveStatus} stagingStatus={stagingStatus} />
 
             <div className="mt-5 flex flex-wrap items-center gap-2 border border-slate-800 bg-[#0B0F16] p-4">
               {FILTERS.map((item) => (
@@ -327,6 +385,7 @@ export default function AiExtractionReviewPage() {
                   setHasUnsavedChanges={setHasUnsavedChanges}
                   setSaveStatus={setSaveStatus}
                   preview={preview}
+                  stagingPreview={stagingPreview}
                 />
               ) : (
                 <div className="border border-slate-800 bg-[#0B0F16] p-6 text-slate-400">No candidates in this view.</div>
@@ -350,7 +409,7 @@ export default function AiExtractionReviewPage() {
   );
 }
 
-function StickyApprovalSummary({ summary, previewLoading, onPreview, onSave, hasUnsavedChanges, saveStatus }: { summary: { approvedFields: number; rejectedFields: number; manualReviewFields: number; readyForApplyPreview: number }; previewLoading: boolean; onPreview: () => void; onSave: () => void; hasUnsavedChanges: boolean; saveStatus: string }) {
+function StickyApprovalSummary({ summary, previewLoading, stagingLoading, onPreview, onSave, onPreviewStaging, onStageApproved, hasUnsavedChanges, saveStatus, stagingStatus }: { summary: { approvedFields: number; rejectedFields: number; manualReviewFields: number; readyForApplyPreview: number }; previewLoading: boolean; stagingLoading: boolean; onPreview: () => void; onSave: () => void; onPreviewStaging: () => void; onStageApproved: () => void; hasUnsavedChanges: boolean; saveStatus: string; stagingStatus: string }) {
   const items = [
     ["Approved fields", summary.approvedFields],
     ["Rejected fields", summary.rejectedFields],
@@ -369,10 +428,13 @@ function StickyApprovalSummary({ summary, previewLoading, onPreview, onSave, has
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {hasUnsavedChanges ? <span className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-amber-100">Unsaved changes</span> : null}
           {saveStatus ? <span className="max-w-sm text-xs text-slate-300">{saveStatus}</span> : null}
+          {stagingStatus ? <span className="max-w-sm text-xs text-amber-100">{stagingStatus}</span> : null}
           <button onClick={onSave} className="rounded-md border border-slate-600 px-4 py-3 text-sm font-bold text-slate-100 hover:border-cyan-400 hover:text-cyan-100">Save review decisions</button>
           <button onClick={onPreview} disabled={previewLoading} className="rounded-md bg-cyan-500 px-4 py-3 text-sm font-bold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50">
             {previewLoading ? "Building preview..." : "Generate apply preview"}
           </button>
+          <button onClick={onPreviewStaging} disabled={stagingLoading} className="rounded-md border border-emerald-500/40 px-4 py-3 text-sm font-bold text-emerald-100 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50">Preview staging</button>
+          <button onClick={onStageApproved} disabled={stagingLoading} title="This only saves to staging. It will not update Talent Search." className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm font-bold text-amber-100 hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-50">Stage approved changes</button>
         </div>
       </div>
     </div>
@@ -419,6 +481,7 @@ function CandidateDetail({
   setHasUnsavedChanges,
   setSaveStatus,
   preview,
+  stagingPreview,
 }: {
   candidate: WorkspaceCandidate;
   approvals: ApprovalState;
@@ -430,6 +493,7 @@ function CandidateDetail({
   setHasUnsavedChanges: (value: boolean) => void;
   setSaveStatus: (value: string) => void;
   preview: ApplyPreview | null;
+  stagingPreview: StagingPreview | null;
 }) {
   const fields = filterFieldsForView(candidate.fields, fieldView);
   return (
@@ -468,6 +532,7 @@ function CandidateDetail({
           />
         ))}
         {!fields.length ? <div className="border border-slate-800 bg-[#070A0F] p-5 text-sm text-slate-400">No fields match this view.</div> : null}
+        <StagingPreviewPanel preview={stagingPreview} />
         <ApplyPreviewPanel preview={preview} />
         <details className="border border-slate-800 bg-[#070A0F] p-4 text-sm text-slate-400">
           <summary className="cursor-pointer font-semibold text-slate-200">Debug details</summary>
@@ -549,6 +614,47 @@ function DecisionControls({ candidate, field, approval, approveDisabled, disable
   );
 }
 
+function StagingPreviewPanel({ preview }: { preview: StagingPreview | null }) {
+  if (!preview) return <div className="border border-slate-800 bg-[#070A0F] p-5 text-sm text-slate-400">No staging preview yet. This only saves to staging. It will not update Talent Search.</div>;
+  const cards = [
+    ["Ready to stage", preview.stagedSafeCount],
+    ["Manual review", preview.manualReviewCount],
+    ["Rejected", preview.rejectedStagingItems],
+    ["Blocked candidates", preview.blockedCandidates],
+  ];
+  return (
+    <section className="border border-slate-800 bg-[#070A0F]">
+      <div className="border-b border-slate-800 px-4 py-3">
+        <h2 className="text-lg font-semibold text-white">Staging preview</h2>
+        <p className="mt-1 text-sm text-amber-100">This only saves to staging. It will not update Talent Search.</p>
+      </div>
+      <div className="grid gap-3 p-4 md:grid-cols-4">
+        {cards.map(([label, value]) => (
+          <div key={String(label)} className="border border-slate-800 bg-[#05070A] p-3">
+            <div className="text-xs font-semibold uppercase text-slate-500">{label}</div>
+            <div className="mt-2 text-2xl font-semibold text-white">{value}</div>
+          </div>
+        ))}
+      </div>
+      <div className="space-y-2 p-4 pt-0">
+        {preview.items.slice(0, 20).map((item) => (
+          <div key={item.stagingId} className="grid gap-2 border border-slate-800 bg-[#05070A] p-3 text-sm text-slate-300 md:grid-cols-[1fr_1fr_1fr_1fr]">
+            <div><span className="text-slate-500">Candidate:</span> {item.candidateName || item.candidateId}</div>
+            <div><span className="text-slate-500">Field:</span> {item.fieldName}</div>
+            <div><span className="text-slate-500">After:</span> <span className="font-semibold text-emerald-100">{empty(item.approvedValue)}</span></div>
+            <div><span className="text-slate-500">Status:</span> {(preview.existingStagedIds || []).includes(item.stagingId) ? "staged" : item.applyReadiness === "blocked" ? "blocked" : "not staged"}</div>
+          </div>
+        ))}
+        {preview.rejectedItems.slice(0, 10).map((item) => (
+          <div key={`${item.sourceApprovalId}-rejected`} className="border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-100">
+            {item.candidateId} / {item.fieldName}: {item.validationReasons.join("; ")}
+          </div>
+        ))}
+        {!preview.items.length && !preview.rejectedItems.length ? <div className="border border-slate-800 p-4 text-sm text-slate-400">No approvals are ready for staging.</div> : null}
+      </div>
+    </section>
+  );
+}
 function ApplyPreviewPanel({ preview }: { preview: ApplyPreview | null }) {
   if (!preview) return <div className="border border-slate-800 bg-[#070A0F] p-5 text-sm text-slate-400">No dry-run preview yet.</div>;
   return (
@@ -587,6 +693,9 @@ function ApplyPreviewPanel({ preview }: { preview: ApplyPreview | null }) {
     </section>
   );
 }
+
+
+
 
 
 

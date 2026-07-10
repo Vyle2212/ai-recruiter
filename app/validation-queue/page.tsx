@@ -193,7 +193,7 @@ export default function ValidationQueuePage() {
                   <div className="min-w-0">
                     <div className="truncate font-semibold text-white">{candidate.displayName}</div>
                     <div className="mt-1 truncate text-slate-400">{candidate.title}</div>
-                    <div className="mt-1 truncate text-slate-500">{candidate.company} · {candidate.location}</div>
+                    <div className="mt-1 truncate text-slate-500">{candidate.company} Â· {candidate.location}</div>
                   </div>
                   <div className="min-w-0">
                     <div className="flex flex-wrap gap-2">
