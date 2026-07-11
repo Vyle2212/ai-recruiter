@@ -44,6 +44,21 @@ type ApplyHistory = {
   items: Array<{ historyId: string; candidateId: string; candidateName: string; fieldName: string; dbFieldName: string; beforeValue: unknown; stagingCurrentValue: unknown; approvedValue: unknown; currentDbValue: unknown; finalDbValue: unknown; status: ApplyHistoryStatus; source: string; riskLevel: string; backupAvailable: boolean; rollbackAvailable: boolean; backupStatus: string; rollbackStatus: string; backupOldValue: unknown; rollbackValue: unknown; validationMessages: string[]; evidence: string; filePaths: string[]; safetyNote: string; lastChecked: string }>;
 };
 
+type BatchPlan = {
+  generatedAt: string;
+  providerMode: string;
+  targetFields: string[];
+  selectedCandidates: Array<{ candidateId: string; candidateName: string; missingFields: string[]; selectedTargetFields: string[]; currentStatus: string; aiStatus: string; reviewStatus: string; stagingStatus: string; applyPreviewStatus: string; lastUpdated: string; safetyNote: string }>;
+  excludedCandidates: Array<{ candidateId: string; candidateName: string; exclusionReasons: string[] }>;
+  summary: { totalCandidateRecords: number; candidatesNeedingAiReview: number; candidatesEligibleForBatch: number; excludedCandidates: number; selectedBatchSize: number; fieldsTargeted: string[]; estimatedAiCalls: number; providerMode: string; safetyStatus: string; warnings: string[]; errors: string[] };
+  guardrails: { warnings: string[]; errors: string[]; safetyStatus: string };
+};
+
+type BatchProgress = {
+  generatedAt: string;
+  summary: { plannedCandidates: number; aiCompleted: number; aiFailed: number; reviewPending: number; approved: number; staged: number; appliedVerified: number; blocked: number; conflicts: number };
+  items: Array<{ candidateName: string; candidateId: string; missingFields: string[]; selectedTargetFields: string[]; currentStatus: string; aiStatus: string; reviewStatus: string; stagingStatus: string; applyPreviewStatus: string; lastUpdated: string; safetyNote: string }>;
+};
 type SavedApproval = {
   approvalId?: string;
   candidateId: string;
@@ -196,6 +211,13 @@ export default function AiExtractionReviewPage() {
   const [applyHistoryError, setApplyHistoryError] = useState("");
   const [applyHistoryFilter, setApplyHistoryFilter] = useState<"all" | "applied_verified" | "preserved_already_applied" | "eligible_for_apply" | "blocked" | "conflict" | "post_apply_mismatch" | "missing_backup_rollback">("all");
   const [applyHistoryQuery, setApplyHistoryQuery] = useState("");
+  const [batchPlan, setBatchPlan] = useState<BatchPlan | null>(null);
+  const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [batchStatus, setBatchStatus] = useState("");
+  const [batchSize, setBatchSize] = useState(10);
+  const [batchTargetFields, setBatchTargetFields] = useState<string[]>(["currentCompany", "title", "primarySapModule"]);
+  const [batchOptions, setBatchOptions] = useState({ validationQueueOnly: false, includeMustRepair: false, highConfidenceOnly: false, excludeAlreadyApplied: true, excludeDuplicateConflict: true, excludeReupload: true });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -357,6 +379,42 @@ export default function AiExtractionReviewPage() {
       setStagingLoading(false);
     }
   }
+  async function planBatch() {
+    setBatchLoading(true);
+    setBatchStatus("");
+    try {
+      const params = new URLSearchParams({ batchSize: String(batchSize), targetFields: batchTargetFields.join(","), provider: "mock" });
+      if (batchOptions.validationQueueOnly) params.set("validationQueueOnly", "true");
+      if (batchOptions.includeMustRepair) params.set("includeMustRepair", "true");
+      if (batchOptions.highConfidenceOnly) params.set("highConfidenceOnly", "true");
+      const res = await fetch(`/api/recruiter/ai-extraction-review/batch-plan?${params.toString()}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Unable to plan batch");
+      setBatchPlan(json);
+      setBatchStatus("Batch plan ready. No candidate records were changed.");
+    } catch (err) {
+      setBatchStatus(err instanceof Error ? err.message : "Unable to plan batch");
+    } finally {
+      setBatchLoading(false);
+    }
+  }
+
+  async function refreshBatchProgress() {
+    setBatchLoading(true);
+    setBatchStatus("");
+    try {
+      const res = await fetch("/api/recruiter/ai-extraction-review/batch-progress");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Unable to load batch progress");
+      setBatchProgress(json);
+      setBatchStatus("Batch progress refreshed. Read-only view only.");
+    } catch (err) {
+      setBatchStatus(err instanceof Error ? err.message : "Unable to load batch progress");
+    } finally {
+      setBatchLoading(false);
+    }
+  }
+
   async function previewCandidateApply() {
     setCandidateApplyLoading(true);
     setCandidateApplyStatus("");
@@ -466,6 +524,8 @@ export default function AiExtractionReviewPage() {
               )}
             </div>
 
+            <BatchExpansionControl plan={batchPlan} progress={batchProgress} loading={batchLoading} status={batchStatus} batchSize={batchSize} setBatchSize={setBatchSize} targetFields={batchTargetFields} setTargetFields={setBatchTargetFields} options={batchOptions} setOptions={setBatchOptions} onPlan={planBatch} onRefreshProgress={refreshBatchProgress} />
+
             <ApplyHistoryPanel history={applyHistory} loading={applyHistoryLoading} error={applyHistoryError} filter={applyHistoryFilter} setFilter={setApplyHistoryFilter} query={applyHistoryQuery} setQuery={setApplyHistoryQuery} />
 
             <details className="mt-5 border border-slate-800 bg-[#0B0F16] p-4 text-sm text-slate-400">
@@ -514,6 +574,117 @@ function historyTone(status: ApplyHistoryStatus) {
   return TONE.keep;
 }
 
+function BatchExpansionControl({ plan, progress, loading, status, batchSize, setBatchSize, targetFields, setTargetFields, options, setOptions, onPlan, onRefreshProgress }: { plan: BatchPlan | null; progress: BatchProgress | null; loading: boolean; status: string; batchSize: number; setBatchSize: (size: number) => void; targetFields: string[]; setTargetFields: (fields: string[]) => void; options: { validationQueueOnly: boolean; includeMustRepair: boolean; highConfidenceOnly: boolean; excludeAlreadyApplied: boolean; excludeDuplicateConflict: boolean; excludeReupload: boolean }; setOptions: React.Dispatch<React.SetStateAction<{ validationQueueOnly: boolean; includeMustRepair: boolean; highConfidenceOnly: boolean; excludeAlreadyApplied: boolean; excludeDuplicateConflict: boolean; excludeReupload: boolean }>>; onPlan: () => void; onRefreshProgress: () => void }) {
+  const fieldOptions = [
+    ["currentCompany", "Missing employer/company"],
+    ["title", "Missing title"],
+    ["primarySapModule", "Missing module"],
+    ["sapSkills", "Missing skills"],
+    ["location", "Missing location"],
+  ] as const;
+  const progressItems = progress?.items?.length ? progress.items : plan?.selectedCandidates || [];
+  const summaryCards = plan ? [
+    ["Total candidate records", plan.summary.totalCandidateRecords],
+    ["Candidates needing AI review", plan.summary.candidatesNeedingAiReview],
+    ["Eligible for batch", plan.summary.candidatesEligibleForBatch],
+    ["Excluded candidates", plan.summary.excludedCandidates],
+    ["Selected batch size", plan.summary.selectedBatchSize],
+    ["Estimated AI calls", plan.summary.estimatedAiCalls],
+    ["Provider mode", plan.summary.providerMode],
+    ["Safety status", plan.summary.safetyStatus],
+  ] : [];
+  function toggleField(field: string) {
+    setTargetFields(targetFields.includes(field) ? targetFields.filter((item) => item !== field) : [...targetFields, field]);
+  }
+  return (
+    <section className="mt-5 border border-emerald-500/20 bg-[#0B0F16]">
+      <div className="border-b border-slate-800 px-4 py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold text-white">Batch Expansion Control</h2>
+            <p className="mt-1 text-sm text-emerald-100">BATCH MODE IS REVIEW-FIRST. This section does not update candidate records.</p>
+          </div>
+          <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-emerald-100">No external AI calls by default</span>
+        </div>
+      </div>
+      <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {summaryCards.length ? summaryCards.map(([label, value]) => (
+              <div key={String(label)} className="border border-slate-800 bg-[#05070A] p-3">
+                <div className="text-xs font-semibold uppercase text-slate-500">{label}</div>
+                <div className="mt-2 text-2xl font-semibold text-white">{String(value)}</div>
+              </div>
+            )) : <div className="border border-slate-800 bg-[#05070A] p-4 text-sm text-slate-400 lg:col-span-4">No batch plan loaded yet. Use Plan batch to preview the next safe batch.</div>}
+          </div>
+          {plan?.guardrails.warnings.length ? <div className="border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">{plan.guardrails.warnings.join("; ")}</div> : null}
+          {plan?.guardrails.errors.length ? <div className="border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-100">{plan.guardrails.errors.join("; ")}</div> : null}
+          <div className="overflow-auto">
+            <table className="min-w-[1100px] w-full border-collapse text-left text-sm">
+              <thead className="text-xs uppercase text-slate-500">
+                <tr className="border-b border-slate-800">
+                  {['Candidate','Candidate ID','Missing fields','Selected target fields','Current status','AI status','Review status','Staging status','Apply preview status','Last updated','Safety note'].map((head) => <th key={head} className="px-3 py-2 font-semibold">{head}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {progressItems.map((item) => (
+                  <tr key={item.candidateId} className="align-top hover:bg-slate-900/40">
+                    <td className="px-3 py-3 text-slate-100">{item.candidateName}</td>
+                    <td className="px-3 py-3 text-xs text-slate-400">{item.candidateId}</td>
+                    <td className="px-3 py-3 text-slate-300">{item.missingFields.join(", ") || "None"}</td>
+                    <td className="px-3 py-3 text-cyan-100">{item.selectedTargetFields.join(", ") || "None"}</td>
+                    <td className="px-3 py-3 text-slate-300">{item.currentStatus}</td>
+                    <td className="px-3 py-3 text-slate-300">{item.aiStatus}</td>
+                    <td className="px-3 py-3 text-slate-300">{item.reviewStatus}</td>
+                    <td className="px-3 py-3 text-slate-300">{item.stagingStatus}</td>
+                    <td className="px-3 py-3 text-slate-300">{item.applyPreviewStatus}</td>
+                    <td className="px-3 py-3 text-xs text-slate-500">{item.lastUpdated}</td>
+                    <td className="px-3 py-3 text-slate-400">{item.safetyNote}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!progressItems.length ? <div className="border border-slate-800 p-4 text-sm text-slate-400">No batch candidates selected yet.</div> : null}
+          </div>
+        </div>
+        <div className="space-y-4 border border-slate-800 bg-[#05070A] p-4">
+          <div>
+            <div className="text-xs font-semibold uppercase text-slate-500">Batch size</div>
+            <div className="mt-2 grid grid-cols-4 gap-2">
+              {[5, 10, 20, 50].map((size) => <button key={size} onClick={() => setBatchSize(size)} className={`rounded-md border px-3 py-2 text-sm font-semibold ${batchSize === size ? "border-emerald-400 bg-emerald-500/15 text-emerald-100" : "border-slate-700 text-slate-300"}`}>{size}</button>)}
+            </div>
+            {batchSize === 50 ? <div className="mt-2 text-xs text-amber-100">Batch size 50 should be reviewed carefully.</div> : null}
+          </div>
+          <div>
+            <div className="text-xs font-semibold uppercase text-slate-500">Batch filters</div>
+            <div className="mt-2 space-y-2">
+              {fieldOptions.map(([field, label]) => <label key={field} className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={targetFields.includes(field)} onChange={() => toggleField(field)} /> {label}</label>)}
+              <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={options.validationQueueOnly} onChange={(event) => setOptions((current) => ({ ...current, validationQueueOnly: event.target.checked }))} /> Validation queue only</label>
+              <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={options.includeMustRepair} onChange={(event) => setOptions((current) => ({ ...current, includeMustRepair: event.target.checked }))} /> Must repair before search</label>
+              <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={options.highConfidenceOnly} onChange={(event) => setOptions((current) => ({ ...current, highConfidenceOnly: event.target.checked }))} /> High confidence only</label>
+              <label className="flex items-center gap-2 text-sm text-slate-500"><input type="checkbox" checked={options.excludeAlreadyApplied} readOnly /> Exclude already applied / verified</label>
+              <label className="flex items-center gap-2 text-sm text-slate-500"><input type="checkbox" checked={options.excludeDuplicateConflict} readOnly /> Exclude duplicate conflict</label>
+              <label className="flex items-center gap-2 text-sm text-slate-500"><input type="checkbox" checked={options.excludeReupload} readOnly /> Exclude requires original file reupload</label>
+            </div>
+          </div>
+          <div className="border border-slate-800 p-3 text-sm text-slate-300">
+            <div className="font-semibold text-white">Provider mode</div>
+            <div className="mt-1">cached/mock/default</div>
+            <div className="mt-1 text-xs text-cyan-100">External provider only if explicitly requested in CLI with confirm flag and max call limit.</div>
+          </div>
+          <div className="grid gap-2">
+            <button onClick={onPlan} disabled={loading} className="rounded-md bg-emerald-500 px-4 py-3 text-sm font-bold text-slate-950 hover:bg-emerald-400 disabled:opacity-50">Plan batch</button>
+            <button disabled className="rounded-md border border-slate-800 px-4 py-3 text-sm font-bold text-slate-500">Run dry-run batch from CLI</button>
+            <button disabled className="rounded-md border border-slate-800 px-4 py-3 text-sm font-bold text-slate-500">Load cached AI results</button>
+            <button disabled className="rounded-md border border-slate-800 px-4 py-3 text-sm font-bold text-slate-500">Generate review file</button>
+            <button onClick={onRefreshProgress} disabled={loading} className="rounded-md border border-cyan-500/40 px-4 py-3 text-sm font-bold text-cyan-100 hover:border-cyan-300 disabled:opacity-50">Refresh progress</button>
+          </div>
+          {status ? <div className="text-sm text-emerald-100">{status}</div> : null}
+        </div>
+      </div>
+    </section>
+  );
+}
 function ApplyHistoryPanel({ history, loading, error, filter, setFilter, query, setQuery }: { history: ApplyHistory | null; loading: boolean; error: string; filter: "all" | "applied_verified" | "preserved_already_applied" | "eligible_for_apply" | "blocked" | "conflict" | "post_apply_mismatch" | "missing_backup_rollback"; setFilter: (filter: "all" | "applied_verified" | "preserved_already_applied" | "eligible_for_apply" | "blocked" | "conflict" | "post_apply_mismatch" | "missing_backup_rollback") => void; query: string; setQuery: (query: string) => void }) {
   const filters = [
     ["all", "All"],
