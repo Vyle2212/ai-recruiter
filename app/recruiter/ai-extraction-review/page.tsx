@@ -35,6 +35,15 @@ type CandidateApplyPreview = {
   conflicts: Array<{ stagingId: string; candidateId: string; candidateName: string; fieldName: string; currentDbValue: unknown; approvedValue: string; reasons: string[] }>;
 };
 
+type ApplyHistoryStatus = "staged_pending_apply" | "eligible_for_apply" | "applied_verified" | "preserved_already_applied" | "blocked" | "conflict" | "rollback_available" | "rollback_missing" | "post_apply_mismatch" | "missing_candidate" | "missing_report_file";
+
+type ApplyHistory = {
+  generatedAt: string;
+  summary: { stagedFields: number; eligibleFields: number; alreadyAppliedPreservedFields: number; appliedFields: number; blockedFields: number; conflicts: number; backupAvailable: boolean; rollbackAvailable: boolean; postApplyVerified: number; postApplyMismatch: number; missingBackupOrRollback: number };
+  files: { stagingFound: boolean; backupFound: boolean; rollbackFound: boolean; postAuditFound: boolean; messages: string[] };
+  items: Array<{ historyId: string; candidateId: string; candidateName: string; fieldName: string; dbFieldName: string; beforeValue: unknown; stagingCurrentValue: unknown; approvedValue: unknown; currentDbValue: unknown; finalDbValue: unknown; status: ApplyHistoryStatus; source: string; riskLevel: string; backupAvailable: boolean; rollbackAvailable: boolean; backupStatus: string; rollbackStatus: string; backupOldValue: unknown; rollbackValue: unknown; validationMessages: string[]; evidence: string; filePaths: string[]; safetyNote: string; lastChecked: string }>;
+};
+
 type SavedApproval = {
   approvalId?: string;
   candidateId: string;
@@ -182,6 +191,11 @@ export default function AiExtractionReviewPage() {
   const [candidateApplyPreview, setCandidateApplyPreview] = useState<CandidateApplyPreview | null>(null);
   const [candidateApplyStatus, setCandidateApplyStatus] = useState("");
   const [candidateApplyLoading, setCandidateApplyLoading] = useState(false);
+  const [applyHistory, setApplyHistory] = useState<ApplyHistory | null>(null);
+  const [applyHistoryLoading, setApplyHistoryLoading] = useState(false);
+  const [applyHistoryError, setApplyHistoryError] = useState("");
+  const [applyHistoryFilter, setApplyHistoryFilter] = useState<"all" | "applied_verified" | "preserved_already_applied" | "eligible_for_apply" | "blocked" | "conflict" | "post_apply_mismatch" | "missing_backup_rollback">("all");
+  const [applyHistoryQuery, setApplyHistoryQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -203,6 +217,26 @@ export default function AiExtractionReviewPage() {
       }
     }
     loadApprovals();
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    async function loadApplyHistory() {
+      setApplyHistoryLoading(true);
+      setApplyHistoryError("");
+      try {
+        const res = await fetch("/api/recruiter/ai-extraction-review/apply-history", { signal: controller.signal });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Unable to load apply history");
+        setApplyHistory(json);
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") setApplyHistoryError(err instanceof Error ? err.message : "Unable to load apply history");
+      } finally {
+        if (!controller.signal.aborted) setApplyHistoryLoading(false);
+      }
+    }
+    loadApplyHistory();
     return () => controller.abort();
   }, []);
 
@@ -432,6 +466,8 @@ export default function AiExtractionReviewPage() {
               )}
             </div>
 
+            <ApplyHistoryPanel history={applyHistory} loading={applyHistoryLoading} error={applyHistoryError} filter={applyHistoryFilter} setFilter={setApplyHistoryFilter} query={applyHistoryQuery} setQuery={setApplyHistoryQuery} />
+
             <details className="mt-5 border border-slate-800 bg-[#0B0F16] p-4 text-sm text-slate-400">
               <summary className="cursor-pointer font-semibold text-slate-200">Debug details</summary>
               <div className="mt-3 grid gap-2 md:grid-cols-2">
@@ -449,6 +485,154 @@ export default function AiExtractionReviewPage() {
   );
 }
 
+function valueText(value: unknown) {
+  if (Array.isArray(value)) return value.join(", ");
+  return String(value ?? "Not available");
+}
+
+function historyStatusLabel(status: ApplyHistoryStatus) {
+  const labels: Record<ApplyHistoryStatus, string> = {
+    staged_pending_apply: "Staged pending apply",
+    eligible_for_apply: "Eligible pending",
+    applied_verified: "Applied verified",
+    preserved_already_applied: "Already applied / preserved",
+    blocked: "Blocked",
+    conflict: "Conflict",
+    rollback_available: "Rollback available",
+    rollback_missing: "Rollback missing",
+    post_apply_mismatch: "Mismatch",
+    missing_candidate: "Missing candidate",
+    missing_report_file: "Missing report file",
+  };
+  return labels[status] || status;
+}
+
+function historyTone(status: ApplyHistoryStatus) {
+  if (status === "applied_verified" || status === "preserved_already_applied") return TONE.safe;
+  if (status === "post_apply_mismatch" || status === "conflict") return TONE.rejected;
+  if (status === "blocked" || status === "missing_candidate" || status === "missing_report_file") return TONE.review;
+  return TONE.keep;
+}
+
+function ApplyHistoryPanel({ history, loading, error, filter, setFilter, query, setQuery }: { history: ApplyHistory | null; loading: boolean; error: string; filter: "all" | "applied_verified" | "preserved_already_applied" | "eligible_for_apply" | "blocked" | "conflict" | "post_apply_mismatch" | "missing_backup_rollback"; setFilter: (filter: "all" | "applied_verified" | "preserved_already_applied" | "eligible_for_apply" | "blocked" | "conflict" | "post_apply_mismatch" | "missing_backup_rollback") => void; query: string; setQuery: (query: string) => void }) {
+  const filters = [
+    ["all", "All"],
+    ["applied_verified", "Applied verified"],
+    ["preserved_already_applied", "Already applied / preserved"],
+    ["eligible_for_apply", "Eligible pending"],
+    ["blocked", "Blocked"],
+    ["conflict", "Conflicts"],
+    ["post_apply_mismatch", "Mismatch"],
+    ["missing_backup_rollback", "Missing backup / rollback"],
+  ] as const;
+  const text = query.trim().toLowerCase();
+  const items = (history?.items || []).filter((item) => {
+    const matchesFilter = filter === "all" || (filter === "missing_backup_rollback" ? !item.backupAvailable || !item.rollbackAvailable : item.status === filter || (filter === "conflict" && item.status === "post_apply_mismatch"));
+    const searchText = `${item.candidateName} ${item.candidateId} ${item.fieldName} ${item.dbFieldName} ${valueText(item.approvedValue)} ${valueText(item.currentDbValue)}`.toLowerCase();
+    return matchesFilter && (!text || searchText.includes(text));
+  });
+  const cards = history ? [
+    ["Staged fields", history.summary.stagedFields],
+    ["Eligible fields", history.summary.eligibleFields],
+    ["Already applied / preserved", history.summary.alreadyAppliedPreservedFields],
+    ["Applied fields", history.summary.appliedFields],
+    ["Blocked fields", history.summary.blockedFields],
+    ["Conflicts", history.summary.conflicts],
+    ["Backup available", history.summary.backupAvailable ? "Yes" : "No"],
+    ["Rollback available", history.summary.rollbackAvailable ? "Yes" : "No"],
+    ["Post-apply verified", history.summary.postApplyVerified],
+    ["Post-apply mismatch", history.summary.postApplyMismatch],
+  ] : [];
+  return (
+    <section className="mt-5 border border-cyan-500/20 bg-[#0B0F16]">
+      <div className="border-b border-slate-800 px-4 py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold text-white">Post-Apply Audit & History</h2>
+            <p className="mt-1 text-sm text-cyan-100">READ-ONLY AUDIT VIEW. This dashboard does not update candidate records.</p>
+          </div>
+          <span className="rounded-md border border-slate-700 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Talent Search remains source of truth</span>
+        </div>
+      </div>
+      {loading ? <div className="p-5 text-sm text-slate-400">Loading apply history...</div> : null}
+      {error ? <div className="m-4 border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-100">{error}</div> : null}
+      {history ? (
+        <>
+          <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5">
+            {cards.map(([label, value]) => (
+              <div key={String(label)} className="border border-slate-800 bg-[#05070A] p-3">
+                <div className="text-xs font-semibold uppercase text-slate-500">{label}</div>
+                <div className="mt-2 text-2xl font-semibold text-white">{String(value)}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mx-4 mb-4 grid gap-2 text-sm text-amber-100">
+            {!history.files.stagingFound ? <div className="border border-amber-500/30 bg-amber-500/10 p-3">No staged changes found yet.</div> : null}
+            {!history.files.backupFound ? <div className="border border-amber-500/30 bg-amber-500/10 p-3">No backup file found. Real apply may not have been run yet.</div> : null}
+            {!history.files.rollbackFound ? <div className="border border-amber-500/30 bg-amber-500/10 p-3">No rollback file found. Rollback is not available.</div> : null}
+            {!history.files.postAuditFound ? <div className="border border-amber-500/30 bg-amber-500/10 p-3">No post-apply audit file found. Run apply or audit to generate it.</div> : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 border-y border-slate-800 p-4">
+            {filters.map(([key, label]) => (
+              <button key={key} onClick={() => setFilter(key)} className={`rounded-md border px-3 py-2 text-sm font-semibold ${filter === key ? "border-cyan-400 bg-cyan-500/15 text-cyan-100" : "border-slate-700 bg-[#070A0F] text-slate-300 hover:border-slate-500"}`}>{label}</button>
+            ))}
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search candidate, field, company, approved value" className="min-w-72 flex-1 rounded-md border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400" />
+          </div>
+          <div className="overflow-auto p-4">
+            <table className="min-w-[1200px] w-full border-collapse text-left text-sm">
+              <thead className="text-xs uppercase text-slate-500">
+                <tr className="border-b border-slate-800">
+                  {['Candidate','Candidate ID','Field','DB field','Before value','Approved value','Current DB value','Status','Source','Risk level','Backup','Rollback','Last checked'].map((head) => <th key={head} className="px-3 py-2 font-semibold">{head}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {items.map((item) => (
+                  <tr key={item.historyId} className="align-top hover:bg-slate-900/40">
+                    <td className="px-3 py-3 text-slate-100">{item.candidateName}</td>
+                    <td className="px-3 py-3 text-xs text-slate-400">{item.candidateId}</td>
+                    <td className="px-3 py-3 text-slate-200">{item.fieldName}</td>
+                    <td className="px-3 py-3 text-slate-300">{item.dbFieldName || "Not mapped"}</td>
+                    <td className="px-3 py-3 text-slate-400">{valueText(item.beforeValue)}</td>
+                    <td className="px-3 py-3 font-semibold text-cyan-100">{valueText(item.approvedValue)}</td>
+                    <td className="px-3 py-3 text-slate-200">{valueText(item.currentDbValue)}</td>
+                    <td className="px-3 py-3"><span className={`rounded-md border px-2 py-1 text-xs font-semibold ${historyTone(item.status)}`}>{historyStatusLabel(item.status)}</span></td>
+                    <td className="px-3 py-3 text-slate-400">{item.source}</td>
+                    <td className="px-3 py-3 text-slate-300">{item.riskLevel}</td>
+                    <td className="px-3 py-3 text-slate-300">{item.backupStatus}</td>
+                    <td className="px-3 py-3 text-slate-300">{item.rollbackStatus}</td>
+                    <td className="px-3 py-3 text-xs text-slate-500">{item.lastChecked}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!items.length ? <div className="border border-slate-800 p-4 text-sm text-slate-400">No apply history rows match this view.</div> : null}
+          </div>
+          <div className="space-y-2 p-4 pt-0">
+            {items.slice(0, 20).map((item) => (
+              <details key={`${item.historyId}-details`} className="border border-slate-800 bg-[#05070A] p-3 text-sm text-slate-400">
+                <summary className="cursor-pointer font-semibold text-slate-200">Details: {item.candidateName} / {item.fieldName}</summary>
+                <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  <div>Candidate ID: <span className="text-slate-200">{item.candidateId}</span></div>
+                  <div>Field: <span className="text-slate-200">{item.fieldName}</span></div>
+                  <div>DB field: <span className="text-slate-200">{item.dbFieldName || "Not mapped"}</span></div>
+                  <div>Staging current: <span className="text-slate-200">{valueText(item.stagingCurrentValue)}</span></div>
+                  <div>Approved value: <span className="text-slate-200">{valueText(item.approvedValue)}</span></div>
+                  <div>Final DB value: <span className="text-slate-200">{valueText(item.finalDbValue)}</span></div>
+                  <div>Backup old value: <span className="text-slate-200">{valueText(item.backupOldValue)}</span></div>
+                  <div>Rollback value: <span className="text-slate-200">{valueText(item.rollbackValue)}</span></div>
+                  <div>Evidence: <span className="text-slate-200">{item.evidence || "Not available"}</span></div>
+                </div>
+                {item.validationMessages.length ? <div className="mt-3 text-amber-100">Reason: {item.validationMessages.join("; ")}</div> : null}
+                <div className="mt-3 text-xs text-slate-500">Files: {item.filePaths.join(", ") || "No file references"}</div>
+                <div className="mt-2 text-xs text-cyan-100">{item.safetyNote}</div>
+              </details>
+            ))}
+          </div>
+        </>
+      ) : null}
+    </section>
+  );
+}
 function StickyApprovalSummary({ summary, previewLoading, stagingLoading, candidateApplyLoading, onPreview, onSave, onPreviewStaging, onStageApproved, onPreviewCandidateApply, hasUnsavedChanges, saveStatus, stagingStatus, candidateApplyStatus }: { summary: { approvedFields: number; rejectedFields: number; manualReviewFields: number; readyForApplyPreview: number }; previewLoading: boolean; stagingLoading: boolean; candidateApplyLoading: boolean; onPreview: () => void; onSave: () => void; onPreviewStaging: () => void; onStageApproved: () => void; onPreviewCandidateApply: () => void; hasUnsavedChanges: boolean; saveStatus: string; stagingStatus: string; candidateApplyStatus: string }) {
   const items = [
     ["Approved fields", summary.approvedFields],
