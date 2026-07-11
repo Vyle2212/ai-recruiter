@@ -39,7 +39,10 @@ assert.equal(validateCandidateApplyItem(item({ fieldName: "displayName", approve
 assert.equal(validateCandidateApplyItem(item({ fieldName: "primarySapModule", currentValue: "FICO", approvedValue: "BASIS" }), { id: "c1", primary_module: "FICO", current_title: "SAP FICO Consultant" }).reasons.includes("module conflicts with title"), true, "module/title conflict blocked");
 assert.equal(validateCandidateApplyItem(item(), undefined).reasons.includes("current DB record is missing"), true, "missing current DB record blocked");
 assert.equal(validateCandidateApplyItem(item({ currentValue: "", approvedValue: "Accenture", aiConfidence: 70 }), { id: "c1", current_company: "Deloitte" }).reasons.includes("current DB value differs from staging current value"), true, "different current DB value blocked");
-assert.equal(validateCandidateApplyItem(item({ approvedValue: "Deloitte" }), { id: "c1", current_company: "Deloitte" }).reasons.includes("current DB value already matches approved value"), true, "existing data not downgraded/noop is preserved");
+const alreadyApplied = validateCandidateApplyItem(item({ approvedValue: "Deloitte" }), { id: "c1", current_company: "Deloitte" });
+assert.equal(alreadyApplied.eligible, false, "already-applied field is not eligible again");
+assert.equal(alreadyApplied.blocked, false, "already-applied field is preserved rather than blocked");
+assert.equal(alreadyApplied.reasons.some((reason) => reason.includes("preserved_already_applied")), true, "existing data not downgraded/noop is preserved");
 assert.equal(validateCandidateApplyItem(item(), { id: "c1", current_company: "", extraction_decision_action: "requires_original_file_reupload" }).reasons.includes("candidate requires original file reupload"), true, "reupload candidate blocked");
 
 console.log("AI extraction candidate apply validator tests passed");

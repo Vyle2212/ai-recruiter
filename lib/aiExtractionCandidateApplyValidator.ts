@@ -88,6 +88,15 @@ export function validateCandidateApplyItem(item: AiExtractionStagingRecord, cand
   const mapping = fieldMappingFor(item.fieldName);
   const reasons: string[] = [];
   const currentDbValue = currentCandidateValue(candidate || {}, mapping);
+  if (candidate && mapping && clean(item.approvedValue) && norm(currentDbValue) === norm(item.approvedValue)) {
+    return {
+      eligible: false,
+      blocked: false,
+      reasons: ["preserved_already_applied: current DB value already matches approved value; staging current value differs because DB has already been updated"],
+      candidateField: mapping.candidateField,
+      currentDbValue,
+    };
+  }
   if (!candidate) reasons.push("current DB record is missing");
   if (!mapping) reasons.push("field is not in allowed mapping");
   if (item.validationStatus !== "valid") reasons.push("staged item is not valid");
@@ -104,7 +113,6 @@ export function validateCandidateApplyItem(item: AiExtractionStagingRecord, cand
     const titleModule = moduleFromTitle(candidate?.current_title || candidate?.title);
     if (titleModule && titleModule !== clean(item.approvedValue).toUpperCase()) reasons.push("module conflicts with title");
   }
-  if (candidate && norm(currentDbValue) === norm(item.approvedValue)) reasons.push("current DB value already matches approved value");
   return {
     eligible: reasons.length === 0,
     blocked: reasons.length > 0,

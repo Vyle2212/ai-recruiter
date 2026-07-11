@@ -1,7 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { buildCandidateApplyBackup, writeCandidateApplyBackup } from "../lib/aiExtractionCandidateBackup";
-import { executeCandidateApplyPlan, writeCandidateApplyResult, writeCandidatePostAudit } from "../lib/aiExtractionCandidateApplyExecutor";
+import { buildCandidateApplyPostAudit, executeCandidateApplyPlan, writeCandidateApplyResult, writeCandidatePostAudit } from "../lib/aiExtractionCandidateApplyExecutor";
 import { buildCandidateRollbackPlan, writeCandidateRollbackPlan } from "../lib/aiExtractionCandidateRollback";
+import { loadRealTalentPoolCandidates } from "../lib/candidateAudit";
 import { buildPlanFromArgs, printCandidateApplyPlan } from "./auditCandidateApplyFromStaging";
 
 function hasFlag(name: string) {
@@ -15,12 +16,20 @@ function supabaseClient() {
   return createClient(supabaseUrl, supabaseKey);
 }
 
+export function candidateApplyModeFromFlags(writeCandidateUpdates: boolean, confirmApply: boolean) {
+  if (writeCandidateUpdates && confirmApply) return "confirmed_apply" as const;
+  if (writeCandidateUpdates && !confirmApply) throw new Error("Refusing candidate updates: --writeCandidateUpdates requires --confirmApply.");
+  if (confirmApply && !writeCandidateUpdates) throw new Error("Refusing candidate updates: --confirmApply requires --writeCandidateUpdates.");
+  return "dry_run" as const;
+}
+
 async function main() {
   const writeCandidateUpdates = hasFlag("writeCandidateUpdates");
   const confirmApply = hasFlag("confirmApply");
-  const realApply = writeCandidateUpdates && confirmApply;
+  const mode = candidateApplyModeFromFlags(writeCandidateUpdates, confirmApply);
+  const realApply = mode === "confirmed_apply";
   const plan = await buildPlanFromArgs();
-  printCandidateApplyPlan(plan);
+  printCandidateApplyPlan(plan, realApply ? "Mode: CONFIRMED REAL APPLY; candidate DB field updates enabled" : "Mode: dry-run only; no candidate DB writes");
   if (!realApply) {
     const result = await executeCandidateApplyPlan(plan);
     writeCandidateApplyResult(result);
@@ -42,14 +51,20 @@ async function main() {
     confirmApply,
     backup,
     rollback,
+    backupPath,
+    rollbackPath,
     updateCandidate: async (candidateId, update) => {
       const { error } = await supabase.from("candidates").update(update).eq("id", candidateId);
       if (error) throw new Error(`Failed to update candidate ${candidateId}: ${error.message}`);
     },
   });
-  writeCandidateApplyResult(result);
-  writeCandidatePostAudit(result);
+  const { candidates } = await loadRealTalentPoolCandidates();
+  const postAudit = buildCandidateApplyPostAudit(result, candidates);
+  const postAuditPath = writeCandidatePostAudit(postAudit);
+  writeCandidateApplyResult({ ...result, postAuditPath });
   console.log(`Applied field updates: ${result.appliedCount}`);
+  console.log(`Post-apply verified: ${postAudit.verifiedCount}`);
+  console.log(`Post-apply mismatch: ${postAudit.mismatchCount}`);
 }
 
 if (process.argv[1]?.replace(/\\/g, "/").endsWith("scripts/applyCandidateChangesFromStaging.ts")) {

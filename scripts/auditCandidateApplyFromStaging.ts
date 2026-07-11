@@ -13,8 +13,8 @@ export async function buildPlanFromArgs() {
   return buildCandidateApplyPlan(stagedItems, candidates);
 }
 
-export function printCandidateApplyPlan(plan: CandidateApplyPlan) {
-  console.log("Mode: dry-run only; no candidate DB writes");
+export function printCandidateApplyPlan(plan: CandidateApplyPlan, modeMessage = "Mode: dry-run only; no candidate DB writes") {
+  console.log(modeMessage);
   console.log(`Staged items loaded: ${plan.stagedItemsLoaded}`);
   console.log(`Candidates affected: ${plan.candidatesAffected}`);
   console.log(`Fields eligible for apply: ${plan.fieldsEligibleForApply}`);
@@ -24,6 +24,7 @@ export function printCandidateApplyPlan(plan: CandidateApplyPlan) {
   console.log(`Rollback ready: ${plan.rollbackReady}`);
   console.log(`Would update count: ${plan.wouldUpdateCount}`);
   console.log(`Would preserve count: ${plan.wouldPreserveCount}`);
+  console.log(`Fields already applied / preserved: ${plan.fieldsAlreadyAppliedPreserved}`);
   console.log("Top 30 apply candidates:");
   plan.eligibleItems.slice(0, 30).forEach((item) => console.log(`- ${item.candidateId} | ${item.fieldName} -> ${item.candidateField} | ${item.approvedValue}`));
   console.log("Top 30 blocked fields:");

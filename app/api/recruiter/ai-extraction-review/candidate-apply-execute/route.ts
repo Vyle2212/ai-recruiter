@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { loadRealTalentPoolCandidates } from "@/lib/candidateAudit";
 import { buildCandidateApplyBackup, writeCandidateApplyBackup } from "@/lib/aiExtractionCandidateBackup";
-import { executeCandidateApplyPlan, writeCandidateApplyResult, writeCandidatePostAudit } from "@/lib/aiExtractionCandidateApplyExecutor";
+import { buildCandidateApplyPostAudit, executeCandidateApplyPlan, writeCandidateApplyResult, writeCandidatePostAudit } from "@/lib/aiExtractionCandidateApplyExecutor";
 import { buildCandidateApplyPlan, loadStagingItems } from "@/lib/aiExtractionCandidateApplyPlan";
 import { buildCandidateRollbackPlan, writeCandidateRollbackPlan } from "@/lib/aiExtractionCandidateRollback";
 
@@ -43,14 +43,18 @@ export async function POST(req: NextRequest) {
       confirmApply,
       backup,
       rollback,
+      backupPath,
+      rollbackPath,
       updateCandidate: async (candidateId, update) => {
         const { error } = await supabase.from("candidates").update(update).eq("id", candidateId);
         if (error) throw new Error(`Failed to update candidate ${candidateId}: ${error.message}`);
       },
     });
-    const resultPath = writeCandidateApplyResult(result);
-    const postAuditPath = writeCandidatePostAudit(result);
-    return NextResponse.json({ ...result, backupPath, rollbackPath, resultPath, postAuditPath });
+    const { candidates: refreshedCandidates } = await loadRealTalentPoolCandidates();
+    const postAudit = buildCandidateApplyPostAudit(result, refreshedCandidates);
+    const postAuditPath = writeCandidatePostAudit(postAudit);
+    const resultPath = writeCandidateApplyResult({ ...result, postAuditPath });
+    return NextResponse.json({ ...result, backupPath, rollbackPath, resultPath, postAuditPath, postAudit });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to execute candidate apply preview" }, { status: 500 });
   }

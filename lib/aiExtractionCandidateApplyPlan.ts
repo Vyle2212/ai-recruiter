@@ -14,6 +14,8 @@ export type CandidateApplyPlanItem = {
   approvedValue: string;
   eligible: boolean;
   blocked: boolean;
+  preserved: boolean;
+  applyStatus: "eligible_for_apply" | "blocked" | "preserved_already_applied";
   conflict: boolean;
   reasons: string[];
   update: Record<string, any>;
@@ -26,6 +28,7 @@ export type CandidateApplyPlan = {
   fieldsEligibleForApply: number;
   fieldsBlocked: number;
   conflictsDetected: number;
+  fieldsAlreadyAppliedPreserved: number;
   backupRequired: boolean;
   rollbackReady: boolean;
   wouldUpdateCount: number;
@@ -33,6 +36,7 @@ export type CandidateApplyPlan = {
   items: CandidateApplyPlanItem[];
   eligibleItems: CandidateApplyPlanItem[];
   blockedItems: CandidateApplyPlanItem[];
+  preservedItems: CandidateApplyPlanItem[];
   conflicts: CandidateApplyPlanItem[];
 };
 
@@ -52,6 +56,8 @@ export function buildCandidateApplyPlan(stagingItems: AiExtractionStagingRecord[
   const items = stagingItems.map((item) => {
     const candidate = candidatesById.get(clean(item.candidateId));
     const validation = validateCandidateApplyItem(item, candidate);
+    const preserved = !validation.eligible && !validation.blocked && validation.reasons.some((reason) => /preserved_already_applied/i.test(reason));
+    const applyStatus: CandidateApplyPlanItem["applyStatus"] = validation.eligible ? "eligible_for_apply" : preserved ? "preserved_already_applied" : "blocked";
     return {
       stagingId: item.stagingId,
       candidateId: item.candidateId,
@@ -63,13 +69,16 @@ export function buildCandidateApplyPlan(stagingItems: AiExtractionStagingRecord[
       approvedValue: item.approvedValue,
       eligible: validation.eligible,
       blocked: validation.blocked,
-      conflict: validation.reasons.some((reason) => /conflict|differs|downgrade/i.test(reason)),
+      preserved,
+      applyStatus,
+      conflict: !preserved && validation.reasons.some((reason) => /conflict|differs|downgrade/i.test(reason)),
       reasons: validation.reasons,
       update: validation.eligible ? { [validation.candidateField]: item.approvedValue } : {},
     };
   });
   const eligibleItems = items.filter((item) => item.eligible);
   const blockedItems = items.filter((item) => item.blocked);
+  const preservedItems = items.filter((item) => item.preserved);
   const conflicts = items.filter((item) => item.conflict);
   return {
     mode: "dry-run only; no candidate DB writes",
@@ -78,13 +87,15 @@ export function buildCandidateApplyPlan(stagingItems: AiExtractionStagingRecord[
     fieldsEligibleForApply: eligibleItems.length,
     fieldsBlocked: blockedItems.length,
     conflictsDetected: conflicts.length,
+    fieldsAlreadyAppliedPreserved: preservedItems.length,
     backupRequired: eligibleItems.length > 0,
     rollbackReady: eligibleItems.length > 0,
     wouldUpdateCount: eligibleItems.length,
-    wouldPreserveCount: blockedItems.length,
+    wouldPreserveCount: preservedItems.length,
     items,
     eligibleItems,
     blockedItems,
+    preservedItems,
     conflicts,
   };
 }
