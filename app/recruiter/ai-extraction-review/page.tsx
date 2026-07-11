@@ -59,6 +59,17 @@ type BatchProgress = {
   summary: { plannedCandidates: number; aiCompleted: number; aiFailed: number; reviewPending: number; approved: number; staged: number; appliedVerified: number; blocked: number; conflicts: number };
   items: Array<{ candidateName: string; candidateId: string; missingFields: string[]; selectedTargetFields: string[]; currentStatus: string; aiStatus: string; reviewStatus: string; stagingStatus: string; applyPreviewStatus: string; lastUpdated: string; safetyNote: string }>;
 };
+
+type BatchPromotion = {
+  generatedAt: string;
+  mode: string;
+  outputPath?: string;
+  summary: { batchReviewItems: number; newReviewItems: number; existingReviewItemsPreserved: number; duplicateReviewItemsSkipped: number; invalidReviewItemsBlocked: number; readyForRecruiterReview: number; existingApprovalsPreserved: number };
+  promotedItems: Array<{ promotionId: string; candidateId: string; candidateName: string; fieldName: string; validationStatus: string; validationReasons: string[] }>;
+  duplicateItems: Array<{ promotionId: string; candidateId: string; candidateName: string; fieldName: string; validationStatus: string; validationReasons: string[] }>;
+  blockedItems: Array<{ promotionId: string; candidateId: string; candidateName: string; fieldName: string; validationStatus: string; validationReasons: string[] }>;
+};
+
 type SavedApproval = {
   approvalId?: string;
   candidateId: string;
@@ -88,6 +99,7 @@ const FILTERS: Array<{ key: ReviewFilter; label: string }> = [
   { key: "employer_issue", label: "Employer issue" },
   { key: "title_issue", label: "Title issue" },
   { key: "identity_issue", label: "Identity issue" },
+  { key: "batch_promotion", label: "Batch promotion" },
 ];
 
 const FIELD_VIEWS: Array<{ key: FieldViewMode; label: string }> = [
@@ -176,6 +188,7 @@ function matchesFilter(candidate: WorkspaceCandidate, filter: ReviewFilter) {
   if (filter === "employer_issue") return candidate.fields.some((field) => /employer|Company/i.test(field.field) && /invalid|dirty|review|missing|not_disclosed/i.test(field.reason));
   if (filter === "title_issue") return candidate.fields.some((field) => field.field === "title" && /invalid|generic|missing|review/i.test(field.reason));
   if (filter === "identity_issue") return candidate.fields.some((field) => field.field === "displayName" && /identity|name|missing|invalid|dirty/i.test(field.reason));
+  if (filter === "batch_promotion") return candidate.debug?.queueItem?.source === "batch_promotion" || candidate.debug?.source === "batch_promotion";
   return true;
 }
 
@@ -213,8 +226,11 @@ export default function AiExtractionReviewPage() {
   const [applyHistoryQuery, setApplyHistoryQuery] = useState("");
   const [batchPlan, setBatchPlan] = useState<BatchPlan | null>(null);
   const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
+  const [batchPromotion, setBatchPromotion] = useState<BatchPromotion | null>(null);
   const [batchLoading, setBatchLoading] = useState(false);
+  const [batchPromotionLoading, setBatchPromotionLoading] = useState(false);
   const [batchStatus, setBatchStatus] = useState("");
+  const [batchPromotionStatus, setBatchPromotionStatus] = useState("");
   const [batchSize, setBatchSize] = useState(10);
   const [batchTargetFields, setBatchTargetFields] = useState<string[]>(["currentCompany", "title", "primarySapModule"]);
   const [batchOptions, setBatchOptions] = useState({ validationQueueOnly: false, includeMustRepair: false, highConfidenceOnly: false, excludeAlreadyApplied: true, excludeDuplicateConflict: true, excludeReupload: true });
@@ -415,6 +431,56 @@ export default function AiExtractionReviewPage() {
     }
   }
 
+
+  async function loadWorkspaceAfterPromotion() {
+    const res = await fetch("/api/recruiter/ai-extraction-review");
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "Unable to refresh review workspace");
+    setWorkspace(json);
+    setSelectedId(json.candidates?.[0]?.candidateId || "");
+  }
+
+  async function previewBatchPromotion() {
+    setBatchPromotionLoading(true);
+    setBatchPromotionStatus("");
+    try {
+      const res = await fetch("/api/recruiter/ai-extraction-review/batch-promote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dryRun: true, noApply: true }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Unable to preview batch promotion");
+      setBatchPromotion(json);
+      setBatchPromotionStatus("Promotion preview ready. Review file was not changed.");
+    } catch (err) {
+      setBatchPromotionStatus(err instanceof Error ? err.message : "Unable to preview batch promotion");
+    } finally {
+      setBatchPromotionLoading(false);
+    }
+  }
+
+  async function promoteBatchToReview() {
+    setBatchPromotionLoading(true);
+    setBatchPromotionStatus("");
+    try {
+      const res = await fetch("/api/recruiter/ai-extraction-review/batch-promote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ writeReviewFile: true, noApply: true }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Unable to promote batch review items");
+      setBatchPromotion(json);
+      await loadWorkspaceAfterPromotion();
+      setBatchPromotionStatus("Batch review items promoted into the Review Workspace file. No approvals, staging, or candidate updates were made.");
+    } catch (err) {
+      setBatchPromotionStatus(err instanceof Error ? err.message : "Unable to promote batch review items");
+    } finally {
+      setBatchPromotionLoading(false);
+    }
+  }
+
   async function previewCandidateApply() {
     setCandidateApplyLoading(true);
     setCandidateApplyStatus("");
@@ -524,7 +590,7 @@ export default function AiExtractionReviewPage() {
               )}
             </div>
 
-            <BatchExpansionControl plan={batchPlan} progress={batchProgress} loading={batchLoading} status={batchStatus} batchSize={batchSize} setBatchSize={setBatchSize} targetFields={batchTargetFields} setTargetFields={setBatchTargetFields} options={batchOptions} setOptions={setBatchOptions} onPlan={planBatch} onRefreshProgress={refreshBatchProgress} />
+            <BatchExpansionControl plan={batchPlan} progress={batchProgress} promotion={batchPromotion} loading={batchLoading} promotionLoading={batchPromotionLoading} status={batchStatus} promotionStatus={batchPromotionStatus} batchSize={batchSize} setBatchSize={setBatchSize} targetFields={batchTargetFields} setTargetFields={setBatchTargetFields} options={batchOptions} setOptions={setBatchOptions} onPlan={planBatch} onRefreshProgress={refreshBatchProgress} onPreviewPromote={previewBatchPromotion} onPromoteReview={promoteBatchToReview} />
 
             <ApplyHistoryPanel history={applyHistory} loading={applyHistoryLoading} error={applyHistoryError} filter={applyHistoryFilter} setFilter={setApplyHistoryFilter} query={applyHistoryQuery} setQuery={setApplyHistoryQuery} />
 
@@ -574,7 +640,7 @@ function historyTone(status: ApplyHistoryStatus) {
   return TONE.keep;
 }
 
-function BatchExpansionControl({ plan, progress, loading, status, batchSize, setBatchSize, targetFields, setTargetFields, options, setOptions, onPlan, onRefreshProgress }: { plan: BatchPlan | null; progress: BatchProgress | null; loading: boolean; status: string; batchSize: number; setBatchSize: (size: number) => void; targetFields: string[]; setTargetFields: (fields: string[]) => void; options: { validationQueueOnly: boolean; includeMustRepair: boolean; highConfidenceOnly: boolean; excludeAlreadyApplied: boolean; excludeDuplicateConflict: boolean; excludeReupload: boolean }; setOptions: React.Dispatch<React.SetStateAction<{ validationQueueOnly: boolean; includeMustRepair: boolean; highConfidenceOnly: boolean; excludeAlreadyApplied: boolean; excludeDuplicateConflict: boolean; excludeReupload: boolean }>>; onPlan: () => void; onRefreshProgress: () => void }) {
+function BatchExpansionControl({ plan, progress, promotion, loading, promotionLoading, status, promotionStatus, batchSize, setBatchSize, targetFields, setTargetFields, options, setOptions, onPlan, onRefreshProgress, onPreviewPromote, onPromoteReview }: { plan: BatchPlan | null; progress: BatchProgress | null; promotion: BatchPromotion | null; loading: boolean; promotionLoading: boolean; status: string; promotionStatus: string; batchSize: number; setBatchSize: (size: number) => void; targetFields: string[]; setTargetFields: (fields: string[]) => void; options: { validationQueueOnly: boolean; includeMustRepair: boolean; highConfidenceOnly: boolean; excludeAlreadyApplied: boolean; excludeDuplicateConflict: boolean; excludeReupload: boolean }; setOptions: React.Dispatch<React.SetStateAction<{ validationQueueOnly: boolean; includeMustRepair: boolean; highConfidenceOnly: boolean; excludeAlreadyApplied: boolean; excludeDuplicateConflict: boolean; excludeReupload: boolean }>>; onPlan: () => void; onRefreshProgress: () => void; onPreviewPromote: () => void; onPromoteReview: () => void }) {
   const fieldOptions = [
     ["currentCompany", "Missing employer/company"],
     ["title", "Missing title"],
@@ -592,6 +658,15 @@ function BatchExpansionControl({ plan, progress, loading, status, batchSize, set
     ["Estimated AI calls", plan.summary.estimatedAiCalls],
     ["Provider mode", plan.summary.providerMode],
     ["Safety status", plan.summary.safetyStatus],
+  ] : [];
+  const promotionCards = promotion ? [
+    ["Batch review items", promotion.summary.batchReviewItems],
+    ["New review items", promotion.summary.newReviewItems],
+    ["Existing preserved", promotion.summary.existingReviewItemsPreserved],
+    ["Duplicates skipped", promotion.summary.duplicateReviewItemsSkipped],
+    ["Invalid blocked", promotion.summary.invalidReviewItemsBlocked],
+    ["Ready for recruiter review", promotion.summary.readyForRecruiterReview],
+    ["Approvals preserved", promotion.summary.existingApprovalsPreserved],
   ] : [];
   function toggleField(field: string) {
     setTargetFields(targetFields.includes(field) ? targetFields.filter((item) => item !== field) : [...targetFields, field]);
@@ -619,6 +694,34 @@ function BatchExpansionControl({ plan, progress, loading, status, batchSize, set
           </div>
           {plan?.guardrails.warnings.length ? <div className="border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">{plan.guardrails.warnings.join("; ")}</div> : null}
           {plan?.guardrails.errors.length ? <div className="border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-100">{plan.guardrails.errors.join("; ")}</div> : null}
+          <div className="border border-cyan-500/20 bg-[#05070A] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-white">Promotion summary</h3>
+                <p className="mt-1 text-sm text-cyan-100">This only moves batch review items into the review file. It does not approve, stage, or apply candidate updates.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={onPreviewPromote} disabled={promotionLoading} className="rounded-md border border-cyan-500/40 px-3 py-2 text-sm font-bold text-cyan-100 hover:border-cyan-300 disabled:opacity-50">{promotionLoading ? "Checking..." : "Preview promote to review"}</button>
+                <button onClick={onPromoteReview} disabled={promotionLoading} className="rounded-md bg-cyan-500 px-3 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400 disabled:opacity-50">Promote to Review Workspace</button>
+              </div>
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+              {promotionCards.length ? promotionCards.map(([label, value]) => (
+                <div key={String(label)} className="border border-slate-800 bg-[#070A0F] p-3">
+                  <div className="text-xs font-semibold uppercase text-slate-500">{label}</div>
+                  <div className="mt-2 text-2xl font-semibold text-white">{String(value)}</div>
+                </div>
+              )) : <div className="border border-slate-800 bg-[#070A0F] p-4 text-sm text-slate-400 lg:col-span-4">No promotion preview yet.</div>}
+            </div>
+            {promotion ? (
+              <div className="mt-3 grid gap-2 md:grid-cols-3">
+                {promotion.promotedItems.slice(0, 5).map((item) => <div key={item.promotionId} className="border border-emerald-500/20 bg-emerald-500/5 p-2 text-xs text-emerald-100">{item.candidateName || item.candidateId} / {item.fieldName}</div>)}
+                {promotion.duplicateItems.slice(0, 5).map((item) => <div key={`${item.promotionId}-duplicate`} className="border border-slate-700 bg-slate-500/5 p-2 text-xs text-slate-300">Skipped duplicate: {item.candidateName || item.candidateId} / {item.fieldName}</div>)}
+                {promotion.blockedItems.slice(0, 5).map((item) => <div key={`${item.promotionId}-blocked`} className="border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-100">Blocked: {item.candidateName || item.candidateId} / {item.fieldName} - {item.validationReasons.join("; ")}</div>)}
+              </div>
+            ) : null}
+            {promotionStatus ? <div className="mt-3 text-sm text-cyan-100">{promotionStatus}</div> : null}
+          </div>
           <div className="overflow-auto">
             <table className="min-w-[1100px] w-full border-collapse text-left text-sm">
               <thead className="text-xs uppercase text-slate-500">

@@ -14,7 +14,8 @@ export type ReviewFilter =
   | "module_conflict"
   | "employer_issue"
   | "title_issue"
-  | "identity_issue";
+  | "identity_issue"
+  | "batch_promotion";
 
 export type ApprovalState = Record<string, { action: FieldApprovalAction; overrideReason?: string }>;
 
@@ -395,3 +396,6 @@ export function buildLocalApprovalSummary(workspace: ReviewWorkspace, approvals:
   }
   return { approvedFields, rejectedFields, manualReviewFields, readyForApplyPreview: readyCandidateIds.size };
 }
+
+
+
