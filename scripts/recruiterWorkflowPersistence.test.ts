@@ -1,0 +1,21 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { buildPersistedWorkflowStateFile, buildPersistedWorkflowStates } from "../lib/recruiterWorkflowPersistence";
+import { writePersistedRecruiterWorkflowStore } from "../lib/recruiterWorkflowStore";
+
+const audit = { generatedAt: "2026-07-12T00:00:00.000Z", states: [{ candidateId: "c1", candidateName: "Jane", status: "ready_for_shortlist", reasons: ["ready"], missingData: [], validationBlockers: [] }], actionQueue: [{ candidateId: "c1", candidateName: "Jane", currentStatus: "ready_for_shortlist", recommendedNextAction: "add_to_shortlist", priority: "high", missingData: [], reason: "ready", lastUpdated: "now", safetyNote: "safe", actionId: "a1" }] } as any;
+const states = buildPersistedWorkflowStates(audit);
+assert.equal(states[0].currentStatus, "ready_for_shortlist", "persisted state generated");
+assert.equal(states[0].recommendedNextAction, "add_to_shortlist", "recommended action persisted");
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-persist-"));
+assert.equal(fs.existsSync(path.join(tmp, "reports", "recruiter-workflow-state.json")), false, "dry-run does not write workflow state");
+const file = buildPersistedWorkflowStateFile(states, audit.generatedAt);
+const written = writePersistedRecruiterWorkflowStore(file, tmp);
+assert.equal(written.path.endsWith(path.join("reports", "recruiter-workflow-state.json")), true, "writeWorkflowState writes only reports/recruiter-workflow-state.json");
+assert.equal(fs.existsSync(written.path), true, "workflow state file written explicitly");
+const source = fs.readFileSync(new URL("../lib/recruiterWorkflowPersistence.ts", import.meta.url), "utf8") + fs.readFileSync(new URL("../lib/recruiterWorkflowStore.ts", import.meta.url), "utf8");
+assert.equal(/\.delete\(|\.update\(|\.insert\(|upsert\(/i.test(source), false, "no candidate DB writes and no delete");
+assert.equal(/from ["']openai["']|new\s+OpenAI\b/i.test(source), false, "no OpenAI calls");
+console.log("Recruiter workflow persistence tests passed");

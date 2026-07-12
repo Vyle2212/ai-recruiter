@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { buildRecruiterWorkflowAuditFromReports } from "@/lib/recruiterWorkflowAudit";
+import { hydrateRecruiterWorkflow } from "@/lib/recruiterWorkflowStateHydration";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const audit = buildRecruiterWorkflowAuditFromReports();
-    return NextResponse.json({ summary: audit.summary, actionQueue: audit.actionQueue, generatedAt: audit.generatedAt });
+    const hydration = hydrateRecruiterWorkflow();
+    return NextResponse.json({ summary: hydration.summary, actionQueue: hydration.actionQueue, generatedAt: hydration.generatedAt, lastUpdatedAt: hydration.lastUpdatedAt, stateSource: hydration.stateSource });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to load workflow summary" }, { status: 500 });
   }

@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 
 type WorkflowSummaryResponse = {
   generatedAt: string;
+  lastUpdatedAt?: string;
+  stateSource?: string;
   summary: Record<string, number>;
   actionQueue: Array<{ actionId: string; candidateId: string; candidateName: string; currentStatus: string; recommendedNextAction: string; reason: string; priority: "high" | "medium" | "low"; missingData: string[]; lastUpdated: string; safetyNote: string }>;
 };
@@ -75,7 +77,7 @@ export default function RecruiterWorkflowPage() {
             <h1 className="text-2xl font-semibold text-white">Recruiter Workflow</h1>
             <p className="mt-1 text-sm text-slate-400">Read-only workflow engine. Talent Search remains the source of truth.</p>
           </div>
-          <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-cyan-100">No candidate DB writes</span>
+          <div className="flex flex-wrap gap-2"><span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-cyan-100">No candidate DB writes</span>{data?.stateSource ? <span className="rounded-md border border-slate-700 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-300">State source: {data.stateSource}</span> : null}</div>
         </div>
       </div>
       <section className="mx-auto max-w-[1500px] px-6 py-6">
@@ -83,6 +85,7 @@ export default function RecruiterWorkflowPage() {
         {loading ? <div className="border border-slate-800 bg-[#0B0F16] p-6 text-slate-300">Loading workflow...</div> : null}
         {data ? (
           <>
+            <div className="mb-5 border border-slate-800 bg-[#0B0F16] p-3 text-sm text-slate-400">State source: <span className="font-semibold text-cyan-100">{data.stateSource || "live inference"}</span> - Generated: {data.generatedAt || "Not available"} - Last updated: {data.lastUpdatedAt || data.generatedAt || "Not available"}</div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
               {CARDS.map(([label, key]) => <div key={key} className="border border-slate-800 bg-[#0B0F16] p-4"><div className="text-xs font-semibold uppercase text-slate-500">{label}</div><div className="mt-2 text-3xl font-semibold text-white">{data.summary[key] ?? 0}</div></div>)}
             </div>
