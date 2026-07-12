@@ -70,6 +70,21 @@ type BatchPromotion = {
   blockedItems: Array<{ promotionId: string; candidateId: string; candidateName: string; fieldName: string; validationStatus: string; validationReasons: string[] }>;
 };
 
+type BatchDecisionAudit = {
+  generatedAt: string;
+  summary: { promotedBatchItems: number; pendingDecisions: number; safeToApprove: number; needsManualReview: number; conflicts: number; alreadyAppliedPreserved: number; existingApprovalsPreserved: number; bulkApprovalEligible: number; bulkRejectionEligible: number; blockedFromBulkAction: number };
+  items: Array<{ decisionItemId: string; candidateId: string; candidateName: string; fieldName: string; currentValue: string; suggestedValue: string; evidence: string; confidence: number; riskLevel: string; decisionStatus: string; safetyNote: string; reasons: string[]; bulkApproveEligible: boolean; bulkRejectEligible: boolean; manualReviewRequired: boolean; conflict: boolean; alreadyAppliedPreserved: boolean; existingApproval?: unknown }>; 
+};
+
+type BatchBulkDecisionPreview = {
+  mode: string;
+  decision: "approve_safe" | "reject_invalid";
+  summary: { candidateFieldsSelected: number; candidateFieldsExcluded: number; wouldApproveCount: number; wouldRejectCount: number; wouldPreserveExistingApprovalsCount: number };
+  selected: BatchDecisionAudit["items"];
+  excluded: Array<BatchDecisionAudit["items"][number] & { exclusionReasons: string[] }>; 
+  outputPath?: string;
+};
+
 type SavedApproval = {
   approvalId?: string;
   candidateId: string;
@@ -231,6 +246,10 @@ export default function AiExtractionReviewPage() {
   const [batchPromotionLoading, setBatchPromotionLoading] = useState(false);
   const [batchStatus, setBatchStatus] = useState("");
   const [batchPromotionStatus, setBatchPromotionStatus] = useState("");
+  const [batchDecisionAudit, setBatchDecisionAudit] = useState<BatchDecisionAudit | null>(null);
+  const [batchDecisionPreview, setBatchDecisionPreview] = useState<BatchBulkDecisionPreview | null>(null);
+  const [batchDecisionLoading, setBatchDecisionLoading] = useState(false);
+  const [batchDecisionStatus, setBatchDecisionStatus] = useState("");
   const [batchSize, setBatchSize] = useState(10);
   const [batchTargetFields, setBatchTargetFields] = useState<string[]>(["currentCompany", "title", "primarySapModule"]);
   const [batchOptions, setBatchOptions] = useState({ validationQueueOnly: false, includeMustRepair: false, highConfidenceOnly: false, excludeAlreadyApplied: true, excludeDuplicateConflict: true, excludeReupload: true });
@@ -275,6 +294,26 @@ export default function AiExtractionReviewPage() {
       }
     }
     loadApplyHistory();
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    async function loadBatchDecisions() {
+      setBatchDecisionLoading(true);
+      setBatchDecisionStatus("");
+      try {
+        const res = await fetch("/api/recruiter/ai-extraction-review/batch-decisions", { signal: controller.signal });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Unable to load batch decisions");
+        setBatchDecisionAudit(json);
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") setBatchDecisionStatus(err instanceof Error ? err.message : "Unable to load batch decisions");
+      } finally {
+        if (!controller.signal.aborted) setBatchDecisionLoading(false);
+      }
+    }
+    loadBatchDecisions();
     return () => controller.abort();
   }, []);
 
@@ -432,6 +471,65 @@ export default function AiExtractionReviewPage() {
   }
 
 
+  async function refreshBatchDecisions() {
+    setBatchDecisionLoading(true);
+    setBatchDecisionStatus("");
+    try {
+      const res = await fetch("/api/recruiter/ai-extraction-review/batch-decisions");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Unable to refresh batch decisions");
+      setBatchDecisionAudit(json);
+      setBatchDecisionStatus("Batch decisions refreshed. Read-only audit only.");
+    } catch (err) {
+      setBatchDecisionStatus(err instanceof Error ? err.message : "Unable to refresh batch decisions");
+    } finally {
+      setBatchDecisionLoading(false);
+    }
+  }
+
+  async function previewBatchDecision(decision: "approve_safe" | "reject_invalid") {
+    setBatchDecisionLoading(true);
+    setBatchDecisionStatus("");
+    try {
+      const res = await fetch("/api/recruiter/ai-extraction-review/batch-decisions-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, source: "batch_promotion", dryRun: true, noApply: true }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Unable to preview batch decision");
+      setBatchDecisionPreview(json);
+      setBatchDecisionStatus("Bulk decision preview ready. Approvals file was not changed.");
+    } catch (err) {
+      setBatchDecisionStatus(err instanceof Error ? err.message : "Unable to preview batch decision");
+    } finally {
+      setBatchDecisionLoading(false);
+    }
+  }
+
+  async function applyBatchDecision(decision: "approve_safe" | "reject_invalid") {
+    const selected = batchDecisionPreview?.decision === decision ? batchDecisionPreview.summary.candidateFieldsSelected : 0;
+    if (!selected || !window.confirm("Write " + selected + " batch decision(s) to the approvals file only? Candidate records will not be changed.")) return;
+    setBatchDecisionLoading(true);
+    setBatchDecisionStatus("");
+    try {
+      const res = await fetch("/api/recruiter/ai-extraction-review/batch-decisions-apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, source: "batch_promotion", writeApprovalsFile: true, noApply: true }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Unable to save batch decisions");
+      setBatchDecisionPreview(json);
+      await refreshBatchDecisions();
+      setBatchDecisionStatus("Batch decisions saved to approvals file only. No staging or candidate updates were made.");
+    } catch (err) {
+      setBatchDecisionStatus(err instanceof Error ? err.message : "Unable to save batch decisions");
+    } finally {
+      setBatchDecisionLoading(false);
+    }
+  }
+
   async function loadWorkspaceAfterPromotion() {
     const res = await fetch("/api/recruiter/ai-extraction-review");
     const json = await res.json();
@@ -557,6 +655,11 @@ export default function AiExtractionReviewPage() {
 
             <StickyApprovalSummary summary={localSummary} previewLoading={previewLoading} stagingLoading={stagingLoading} candidateApplyLoading={candidateApplyLoading} onPreview={buildPreview} onSave={saveReviewDecisions} onPreviewStaging={previewStaging} onStageApproved={stageApprovedChanges} onPreviewCandidateApply={previewCandidateApply} hasUnsavedChanges={hasUnsavedChanges} saveStatus={saveStatus} stagingStatus={stagingStatus} candidateApplyStatus={candidateApplyStatus} />
 
+            <BatchReviewDecisionsPanel audit={batchDecisionAudit} preview={batchDecisionPreview} loading={batchDecisionLoading} status={batchDecisionStatus} onRefresh={refreshBatchDecisions} onPreview={previewBatchDecision} onApply={applyBatchDecision} onLocalDecision={(item, action) => {
+              const field = (workspace?.candidates || []).find((candidate) => candidate.candidateId === item.candidateId)?.fields.find((candidateField) => candidateField.field === item.fieldName);
+              if (field) setFieldApproval(item.candidateId, field, action);
+            }} />
+
             <div className="mt-5 flex flex-wrap items-center gap-2 border border-slate-800 bg-[#0B0F16] p-4">
               {FILTERS.map((item) => (
                 <button key={item.key} onClick={() => setFilter(item.key)} className={`rounded-md border px-3 py-2 text-sm font-semibold ${filter === item.key ? "border-cyan-400 bg-cyan-500/15 text-cyan-100" : "border-slate-700 bg-[#070A0F] text-slate-300 hover:border-slate-500"}`}>
@@ -608,6 +711,51 @@ export default function AiExtractionReviewPage() {
         ) : null}
       </section>
     </main>
+  );
+}
+
+function BatchReviewDecisionsPanel({ audit, preview, loading, status, onRefresh, onPreview, onApply, onLocalDecision }: { audit: BatchDecisionAudit | null; preview: BatchBulkDecisionPreview | null; loading: boolean; status: string; onRefresh: () => void; onPreview: (decision: "approve_safe" | "reject_invalid") => void; onApply: (decision: "approve_safe" | "reject_invalid") => void; onLocalDecision: (item: BatchDecisionAudit["items"][number], action: FieldApprovalAction) => void }) {
+  const [filter, setFilter] = useState("all");
+  const [field, setField] = useState("all");
+  const [search, setSearch] = useState("");
+  const filters = [["all", "Source: batch promotion"], ["pending", "Pending only"], ["safe", "Safe to approve"], ["manual", "Needs manual review"], ["conflict", "Conflict"], ["applied", "Already applied / preserved"], ["evidence", "Has evidence"], ["missing_evidence", "Missing evidence"]];
+  const fields = ["all", "currentCompany", "title", "primarySapModule", "sapModules", "sapSkills", "location"];
+  const text = search.trim().toLowerCase();
+  const items = (audit?.items || []).filter((item) => {
+    const matchesFilter = filter === "all" || (filter === "pending" && !item.existingApproval) || (filter === "safe" && item.bulkApproveEligible) || (filter === "manual" && item.manualReviewRequired) || (filter === "conflict" && item.conflict) || (filter === "applied" && item.alreadyAppliedPreserved) || (filter === "evidence" && Boolean(item.evidence)) || (filter === "missing_evidence" && !item.evidence);
+    const matchesField = field === "all" || item.fieldName === field;
+    const searchText = `${item.candidateName} ${item.candidateId} ${item.fieldName} ${item.currentValue} ${item.suggestedValue}`.toLowerCase();
+    return matchesFilter && matchesField && (!text || searchText.includes(text));
+  });
+  const cards = audit ? [["Promoted batch items", audit.summary.promotedBatchItems], ["Pending decisions", audit.summary.pendingDecisions], ["Safe to approve", audit.summary.safeToApprove], ["Needs manual review", audit.summary.needsManualReview], ["Conflicts", audit.summary.conflicts], ["Already applied / preserved", audit.summary.alreadyAppliedPreserved], ["Existing approvals preserved", audit.summary.existingApprovalsPreserved], ["Bulk approval eligible", audit.summary.bulkApprovalEligible], ["Bulk rejection eligible", audit.summary.bulkRejectionEligible], ["Blocked from bulk action", audit.summary.blockedFromBulkAction]] : [];
+  return (
+    <section className="mt-5 border border-amber-500/20 bg-[#0B0F16]">
+      <div className="border-b border-slate-800 px-4 py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><h2 className="text-xl font-semibold text-white">Batch Review Decisions</h2><p className="mt-1 text-sm text-amber-100">REVIEW DECISIONS ONLY. This does not stage or update candidate records.</p></div>
+          <button onClick={onRefresh} disabled={loading} className="rounded-md border border-amber-500/40 px-3 py-2 text-sm font-bold text-amber-100 disabled:opacity-50">Refresh decisions</button>
+        </div>
+      </div>
+      <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5">
+        {cards.length ? cards.map(([label, value]) => <div key={String(label)} className="border border-slate-800 bg-[#05070A] p-3"><div className="text-xs font-semibold uppercase text-slate-500">{label}</div><div className="mt-2 text-2xl font-semibold text-white">{String(value)}</div></div>) : <div className="border border-slate-800 bg-[#05070A] p-4 text-sm text-slate-400 lg:col-span-5">No promoted batch review items found.</div>}
+      </div>
+      <div className="flex flex-wrap items-center gap-2 border-y border-slate-800 p-4">
+        {filters.map(([key, label]) => <button key={key} onClick={() => setFilter(key)} className={`rounded-md border px-3 py-2 text-sm font-semibold ${filter === key ? "border-amber-400 bg-amber-500/15 text-amber-100" : "border-slate-700 bg-[#070A0F] text-slate-300 hover:border-slate-500"}`}>{label}</button>)}
+        <select value={field} onChange={(event) => setField(event.target.value)} className="rounded-md border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-100 outline-none"><option value="all">All fields</option>{fields.filter((item) => item !== "all").map((item) => <option key={item} value={item}>{item}</option>)}</select>
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search candidate, field, value" className="min-w-64 flex-1 rounded-md border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-400" />
+      </div>
+      <div className="grid gap-3 border-b border-slate-800 p-4 md:grid-cols-2 xl:grid-cols-4">
+        <button onClick={() => onPreview("approve_safe")} disabled={loading} className="rounded-md border border-emerald-500/40 px-4 py-3 text-sm font-bold text-emerald-100 disabled:opacity-50">Preview bulk approve safe items</button>
+        <button onClick={() => onApply("approve_safe")} disabled={loading || preview?.decision !== "approve_safe" || !preview.summary.candidateFieldsSelected} className="rounded-md bg-emerald-500 px-4 py-3 text-sm font-bold text-slate-950 disabled:opacity-50">Apply bulk approve safe items to approvals file</button>
+        <button onClick={() => onPreview("reject_invalid")} disabled={loading} className="rounded-md border border-red-500/40 px-4 py-3 text-sm font-bold text-red-100 disabled:opacity-50">Preview bulk reject invalid/risky items</button>
+        <button onClick={() => onApply("reject_invalid")} disabled={loading || preview?.decision !== "reject_invalid" || !preview.summary.candidateFieldsSelected} className="rounded-md bg-red-500 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">Apply bulk reject invalid/risky items to approvals file</button>
+      </div>
+      {preview ? <div className="mx-4 mt-4 border border-cyan-500/20 bg-cyan-500/10 p-3 text-sm text-cyan-100">Preview selected {preview.summary.candidateFieldsSelected} fields, excluded {preview.summary.candidateFieldsExcluded}, preserves {preview.summary.wouldPreserveExistingApprovalsCount} existing approvals.</div> : null}
+      {status ? <div className="mx-4 mt-4 text-sm text-amber-100">{status}</div> : null}
+      <div className="overflow-auto p-4"><table className="min-w-[1200px] w-full border-collapse text-left text-sm"><thead className="text-xs uppercase text-slate-500"><tr className="border-b border-slate-800">{["Candidate", "Candidate ID", "Field", "Existing value", "Suggested value", "Evidence", "Confidence", "Risk level", "Decision status", "Safety note", "Actions"].map((head) => <th key={head} className="px-3 py-2 font-semibold">{head}</th>)}</tr></thead><tbody className="divide-y divide-slate-800">
+        {items.slice(0, 80).map((item) => <tr key={item.decisionItemId} className="align-top hover:bg-slate-900/40"><td className="px-3 py-3 text-slate-100">{item.candidateName}</td><td className="px-3 py-3 text-xs text-slate-400">{item.candidateId}</td><td className="px-3 py-3 text-cyan-100">{item.fieldName}</td><td className="px-3 py-3 text-slate-300">{empty(item.currentValue)}</td><td className="px-3 py-3 text-slate-100">{empty(item.suggestedValue)}</td><td className="px-3 py-3 text-slate-400">{empty(item.evidence)}</td><td className="px-3 py-3 text-slate-300">{item.confidence}</td><td className="px-3 py-3 text-slate-300">{item.riskLevel}</td><td className="px-3 py-3 text-slate-300">{item.existingApproval ? "Existing approval preserved" : item.decisionStatus}</td><td className="px-3 py-3 text-slate-400">{item.safetyNote}: {item.reasons.slice(0, 2).join("; ")}</td><td className="px-3 py-3"><div className="grid min-w-44 gap-1"><button onClick={() => onLocalDecision(item, "approve")} disabled={!item.bulkApproveEligible} className="rounded border border-emerald-500/30 px-2 py-1 text-xs text-emerald-100 disabled:text-slate-600">Approve this field</button><button onClick={() => onLocalDecision(item, "reject")} className="rounded border border-red-500/30 px-2 py-1 text-xs text-red-100">Reject this field</button><button onClick={() => onLocalDecision(item, "keep")} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">Keep existing</button><button onClick={() => onLocalDecision(item, "manual_review")} className="rounded border border-amber-500/30 px-2 py-1 text-xs text-amber-100">Mark manual review</button></div></td></tr>)}
+      </tbody></table>{!items.length ? <div className="border border-slate-800 p-4 text-sm text-slate-400">No batch decision items match this view.</div> : null}</div>
+    </section>
   );
 }
 
