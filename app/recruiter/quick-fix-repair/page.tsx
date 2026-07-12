@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 type Suggestion = { suggestionId: string; candidateId: string; candidateName: string; fieldName: string; currentValue: string; suggestedValue: string; confidence: number; confidenceBand: string; evidenceSource: string; evidenceSnippet: string; repairCategory: string; priority: string; validationStatus: string; approvalReadiness: string; validationReasons: string[]; safetyNote: string };
 type Audit = { summary: Record<string, number>; suggestions: Suggestion[]; readyForApprovalPreview: number; existingApprovalsPreserved: number; mode: string };
+type BridgeResult = { mode: string; summary: Record<string, number>; approvalFilePath: string; outputPath: string; blocked: unknown[]; preserved: unknown[]; approvals: unknown[] };
 
 const filters = ["all", "currentCompany", "title", "primarySapModule", "location", "safe_suggestion", "needs_manual_review", "blocked", "has_evidence", "missing_evidence", "high", "medium", "low"];
 const labels: Record<string, string> = { all: "All", currentCompany: "Missing company", title: "Missing title", primarySapModule: "Missing module", location: "Missing location", safe_suggestion: "Safe suggestion", needs_manual_review: "Needs manual review", blocked: "Blocked", has_evidence: "Has evidence", missing_evidence: "Missing evidence", high: "Confidence high", medium: "Confidence medium", low: "Confidence low" };
@@ -21,6 +22,8 @@ export default function QuickFixRepairPage() {
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
+  const [bridge, setBridge] = useState<BridgeResult | null>(null);
+  const [bridgeMessage, setBridgeMessage] = useState("");
 
   useEffect(() => {
     fetch("/api/recruiter/quick-fix-repair/summary")
@@ -41,6 +44,24 @@ export default function QuickFixRepairPage() {
       return matchesFilter && (!needle || blob.includes(needle));
     });
   }, [audit, filter, query]);
+
+  async function previewApprovalWrite() {
+    setBridgeMessage("");
+    const res = await fetch("/api/recruiter/quick-fix-repair/approvals-write-preview");
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "Unable to preview approval write");
+    setBridge(json);
+    setBridgeMessage("Preview generated. Approvals file was not changed.");
+  }
+
+  async function writeApprovalsFile() {
+    setBridgeMessage("");
+    const res = await fetch("/api/recruiter/quick-fix-repair/approvals-write", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ writeReviewFile: true, writeApprovalsFile: true }) });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "Unable to write approvals file");
+    setBridge(json);
+    setBridgeMessage("Review items and approvals were written to local report files only. Candidate records were not updated.");
+  }
 
   const summary = audit?.summary || {};
   const cards = [
@@ -77,6 +98,15 @@ export default function QuickFixRepairPage() {
           {filters.map((item) => <button key={item} onClick={() => setFilter(item)} className={`rounded-md border px-3 py-2 text-sm ${filter === item ? "border-cyan-400 bg-cyan-400/10 text-cyan-100" : "border-slate-700 text-slate-300"}`}>{labels[item]}</button>)}
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search candidate, field, company, approved value" className="ml-auto min-w-[280px] rounded-md border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-white outline-none" />
         </div>
+        <div className="border border-emerald-500/20 bg-[#0B0F16] p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div><h2 className="text-lg font-semibold text-white">Approval Bridge</h2><p className="mt-1 text-sm text-slate-400">This writes review items and approval decisions only when explicitly confirmed. It does not stage or update candidate records.</p></div>
+            <div className="flex flex-wrap gap-2"><button onClick={() => previewApprovalWrite().catch((err) => setBridgeMessage(err instanceof Error ? err.message : "Preview failed"))} className="rounded-md border border-cyan-500/40 px-3 py-2 text-sm font-semibold text-cyan-100">Preview approval write</button><button onClick={() => writeApprovalsFile().catch((err) => setBridgeMessage(err instanceof Error ? err.message : "Write failed"))} className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-100">Promote review + write approvals</button></div>
+          </div>
+          {bridgeMessage ? <div className="mt-3 border border-slate-700 bg-[#05070A] p-3 text-sm text-cyan-100">{bridgeMessage}</div> : null}
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">{[["Suggestions loaded", bridge?.summary?.suggestionsLoaded], ["Ready for approval", bridge?.summary?.approvalDecisionsReady], ["Existing approvals preserved", bridge?.summary?.existingApprovalsPreserved], ["Blocked suggestions", bridge?.summary?.suggestionsBlocked], ["Would write approvals", bridge?.summary?.wouldWriteApprovals], ["Approval file status", bridge ? "Ready" : "Preview needed"], ["Next step", "staging preview"]].map(([label, value]) => <div key={String(label)} className="border border-slate-800 bg-[#05070A] p-3"><div className="text-xs font-semibold uppercase text-slate-500">{label}</div><div className="mt-2 text-sm font-semibold text-white">{String(value ?? 0)}</div></div>)}</div>
+          <div className="mt-4 border border-slate-800 bg-[#05070A] p-3 font-mono text-xs text-slate-300">npm run stage:ai-approved-changes -- --approvalsPath=reports/ai-extraction-approvals.json --applyPlanPath=reports/ai-extraction-apply-plan.json --dryRun --noApply</div>
+        </div>
         <div className="overflow-hidden border border-slate-800 bg-[#0B0F16]">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1200px] border-collapse text-sm">
@@ -90,3 +120,4 @@ export default function QuickFixRepairPage() {
     </main>
   );
 }
+
