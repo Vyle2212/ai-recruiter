@@ -1,0 +1,12 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import { buildQuickFixApplySubsetPreview } from "../lib/quickFixApplySubsetBuilder";
+const preview = buildQuickFixApplySubsetPreview();
+assert.equal(preview.mode.includes("no candidate DB writes"), true, "subset preview is read-only");
+assert.equal(preview.subsetItems.every((item: any) => item.quickFixApplyReview?.decision === "approve_for_apply"), true, "preview subset includes approved_for_apply only");
+assert.equal(preview.excludedItems.every((item) => item.decision !== "approve_for_apply"), true, "preview subset excludes held/rejected/keep_existing");
+const source = fs.readFileSync(new URL("../lib/quickFixApplySubsetBuilder.ts", import.meta.url), "utf8") + fs.readFileSync(new URL("../lib/quickFixApplyReviewBoard.ts", import.meta.url), "utf8");
+assert.equal(/\.delete\(|\.update\(|\.insert\(|upsert\(/i.test(source), false, "no candidate DB writes and no delete");
+assert.equal(/from ["']openai["']|new\s+OpenAI\b/i.test(source), false, "no OpenAI calls");
+assert.equal(/applyCandidate|rollbackCandidate|confirmApply/i.test(source), false, "no real apply or rollback calls");
+console.log("Quick fix apply subset builder tests passed");
