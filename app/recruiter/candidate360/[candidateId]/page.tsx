@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+type RepairPanel = { candidateId: string; repairCategory: string; priority: string; missingFields: string[]; recommendedRepairAction: string; evidenceAvailability: string; blockedFromShortlistReason: string; suggestedNextStep: string; aiReviewStatus: string; applyHistoryStatus: string; safetyNote: string };
+
 type Candidate360Panel = {
   candidateId: string;
   candidateName: string;
@@ -27,6 +29,7 @@ type Candidate360Panel = {
 export default function Candidate360WorkflowPage({ params }: { params: Promise<{ candidateId: string }> }) {
   const [candidateId, setCandidateId] = useState("");
   const [panel, setPanel] = useState<Candidate360Panel | null>(null);
+  const [repairPanel, setRepairPanel] = useState<RepairPanel | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -35,6 +38,7 @@ export default function Candidate360WorkflowPage({ params }: { params: Promise<{
     params.then(({ candidateId }) => {
       if (!active) return;
       setCandidateId(candidateId);
+      fetch(`/api/recruiter/repair-queue/candidate/${candidateId}`).then(async (res) => { if (res.ok) setRepairPanel(await res.json()); }).catch(() => undefined);
       fetch(`/api/recruiter/workflow/candidate/${candidateId}`)
         .then(async (res) => {
           const json = await res.json();
@@ -55,6 +59,8 @@ export default function Candidate360WorkflowPage({ params }: { params: Promise<{
         {error ? <div className="border border-red-500/30 bg-red-500/10 p-4 text-red-100">{error}</div> : null}
         {panel ? <div className="space-y-5">
           <div className="border border-slate-800 bg-[#0B0F16] p-5"><h2 className="text-xl font-semibold text-white">{panel.candidateName}</h2><p className="mt-1 text-sm text-slate-400">{candidateId}</p><div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-5">{[["Workflow status", panel.currentWorkflowStatus], ["Next action", panel.recommendedNextAction || panel.recommendedNextActions[0]?.recommendedNextAction || "No action"], ["Profile quality", panel.profileQualityStatus], ["Validation", panel.validationStatus], ["AI extraction", panel.aiExtractionReviewStatus], ["Staging/apply", panel.stagingApplyHistoryStatus], ["Apply history", panel.applyHistoryStatus || "Not available"], ["Last updated", panel.lastUpdatedAt || "Not available"]].map(([label, value]) => <div key={label} className="border border-slate-800 bg-[#05070A] p-3"><div className="text-xs font-semibold uppercase text-slate-500">{label}</div><div className="mt-2 text-sm font-semibold text-white">{value}</div></div>)}</div></div>
+
+          {repairPanel ? <div className="border border-cyan-500/20 bg-[#0B0F16] p-5"><h3 className="font-semibold text-white">Repair queue</h3><div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">{[["Repair category", repairPanel.repairCategory], ["Priority", repairPanel.priority], ["Missing fields", repairPanel.missingFields.join(", ") || "None"], ["Evidence", repairPanel.evidenceAvailability], ["Suggested next step", repairPanel.suggestedNextStep], ["AI review", repairPanel.aiReviewStatus], ["Apply history", repairPanel.applyHistoryStatus]].map(([label, value]) => <div key={label} className="border border-slate-800 bg-[#05070A] p-3"><div className="text-xs font-semibold uppercase text-slate-500">{label}</div><div className="mt-2 text-sm font-semibold text-white">{value}</div></div>)}</div><div className="mt-4 border border-slate-800 bg-[#05070A] p-3 text-sm text-slate-300"><div className="font-semibold text-cyan-100">{repairPanel.recommendedRepairAction}</div><div className="mt-1 text-amber-100">Why blocked: {repairPanel.blockedFromShortlistReason}</div><div className="mt-1 text-xs text-slate-500">{repairPanel.safetyNote}</div></div></div> : null}
           <div className="grid gap-5 lg:grid-cols-2"><div className="border border-slate-800 bg-[#0B0F16] p-5"><h3 className="font-semibold text-white">Recommended next actions</h3><div className="mt-3 space-y-2">{panel.recommendedNextActions.map((item) => <div key={item.actionId} className="border border-slate-800 bg-[#05070A] p-3 text-sm text-slate-300"><div className="font-semibold text-cyan-100">{item.recommendedNextAction.replace(/_/g, " ")}</div><div className="mt-1">{item.reason}</div><div className="mt-1 text-xs text-slate-500">{item.safetyNote}</div></div>)}{!panel.recommendedNextActions.length ? <div className="text-sm text-slate-400">No immediate workflow action.</div> : null}</div></div><div className="border border-slate-800 bg-[#0B0F16] p-5"><h3 className="font-semibold text-white">Allowed actions</h3><div className="mt-3 grid gap-2">{panel.allowedActions.map((item) => <button key={item.action} className="rounded-md border border-cyan-500/30 px-3 py-2 text-left text-sm text-cyan-100">{item.action.replace(/_/g, " ")}<span className="block text-xs text-slate-500">Dry-run preview</span></button>)}</div></div></div>
           <div className="border border-slate-800 bg-[#0B0F16] p-5"><h3 className="font-semibold text-white">Blocked actions</h3><div className="mt-3 grid gap-2 md:grid-cols-2">{panel.blockedActions.map((item) => <div key={item.action} className="border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-100"><div className="font-semibold">{item.action.replace(/_/g, " ")}</div><div className="mt-1 text-xs">{item.reasons.join("; ")}</div></div>)}</div></div>
           <div className="border border-slate-800 bg-[#0B0F16] p-5"><h3 className="font-semibold text-white">Timeline / audit history</h3><div className="mt-3 space-y-2">{panel.timeline.map((item) => <div key={`${item.at}-${item.event}`} className="border border-slate-800 bg-[#05070A] p-3 text-sm text-slate-300"><div className="text-xs text-slate-500">{item.at}</div><div className="font-semibold text-white">{item.event.replace(/_/g, " ")}</div><div>{item.note}</div></div>)}</div>{panel.missingFields?.length ? <p className="mt-4 text-sm text-amber-100">Missing fields: {panel.missingFields.join(", ")}</p> : null}{panel.blockerReasons?.length ? <p className="mt-2 text-sm text-amber-100">Blockers: {panel.blockerReasons.join("; ")}</p> : null}<p className="mt-4 text-sm text-cyan-100">{panel.safetyNote}</p></div>

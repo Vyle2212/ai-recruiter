@@ -1,0 +1,11 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import { buildRepairQueueAudit } from "../lib/repairQueueAudit";
+const audit = buildRepairQueueAudit({ statePath: "missing-state.json" });
+assert.equal(audit.totalWorkflowStates > 0, true, "fallback to live inference if workflow state missing");
+assert.equal(audit.mode.includes("no candidate DB writes"), true, "audit is read-only");
+const source = fs.readFileSync(new URL("../lib/repairQueueAudit.ts", import.meta.url), "utf8") + fs.readFileSync(new URL("../lib/repairQueueClassifier.ts", import.meta.url), "utf8");
+assert.equal(/\.delete\(|\.update\(|\.insert\(|upsert\(/i.test(source), false, "no candidate DB writes and no delete");
+assert.equal(/from ["']openai["']|new\s+OpenAI\b/i.test(source), false, "no OpenAI calls");
+assert.equal(/stageApproved|applyCandidate|rollbackCandidate|confirmApply/i.test(source), false, "no stage/apply/rollback calls");
+console.log("Repair queue audit tests passed");
