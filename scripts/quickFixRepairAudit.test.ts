@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import { buildQuickFixRepairAudit } from "../lib/quickFixRepairAudit";
+const audit = buildQuickFixRepairAudit({ suggestionsPath: "missing-quick-fix-suggestions.json" });
+assert.equal(audit.mode.includes("no candidate DB writes"), true, "audit is read-only");
+const source = fs.readFileSync(new URL("../lib/quickFixRepairAudit.ts", import.meta.url), "utf8") + fs.readFileSync(new URL("../lib/quickFixRepairSuggestionEngine.ts", import.meta.url), "utf8") + fs.readFileSync(new URL("../lib/quickFixRepairApprovalBridge.ts", import.meta.url), "utf8");
+assert.equal(/\.delete\(|\.update\(|\.insert\(|upsert\(/i.test(source), false, "no candidate DB writes and no delete");
+assert.equal(/from ["']openai["']|new\s+OpenAI\b/i.test(source), false, "no OpenAI calls");
+assert.equal(/stageApproved|applyCandidate|rollbackCandidate|confirmApply/i.test(source), false, "no stage/apply/rollback calls");
+console.log("Quick fix repair audit tests passed");
