@@ -3,6 +3,7 @@ import { buildCandidateApplyBackup, writeCandidateApplyBackup } from "../lib/aiE
 import { buildCandidateApplyPostAudit, executeCandidateApplyPlan, writeCandidateApplyResult, writeCandidatePostAudit } from "../lib/aiExtractionCandidateApplyExecutor";
 import { buildCandidateRollbackPlan, writeCandidateRollbackPlan } from "../lib/aiExtractionCandidateRollback";
 import { loadRealTalentPoolCandidates } from "../lib/candidateAudit";
+import { loadCliEnv, printSupabaseEnvDiagnostics } from "../lib/cliEnv";
 import { buildPlanFromArgs, printCandidateApplyPlan } from "./auditCandidateApplyFromStaging";
 
 function hasFlag(name: string) {
@@ -10,10 +11,14 @@ function hasFlag(name: string) {
 }
 
 function supabaseClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseKey) throw new Error("Candidate apply failed: missing Supabase URL/key.");
-  return createClient(supabaseUrl, supabaseKey);
+  const env = loadCliEnv();
+  printSupabaseEnvDiagnostics(env.diagnostics);
+  if (!env.supabaseUrl) throw new Error("Candidate apply failed: missing Supabase URL.");
+  if (!env.supabaseServiceRoleKey) {
+    if (env.supabaseAnonKey) throw new Error("Real apply requires SUPABASE_SERVICE_ROLE_KEY. Anon key is not allowed for candidate DB writes.");
+    throw new Error("Candidate apply failed: missing SUPABASE_SERVICE_ROLE_KEY.");
+  }
+  return createClient(env.supabaseUrl, env.supabaseServiceRoleKey);
 }
 
 export function candidateApplyModeFromFlags(writeCandidateUpdates: boolean, confirmApply: boolean) {
