@@ -4,6 +4,8 @@ import { auditCandidates } from "./candidateAudit";
 import { buildActionQueue } from "./recruiterWorkflowActions";
 import { buildWorkflowStates } from "./recruiterWorkflowState";
 import { loadRecruiterWorkflowStore, writeWorkflowJson } from "./recruiterWorkflowStore";
+import { readPersistedWorkflowState, workflowStatePath } from "./recruiterWorkflowStateHydration";
+import type { PersistedWorkflowState } from "./recruiterWorkflowPersistence";
 import { summarizeWorkflow } from "./recruiterWorkflowSummary";
 import type { RecruiterWorkflowState, WorkflowAuditReport } from "./recruiterWorkflowTypes";
 
@@ -119,4 +121,63 @@ export function buildRecruiterWorkflowAuditFromReports(options: { qualityPath?: 
 
 export function writeRecruiterWorkflowAudit(report: WorkflowAuditReport, outputPath = path.join("reports", "recruiter-workflow-audit.json")) {
   return writeWorkflowJson(outputPath, report);
+}
+
+
+function workflowStateFromPersisted(state: PersistedWorkflowState): RecruiterWorkflowState {
+  return {
+    workflowId: `workflow-${state.candidateId}`,
+    candidateId: state.candidateId,
+    candidateName: state.displayName,
+    status: state.currentStatus,
+    source: "local_state",
+    reasons: state.auditNotes.length ? state.auditNotes : [`Workflow state loaded from persisted state: ${state.currentStatus}`],
+    missingData: state.missingFields,
+    validationBlockers: state.blockerReasons,
+    lastUpdated: state.lastUpdatedAt || state.lastInferredAt,
+  };
+}
+
+function actionQueueFromPersistedStates(states: PersistedWorkflowState[]) {
+  return states.filter((state) => !["placed", "rejected", "archived"].includes(state.currentStatus)).map((state) => ({
+    actionId: `${state.candidateId}:${state.recommendedNextAction}`,
+    candidateId: state.candidateId,
+    candidateName: state.displayName,
+    currentStatus: state.currentStatus,
+    recommendedNextAction: state.recommendedNextAction,
+    reason: state.auditNotes[0] || "Review saved workflow state",
+    priority: state.priority,
+    missingData: state.missingFields,
+    lastUpdated: state.lastUpdatedAt,
+    safetyNote: "Read-only persisted workflow audit. Candidate records are not updated.",
+  }));
+}
+
+export function buildRecruiterWorkflowAuditPreferPersisted(options: { workflowStatePath?: string; qualityPath?: string; fullExtractionPath?: string; reviewPath?: string; applyHistoryPath?: string } = {}): WorkflowAuditReport & { auditSource: "persisted workflow state" | "rebuilt from candidate data"; workflowStatePath: string } {
+  const statePath = options.workflowStatePath || workflowStatePath();
+  const persisted = readPersistedWorkflowState(statePath);
+  if (persisted) {
+    const states = persisted.states.map(workflowStateFromPersisted);
+    const actionQueue = actionQueueFromPersistedStates(persisted.states);
+    return {
+      generatedAt: persisted.generatedAt,
+      mode: "read-only workflow audit from persisted workflow state; no candidate DB writes; no workflow writes; no delete; no OpenAI calls",
+      totalCandidates: states.length,
+      summary: summarizeWorkflow(states, actionQueue),
+      states,
+      actionQueue,
+      blockedCandidates: states.filter((state) => state.validationBlockers.length || state.status === "needs_repair"),
+      files: { workflowState: { path: statePath, found: true } },
+      auditSource: "persisted workflow state",
+      workflowStatePath: statePath,
+    };
+  }
+
+  const rebuilt = buildRecruiterWorkflowAuditFromReports(options);
+  return {
+    ...rebuilt,
+    files: { ...rebuilt.files, workflowState: { path: statePath, found: false } },
+    auditSource: "rebuilt from candidate data",
+    workflowStatePath: statePath,
+  };
 }
