@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "pretest": "tsx scripts/quickFixStagingRefresh.test.ts",
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
@@ -92,7 +93,9 @@
     "audit:quick-fix-rollback-readiness": "tsx scripts/auditQuickFixRollbackReadiness.ts",
     "check:supabase-env": "tsx scripts/checkSupabaseEnv.ts",
     "apply:quick-fix-workflow-refresh": "tsx scripts/applyQuickFixWorkflowRefresh.ts",
-    "audit:quick-fix-workflow-refresh-apply": "tsx scripts/auditQuickFixWorkflowRefreshApply.ts"
+    "audit:quick-fix-workflow-refresh-apply": "tsx scripts/auditQuickFixWorkflowRefreshApply.ts",
+    "refresh:quick-fix-staging": "tsx scripts/refreshQuickFixStaging.ts",
+    "audit:quick-fix-staging-refresh": "tsx scripts/auditQuickFixStagingRefresh.ts"
   },
   "dependencies": {
     "@google-cloud/vision": "^5.3.6",
