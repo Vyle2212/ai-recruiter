@@ -56,35 +56,43 @@ function fixture(candidateIds: string[], options: { pending?: boolean; mismatch?
 
 const dry = fixture(["dry1", "dry2"]);
 const dryPreviewPath = path.join(fixtureDir, "dry-preview.json");
-const dryResult: any = applyQuickFixWorkflowRefresh({ ...dry, expectedVerifiedCount: 2, outputPath: dryPreviewPath });
+const dryResult: any = applyQuickFixWorkflowRefresh({ ...dry, outputPath: dryPreviewPath });
 assert.equal(dryResult.eligibleWorkflowUpdates, 2, "dry-run sees eligible workflow updates");
 assert.equal(fs.existsSync(dryPreviewPath), true, "dry-run writes preview report only");
 const dryState = JSON.parse(fs.readFileSync(dry.statePath, "utf8"));
 assert.equal(dryState.states[0].currentStatus, "needs_repair", "dry-run does not write workflow state");
 
-assert.throws(() => applyQuickFixWorkflowRefresh({ ...dry, expectedVerifiedCount: 2, writeWorkflowState: true }), /requires --confirmWorkflowRefresh/, "write requires confirm");
-assert.throws(() => applyQuickFixWorkflowRefresh({ ...dry, expectedVerifiedCount: 2, confirmWorkflowRefresh: true }), /requires --writeWorkflowState/, "confirm requires write");
+const batchNine = buildQuickFixWorkflowRefreshApplyPreview(fixture(Array.from({ length: 9 }, (_, index) => `nine${index}`)));
+assert.equal(batchNine.expectedVerifiedCount, 9, "supports dynamic batch size 9");
+assert.equal(batchNine.rollbackReady, true, "batch size 9 rollback plan is ready");
+const batchThree = buildQuickFixWorkflowRefreshApplyPreview(fixture(["three1", "three2", "three3"]));
+assert.equal(batchThree.expectedVerifiedCount, 3, "supports dynamic batch size 3");
+assert.equal(batchThree.eligibleWorkflowUpdates, 3, "batch size 3 has three eligible workflow updates");
+assert.equal(batchThree.rollbackReady, true, "batch size 3 rollback plan is ready");
+
+assert.throws(() => applyQuickFixWorkflowRefresh({ ...dry, writeWorkflowState: true }), /requires --confirmWorkflowRefresh/, "write requires confirm");
+assert.throws(() => applyQuickFixWorkflowRefresh({ ...dry, confirmWorkflowRefresh: true }), /requires --writeWorkflowState/, "confirm requires write");
 
 const pending = fixture(["pending1"], { pending: true });
-const pendingPreview = buildQuickFixWorkflowRefreshApplyPreview({ ...pending, expectedVerifiedCount: 1 });
+const pendingPreview = buildQuickFixWorkflowRefreshApplyPreview(pending);
 assert.equal(pendingPreview.canApply, false, "pending apply blocks workflow refresh");
 assert.equal(pendingPreview.pendingApply, 1, "pending count retained");
 
 const mismatch = fixture(["mismatch1"], { mismatch: true });
-const mismatchPreview = buildQuickFixWorkflowRefreshApplyPreview({ ...mismatch, expectedVerifiedCount: 1 });
+const mismatchPreview = buildQuickFixWorkflowRefreshApplyPreview(mismatch);
 assert.equal(mismatchPreview.canApply, false, "mismatch blocks workflow refresh");
 assert.equal(mismatchPreview.mismatch, 1, "mismatch count retained");
 
 const missingPreviewCandidate = fixture(["present", "missing"], { missingStateIds: ["missing"] });
-const missingPreview = buildQuickFixWorkflowRefreshApplyPreview({ ...missingPreviewCandidate, expectedVerifiedCount: 2 });
+const missingPreview = buildQuickFixWorkflowRefreshApplyPreview(missingPreviewCandidate);
 assert.equal(missingPreview.canApply, false, "candidate not included in preview blocks apply");
-assert.equal(missingPreview.gateReasons.some((reason) => reason.includes("preview eligible 1, applied verified 2")), true, "missing preview candidate is reported");
+assert.equal(missingPreview.gateReasons.some((reason) => reason.includes("eligible 1, applied verified 2")), true, "missing preview candidate is reported");
 
 const applyFixture = fixture(["apply1", "apply2"]);
 const backupPath = path.join(fixtureDir, "workflow-backup.json");
 const rollbackPath = path.join(fixtureDir, "workflow-rollback.json");
 const resultPath = path.join(fixtureDir, "workflow-result.json");
-const result: any = applyQuickFixWorkflowRefresh({ ...applyFixture, expectedVerifiedCount: 2, writeWorkflowState: true, confirmWorkflowRefresh: true, backupPath, rollbackPath, resultPath });
+const result: any = applyQuickFixWorkflowRefresh({ ...applyFixture, writeWorkflowState: true, confirmWorkflowRefresh: true, backupPath, rollbackPath, resultPath });
 assert.equal(result.appliedWorkflowUpdates, 2, "confirmed local workflow apply updates eligible states");
 assert.equal(fs.existsSync(backupPath), true, "backup generated before workflow state update");
 assert.equal(fs.existsSync(rollbackPath), true, "rollback generated before workflow state update");
@@ -96,7 +104,7 @@ const backup = JSON.parse(fs.readFileSync(backupPath, "utf8"));
 const rollback = JSON.parse(fs.readFileSync(rollbackPath, "utf8"));
 assert.equal(backup.states.length, 2, "backup covers updated states");
 assert.equal(rollback.rollbackItems.length, 2, "rollback coverage is complete");
-const audit = auditQuickFixWorkflowRefreshApply({ statePath: applyFixture.statePath, previewOptions: { ...applyFixture, expectedVerifiedCount: 2 }, backupPath, rollbackPath, resultPath });
+const audit = auditQuickFixWorkflowRefreshApply({ statePath: applyFixture.statePath, previewOptions: applyFixture, backupPath, rollbackPath, resultPath });
 assert.equal(audit.appliedWorkflowUpdatesVerified, 2, "audit verifies applied workflow updates");
 assert.equal(audit.pendingWorkflowUpdates, 0, "audit reports no pending updates");
 assert.equal(audit.mismatch, 0, "audit reports no mismatch");
@@ -104,6 +112,16 @@ assert.equal(audit.rollbackSafe, true, "audit verifies rollback safety");
 assert.equal(audit.mode.includes("no candidate DB writes"), true, "no DB writes");
 assert.equal(audit.mode.includes("no OpenAI calls"), true, "no OpenAI calls");
 assert.equal(audit.mode.includes("no delete"), true, "no delete");
+
+const staleCurrent = fixture(["current1", "current2", "current3"]);
+const staleResultPath = writeJson("stale-workflow-result.json", { updates: Array.from({ length: 9 }, (_, index) => ({ candidateId: `old${index}` })) });
+const staleBackupPath = writeJson("stale-workflow-backup.json", { states: Array.from({ length: 9 }, (_, index) => ({ candidateId: `old${index}` })) });
+const staleRollbackPath = writeJson("stale-workflow-rollback.json", { rollbackItems: Array.from({ length: 9 }, (_, index) => ({ candidateId: `old${index}` })) });
+const staleAudit = auditQuickFixWorkflowRefreshApply({ statePath: staleCurrent.statePath, previewOptions: staleCurrent, resultPath: staleResultPath, backupPath: staleBackupPath, rollbackPath: staleRollbackPath });
+assert.equal(staleAudit.expectedWorkflowUpdates, 3, "audit uses current dynamic batch instead of stale batch 1 result");
+assert.equal(staleAudit.pendingWorkflowUpdates, 3, "current unapplied workflow updates remain pending");
+assert.equal(staleAudit.appliedWorkflowUpdatesVerified, 0, "stale applied result is not counted");
+assert.equal(staleAudit.backupAvailable, false, "stale backup is not current-batch backup coverage");
 
 console.log("Quick fix workflow refresh apply tests passed");
 

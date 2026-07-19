@@ -10,7 +10,6 @@ export type QuickFixWorkflowRefreshMode = "dry_run" | "confirmed_apply";
 export type QuickFixWorkflowRefreshApplyOptions = {
   statePath?: string;
   verificationOptions?: Parameters<typeof buildQuickFixPostApplyVerification>[0];
-  expectedVerifiedCount?: number;
   writeWorkflowState?: boolean;
   confirmWorkflowRefresh?: boolean;
   outputPath?: string;
@@ -108,13 +107,15 @@ export function buildQuickFixWorkflowRefreshApplyPreview(options: QuickFixWorkfl
     });
   }
 
-  const expectedVerifiedCount = options.expectedVerifiedCount ?? 9;
+  const expectedVerifiedCount = verification.subsetItems;
   const gateReasons: string[] = [];
-  if (verification.appliedVerified !== expectedVerifiedCount) gateReasons.push(`Applied verified must be ${expectedVerifiedCount}; found ${verification.appliedVerified}`);
+  if (verification.appliedVerified !== expectedVerifiedCount) gateReasons.push(`Applied verified must equal subset items; subset ${expectedVerifiedCount}, applied verified ${verification.appliedVerified}`);
   if (verification.pendingApply !== 0) gateReasons.push(`Pending apply must be 0; found ${verification.pendingApply}`);
   if (verification.mismatch !== 0) gateReasons.push(`Mismatch must be 0; found ${verification.mismatch}`);
   if (!workflowFile) gateReasons.push("workflow state file is missing or invalid");
-  if (eligible.length !== verification.appliedVerified) gateReasons.push(`Verified candidates included in preview must equal applied verified count; preview eligible ${eligible.length}, applied verified ${verification.appliedVerified}`);
+  if (eligible.length !== verification.appliedVerified) gateReasons.push(`Eligible workflow updates must equal applied verified count; eligible ${eligible.length}, applied verified ${verification.appliedVerified}`);
+  const rollbackPlanReady = eligible.length > 0 && eligible.every((item) => statesById.has(item.candidateId));
+  if (eligible.length > 0 && !rollbackPlanReady) gateReasons.push("Backup and rollback plan cannot cover every eligible workflow update");
 
   return {
     generatedAt: new Date().toISOString(),
@@ -131,7 +132,7 @@ export function buildQuickFixWorkflowRefreshApplyPreview(options: QuickFixWorkfl
     wouldMoveOutOfNeedsRepair: eligible.filter((item) => item.fromStatus === "needs_repair").length,
     wouldBecomeReadyForShortlist: eligible.filter((item) => item.toStatus === "ready_for_shortlist").length,
     backupRequired: true,
-    rollbackReady: gateReasons.length === 0 && eligible.length > 0,
+    rollbackReady: gateReasons.length === 0 && rollbackPlanReady,
     canApply: gateReasons.length === 0 && eligible.length > 0 && blocked.length === 0,
     gateReasons,
     eligible,
@@ -208,6 +209,7 @@ function readJson(filePath: string) {
 export function auditQuickFixWorkflowRefreshApply(options: { statePath?: string; previewOptions?: QuickFixWorkflowRefreshApplyOptions; backupPath?: string; rollbackPath?: string; resultPath?: string } = {}) {
   const statePath = options.statePath || workflowStatePath();
   const preview = buildQuickFixWorkflowRefreshApplyPreview({ ...(options.previewOptions || {}), statePath });
+  const verification = buildQuickFixPostApplyVerification(options.previewOptions?.verificationOptions);
   const workflowFile = readPersistedWorkflowState(statePath);
   const statesById = new Map((workflowFile?.states || []).map((state) => [state.candidateId, state]));
   const backupPath = options.backupPath || path.join("reports", "quick-fix-workflow-refresh-backup.json");
@@ -216,7 +218,11 @@ export function auditQuickFixWorkflowRefreshApply(options: { statePath?: string;
   const backup = readJson(backupPath);
   const rollback = readJson(rollbackPath);
   const result = readJson(resultPath);
-  const resultUpdates = Array.isArray(result.data?.updates) ? result.data.updates : preview.eligible;
+  const expectedItems = verification.items.filter((item) => item.verificationStatus === "verified_applied");
+  const expectedIds = new Set(expectedItems.map((item) => item.candidateId));
+  const storedResultUpdates = Array.isArray(result.data?.updates) ? result.data.updates : [];
+  const resultMatchesCurrentBatch = storedResultUpdates.length === expectedIds.size && storedResultUpdates.every((update: any) => expectedIds.has(update.candidateId));
+  const resultUpdates = resultMatchesCurrentBatch ? storedResultUpdates : expectedItems.map((item) => ({ candidateId: item.candidateId, candidateName: item.candidateName }));
 
   let verified = 0;
   let pending = 0;
@@ -229,18 +235,20 @@ export function auditQuickFixWorkflowRefreshApply(options: { statePath?: string;
     else mismatch += 1;
   }
 
+  const backupStates = Array.isArray(backup.data?.states) ? backup.data.states : [];
   const rollbackItems = Array.isArray(rollback.data?.rollbackItems) ? rollback.data.rollbackItems : [];
-  const rollbackCoverage = resultUpdates.length > 0 && resultUpdates.every((update: any) => rollbackItems.some((item: any) => item.candidateId === update.candidateId));
+  const backupCoverage = resultMatchesCurrentBatch && resultUpdates.length > 0 && resultUpdates.every((update: any) => backupStates.some((item: any) => item.candidateId === update.candidateId));
+  const rollbackCoverage = resultMatchesCurrentBatch && resultUpdates.length > 0 && resultUpdates.every((update: any) => rollbackItems.some((item: any) => item.candidateId === update.candidateId));
   return {
     generatedAt: new Date().toISOString(),
     mode: "read-only workflow refresh apply audit; no workflow writes; no candidate DB writes; no delete; no OpenAI calls",
-    expectedWorkflowUpdates: resultUpdates.length || preview.eligibleWorkflowUpdates,
+    expectedWorkflowUpdates: expectedIds.size,
     appliedWorkflowUpdatesVerified: verified,
     pendingWorkflowUpdates: pending,
     mismatch,
-    backupAvailable: backup.found,
-    rollbackAvailable: rollback.found,
-    rollbackSafe: backup.found && rollback.found && rollbackCoverage,
+    backupAvailable: backup.found && backupCoverage,
+    rollbackAvailable: rollback.found && rollbackCoverage,
+    rollbackSafe: backup.found && rollback.found && backupCoverage && rollbackCoverage,
     files: { statePath, backupPath, rollbackPath, resultPath },
   };
 }
