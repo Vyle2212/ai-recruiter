@@ -8,7 +8,13 @@ import { writeWorkflowJson } from "./recruiterWorkflowStore";
 
 export type QuickFixStagingRefreshPaths = {
   approvalsPath: string; applyResultPath: string; verificationPath: string; workflowRefreshPath: string;
-  decisionsPath: string; reviewPath: string; applyPlanPath: string; stagingPath: string; previewPath: string; resultPath: string;
+  decisionsPath: string; reviewPath: string; applyPlanPath: string; workflowStatePath: string; cumulativeHistoryPath: string;
+  stagingPath: string; previewPath: string; resultPath: string;
+};
+
+export type QuickFixCumulativeApplyHistoryItem = {
+  candidateId: string; fieldName: string; dbFieldName: string; appliedValue: string;
+  sourceBatchOrResultPath: string; appliedAt: string; verificationStatus: string;
 };
 
 export type QuickFixStagingRefreshReport = {
@@ -20,7 +26,7 @@ export type QuickFixStagingRefreshReport = {
   excludedPreservedHeldRejected: Array<{ candidateId: string; fieldName: string }>;
 };
 
-function clean(value: unknown) { return String(Array.isArray(value) ? value.join(", ") : value ?? "").replace(/\\s+/g, " ").trim(); }
+function clean(value: unknown) { return String(Array.isArray(value) ? value.join(", ") : value ?? "").replace(/\s+/g, " ").trim(); }
 function key(candidateId: unknown, fieldName: unknown) { return `${clean(candidateId)}:${clean(fieldName)}`; }
 function readJson(filePath: string) { const fullPath = path.resolve(filePath); if (!fs.existsSync(fullPath)) return null; try { return JSON.parse(fs.readFileSync(fullPath, "utf8")); } catch { return null; } }
 function rows(value: any, names: string[]) { for (const name of names) if (Array.isArray(value?.[name])) return value[name]; return []; }
@@ -31,20 +37,48 @@ export function quickFixStagingRefreshPaths(baseDir = process.cwd()): QuickFixSt
     approvalsPath: report("ai-extraction-approvals.json"), applyResultPath: report("quick-fix-subset-apply-result.json"),
     verificationPath: report("quick-fix-post-apply-verification.json"), workflowRefreshPath: report("quick-fix-workflow-refresh-apply-result.json"),
     decisionsPath: report("quick-fix-apply-decisions.json"), reviewPath: report("ai-extraction-review.json"),
-    applyPlanPath: report("ai-extraction-apply-plan.json"), stagingPath: report("ai-extraction-staging.json"),
+    applyPlanPath: report("ai-extraction-apply-plan.json"), workflowStatePath: report("recruiter-workflow-state.json"),
+    cumulativeHistoryPath: report("quick-fix-cumulative-apply-history.json"), stagingPath: report("ai-extraction-staging.json"),
     previewPath: report("quick-fix-staging-refresh-preview.json"), resultPath: report("quick-fix-staging-refresh-result.json"),
   };
 }
 
 export function canWriteQuickFixStaging(writeStaging: boolean, confirmQuickFixStagingRefresh: boolean) { return writeStaging && confirmQuickFixStagingRefresh; }
 
-function processedHistory(paths: QuickFixStagingRefreshPaths) {
-  const appliedPairs = new Set<string>(); const movedCandidates = new Set<string>(); const heldPairs = new Set<string>();
-  for (const item of rows(readJson(paths.applyResultPath), ["fieldAudit", "items"])) if (item?.applied !== false && clean(item?.candidateId) && clean(item?.fieldName)) appliedPairs.add(key(item.candidateId, item.fieldName));
-  for (const item of rows(readJson(paths.verificationPath), ["items"])) if (/verified_applied|applied_verified|preserved_already_applied/i.test(clean(item?.verificationStatus || item?.status))) appliedPairs.add(key(item.candidateId, item.fieldName));
-  for (const item of rows(readJson(paths.workflowRefreshPath), ["updates", "items"])) if (clean(item?.candidateId)) movedCandidates.add(clean(item.candidateId));
+function dbFieldName(fieldName: string) { return fieldName === "currentCompany" ? "current_company" : fieldName === "primarySapModule" ? "primary_sap_module" : fieldName; }
+
+export function buildQuickFixCumulativeApplyHistory(paths: QuickFixStagingRefreshPaths, approvals: AiExtractionApproval[]) {
+  const byPair = new Map<string, QuickFixCumulativeApplyHistoryItem>();
+  const existing = readJson(paths.cumulativeHistoryPath);
+  for (const item of rows(existing, ["items"])) if (clean(item?.candidateId) && clean(item?.fieldName)) byPair.set(key(item.candidateId, item.fieldName), item);
+  const approvalsByCandidate = new Map<string, any[]>();
+  for (const approval of approvals) {
+    const list = approvalsByCandidate.get(clean(approval.candidateId)) || []; list.push(approval); approvalsByCandidate.set(clean(approval.candidateId), list);
+  }
+  const add = (item: any, sourcePath: string, appliedAt: string, verificationStatus: string) => {
+    const candidateId = clean(item?.candidateId); const fieldName = clean(item?.fieldName); if (!candidateId || !fieldName) return;
+    const pair = key(candidateId, fieldName); const previous = byPair.get(pair);
+    byPair.set(pair, { candidateId, fieldName, dbFieldName: clean(item?.dbFieldName || item?.candidateField) || dbFieldName(fieldName), appliedValue: clean(item?.appliedValue || item?.approvedValue || item?.finalDbValue || item?.to) || previous?.appliedValue || "", sourceBatchOrResultPath: previous?.sourceBatchOrResultPath || sourcePath, appliedAt: previous?.appliedAt || appliedAt, verificationStatus: /verified/i.test(verificationStatus) ? verificationStatus : previous?.verificationStatus || verificationStatus });
+  };
+  const applyResult = readJson(paths.applyResultPath);
+  for (const item of rows(applyResult, ["fieldAudit", "items"])) if (item?.applied !== false) add(item, paths.applyResultPath, clean(applyResult?.exportedAt || applyResult?.generatedAt), "applied");
+  const verification = readJson(paths.verificationPath);
+  for (const item of rows(verification, ["items"])) if (/verified_applied|applied_verified|preserved_already_applied/i.test(clean(item?.verificationStatus || item?.status))) add(item, paths.verificationPath, clean(verification?.generatedAt), clean(item?.verificationStatus || item?.status));
+  const workflow = readJson(paths.workflowStatePath);
+  for (const state of rows(workflow, ["states"])) if (clean(state?.applyHistoryStatus) === "quick_fix_verified_applied") {
+    for (const approval of approvalsByCandidate.get(clean(state.candidateId)) || []) if (clean(approval?.decision) === "approve_suggestion") add({ ...approval, appliedValue: approval.suggestedValue }, paths.workflowStatePath, clean(state?.lastUpdatedAt), "verified_applied_from_workflow_history");
+  }
+  const workflowRefresh = readJson(paths.workflowRefreshPath);
+  for (const update of rows(workflowRefresh, ["updates", "items"])) for (const approval of approvalsByCandidate.get(clean(update.candidateId)) || []) if (clean(approval?.decision) === "approve_suggestion") add({ ...approval, appliedValue: approval.suggestedValue }, paths.workflowRefreshPath, clean(workflowRefresh?.generatedAt), "verified_applied_from_workflow_refresh");
+  const items = Array.from(byPair.values()).sort((a, b) => key(a.candidateId, a.fieldName).localeCompare(key(b.candidateId, b.fieldName)));
+  writeWorkflowJson(paths.cumulativeHistoryPath, { generatedAt: new Date().toISOString(), mode: "durable cumulative quick fix apply history; reconstructed from local reports only; no candidate DB writes; no workflow writes; no apply; no delete; no OpenAI calls", appliedPairs: items.length, items });
+  return items;
+}
+
+function processedHistory(paths: QuickFixStagingRefreshPaths, approvals: AiExtractionApproval[]) {
+  const appliedPairs = new Set(buildQuickFixCumulativeApplyHistory(paths, approvals).map((item) => key(item.candidateId, item.fieldName))); const heldPairs = new Set<string>();
   for (const item of rows(readJson(paths.decisionsPath), ["decisions", "items"])) if (/^(hold_for_review|reject_suggestion|keep_existing|held|rejected)$/i.test(clean(item?.decision))) heldPairs.add(key(item.candidateId, item.fieldName));
-  return { appliedPairs, movedCandidates, heldPairs };
+  return { appliedPairs, heldPairs };
 }
 
 export function loadQuickFixStagingRefreshInputs(paths: QuickFixStagingRefreshPaths) {
@@ -58,10 +92,10 @@ export function buildQuickFixStagingRefresh(options: { paths?: QuickFixStagingRe
   const paths = options.paths || quickFixStagingRefreshPaths();
   const loaded = options.approvals && options.workspace ? { approvals: options.approvals, workspace: options.workspace } : loadQuickFixStagingRefreshInputs(paths);
   const validItems = buildAiExtractionStagingPreview(loaded.workspace, loaded.approvals).items;
-  const history = processedHistory(paths); const excludedAlreadyApplied: QuickFixStagingRefreshReport["excludedAlreadyApplied"] = []; const excludedPreservedHeldRejected: QuickFixStagingRefreshReport["excludedPreservedHeldRejected"] = [];
+  const history = processedHistory(paths, loaded.approvals); const excludedAlreadyApplied: QuickFixStagingRefreshReport["excludedAlreadyApplied"] = []; const excludedPreservedHeldRejected: QuickFixStagingRefreshReport["excludedPreservedHeldRejected"] = [];
   const items = validItems.filter((item) => {
     const pair = key(item.candidateId, item.fieldName);
-    if (history.appliedPairs.has(pair) || history.movedCandidates.has(item.candidateId)) { excludedAlreadyApplied.push({ candidateId: item.candidateId, fieldName: item.fieldName }); return false; }
+    if (history.appliedPairs.has(pair)) { excludedAlreadyApplied.push({ candidateId: item.candidateId, fieldName: item.fieldName }); return false; }
     if (history.heldPairs.has(pair)) { excludedPreservedHeldRejected.push({ candidateId: item.candidateId, fieldName: item.fieldName }); return false; }
     return true;
   });
