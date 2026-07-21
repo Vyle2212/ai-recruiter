@@ -18,9 +18,18 @@ export type QuickFixRepairPlan = {
   generatedAt: string;
   mode: string;
   batchSize: number;
+  batchIndex: number;
+  offset: number;
   focus: string;
   quickFixCandidates: number;
   selectedCandidates: number;
+  selectedCandidateIds: string[];
+  excludedAlreadyAppliedCount: number;
+  excludedPreviouslyBlockedCount: number;
+  excludedExistingApprovalsCount: number;
+  skipPreviouslyBlocked: boolean;
+  minSafeSuggestions: number;
+  estimatedSafeSuggestions: number;
   targetFields: QuickFixTargetField[];
   items: QuickFixRepairPlanItem[];
   warnings: string[];

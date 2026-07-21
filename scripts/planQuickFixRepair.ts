@@ -4,13 +4,21 @@ function argValue(name: string, fallback = "") {
   const prefix = `--${name}=`;
   return process.argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length) || fallback;
 }
+function hasFlag(name: string) { return process.argv.includes(`--${name}`); }
 
 async function main() {
-  const plan = buildQuickFixRepairPlan({ batchSize: Number(argValue("batchSize", "25")), focus: argValue("focus", "all") });
+  const offsetArg = argValue("offset");
+  const plan = buildQuickFixRepairPlan({ batchSize: Number(argValue("batchSize", "25")), focus: argValue("focus", "all"), batchIndex: Number(argValue("batchIndex", "0")), offset: offsetArg === "" ? undefined : Number(offsetArg), skipPreviouslyBlocked: hasFlag("skipPreviouslyBlocked"), minSafeSuggestions: Number(argValue("minSafeSuggestions", "0")) });
   const outputPath = writeQuickFixRepairPlan(plan);
   console.log("Mode: quick fix repair planning only; no candidate DB writes");
   console.log(`Quick fix candidates: ${plan.quickFixCandidates}`);
   console.log(`Selected candidates: ${plan.selectedCandidates}`);
+  console.log(`Batch index: ${plan.batchIndex}`);
+  console.log(`Offset: ${plan.offset}`);
+  console.log(`Excluded already applied: ${plan.excludedAlreadyAppliedCount}`);
+  console.log(`Excluded existing approvals: ${plan.excludedExistingApprovalsCount}`);
+  console.log(`Excluded previously blocked: ${plan.excludedPreviouslyBlockedCount}`);
+  console.log(`Estimated safe suggestions: ${plan.estimatedSafeSuggestions}`);
   console.log(`Target fields: ${plan.targetFields.join(", ") || "none"}`);
   console.log(`Focus: ${plan.focus}`);
   if (plan.warnings.length) console.log(`Warnings: ${plan.warnings.join("; ")}`);

@@ -11,7 +11,7 @@ function argValue(name: string, fallback = "") {
 
 function readPlan(filePath: string): QuickFixRepairPlan {
   const fullPath = path.resolve(filePath);
-  if (!fs.existsSync(fullPath)) return { generatedAt: new Date().toISOString(), mode: "missing quick fix plan; no candidate DB writes", batchSize: 25, focus: "all", quickFixCandidates: 0, selectedCandidates: 0, targetFields: [], items: [], warnings: ["Plan file missing"], errors: [] };
+  if (!fs.existsSync(fullPath)) return { generatedAt: new Date().toISOString(), mode: "missing quick fix plan; no candidate DB writes", batchSize: 25, batchIndex: 0, offset: 0, focus: "all", quickFixCandidates: 0, selectedCandidates: 0, selectedCandidateIds: [], excludedAlreadyAppliedCount: 0, excludedPreviouslyBlockedCount: 0, excludedExistingApprovalsCount: 0, skipPreviouslyBlocked: false, minSafeSuggestions: 0, estimatedSafeSuggestions: 0, targetFields: [], items: [], warnings: ["Plan file missing"], errors: [] };
   return JSON.parse(fs.readFileSync(fullPath, "utf8"));
 }
 

@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { buildQuickFixRepairPlan, isQuickFixItem } from "../lib/quickFixRepairSelector";
 
 const item: any = { priority: "P1", repairCategory: "quick_fix_missing_company", missingFields: ["currentCompany"] };
@@ -6,4 +9,29 @@ assert.equal(isQuickFixItem(item), true, "selects P1 quick fix candidates");
 const plan = buildQuickFixRepairPlan({ batchSize: 25, focus: "quick_fix_missing_company" });
 assert.equal(plan.focus, "quick_fix_missing_company", "focus quick_fix_missing_company works");
 assert.equal(plan.items.every((entry) => entry.targetFields.includes("currentCompany")), true, "focused plan targets company fixes");
+
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "quick-fix-plan-"));
+const repairAuditPath = path.join(tmp, "repair.json");
+const repairItem = (index: number) => ({ repairId: `r${index}`, candidateId: `c${index}`, candidateName: `Candidate ${index}`, workflowStatus: "needs_repair", repairCategory: "quick_fix_missing_company", categories: ["quick_fix_missing_company"], priority: "P1", missingFields: ["currentCompany"], evidenceAvailability: "good_evidence", recommendedRepairAction: "repair", blockerReason: "missing", suggestedBatch: "company_title_quick_fix", readyAfterQuickFix: true, safetyNote: "safe", sortScore: index });
+fs.writeFileSync(repairAuditPath, JSON.stringify({ items: Array.from({ length: 6 }, (_, index) => repairItem(index + 1)) }));
+const historyPaths = Object.fromEntries(["cumulativeApply", "applyResult", "verification", "workflowRefresh", "approvals", "decisions", "suggestions", "audit", "blockedHistory"].map((name) => [name, path.join(tmp, `${name}.json`)]));
+const repairBatchesPath = path.join(tmp, "missing-batches.json");
+const first = buildQuickFixRepairPlan({ repairAuditPath, repairBatchesPath, historyPaths, batchSize: 2, batchIndex: 0 });
+const second = buildQuickFixRepairPlan({ repairAuditPath, repairBatchesPath, historyPaths, batchSize: 2, batchIndex: 1 });
+assert.deepEqual(first.selectedCandidateIds, ["c1", "c2"], "batch index zero selects first slice");
+assert.deepEqual(second.selectedCandidateIds, ["c3", "c4"], "batch index one selects a different slice");
+const offset = buildQuickFixRepairPlan({ repairAuditPath, repairBatchesPath, historyPaths, batchSize: 2, offset: 1 });
+assert.deepEqual(offset.selectedCandidateIds, ["c2", "c3"], "offset selects from the requested candidate position");
+fs.writeFileSync(historyPaths.cumulativeApply, JSON.stringify({ items: [{ candidateId: "c1", fieldName: "currentCompany" }] }));
+fs.writeFileSync(historyPaths.approvals, JSON.stringify({ approvals: [{ candidateId: "c2", fieldName: "currentCompany" }] }));
+fs.writeFileSync(historyPaths.suggestions, JSON.stringify({ suggestions: [{ candidateId: "c3", fieldName: "currentCompany", validationStatus: "blocked" }] }));
+const filtered = buildQuickFixRepairPlan({ repairAuditPath, repairBatchesPath, historyPaths, batchSize: 2, skipPreviouslyBlocked: true });
+assert.deepEqual(filtered.selectedCandidateIds, ["c4", "c5"], "applied, approved, and previously blocked pairs are excluded");
+assert.equal(filtered.excludedAlreadyAppliedCount, 1, "reports applied exclusion count");
+assert.equal(filtered.excludedExistingApprovalsCount, 1, "reports existing approval exclusion count");
+assert.equal(filtered.excludedPreviouslyBlockedCount, 1, "reports blocked exclusion count");
+const source = fs.readFileSync(new URL("../lib/quickFixRepairSelector.ts", import.meta.url), "utf8") + fs.readFileSync(new URL("./planQuickFixRepair.ts", import.meta.url), "utf8");
+assert.equal(/supabase|\.update\(|\.insert\(|\.delete\(/i.test(source), false, "planner has no candidate DB writes or delete");
+assert.equal(/writeWorkflowState|applyWorkflow/i.test(source), false, "planner has no workflow writes");
+assert.equal(/from ["']openai["']|new\s+OpenAI\b/i.test(source), false, "planner has no OpenAI calls");
 console.log("Quick fix repair selector tests passed");
