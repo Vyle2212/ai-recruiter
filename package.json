@@ -140,7 +140,8 @@
     "audit:candidate-portal-mvp-preview": "tsx scripts/auditCandidatePortalMvpPreview.ts",
     "audit:client-portal-mvp-preview": "tsx scripts/auditClientPortalMvpPreview.ts",
     "audit:recruiter-portal-mvp-preview": "tsx scripts/auditRecruiterPortalMvpPreview.ts",
-    "audit:admin-portal-mvp-preview": "tsx scripts/auditAdminPortalMvpPreview.ts"
+    "audit:admin-portal-mvp-preview": "tsx scripts/auditAdminPortalMvpPreview.ts",
+    "audit:portal-navigation-preview": "tsx scripts/auditPortalNavigationPreview.ts"
   },
   "dependencies": {
     "@google-cloud/vision": "^5.3.6",
