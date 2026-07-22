@@ -9,6 +9,7 @@ import "./authMigrationPreview.test";
 import "./rlsPolicyPreview.test";
 import "./loginUiPreview.test";
 import "./authHelperPreview.test";
+import "./middlewareGuardPreview.test";
 import "./roleAccessPreview.test";
 import "./roleAccessPreview.test";
 import fs from "node:fs";
