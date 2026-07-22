@@ -138,7 +138,8 @@
     "audit:mock-auth-session-preview": "tsx scripts/auditMockAuthSessionPreview.ts",
     "audit:staging-auth-enablement-plan": "tsx scripts/auditStagingAuthEnablementPlan.ts",
     "audit:candidate-portal-mvp-preview": "tsx scripts/auditCandidatePortalMvpPreview.ts",
-    "audit:client-portal-mvp-preview": "tsx scripts/auditClientPortalMvpPreview.ts"
+    "audit:client-portal-mvp-preview": "tsx scripts/auditClientPortalMvpPreview.ts",
+    "audit:recruiter-portal-mvp-preview": "tsx scripts/auditRecruiterPortalMvpPreview.ts"
   },
   "dependencies": {
     "@google-cloud/vision": "^5.3.6",
