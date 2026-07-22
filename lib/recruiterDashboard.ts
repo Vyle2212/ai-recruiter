@@ -22,6 +22,7 @@ const ADMIN_DATA_TOOLS=[
   {id:"product-health",title:"Product Health",description:"Review route, safety, and product health status.",href:"/recruiter/dashboard#product-health"},
 ];
 const CANDIDATE_QUALITY_TOOLS=[
+  {id:"candidate-portal",title:"Candidate Portal MVP Preview",description:"Preview candidate profile preferences, availability, consent, and CV upload placeholder.",href:"/candidate/portal",status:"Preview only"},
   {id:"candidate-confirmations",title:"Candidate Confirmations",description:"Review candidate-submitted profile confirmations before applying to the main database.",href:"/recruiter/candidate-self-confirm-review",status:"Preview / review only"},
 ];
 function read(base:string,relative:string){const full=path.join(base,"reports",relative);try{const data=JSON.parse(fs.readFileSync(full,"utf8"));return{data,source:{name:relative,path:full,found:true,generatedAt:data.generatedAt||null} as Source};}catch{return{data:null,source:{name:relative,path:full,found:false,generatedAt:null} as Source};}}
