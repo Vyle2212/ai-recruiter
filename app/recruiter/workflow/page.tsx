@@ -77,7 +77,7 @@ export default function RecruiterWorkflowPage() {
             <h1 className="text-2xl font-semibold text-white">Recruiter Workflow</h1>
             <p className="mt-1 text-sm text-slate-400">Read-only workflow engine. Talent Search remains the source of truth.</p>
           </div>
-          <div className="flex flex-wrap gap-2"><Link href="/recruiter/import-staging" className="rounded-md border border-cyan-500/30 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-cyan-100">Import staging</Link><span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-cyan-100">No candidate DB writes</span>{data?.stateSource ? <span className="rounded-md border border-slate-700 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-300">State source: {data.stateSource}</span> : null}</div>
+          <div className="flex flex-wrap gap-2"><Link href="/recruiter/smart-shortlist" className="rounded-md bg-cyan-400 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-950">Smart Shortlist</Link><Link href="/recruiter/import-staging" className="rounded-md border border-cyan-500/30 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-cyan-100">Import staging</Link><span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-cyan-100">No candidate DB writes</span>{data?.stateSource ? <span className="rounded-md border border-slate-700 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-300">State source: {data.stateSource}</span> : null}</div>
         </div>
       </div>
       <section className="mx-auto max-w-[1500px] px-6 py-6">
