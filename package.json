@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "pretest": "tsx scripts/talentPackBuilder.test.ts && tsx scripts/talentSearchPackCompare.test.ts && tsx scripts/candidatePortal.test.ts && tsx scripts/candidateSelfConfirmSubmission.test.ts && tsx scripts/candidateSelfConfirmApply.test.ts && tsx scripts/roleBasedUx.test.ts && tsx scripts/visualPolish.test.ts && tsx scripts/uiCheckRoutes.test.ts && tsx scripts/uiPolishBacklog.test.ts && tsx scripts/navigationRouteAudit.test.ts && tsx scripts/uiSmokeTestData.test.ts && tsx scripts/productHealthAudit.test.ts && tsx scripts/recruiterDashboard.test.ts && tsx scripts/clientExecutiveReportRequest.test.ts && tsx scripts/clientExecutiveReport.test.ts && tsx scripts/submissionGeneratorRequest.test.ts && tsx scripts/submissionGenerator.test.ts && tsx scripts/candidateCompareRequest.test.ts && tsx scripts/candidateCompare.test.ts && tsx scripts/smartShortlist.test.ts && tsx scripts/candidate360UiModel.test.ts && tsx scripts/quickFixStagingRefresh.test.ts && tsx scripts/manualCleanupFreeze.test.ts && tsx scripts/candidate360Profile.test.ts && tsx scripts/candidateSelfConfirm.test.ts && tsx scripts/importStaging.test.ts && tsx scripts/importMergeApproval.test.ts && tsx scripts/importMergeApply.test.ts",
+    "pretest": "tsx scripts/recruiterTalentSearchResults.test.ts && tsx scripts/talentPackBuilder.test.ts && tsx scripts/talentSearchPackCompare.test.ts && tsx scripts/candidatePortal.test.ts && tsx scripts/candidateSelfConfirmSubmission.test.ts && tsx scripts/candidateSelfConfirmApply.test.ts && tsx scripts/roleBasedUx.test.ts && tsx scripts/visualPolish.test.ts && tsx scripts/uiCheckRoutes.test.ts && tsx scripts/uiPolishBacklog.test.ts && tsx scripts/navigationRouteAudit.test.ts && tsx scripts/uiSmokeTestData.test.ts && tsx scripts/productHealthAudit.test.ts && tsx scripts/recruiterDashboard.test.ts && tsx scripts/clientExecutiveReportRequest.test.ts && tsx scripts/clientExecutiveReport.test.ts && tsx scripts/submissionGeneratorRequest.test.ts && tsx scripts/submissionGenerator.test.ts && tsx scripts/candidateCompareRequest.test.ts && tsx scripts/candidateCompare.test.ts && tsx scripts/smartShortlist.test.ts && tsx scripts/candidate360UiModel.test.ts && tsx scripts/quickFixStagingRefresh.test.ts && tsx scripts/manualCleanupFreeze.test.ts && tsx scripts/candidate360Profile.test.ts && tsx scripts/candidateSelfConfirm.test.ts && tsx scripts/importStaging.test.ts && tsx scripts/importMergeApproval.test.ts && tsx scripts/importMergeApply.test.ts",
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
@@ -122,7 +122,8 @@
     "apply:quick-fix-workflow-refresh": "tsx scripts/applyQuickFixWorkflowRefresh.ts",
     "audit:quick-fix-workflow-refresh-apply": "tsx scripts/auditQuickFixWorkflowRefreshApply.ts",
     "refresh:quick-fix-staging": "tsx scripts/refreshQuickFixStaging.ts",
-    "audit:quick-fix-staging-refresh": "tsx scripts/auditQuickFixStagingRefresh.ts"
+    "audit:quick-fix-staging-refresh": "tsx scripts/auditQuickFixStagingRefresh.ts",
+    "audit:recruiter-talent-search-results": "tsx scripts/auditRecruiterTalentSearchResults.ts"
   },
   "dependencies": {
     "@google-cloud/vision": "^5.3.6",

@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import {buildPackCompareUrlFromSearchParams,normalizeTalentPackSize} from "../lib/talentPackBuilder";
+import {buildRecruiterTalentSearchResults,TALENT_SEARCH_INITIAL_RENDER_LIMIT} from "../lib/recruiterTalentSearchResults";
+assert.ok(fs.existsSync("app/recruiter/talent-search/results/page.tsx"));
+const bridge=fs.readFileSync("app/recruiter/talent-search/page.tsx","utf8"),results=fs.readFileSync("app/recruiter/talent-search/results/page.tsx","utf8");
+assert.match(bridge,/\/recruiter\/talent-search\/results/);
+assert.ok(fs.existsSync("app/search/page.tsx"));assert.ok(fs.existsSync("app/compare/page.tsx"));
+for(const size of [5,10,20]){const url=buildPackCompareUrlFromSearchParams({q:"SAP",country:"Malaysia"},size);assert.match(url,new RegExp(`packSize=${size}`));assert.match(url,/q=SAP/);assert.match(url,/country=Malaysia/)}
+assert.equal(normalizeTalentPackSize(12),5);
+assert.match(buildRecruiterTalentSearchResults({q:"SAP",country:"Malaysia"},{items:[]}).legacySearchUrl,/\/search\?/);
+assert.equal(TALENT_SEARCH_INITIAL_RENDER_LIMIT,30);assert.match(results,/Load more/);
+for(const source of [bridge,results,fs.readFileSync("lib/recruiterTalentSearchResults.ts","utf8")])assert.doesNotMatch(source,/supabase.*(insert|update|upsert|delete)|new OpenAI|rmSync|unlink|Remove-Item/i);
+console.log("recruiterTalentSearchResults.test.ts passed");

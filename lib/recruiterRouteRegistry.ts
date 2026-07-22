@@ -3,6 +3,7 @@ const page=(route:string,feature:string,file:string,linkedFrom:string[]=[],candi
 const api=(route:string,feature:string,file:string,risk:"none"|"preview"="none",candidate=false,selection=false):RecruiterRouteEntry=>({route,type:"api",feature,readOnly:true,writeRisk:risk,expectedFilePath:file,requiresCandidateId:candidate,requiresCandidateSelection:selection,linkedFrom:[],safetyNotes:[risk==="preview"?"POST preview only; no persistence.":"Read-only API; no persistence."],candidateDbWrites:false,workflowWrites:false,openAiCallsDefault:false});
 export const recruiterRouteRegistry:RecruiterRouteEntry[]=[
 page("/recruiter/talent-search","Talent Search","app/recruiter/talent-search/page.tsx",["/recruiter/dashboard"]),
+page("/recruiter/talent-search/results","Talent Search Results","app/recruiter/talent-search/results/page.tsx",["/recruiter/talent-search"]),
 page("/recruiter/compare","Unified Compare","app/recruiter/compare/page.tsx",["/recruiter/dashboard","/recruiter/talent-search","/recruiter/smart-shortlist"]),
 page("/search","Legacy Talent Search","app/search/page.tsx",["/recruiter/talent-search"]),
 page("/compare","Legacy Pack Compare","app/compare/page.tsx",["/recruiter/talent-search","/recruiter/compare"]),
