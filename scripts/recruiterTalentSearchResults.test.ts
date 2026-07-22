@@ -14,6 +14,7 @@ import "./candidatePortalMvpPreview.test";
 import "./clientPortalMvpPreview.test";
 import "./recruiterPortalMvpPreview.test";
 import "./adminPortalMvpPreview.test";
+import "./portalNavigationPreview.test";
 import "./authHelperPreview.test";
 import "./middlewareGuardPreview.test";
 import "./roleAccessPreview.test";

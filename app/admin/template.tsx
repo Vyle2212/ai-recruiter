@@ -1,0 +1,1 @@
+import Link from "next/link";export default function AdminPortalTemplate({children}:{children:React.ReactNode}){return <><div className="border-b border-cyan-500/15 bg-cyan-500/5 px-6 py-2 text-right text-xs"><Link className="text-cyan-300" href="/portal">Back to Portal Switcher</Link></div>{children}</>}
