@@ -12,6 +12,7 @@ page("/auth/preview","Auth & Role Access Preview","app/auth/preview/page.tsx",["
 page("/auth/setup","Supabase Auth Setup Preview","app/auth/setup/page.tsx",["/auth/preview","/recruiter/dashboard"]),
 page("/auth/migrations","Auth DB Migration Preview","app/auth/migrations/page.tsx",["/auth/preview","/auth/setup","/recruiter/dashboard"]),
 page("/auth/rls","RLS Policy Preview","app/auth/rls/page.tsx",["/auth/preview","/auth/setup","/auth/migrations","/recruiter/dashboard"]),
+page("/auth/helpers","Supabase Auth Helpers Preview","app/auth/helpers/page.tsx",["/auth/login","/auth/preview","/auth/setup","/auth/migrations","/auth/rls","/recruiter/dashboard"]),
 page("/client/portal","Client Portal","app/client/portal/page.tsx",["/recruiter/dashboard","/recruiter/client-report"]),
 page("/client/portal/preview","Client Portal Preview","app/client/portal/preview/page.tsx",["/client/portal","/recruiter/client-report","/recruiter/jobs/preview"]),
 page("/client/candidates/[candidateId]","Client Candidate Submission","app/client/candidates/[candidateId]/page.tsx",["/client/portal/preview","/recruiter/submission-generator"],true),
