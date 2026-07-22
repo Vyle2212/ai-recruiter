@@ -9,9 +9,9 @@ export function buildVisualPolishAudit(baseDir=process.cwd()){
   const source=Object.fromEntries(Object.entries(FILES).map(([key,file])=>[key,read(baseDir,file)])) as Record<keyof typeof FILES,string>;
   const checks={
     smartShortlistLoadingFallback:hasAll(source.shortlist,["setTimeout","Smart Shortlist could not be loaded","Retry","setLoading(false)","No matching ready candidates"]),
-    dashboardPrimaryCta:hasAll(source.dashboard,["Open Shortlist","Compare candidates","Create client report"]),
-    safetyLabelsNormalized:hasAll(source.dashboard,["Main DB deletion","Full reupload into main DB","Import staging required","Candidate confirmation recommended","Merge requires approval","OpenAI calls in deterministic v1"]),
-    productHealthEncodingClean:Object.values(source).every(text=>!text.includes("\uFFFD"))&&hasAll(source.dashboard,["Route audit passed","Product health healthy"]),
+    dashboardPrimaryCta:hasAll(source.dashboard,["Daily work queue","Assigned jobs","Next best actions"]),
+    safetyLabelsNormalized:hasAll(source.dashboard,["No candidate DB writes","No job DB writes","No workflow writes","No client/feedback DB writes","No email sends","No OpenAI calls"]),
+    productHealthEncodingClean:Object.values(source).every(text=>!text.includes("\uFFFD"))&&hasAll(source.dashboard,["Route audit and product health remain available","main DB deletion blocked","full reupload blocked"]),
     formHelperPanels:[source.compare,source.submission,source.report].every(text=>hasAll(text,["How to use","Use SAP Consultant sample","No DB writes"])),
     tableReadabilityHelpers:[source.staging,source.merge].every(text=>hasAll(text,["Scroll horizontally","sticky left-0"])),
     navigationLinksPresent:["/recruiter/dashboard","/recruiter/talent-search","/recruiter/smart-shortlist","/recruiter/compare","/recruiter/submission-generator","/recruiter/client-report","/recruiter/import-staging","/recruiter/import-merge","/recruiter/workflow"].every(route=>source.navigation.includes(route)),
