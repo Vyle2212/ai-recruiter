@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { recruiterRouteRegistry } from "../lib/recruiterRouteRegistry";
 import { buildRoleBasedUxAudit } from "./auditRoleBasedUx";
 const report=buildRoleBasedUxAudit();
-assert.equal(report.primaryRecruiterNavItems,6);
+assert.equal(report.primaryRecruiterNavItems,7);
 assert.equal(report.adminDataNavItems,4);
 assert.equal(report.oldTechnicalLabelsHiddenFromPrimaryNav,true);
 assert.equal(report.shortlistInitialRenderLimit,30);

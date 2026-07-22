@@ -6,6 +6,8 @@ page("/recruiter/talent-search","Talent Search","app/recruiter/talent-search/pag
 page("/recruiter/talent-search/results","Talent Search Results","app/recruiter/talent-search/results/page.tsx",["/recruiter/talent-search"]),
 page("/recruiter/pack-compare","Pack Compare","app/recruiter/pack-compare/page.tsx",["/recruiter/compare","/recruiter/talent-search/results"]),
 page("/recruiter/saved-searches","Saved Searches & Packs","app/recruiter/saved-searches/page.tsx",["/recruiter/dashboard","/recruiter/talent-search/results","/recruiter/pack-compare"]),
+page("/recruiter/jobs","Jobs","app/recruiter/jobs/page.tsx",["/recruiter/dashboard"]),
+page("/recruiter/jobs/preview","Job Preview","app/recruiter/jobs/preview/page.tsx",["/recruiter/jobs"]),
 page("/recruiter/compare","Unified Compare","app/recruiter/compare/page.tsx",["/recruiter/dashboard","/recruiter/talent-search","/recruiter/smart-shortlist"]),
 page("/search","Legacy Talent Search","app/search/page.tsx",["/recruiter/talent-search"]),
 page("/compare","Legacy Pack Compare","app/compare/page.tsx",["/recruiter/talent-search","/recruiter/compare","/recruiter/pack-compare"]),
