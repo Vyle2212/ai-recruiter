@@ -2,6 +2,7 @@ export type RecruiterRouteEntry={route:string;type:"page"|"api";feature:string;r
 const page=(route:string,feature:string,file:string,linkedFrom:string[]=[],candidate=false,selection=false):RecruiterRouteEntry=>({route,type:"page",feature,readOnly:true,writeRisk:"none",expectedFilePath:file,requiresCandidateId:candidate,requiresCandidateSelection:selection,linkedFrom,safetyNotes:["UI/read-only route; no candidate DB writes."],candidateDbWrites:false,workflowWrites:false,openAiCallsDefault:false});
 const api=(route:string,feature:string,file:string,risk:"none"|"preview"="none",candidate=false,selection=false):RecruiterRouteEntry=>({route,type:"api",feature,readOnly:true,writeRisk:risk,expectedFilePath:file,requiresCandidateId:candidate,requiresCandidateSelection:selection,linkedFrom:[],safetyNotes:[risk==="preview"?"POST preview only; no persistence.":"Read-only API; no persistence."],candidateDbWrites:false,workflowWrites:false,openAiCallsDefault:false});
 export const recruiterRouteRegistry:RecruiterRouteEntry[]=[
+page("/admin/portal","Admin Portal MVP Preview","app/admin/portal/page.tsx",["/recruiter/dashboard","/auth/mock-session"]),
 page("/auth/login","Login Preview","app/auth/login/page.tsx",["/recruiter/dashboard","/client/portal","/candidate/portal"]),
 page("/auth/signup","Request Access","app/auth/signup/page.tsx",["/auth/login"]),
 page("/auth/forgot-password","Forgot Password","app/auth/forgot-password/page.tsx",["/auth/login"]),

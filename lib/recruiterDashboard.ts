@@ -19,7 +19,7 @@ const ADMIN_DATA_TOOLS=[
   {id:"data-import",title:"Data Import",description:"Stage uploads and reuploads before merge.",href:"/recruiter/import-staging"},
   {id:"merge-review",title:"Merge Review",description:"Review imported data before any merge.",href:"/recruiter/import-merge"},
   {id:"data-workflow",title:"Data Workflow",description:"Review internal data quality and workflow state.",href:"/recruiter/workflow"},
-  {id:"product-health",title:"Product Health",description:"Review route, safety, and product health status.",href:"/recruiter/dashboard#product-health"},
+  {id:"product-health",title:"Admin Portal",description:"Review product health, data operations, auth planning, audits, and safety controls.",href:"/admin/portal"},
 ];
 const CANDIDATE_QUALITY_TOOLS=[
   {id:"candidate-portal",title:"Candidate Portal MVP Preview",description:"Preview candidate profile preferences, availability, consent, and CV upload placeholder.",href:"/candidate/portal",status:"Preview only"},
