@@ -1,0 +1,11 @@
+import type {AccessArea,UserRole} from "./roleAccessTypes";
+export type AuthProviderPreview={provider:"supabase";enabledNow:false;authCallsEnabled:false;middlewareEnabled:false;notes:string[]};
+export type AuthEnvironmentCheck={key:string;requiredEventually:boolean;present:boolean;safeToPrint:boolean;status:"configured"|"missing"|"placeholder"|"not_checked";description:string};
+export type UserProfileFieldPreview={name:"id"|"auth_user_id"|"email"|"full_name"|"role"|"organization_id"|"client_id"|"candidate_id"|"status"|"invited_by"|"created_at"|"updated_at";required:boolean;description:string};
+export type UserProfileSchemaPreview={tableName:"user_profiles";fields:UserProfileFieldPreview[];rlsRequiredEventually:true;migrationStatus:"preview_only"};
+export type RoleMappingPreview={role:UserRole;description:string;defaultLandingRoute:string;allowedRouteAreas:AccessArea[];deniedRouteAreas:AccessArea[];requiresOrganization:boolean;requiresClientOwnership:boolean;requiresCandidateOwnership:boolean};
+export type OrganizationOwnershipPreview={organization_id:string;organization_type:"internal"|"client"|"candidate"|"partner";allowedRoles:UserRole[];ownershipRule:string};
+export type OwnershipModelPreview={key:"internal_organization"|"client_organization"|"candidate_ownership"|"job_ownership"|"report_submission_ownership";label:string;organization:OrganizationOwnershipPreview;description:string};
+export type InviteFlowPreview={inviteType:"recruiter"|"client"|"candidate"|"admin";invitedRole:UserRole;inviteRoutePreview:string;emailSendEnabled:false;tokenStorageEnabled:false;status:"disabled_preview"};
+export type AuthReadinessCategory="ready_for_preview"|"missing_env"|"needs_schema_migration"|"needs_rls_policy"|"needs_middleware"|"needs_invite_flow"|"blocked_for_real_auth";
+export type AuthSetupPreviewState={provider:AuthProviderPreview;environment:AuthEnvironmentCheck[];userProfileSchema:UserProfileSchemaPreview;roleMappings:RoleMappingPreview[];ownershipModels:OwnershipModelPreview[];inviteFlows:InviteFlowPreview[];safety:{noSupabaseAuthCalls:true;middlewareEnforced:false;userDbWrites:0;candidateDbWrites:0;clientDbWrites:0;emailSends:0;openAiCalls:0}};
