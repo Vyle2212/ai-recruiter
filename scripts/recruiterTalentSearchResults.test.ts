@@ -11,6 +11,7 @@ import "./loginUiPreview.test";
 import "./mockAuthSessionPreview.test";
 import "./stagingAuthEnablementPlan.test";
 import "./candidatePortalMvpPreview.test";
+import "./clientPortalMvpPreview.test";
 import "./authHelperPreview.test";
 import "./middlewareGuardPreview.test";
 import "./roleAccessPreview.test";
