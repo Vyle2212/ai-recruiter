@@ -8,14 +8,14 @@ function hasAll(source:string,tokens:string[]){return tokens.every(token=>source
 export function buildVisualPolishAudit(baseDir=process.cwd()){
   const source=Object.fromEntries(Object.entries(FILES).map(([key,file])=>[key,read(baseDir,file)])) as Record<keyof typeof FILES,string>;
   const checks={
-    smartShortlistLoadingFallback:hasAll(source.shortlist,["setTimeout","Smart Shortlist could not be loaded","Retry","setLoading(false)","No shortlist profiles match"]),
-    dashboardPrimaryCta:hasAll(source.dashboard,["Start with Smart Shortlist","Compare candidates","Create client report"]),
+    smartShortlistLoadingFallback:hasAll(source.shortlist,["setTimeout","Smart Shortlist could not be loaded","Retry","setLoading(false)","No matching ready candidates"]),
+    dashboardPrimaryCta:hasAll(source.dashboard,["Open Shortlist","Compare candidates","Create client report"]),
     safetyLabelsNormalized:hasAll(source.dashboard,["Main DB deletion","Full reupload into main DB","Import staging required","Candidate confirmation recommended","Merge requires approval","OpenAI calls in deterministic v1"]),
     productHealthEncodingClean:Object.values(source).every(text=>!text.includes("\uFFFD"))&&hasAll(source.dashboard,["Route audit passed","Product health healthy"]),
     formHelperPanels:[source.compare,source.submission,source.report].every(text=>hasAll(text,["How to use","Use SAP Consultant sample","No DB writes"])),
     tableReadabilityHelpers:[source.staging,source.merge].every(text=>hasAll(text,["Scroll horizontally","sticky left-0"])),
     navigationLinksPresent:["/recruiter/dashboard","/recruiter/smart-shortlist","/recruiter/candidate-compare","/recruiter/submission-generator","/recruiter/client-report","/recruiter/import-staging","/recruiter/import-merge","/recruiter/workflow"].every(route=>source.navigation.includes(route)),
-    emptyStatesPresent:hasAll(source.shortlist,["Smart Shortlist could not be loaded","No shortlist profiles match"])&&hasAll(source.compare,["Select at least 2 candidates.","No comparison has run yet"])&&source.submission.includes("Enter a candidate ID")&&hasAll(source.report,["Select at least 2 candidates.","Select 2"])&&source.staging.includes("No staged candidates match")&&source.merge.includes("No merge proposals match"),
+    emptyStatesPresent:hasAll(source.shortlist,["Smart Shortlist could not be loaded","No matching ready candidates"])&&hasAll(source.compare,["Select at least 2 candidates.","No comparison has run yet"])&&source.submission.includes("Enter a candidate ID")&&hasAll(source.report,["Select at least 2 candidates.","Select 2"])&&source.staging.includes("No staged candidates match")&&source.merge.includes("No merge proposals match"),
   };
   return{generatedAt:new Date().toISOString(),mode:"read-only Visual Polish audit; no candidate DB writes; no OpenAI calls",...checks,noOpenAiCalls:true,candidateDbWrites:0,workflowWrites:0,passed:Object.values(checks).every(Boolean)};
 }

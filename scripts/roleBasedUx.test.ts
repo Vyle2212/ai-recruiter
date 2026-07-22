@@ -1,0 +1,22 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import { recruiterRouteRegistry } from "../lib/recruiterRouteRegistry";
+import { buildRoleBasedUxAudit } from "./auditRoleBasedUx";
+const report=buildRoleBasedUxAudit();
+assert.equal(report.primaryRecruiterNavItems,5);
+assert.equal(report.adminDataNavItems,4);
+assert.equal(report.oldTechnicalLabelsHiddenFromPrimaryNav,true);
+assert.equal(report.shortlistInitialRenderLimit,30);
+assert.equal(report.shortlistLoadMoreAvailable,true);
+assert.equal(report.selectedCandidateActionsPresent,true);
+assert.equal(report.formPagesHelperTextPresent,true);
+assert.equal(report.adminDataPagesLabeled,true);
+assert.equal(report.routesBackwardCompatible,true);
+assert.equal(new Set(recruiterRouteRegistry.map(item=>item.route)).size,recruiterRouteRegistry.length);
+assert.equal(report.candidateDbWrites,0);
+assert.equal(report.workflowWrites,0);
+assert.equal(report.noOpenAiCalls,true);
+for(const file of ["app/recruiter/layout.tsx","app/recruiter/smart-shortlist/page.tsx","scripts/auditRoleBasedUx.ts"]){const source=fs.readFileSync(file,"utf8");assert.doesNotMatch(source,/\.insert\(|\.update\(|\.upsert\(|\.delete\(|openai\./i);}
+assert.equal(report.passed,true);
+console.log("roleBasedUx.test.ts passed");
+
