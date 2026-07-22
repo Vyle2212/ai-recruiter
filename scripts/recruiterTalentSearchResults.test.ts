@@ -7,6 +7,7 @@ import "./roleAccessPreview.test";
 import "./supabaseAuthSetupPreview.test";
 import "./authMigrationPreview.test";
 import "./rlsPolicyPreview.test";
+import "./loginUiPreview.test";
 import "./roleAccessPreview.test";
 import "./roleAccessPreview.test";
 import fs from "node:fs";

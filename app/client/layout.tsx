@@ -1,0 +1,1 @@
+import Link from "next/link";export default function ClientLayout({children}:{children:React.ReactNode}){return <><div className="border-b border-cyan-500/20 bg-cyan-500/5 px-6 py-2 text-center text-xs text-slate-300">Real login is not enabled. <Link className="text-cyan-300" href="/auth/login?role=client">Open sign in preview</Link>.</div>{children}</>}
