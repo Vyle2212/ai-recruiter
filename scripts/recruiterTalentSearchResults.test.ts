@@ -10,6 +10,7 @@ import "./rlsPolicyPreview.test";
 import "./loginUiPreview.test";
 import "./mockAuthSessionPreview.test";
 import "./stagingAuthEnablementPlan.test";
+import "./candidatePortalMvpPreview.test";
 import "./authHelperPreview.test";
 import "./middlewareGuardPreview.test";
 import "./roleAccessPreview.test";
