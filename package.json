@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "pretest": "tsx scripts/candidateCompareRequest.test.ts && tsx scripts/candidateCompare.test.ts && tsx scripts/smartShortlist.test.ts && tsx scripts/candidate360UiModel.test.ts && tsx scripts/quickFixStagingRefresh.test.ts && tsx scripts/manualCleanupFreeze.test.ts && tsx scripts/candidate360Profile.test.ts && tsx scripts/candidateSelfConfirm.test.ts && tsx scripts/importStaging.test.ts && tsx scripts/importMergeApproval.test.ts && tsx scripts/importMergeApply.test.ts",
+    "pretest": "tsx scripts/submissionGeneratorRequest.test.ts && tsx scripts/submissionGenerator.test.ts && tsx scripts/candidateCompareRequest.test.ts && tsx scripts/candidateCompare.test.ts && tsx scripts/smartShortlist.test.ts && tsx scripts/candidate360UiModel.test.ts && tsx scripts/quickFixStagingRefresh.test.ts && tsx scripts/manualCleanupFreeze.test.ts && tsx scripts/candidate360Profile.test.ts && tsx scripts/candidateSelfConfirm.test.ts && tsx scripts/importStaging.test.ts && tsx scripts/importMergeApproval.test.ts && tsx scripts/importMergeApply.test.ts",
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
@@ -20,6 +20,7 @@
     "audit:candidate360": "tsx scripts/auditCandidate360Profiles.ts",
     "audit:smart-shortlist": "tsx scripts/auditSmartShortlist.ts",
     "audit:candidate-compare": "tsx scripts/auditCandidateCompare.ts",
+    "audit:submission-generator": "tsx scripts/auditSubmissionGenerator.ts",
     "audit:candidates": "tsx scripts/audit-candidates.ts",
     "audit:display": "tsx scripts/auditCandidateDisplay.ts",
     "audit:display:preview": "tsx scripts/previewCandidateDisplayRepairs.ts",
