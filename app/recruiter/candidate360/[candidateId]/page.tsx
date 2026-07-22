@@ -2,75 +2,40 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import type { Candidate360Field, Candidate360Profile } from "@/lib/candidate360Types";
 
-type QuickFixPanel = { candidateId: string; candidateName: string; suggestions: Array<{ suggestionId: string; fieldName: string; suggestedValue: string; confidence: number; evidenceSnippet: string; validationStatus: string; approvalReadiness: string; validationReasons: string[] }>; suggestedNextAction: string; safetyNote: string };
+function badge(value: string) {
+  if (/confirmed|verified/.test(value)) return "border-emerald-500/30 bg-emerald-500/10 text-emerald-100";
+  if (/conflict|review/.test(value)) return "border-amber-500/30 bg-amber-500/10 text-amber-100";
+  return "border-slate-700 bg-slate-900 text-slate-300";
+}
+function FieldCard({ label, field }: { label: string; field: Candidate360Field }) {
+  return <div className="border border-slate-800 bg-[#05070A] p-4"><div className="text-xs font-semibold uppercase text-slate-500">{label}</div><div className="mt-2 text-base text-white">{String(field.value ?? "") || "Missing"}</div><div className="mt-3 flex flex-wrap gap-2"><span className={`rounded border px-2 py-1 text-xs ${badge(field.verificationStatus)}`}>{field.verificationStatus.replace(/_/g, " ")}</span><span className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400">{field.source.replace(/_/g, " ")}</span></div>{field.conflictReason ? <p className="mt-2 text-xs text-amber-100">{field.conflictReason}</p> : null}</div>;
+}
 
-type RepairPanel = { candidateId: string; repairCategory: string; priority: string; missingFields: string[]; recommendedRepairAction: string; evidenceAvailability: string; blockedFromShortlistReason: string; suggestedNextStep: string; aiReviewStatus: string; applyHistoryStatus: string; safetyNote: string };
-
-type Candidate360Panel = {
-  candidateId: string;
-  candidateName: string;
-  currentWorkflowStatus: string;
-  profileQualityStatus: string;
-  validationStatus: string;
-  aiExtractionReviewStatus: string;
-  stagingApplyHistoryStatus: string;
-  recommendedNextActions: Array<{ actionId: string; recommendedNextAction: string; reason: string; priority: string; safetyNote: string }>;
-  allowedActions: Array<{ action: string; reasons: string[] }>;
-  blockedActions: Array<{ action: string; reasons: string[] }>;
-  timeline: Array<{ at: string; event: string; note: string }>;
-  safetyNote: string;
-  recommendedNextAction?: string;
-  blockerReasons?: string[];
-  missingFields?: string[];
-  applyHistoryStatus?: string;
-  lastUpdatedAt?: string;
-  stateSource?: string;
-};
-
-export default function Candidate360WorkflowPage({ params }: { params: Promise<{ candidateId: string }> }) {
-  const [candidateId, setCandidateId] = useState("");
-  const [panel, setPanel] = useState<Candidate360Panel | null>(null);
-  const [repairPanel, setRepairPanel] = useState<RepairPanel | null>(null);
-  const [quickFixPanel, setQuickFixPanel] = useState<QuickFixPanel | null>(null);
+export default function RecruiterCandidate360Page({ params }: { params: Promise<{ candidateId: string }> }) {
+  const [profile, setProfile] = useState<Candidate360Profile | null>(null);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-
   useEffect(() => {
-    let active = true;
-    params.then(({ candidateId }) => {
-      if (!active) return;
-      setCandidateId(candidateId);
-      fetch(`/api/recruiter/repair-queue/candidate/${candidateId}`).then(async (res) => { if (res.ok) setRepairPanel(await res.json()); }).catch(() => undefined);
-      fetch(`/api/recruiter/quick-fix-repair/candidate/${candidateId}`).then(async (res) => { if (res.ok) setQuickFixPanel(await res.json()); }).catch(() => undefined);
-      fetch(`/api/recruiter/workflow/candidate/${candidateId}`)
-        .then(async (res) => {
-          const json = await res.json();
-          if (!res.ok) throw new Error(json.error || "Unable to load Candidate360 workflow");
-          setPanel(json);
-        })
-        .catch((err) => setError(err instanceof Error ? err.message : "Unable to load Candidate360 workflow"))
-        .finally(() => setLoading(false));
-    });
-    return () => { active = false; };
+    const controller = new AbortController();
+    params.then(({ candidateId }) => fetch(`/api/candidate360/${encodeURIComponent(candidateId)}`, { signal: controller.signal }))
+      .then(async (response) => { const json = await response.json(); if (!response.ok) throw new Error(json.error || "Unable to load profile"); setProfile(json); })
+      .catch((reason) => { if (reason?.name !== "AbortError") setError(reason instanceof Error ? reason.message : "Unable to load profile"); });
+    return () => controller.abort();
   }, [params]);
-
-  return (
-    <main className="min-h-screen bg-[#05070A] text-slate-100">
-      <div className="border-b border-slate-800 bg-[#070A0F] px-6 py-5"><div className="mx-auto max-w-[1200px]"><Link href="/recruiter/workflow" className="text-sm text-cyan-100">Back to workflow</Link><h1 className="mt-2 text-2xl font-semibold text-white">Candidate360 Action Panel</h1><p className="mt-1 text-sm text-slate-400">Dry-run workflow actions only. Candidate records are not updated.</p>{panel?.stateSource ? <p className="mt-1 text-sm text-cyan-100">State source: {panel.stateSource}</p> : null}</div></div>
-      <section className="mx-auto max-w-[1200px] px-6 py-6">
-        {loading ? <div className="border border-slate-800 bg-[#0B0F16] p-6 text-slate-300">Loading Candidate360 workflow...</div> : null}
-        {error ? <div className="border border-red-500/30 bg-red-500/10 p-4 text-red-100">{error}</div> : null}
-        {panel ? <div className="space-y-5">
-          <div className="border border-slate-800 bg-[#0B0F16] p-5"><h2 className="text-xl font-semibold text-white">{panel.candidateName}</h2><p className="mt-1 text-sm text-slate-400">{candidateId}</p><div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-5">{[["Workflow status", panel.currentWorkflowStatus], ["Next action", panel.recommendedNextAction || panel.recommendedNextActions[0]?.recommendedNextAction || "No action"], ["Profile quality", panel.profileQualityStatus], ["Validation", panel.validationStatus], ["AI extraction", panel.aiExtractionReviewStatus], ["Staging/apply", panel.stagingApplyHistoryStatus], ["Apply history", panel.applyHistoryStatus || "Not available"], ["Last updated", panel.lastUpdatedAt || "Not available"]].map(([label, value]) => <div key={label} className="border border-slate-800 bg-[#05070A] p-3"><div className="text-xs font-semibold uppercase text-slate-500">{label}</div><div className="mt-2 text-sm font-semibold text-white">{value}</div></div>)}</div></div>
-
-          {repairPanel ? <div className="border border-cyan-500/20 bg-[#0B0F16] p-5"><h3 className="font-semibold text-white">Repair queue</h3><div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">{[["Repair category", repairPanel.repairCategory], ["Priority", repairPanel.priority], ["Missing fields", repairPanel.missingFields.join(", ") || "None"], ["Evidence", repairPanel.evidenceAvailability], ["Suggested next step", repairPanel.suggestedNextStep], ["AI review", repairPanel.aiReviewStatus], ["Apply history", repairPanel.applyHistoryStatus]].map(([label, value]) => <div key={label} className="border border-slate-800 bg-[#05070A] p-3"><div className="text-xs font-semibold uppercase text-slate-500">{label}</div><div className="mt-2 text-sm font-semibold text-white">{value}</div></div>)}</div><div className="mt-4 border border-slate-800 bg-[#05070A] p-3 text-sm text-slate-300"><div className="font-semibold text-cyan-100">{repairPanel.recommendedRepairAction}</div><div className="mt-1 text-amber-100">Why blocked: {repairPanel.blockedFromShortlistReason}</div><div className="mt-1 text-xs text-slate-500">{repairPanel.safetyNote}</div></div></div> : null}
-          {quickFixPanel?.suggestions?.length ? <div className="border border-emerald-500/20 bg-[#0B0F16] p-5"><h3 className="font-semibold text-white">Quick fix suggestions</h3><p className="mt-1 text-sm text-slate-400">{quickFixPanel.suggestedNextAction}</p><div className="mt-3 grid gap-3 md:grid-cols-2">{quickFixPanel.suggestions.map((item) => <div key={item.suggestionId} className="border border-slate-800 bg-[#05070A] p-3 text-sm"><div className="font-semibold text-cyan-100">{item.fieldName}: {item.suggestedValue || "Not available"}</div><div className="mt-1 text-slate-300">Confidence: {item.confidence}%</div><div className="mt-1 text-slate-400">{item.evidenceSnippet || "Missing evidence"}</div><div className="mt-1 text-xs text-amber-100">{item.validationStatus.replace(/_/g, " ")} ? {item.approvalReadiness.replace(/_/g, " ")}</div></div>)}</div><p className="mt-3 text-xs text-slate-500">{quickFixPanel.safetyNote}</p></div> : null}
-          <div className="grid gap-5 lg:grid-cols-2"><div className="border border-slate-800 bg-[#0B0F16] p-5"><h3 className="font-semibold text-white">Recommended next actions</h3><div className="mt-3 space-y-2">{panel.recommendedNextActions.map((item) => <div key={item.actionId} className="border border-slate-800 bg-[#05070A] p-3 text-sm text-slate-300"><div className="font-semibold text-cyan-100">{item.recommendedNextAction.replace(/_/g, " ")}</div><div className="mt-1">{item.reason}</div><div className="mt-1 text-xs text-slate-500">{item.safetyNote}</div></div>)}{!panel.recommendedNextActions.length ? <div className="text-sm text-slate-400">No immediate workflow action.</div> : null}</div></div><div className="border border-slate-800 bg-[#0B0F16] p-5"><h3 className="font-semibold text-white">Allowed actions</h3><div className="mt-3 grid gap-2">{panel.allowedActions.map((item) => <button key={item.action} className="rounded-md border border-cyan-500/30 px-3 py-2 text-left text-sm text-cyan-100">{item.action.replace(/_/g, " ")}<span className="block text-xs text-slate-500">Dry-run preview</span></button>)}</div></div></div>
-          <div className="border border-slate-800 bg-[#0B0F16] p-5"><h3 className="font-semibold text-white">Blocked actions</h3><div className="mt-3 grid gap-2 md:grid-cols-2">{panel.blockedActions.map((item) => <div key={item.action} className="border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-100"><div className="font-semibold">{item.action.replace(/_/g, " ")}</div><div className="mt-1 text-xs">{item.reasons.join("; ")}</div></div>)}</div></div>
-          <div className="border border-slate-800 bg-[#0B0F16] p-5"><h3 className="font-semibold text-white">Timeline / audit history</h3><div className="mt-3 space-y-2">{panel.timeline.map((item) => <div key={`${item.at}-${item.event}`} className="border border-slate-800 bg-[#05070A] p-3 text-sm text-slate-300"><div className="text-xs text-slate-500">{item.at}</div><div className="font-semibold text-white">{item.event.replace(/_/g, " ")}</div><div>{item.note}</div></div>)}</div>{panel.missingFields?.length ? <p className="mt-4 text-sm text-amber-100">Missing fields: {panel.missingFields.join(", ")}</p> : null}{panel.blockerReasons?.length ? <p className="mt-2 text-sm text-amber-100">Blockers: {panel.blockerReasons.join("; ")}</p> : null}<p className="mt-4 text-sm text-cyan-100">{panel.safetyNote}</p></div>
-        </div> : null}
-      </section>
-    </main>
-  );
+  return <main className="min-h-screen bg-[#05070A] text-slate-100">
+    <header className="border-b border-slate-800 bg-[#070A0F] px-6 py-5"><div className="mx-auto max-w-[1300px]"><Link href="/recruiter/workflow" className="text-sm text-cyan-100">Back to workflow</Link><div className="mt-2 flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-2xl font-semibold text-white">Candidate360 Profile</h1><p className="mt-1 text-sm text-slate-400">Trusted-field profile foundation. Read-only; candidate records are not updated.</p></div>{profile ? <Link href={`/candidate/self-confirm/${profile.candidateId}`} className="rounded-md bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950">Open self-confirm preview</Link> : null}</div></div></header>
+    <section className="mx-auto max-w-[1300px] space-y-5 px-6 py-6">
+      {error ? <div className="border border-red-500/30 bg-red-500/10 p-4 text-red-100">{error}</div> : null}
+      {!profile && !error ? <div className="border border-slate-800 bg-[#0B0F16] p-6">Loading Candidate360 profile...</div> : null}
+      {profile ? <>
+        <div className="border border-slate-800 bg-[#0B0F16] p-5"><div className="flex flex-wrap justify-between gap-4"><div><div className="text-xs font-semibold uppercase tracking-wider text-cyan-200">Executive Summary</div><h2 className="mt-2 text-3xl font-semibold text-white">{String(profile.displayName.value) || "Candidate requires identity confirmation"}</h2><p className="mt-1 text-slate-300">{String(profile.headline.value) || "Headline not provided"} � {String(profile.currentCompany.value) || "Company not provided"}</p><p className="mt-3 text-sm text-slate-400">{profile.workExperienceSummary}. {profile.educationSummary}.</p></div><div className="min-w-52 border border-slate-700 bg-[#05070A] p-4"><div className="text-xs uppercase text-slate-500">Completeness</div><div className="mt-1 text-4xl font-semibold text-white">{profile.completeness.score}%</div><div className="mt-2 text-xs text-slate-400">{profile.completeness.completedFields}/{profile.completeness.totalFields} foundation fields</div></div></div></div>
+        <div className="border border-slate-800 bg-[#0B0F16] p-5"><h3 className="font-semibold text-white">Trust / verification summary</h3><div className="mt-3 flex flex-wrap gap-2">{Object.entries(profile.verificationSummary).map(([key, count]) => <span key={key} className={`rounded border px-3 py-2 text-xs ${badge(key)}`}>{key.replace(/_/g, " ")}: {count}</span>)}</div></div>
+        <div><h3 className="mb-3 font-semibold text-white">Core fields</h3><div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4"><FieldCard label="Current title" field={profile.currentTitle}/><FieldCard label="Current company" field={profile.currentCompany}/><FieldCard label="Location" field={profile.location}/><FieldCard label="Email" field={profile.contactInfo.email}/><FieldCard label="Phone" field={profile.contactInfo.phone}/><FieldCard label="Years experience" field={profile.yearsOfExperience}/></div></div>
+        <div className="grid gap-5 lg:grid-cols-2"><div className="border border-slate-800 bg-[#0B0F16] p-5"><h3 className="font-semibold">Missing fields</h3><div className="mt-3 flex flex-wrap gap-2">{profile.missingFields.map((item) => <span key={item} className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-sm text-amber-100">{item}</span>)}{!profile.missingFields.length ? <span className="text-sm text-emerald-100">No foundation fields missing</span> : null}</div></div><div className="border border-slate-800 bg-[#0B0F16] p-5"><h3 className="font-semibold">Candidate self-confirm status</h3><p className="mt-2 text-cyan-100">{profile.selfConfirmStatus.replace(/_/g, " ")}</p><p className="mt-2 text-sm text-slate-400">Needs candidate confirmation: {profile.readiness.needsCandidateConfirmation ? "yes" : "no"} � Recruiter review: {profile.readiness.needsRecruiterReview ? "yes" : "no"}</p></div></div>
+        <div className="grid gap-5 lg:grid-cols-2"><div className="border border-slate-800 bg-[#0B0F16] p-5"><h3 className="font-semibold">Work experience</h3><div className="mt-3 space-y-3">{profile.workExperience.map((item) => <div key={item.id} className="border border-slate-800 bg-[#05070A] p-3"><div className="font-semibold">{String(item.title.value) || "Role to confirm"}</div><div className="text-sm text-cyan-100">{String(item.company.value) || "Company to confirm"}</div><div className="text-xs text-slate-500">{String(item.startDate.value)} � {String(item.endDate.value) || "Present"}</div></div>)}{!profile.workExperience.length ? <p className="text-sm text-slate-400">No structured experience. Candidate should complete this section.</p> : null}</div></div><div className="border border-slate-800 bg-[#0B0F16] p-5"><h3 className="font-semibold">Skills / modules</h3><div className="mt-3 flex flex-wrap gap-2">{[...profile.sapModules, ...profile.techSkills].map((item, index) => <span key={`${item.name.value}-${index}`} className="rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-sm text-cyan-100">{String(item.name.value)}</span>)}{!profile.sapModules.length && !profile.techSkills.length ? <p className="text-sm text-slate-400">Skills need confirmation.</p> : null}</div></div></div>
+        <div className="grid gap-5 lg:grid-cols-2"><div className="border border-slate-800 bg-[#0B0F16] p-5"><h3 className="font-semibold">Recruiter next actions</h3><ul className="mt-3 space-y-2 text-sm text-slate-300">{profile.recommendedRecruiterActions.map((item) => <li key={item}>� {item}</li>)}{!profile.recommendedRecruiterActions.length ? <li>No immediate recruiter action.</li> : null}</ul></div><div className="border border-slate-800 bg-[#0B0F16] p-5"><h3 className="font-semibold">Workflow status</h3><div className="mt-3 grid grid-cols-2 gap-3 text-sm"><div><span className="text-slate-500">Status</span><div>{profile.workflowStatus.replace(/_/g, " ")}</div></div><div><span className="text-slate-500">Repair queue</span><div>{profile.repairQueueStatus.replace(/_/g, " ")}</div></div><div><span className="text-slate-500">Searchable</span><div>{profile.readiness.searchable ? "yes" : "no"}</div></div><div><span className="text-slate-500">Ready for shortlist</span><div>{profile.readiness.readyForShortlist ? "yes" : "no"}</div></div></div></div></div>
+      </> : null}
+    </section>
+  </main>;
 }
