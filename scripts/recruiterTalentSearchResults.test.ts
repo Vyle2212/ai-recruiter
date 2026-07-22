@@ -4,6 +4,7 @@ import "./savedSearchPackPreview.test";
 import "./jobManagementPreview.test";
 import "./clientPortalPreview.test";
 import "./roleAccessPreview.test";
+import "./supabaseAuthSetupPreview.test";
 import "./roleAccessPreview.test";
 import "./roleAccessPreview.test";
 import fs from "node:fs";
