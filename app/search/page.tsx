@@ -2327,6 +2327,7 @@ export default function TalentPoolSearchPage() {
 
   return (
     <main className="min-h-screen bg-black p-5 text-white">
+      <div className="mx-auto mb-4 flex max-w-[1600px] flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4"><div><div className="text-xs font-semibold uppercase text-cyan-200">Talent Search results</div><p className="mt-1 text-sm text-slate-400">Build a Top 5 / 10 / 20 result pack, then use Pack Compare for executive review.</p></div><div className="flex flex-wrap gap-3 text-sm"><Link href="/recruiter/talent-search" className="text-cyan-100">Back to Talent Search</Link><Link href="/recruiter/dashboard" className="text-cyan-100">AI Recruiter Dashboard</Link></div></div>
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-3xl font-semibold tracking-tight">
           Talent Pool Search

@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import {buildTalentPackSummary,getTalentPackLabel,normalizeTalentPackSize} from "../lib/talentPackBuilder";
+assert.deepEqual([5,10,20].map(normalizeTalentPackSize),[5,10,20]);
+assert.equal(normalizeTalentPackSize(7),5);
+assert.equal(getTalentPackLabel(10),"Top 10 Pack");
+const pack=buildTalentPackSummary([{candidateId:"a",ranking:1},{candidateId:"a",ranking:2},{candidateId:"b",ranking:3},{candidateId:"c",ranking:4}],5);
+assert.deepEqual(pack.candidateIds,["a","b","c"]);
+assert.deepEqual(pack.candidates.map(item=>item.ranking),[1,3,4]);
+assert.equal(pack.readOnly,true);
+const source=fs.readFileSync("lib/talentPackBuilder.ts","utf8");
+assert.doesNotMatch(source,/\.insert\(|\.update\(|\.upsert\(|\.delete\(|new OpenAI|unlink|rmSync/i);
+console.log("talentPackBuilder.test.ts passed");

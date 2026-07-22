@@ -4,8 +4,9 @@ import path from "node:path";
 type Source={name:string;path:string;found:boolean;generatedAt:string|null};
 const MILESTONES=["manual-cleanup-v1-freeze","candidate360-self-confirm-foundation-v1","import-staging-v1","import-merge-approval-workflow-v1","candidate360-smart-shortlist-v1","candidate-compare-v1","submission-generator-v1","client-executive-report-v1"];
 const RECRUITER_WORKSPACE=[
+  {id:"talent-search",title:"Talent Search",description:"Search the talent pool and build packs 5 / 10 / 20.",href:"/recruiter/talent-search"},
   {id:"shortlist",title:"Shortlist",description:"Browse profiles ready for recruiter review.",href:"/recruiter/smart-shortlist"},
-  {id:"compare",title:"Compare",description:"Compare 2-5 candidates against a role.",href:"/recruiter/candidate-compare"},
+  {id:"compare",title:"Compare",description:"Quick compare selected candidates or compare search packs.",href:"/recruiter/compare"},
   {id:"submissions",title:"Submissions",description:"Generate editable candidate submission drafts.",href:"/recruiter/submission-generator"},
   {id:"reports",title:"Reports",description:"Generate client-ready shortlist reports.",href:"/recruiter/client-report"},
   {id:"candidate360",title:"Candidate360",description:"Review profile trust, completeness, and missing information.",href:"/recruiter/smart-shortlist"},
@@ -17,7 +18,7 @@ const ADMIN_DATA_TOOLS=[
   {id:"product-health",title:"Product Health",description:"Review route, safety, and product health status.",href:"/recruiter/dashboard#product-health"},
 ];
 const CANDIDATE_QUALITY_TOOLS=[
-  {id:"candidate-confirmations",title:"Candidate Confirmations",description:"Review staged candidate confirmations and conflicts before any approved apply.",href:"/recruiter/candidate-self-confirm-review",status:"Preview / review only"},
+  {id:"candidate-confirmations",title:"Candidate Confirmations",description:"Review candidate-submitted profile confirmations before applying to the main database.",href:"/recruiter/candidate-self-confirm-review",status:"Preview / review only"},
 ];
 function read(base:string,relative:string){const full=path.join(base,"reports",relative);try{const data=JSON.parse(fs.readFileSync(full,"utf8"));return{data,source:{name:relative,path:full,found:true,generatedAt:data.generatedAt||null} as Source};}catch{return{data:null,source:{name:relative,path:full,found:false,generatedAt:null} as Source};}}
 

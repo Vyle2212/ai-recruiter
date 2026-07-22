@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "pretest": "tsx scripts/candidatePortal.test.ts && tsx scripts/candidateSelfConfirmSubmission.test.ts && tsx scripts/candidateSelfConfirmApply.test.ts && tsx scripts/roleBasedUx.test.ts && tsx scripts/visualPolish.test.ts && tsx scripts/uiCheckRoutes.test.ts && tsx scripts/uiPolishBacklog.test.ts && tsx scripts/navigationRouteAudit.test.ts && tsx scripts/uiSmokeTestData.test.ts && tsx scripts/productHealthAudit.test.ts && tsx scripts/recruiterDashboard.test.ts && tsx scripts/clientExecutiveReportRequest.test.ts && tsx scripts/clientExecutiveReport.test.ts && tsx scripts/submissionGeneratorRequest.test.ts && tsx scripts/submissionGenerator.test.ts && tsx scripts/candidateCompareRequest.test.ts && tsx scripts/candidateCompare.test.ts && tsx scripts/smartShortlist.test.ts && tsx scripts/candidate360UiModel.test.ts && tsx scripts/quickFixStagingRefresh.test.ts && tsx scripts/manualCleanupFreeze.test.ts && tsx scripts/candidate360Profile.test.ts && tsx scripts/candidateSelfConfirm.test.ts && tsx scripts/importStaging.test.ts && tsx scripts/importMergeApproval.test.ts && tsx scripts/importMergeApply.test.ts",
+    "pretest": "tsx scripts/talentPackBuilder.test.ts && tsx scripts/talentSearchPackCompare.test.ts && tsx scripts/candidatePortal.test.ts && tsx scripts/candidateSelfConfirmSubmission.test.ts && tsx scripts/candidateSelfConfirmApply.test.ts && tsx scripts/roleBasedUx.test.ts && tsx scripts/visualPolish.test.ts && tsx scripts/uiCheckRoutes.test.ts && tsx scripts/uiPolishBacklog.test.ts && tsx scripts/navigationRouteAudit.test.ts && tsx scripts/uiSmokeTestData.test.ts && tsx scripts/productHealthAudit.test.ts && tsx scripts/recruiterDashboard.test.ts && tsx scripts/clientExecutiveReportRequest.test.ts && tsx scripts/clientExecutiveReport.test.ts && tsx scripts/submissionGeneratorRequest.test.ts && tsx scripts/submissionGenerator.test.ts && tsx scripts/candidateCompareRequest.test.ts && tsx scripts/candidateCompare.test.ts && tsx scripts/smartShortlist.test.ts && tsx scripts/candidate360UiModel.test.ts && tsx scripts/quickFixStagingRefresh.test.ts && tsx scripts/manualCleanupFreeze.test.ts && tsx scripts/candidate360Profile.test.ts && tsx scripts/candidateSelfConfirm.test.ts && tsx scripts/importStaging.test.ts && tsx scripts/importMergeApproval.test.ts && tsx scripts/importMergeApply.test.ts",
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
@@ -35,6 +35,7 @@
     "apply:candidate-self-confirm": "tsx scripts/applyCandidateSelfConfirm.ts",
     "audit:candidate-self-confirm-apply": "tsx scripts/auditCandidateSelfConfirmApply.ts",
     "audit:candidate-portal": "tsx scripts/auditCandidatePortal.ts",
+    "audit:talent-search-pack-compare": "tsx scripts/auditTalentSearchPackCompare.ts",
     "audit:candidates": "tsx scripts/audit-candidates.ts",
     "audit:display": "tsx scripts/auditCandidateDisplay.ts",
     "audit:display:preview": "tsx scripts/previewCandidateDisplayRepairs.ts",
