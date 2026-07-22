@@ -126,7 +126,8 @@
     "audit:recruiter-talent-search-results": "tsx scripts/auditRecruiterTalentSearchResults.ts",
     "audit:recruiter-pack-compare": "tsx scripts/auditRecruiterPackCompare.ts",
     "audit:saved-search-pack-preview": "tsx scripts/auditSavedSearchPackPreview.ts",
-    "audit:job-management-preview": "tsx scripts/auditJobManagementPreview.ts"
+    "audit:job-management-preview": "tsx scripts/auditJobManagementPreview.ts",
+    "audit:client-portal-preview": "tsx scripts/auditClientPortalPreview.ts"
   },
   "dependencies": {
     "@google-cloud/vision": "^5.3.6",

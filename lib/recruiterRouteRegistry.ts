@@ -2,6 +2,9 @@ export type RecruiterRouteEntry={route:string;type:"page"|"api";feature:string;r
 const page=(route:string,feature:string,file:string,linkedFrom:string[]=[],candidate=false,selection=false):RecruiterRouteEntry=>({route,type:"page",feature,readOnly:true,writeRisk:"none",expectedFilePath:file,requiresCandidateId:candidate,requiresCandidateSelection:selection,linkedFrom,safetyNotes:["UI/read-only route; no candidate DB writes."],candidateDbWrites:false,workflowWrites:false,openAiCallsDefault:false});
 const api=(route:string,feature:string,file:string,risk:"none"|"preview"="none",candidate=false,selection=false):RecruiterRouteEntry=>({route,type:"api",feature,readOnly:true,writeRisk:risk,expectedFilePath:file,requiresCandidateId:candidate,requiresCandidateSelection:selection,linkedFrom:[],safetyNotes:[risk==="preview"?"POST preview only; no persistence.":"Read-only API; no persistence."],candidateDbWrites:false,workflowWrites:false,openAiCallsDefault:false});
 export const recruiterRouteRegistry:RecruiterRouteEntry[]=[
+page("/client/portal","Client Portal","app/client/portal/page.tsx",["/recruiter/dashboard","/recruiter/client-report"]),
+page("/client/portal/preview","Client Portal Preview","app/client/portal/preview/page.tsx",["/client/portal","/recruiter/client-report","/recruiter/jobs/preview"]),
+page("/client/candidates/[candidateId]","Client Candidate Submission","app/client/candidates/[candidateId]/page.tsx",["/client/portal/preview","/recruiter/submission-generator"],true),
 page("/recruiter/talent-search","Talent Search","app/recruiter/talent-search/page.tsx",["/recruiter/dashboard"]),
 page("/recruiter/talent-search/results","Talent Search Results","app/recruiter/talent-search/results/page.tsx",["/recruiter/talent-search"]),
 page("/recruiter/pack-compare","Pack Compare","app/recruiter/pack-compare/page.tsx",["/recruiter/compare","/recruiter/talent-search/results"]),
