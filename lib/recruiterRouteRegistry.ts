@@ -8,6 +8,7 @@ page("/auth/forgot-password","Forgot Password","app/auth/forgot-password/page.ts
 page("/auth/invite","Invite Accept","app/auth/invite/page.tsx",["/auth/login"]),
 page("/auth/logout","Logout Preview","app/auth/logout/page.tsx",["/auth/login"]),
 page("/auth/landing-preview","Role Landing Preview","app/auth/landing-preview/page.tsx",["/auth/login","/auth/preview"]),
+page("/auth/mock-session","Mock Auth Session Preview","app/auth/mock-session/page.tsx",["/auth/login","/auth/landing-preview","/auth/helpers","/auth/middleware","/recruiter/dashboard"]),
 page("/auth/preview","Auth & Role Access Preview","app/auth/preview/page.tsx",["/recruiter/dashboard"]),
 page("/auth/setup","Supabase Auth Setup Preview","app/auth/setup/page.tsx",["/auth/preview","/recruiter/dashboard"]),
 page("/auth/migrations","Auth DB Migration Preview","app/auth/migrations/page.tsx",["/auth/preview","/auth/setup","/recruiter/dashboard"]),
