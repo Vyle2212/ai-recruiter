@@ -4,7 +4,7 @@ import path from "node:path";
 type Source={name:string;path:string;found:boolean;generatedAt:string|null};
 const MILESTONES=["manual-cleanup-v1-freeze","candidate360-self-confirm-foundation-v1","import-staging-v1","import-merge-approval-workflow-v1","candidate360-smart-shortlist-v1","candidate-compare-v1","submission-generator-v1","client-executive-report-v1"];
 const RECRUITER_WORKSPACE=[
-  {id:"auth-preview",title:"Auth & Access",description:"Review Role Access, Supabase Auth Setup (/auth/setup), DB Migration (/auth/migrations), and RLS Policy Preview (/auth/rls).",href:"/auth/preview"},
+  {id:"auth-preview",title:"Auth & Access",description:"Preview Login UI (/auth/login), Role Access (/auth/preview), Supabase setup (/auth/setup), DB migration (/auth/migrations), and RLS (/auth/rls).",href:"/auth/preview"},
   {id:"client-portal",title:"Client Portal Preview",description:"Preview how clients will review submitted candidates, packs, and reports.",href:"/client/portal"},
   {id:"jobs",title:"Jobs",description:"Create job previews and connect role requirements to search packs.",href:"/recruiter/jobs"},
   {id:"talent-search",title:"Talent Search",description:"Open search results, build Pack 5/10/20, and continue to Pack Compare.",href:"/recruiter/talent-search"},

@@ -131,7 +131,8 @@
     "audit:role-access-preview": "tsx scripts/auditRoleAccessPreview.ts",
     "audit:supabase-auth-setup-preview": "tsx scripts/auditSupabaseAuthSetupPreview.ts",
     "audit:auth-migration-preview": "tsx scripts/auditAuthMigrationPreview.ts",
-    "audit:rls-policy-preview": "tsx scripts/auditRlsPolicyPreview.ts"
+    "audit:rls-policy-preview": "tsx scripts/auditRlsPolicyPreview.ts",
+    "audit:login-ui-preview": "tsx scripts/auditLoginUiPreview.ts"
   },
   "dependencies": {
     "@google-cloud/vision": "^5.3.6",
