@@ -1,19 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadCandidate360Profile } from "@/lib/candidate360Data";
 import { previewCandidateSelfConfirmUpdate } from "@/lib/candidateSelfConfirm";
+import { buildCandidateSelfConfirmStaging,buildCandidateSelfConfirmSubmission,validateCandidateSelfConfirmSubmission } from "@/lib/candidateSelfConfirmSubmission";
+export const runtime="nodejs";export const dynamic="force-dynamic";
+export async function POST(request:Request,context:{params:Promise<{candidateId:string}>}){try{const{candidateId}=await context.params,profile=await loadCandidate360Profile(decodeURIComponent(candidateId).trim());if(!profile)return NextResponse.json({error:"Candidate not found"},{status:404});const body=await request.json(),input=body?.submittedFields&&typeof body.submittedFields==="object"?body.submittedFields:body||{},submission=buildCandidateSelfConfirmSubmission(profile.candidateId,{...input,candidateConsent:input.candidateConsent===true||input.confirmAccuracy===true},profile),validation=validateCandidateSelfConfirmSubmission(submission,profile),staging=buildCandidateSelfConfirmStaging(submission,validation,profile),legacy=previewCandidateSelfConfirmUpdate(profile,input);return NextResponse.json({...legacy,submissionId:submission.submissionId,safeConfirmations:staging.items.filter(item=>item.riskLevel==="safe"),needsRecruiterReview:staging.items.filter(item=>item.riskLevel==="needs_recruiter_review"),blockedChanges:staging.items.filter(item=>item.riskLevel==="blocked"),consentRequired:!submission.candidateConsent,noDbWrites:true});}catch(error){return NextResponse.json({error:error instanceof Error?error.message:"Unable to preview candidate confirmation"},{status:400});}}
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
-export async function POST(request: Request, context: { params: Promise<{ candidateId: string }> }) {
-  try {
-    const { candidateId } = await context.params;
-    const profile = await loadCandidate360Profile(decodeURIComponent(candidateId).trim());
-    if (!profile) return NextResponse.json({ error: "Candidate not found" }, { status: 404 });
-    const body = await request.json();
-    const submittedFields = body?.submittedFields && typeof body.submittedFields === "object" ? body.submittedFields : body;
-    return NextResponse.json(previewCandidateSelfConfirmUpdate(profile, submittedFields || {}));
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to preview candidate confirmation" }, { status: 400 });
-  }
-}

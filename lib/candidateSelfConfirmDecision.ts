@@ -1,0 +1,3 @@
+import type { CandidateSelfConfirmDecisionFile,CandidateSelfConfirmStagingFile } from "./candidateSelfConfirmTypes";
+export function buildCandidateSelfConfirmDecisions(staging:CandidateSelfConfirmStagingFile):CandidateSelfConfirmDecisionFile{return{generatedAt:new Date().toISOString(),mode:"candidate self-confirm decisions; local report only; no candidate DB writes",decisions:staging.items.map(item=>({stagingItemId:item.stagingItemId,candidateId:item.candidateId,fieldName:item.fieldName,decision:item.defaultDecision,reviewerNote:item.riskLevel==="safe"?"Safe candidate confirmation default.":item.riskLevel==="blocked"?"Blocked by validation.":"Recruiter review required.",decidedAt:new Date().toISOString()}))};}
+
