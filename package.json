@@ -129,7 +129,8 @@
     "audit:job-management-preview": "tsx scripts/auditJobManagementPreview.ts",
     "audit:client-portal-preview": "tsx scripts/auditClientPortalPreview.ts",
     "audit:role-access-preview": "tsx scripts/auditRoleAccessPreview.ts",
-    "audit:supabase-auth-setup-preview": "tsx scripts/auditSupabaseAuthSetupPreview.ts"
+    "audit:supabase-auth-setup-preview": "tsx scripts/auditSupabaseAuthSetupPreview.ts",
+    "audit:auth-migration-preview": "tsx scripts/auditAuthMigrationPreview.ts"
   },
   "dependencies": {
     "@google-cloud/vision": "^5.3.6",

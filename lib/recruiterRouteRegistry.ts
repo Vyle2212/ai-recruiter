@@ -4,6 +4,7 @@ const api=(route:string,feature:string,file:string,risk:"none"|"preview"="none",
 export const recruiterRouteRegistry:RecruiterRouteEntry[]=[
 page("/auth/preview","Auth & Role Access Preview","app/auth/preview/page.tsx",["/recruiter/dashboard"]),
 page("/auth/setup","Supabase Auth Setup Preview","app/auth/setup/page.tsx",["/auth/preview","/recruiter/dashboard"]),
+page("/auth/migrations","Auth DB Migration Preview","app/auth/migrations/page.tsx",["/auth/preview","/auth/setup","/recruiter/dashboard"]),
 page("/client/portal","Client Portal","app/client/portal/page.tsx",["/recruiter/dashboard","/recruiter/client-report"]),
 page("/client/portal/preview","Client Portal Preview","app/client/portal/preview/page.tsx",["/client/portal","/recruiter/client-report","/recruiter/jobs/preview"]),
 page("/client/candidates/[candidateId]","Client Candidate Submission","app/client/candidates/[candidateId]/page.tsx",["/client/portal/preview","/recruiter/submission-generator"],true),
