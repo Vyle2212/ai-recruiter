@@ -1,0 +1,7 @@
+import type {UserRole} from "./roleAccessTypes";
+export type MiddlewareRouteGroupPreview={groupKey:string;label:string;routePatterns:string[];area:"auth"|"recruiter"|"admin_data"|"client"|"candidate"|"legacy"|"public";requiresAuthEventually:boolean;allowedRoles:UserRole[];defaultDeny:boolean;notes:string[]};
+export type MiddlewareDecisionPreview={pathname:string;role:UserRole;sessionStatus:"unauthenticated_preview"|"authenticated_preview"|"disabled_preview";matchedGroup:string;allowed:boolean;redirectTo?:string;reason:string;advisoryOnly:true;middlewareEnforced:false;cookiesRead:0;supabaseAuthCalls:0};
+export type MiddlewareRedirectRulePreview={fromGroup:string;role:UserRole;condition:string;redirectTo:string;reason:string;loopSafe:boolean;enabledNow:false};
+export type MiddlewareLoopPreventionPreview={authRoutesNeverRedirectToSelf:true;alreadyOnLandingRouteNoRedirect:true;unknownRoleToLogin:true;invalidPathNoCrash:true;notes:string[]};
+export type MiddlewareSafetyPreview={realMiddlewareCreated:false;middlewareEnforced:false;routesBlocked:0;redirectsExecuted:0;supabaseAuthCalls:0;cookiesRead:0;cookiesSet:0;userDbReads:0;userDbWrites:0;emailSends:0;openAiCalls:0};
+export type MiddlewareGuardPreview={id:string;name:string;status:"preview_only";generatedAt:string;routeGroups:MiddlewareRouteGroupPreview[];decisions:MiddlewareDecisionPreview[];redirectRules:MiddlewareRedirectRulePreview[];loopPrevention:MiddlewareLoopPreventionPreview;protectedRoutes:string[];publicExceptions:string[];safety:MiddlewareSafetyPreview;implementationRoadmap:string[]};
