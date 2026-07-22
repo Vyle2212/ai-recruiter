@@ -123,7 +123,8 @@
     "audit:quick-fix-workflow-refresh-apply": "tsx scripts/auditQuickFixWorkflowRefreshApply.ts",
     "refresh:quick-fix-staging": "tsx scripts/refreshQuickFixStaging.ts",
     "audit:quick-fix-staging-refresh": "tsx scripts/auditQuickFixStagingRefresh.ts",
-    "audit:recruiter-talent-search-results": "tsx scripts/auditRecruiterTalentSearchResults.ts"
+    "audit:recruiter-talent-search-results": "tsx scripts/auditRecruiterTalentSearchResults.ts",
+    "audit:recruiter-pack-compare": "tsx scripts/auditRecruiterPackCompare.ts"
   },
   "dependencies": {
     "@google-cloud/vision": "^5.3.6",

@@ -4,9 +4,9 @@ import path from "node:path";
 type Source={name:string;path:string;found:boolean;generatedAt:string|null};
 const MILESTONES=["manual-cleanup-v1-freeze","candidate360-self-confirm-foundation-v1","import-staging-v1","import-merge-approval-workflow-v1","candidate360-smart-shortlist-v1","candidate-compare-v1","submission-generator-v1","client-executive-report-v1"];
 const RECRUITER_WORKSPACE=[
-  {id:"talent-search",title:"Talent Search",description:"Search the talent pool and build packs 5 / 10 / 20.",href:"/recruiter/talent-search"},
+  {id:"talent-search",title:"Talent Search",description:"Open search results, build Pack 5/10/20, and continue to Pack Compare.",href:"/recruiter/talent-search"},
   {id:"shortlist",title:"Shortlist",description:"Browse profiles ready for recruiter review.",href:"/recruiter/smart-shortlist"},
-  {id:"compare",title:"Compare",description:"Quick compare selected candidates or compare search packs.",href:"/recruiter/compare"},
+  {id:"compare",title:"Compare",description:"Quick Compare selected candidates or Pack Compare 5/10/20.",href:"/recruiter/compare"},
   {id:"submissions",title:"Submissions",description:"Generate editable candidate submission drafts.",href:"/recruiter/submission-generator"},
   {id:"reports",title:"Reports",description:"Generate client-ready shortlist reports.",href:"/recruiter/client-report"},
   {id:"candidate360",title:"Candidate360",description:"Review profile trust, completeness, and missing information.",href:"/recruiter/smart-shortlist"},

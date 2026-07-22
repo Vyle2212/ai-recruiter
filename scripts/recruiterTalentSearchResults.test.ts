@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import "./recruiterPackCompare.test";
 import fs from "node:fs";
 import {buildPackCompareUrlFromSearchParams,normalizeTalentPackSize} from "../lib/talentPackBuilder";
 import {buildRecruiterTalentSearchResults,TALENT_SEARCH_INITIAL_RENDER_LIMIT} from "../lib/recruiterTalentSearchResults";
