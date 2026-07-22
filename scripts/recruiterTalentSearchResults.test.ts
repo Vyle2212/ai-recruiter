@@ -13,6 +13,7 @@ import "./stagingAuthEnablementPlan.test";
 import "./candidatePortalMvpPreview.test";
 import "./clientPortalMvpPreview.test";
 import "./recruiterPortalMvpPreview.test";
+import "./adminPortalMvpPreview.test";
 import "./authHelperPreview.test";
 import "./middlewareGuardPreview.test";
 import "./roleAccessPreview.test";
