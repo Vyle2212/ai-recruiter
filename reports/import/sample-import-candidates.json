@@ -1,0 +1,47 @@
+{
+  "mode": "sample import staging fixture only; no candidate DB writes",
+  "candidates": [
+    {
+      "existingCandidateId": "033061ad-e84d-4f45-bb99-617a28ca2864",
+      "name": "Ashok Kumar P",
+      "current_company": "Specific Candidate Supplied Employer",
+      "currentCompanyConfidence": 95,
+      "source_filename": "ashok-kumar-reupload.pdf"
+    },
+    {
+      "existingCandidateId": "6077d684-ca3b-4b15-9987-d201a819b3f0",
+      "name": "Different Person Name",
+      "current_company": "Conflicting Company",
+      "confidence": 92,
+      "source_filename": "identity-conflict.pdf"
+    },
+    {
+      "name": "Duplicate Risk Example",
+      "possibleExistingCandidateIds": [
+        "6077d684-ca3b-4b15-9987-d201a819b3f0",
+        "758e5a4e-494f-40fe-a3f1-431ec9a000e4"
+      ],
+      "matchConfidence": 65,
+      "source_filename": "duplicate-risk.pdf"
+    },
+    {
+      "name": "New Candidate Staging Example",
+      "email": "new.candidate.staging@example.test",
+      "current_title": "SAP EWM Specialist",
+      "current_company": "Example Logistics Technology",
+      "location": "Singapore",
+      "primary_module": "EWM",
+      "confidence": 90,
+      "source_filename": "new-candidate-example.pdf"
+    },
+    {
+      "name": "Generic Value Review Example",
+      "email": "generic.value.review@example.test",
+      "current_title": "Consultant",
+      "current_company": "Financial Services",
+      "location": "Malaysia",
+      "confidence": 80,
+      "source_filename": "generic-value-example.pdf"
+    }
+  ]
+}
