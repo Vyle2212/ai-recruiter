@@ -1,0 +1,8 @@
+import type {UserRole} from "./roleAccessTypes";
+export type StagingReadinessGate={gateKey:string;label:string;required:boolean;status:"pass_preview"|"fail_preview"|"pending_preview"|"blocked_preview";evidence:string[];blockerIfFailed:boolean;notes:string[]};
+export type StagingImplementationPhase={phaseKey:string;label:string;sequence:number;objective:string;tasks:string[];dependencies:string[];verificationCommands:string[];rollbackNotes:string[];status:"not_started_preview"};
+export type StagingSmokeTest={testKey:string;label:string;role:UserRole;route:string;expectedResult:string;status:"pending_preview";requiresRealAuthLater:boolean};
+export type StagingRollbackPlan={backupRequired:true;rollbackSteps:string[];rollbackVerification:string[];dangerousOperations:string[];manualApprovalRequired:true};
+export type StagingRiskItem={riskKey:string;title:string;severity:"low"|"medium"|"high"|"critical";mitigation:string;ownerRole:UserRole;blocksProduction:boolean};
+export type StagingAuthSafety={planningOnly:true;productionBlocked:true;supabaseAuthCalls:0;migrationsExecuted:0;rlsPoliciesCreated:0;middlewareCreated:false;sessionsCreated:0;cookiesRead:0;cookiesSet:0;dbReads:0;dbWrites:0;emailSends:0;openAiCalls:0};
+export type StagingAuthEnablementPlan={id:string;name:string;status:"planning_only";targetEnvironment:"staging";productionBlocked:true;generatedAt:string;readinessGates:StagingReadinessGate[];implementationPhases:StagingImplementationPhase[];smokeTests:StagingSmokeTest[];rollbackPlan:StagingRollbackPlan;riskRegister:StagingRiskItem[];goNoGoChecklist:string[];safety:StagingAuthSafety};

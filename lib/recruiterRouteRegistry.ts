@@ -15,6 +15,7 @@ page("/auth/migrations","Auth DB Migration Preview","app/auth/migrations/page.ts
 page("/auth/rls","RLS Policy Preview","app/auth/rls/page.tsx",["/auth/preview","/auth/setup","/auth/migrations","/recruiter/dashboard"]),
 page("/auth/helpers","Supabase Auth Helpers Preview","app/auth/helpers/page.tsx",["/auth/login","/auth/preview","/auth/setup","/auth/migrations","/auth/rls","/recruiter/dashboard"]),
 page("/auth/middleware","Middleware Guard Preview","app/auth/middleware/page.tsx",["/auth/helpers","/auth/preview","/auth/setup","/auth/migrations","/auth/rls","/recruiter/dashboard"]),
+page("/auth/staging","Staging Auth Enablement Plan","app/auth/staging/page.tsx",["/auth/helpers","/auth/middleware","/auth/mock-session","/auth/setup","/auth/migrations","/auth/rls","/auth/preview","/recruiter/dashboard"]),
 page("/client/portal","Client Portal","app/client/portal/page.tsx",["/recruiter/dashboard","/recruiter/client-report"]),
 page("/client/portal/preview","Client Portal Preview","app/client/portal/preview/page.tsx",["/client/portal","/recruiter/client-report","/recruiter/jobs/preview"]),
 page("/client/candidates/[candidateId]","Client Candidate Submission","app/client/candidates/[candidateId]/page.tsx",["/client/portal/preview","/recruiter/submission-generator"],true),
