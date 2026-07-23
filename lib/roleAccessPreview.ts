@@ -29,6 +29,7 @@ ROUTES.push(rule("/admin/staging-execution-gate","Staging Auth Execution Gate","
 ROUTES.push(rule("/admin/staging-auth-adapter","Staging Auth Adapter","admin_data",ADMIN,"admin_only_preview","Disabled-by-default adapter contract; no real provider or auth calls.",true));
 ROUTES.push(rule("/admin/staging-auth-operations","Staging Auth Operations","admin_data",ADMIN,"admin_only_preview","Server-only operation boundary preview; sensitive inputs redacted and no persistence.",true));
 ROUTES.push(rule("/admin/staging-auth-e2e","Staging Auth End-to-End Preview","admin_data",ADMIN,"admin_only_preview","End-to-end auth flow trace preview; no bypass, persistence, or real auth actions.",true));
+ROUTES.push(rule("/admin/staging-auth-security","Staging Auth Security Review","admin_data",ADMIN,"admin_only_preview","Read-only threat model and negative-test matrix; no real attacks or external actions.",true));
 ROUTES.push(rule("/portal","AI Primus Portal","public",ALL,"public_preview","Unified public entry point for all portal previews."));
 const nav=(role:UserRole)=>({primary:RECRUITER.includes(role)?primary:[],adminData:role==="admin"?adminData:[],client:CLIENT.includes(role)?client:[],candidate:CANDIDATE.includes(role)?candidate:[],publicLegacy:role==="admin"?[...publicLegacy]:["Auth Preview"]});
 const MATRIX:RoleAccessMatrix={roles:ROLES,routeRules:ROUTES,actionPermissions:ACTIONS,navVisibility:Object.fromEntries(ROLES.map(role=>[role,nav(role)])) as RoleAccessMatrix["navVisibility"],safety:{previewOnly:true,authCalls:0,middlewareEnforcement:false,userDbWrites:0,candidateDbWrites:0,openAiCalls:0,emailSends:0}};
@@ -42,6 +43,3 @@ export function getActionPermission(actionKey:string){return ACTIONS.find(item=>
 export function canRolePerformAction(role:UserRole,actionKey:string){const permission=getActionPermission(actionKey);return Boolean(permission?.enabledNow&&permission.allowedRoles.includes(role));}
 export function buildRoleAccessPreview(role:UserRole,pathname:string){const selectedRole=ROLES.includes(role)?role:"guest",routeRule=getRouteAccessRule(pathname);return{role:selectedRole,pathname,routeRule,advisoryAccess:canRoleAccessRoute(selectedRole,pathname),visibleNav:getVisibleNavForRole(selectedRole),actions:ACTIONS.map(permission=>({...permission,advisoryAllowed:canRolePerformAction(selectedRole,permission.actionKey)})),previewOnly:true,enforced:false,safety:MATRIX.safety};}
 export function buildRoleAccessSummary(){return{roles:ROLES,routeRuleCount:ROUTES.length,actionPermissionCount:ACTIONS.length,areas:[...new Set(ROUTES.map(item=>item.area))],adminOnlyRoutes:ROUTES.filter(item=>item.accessLevel==="admin_only_preview").map(item=>item.routePattern),disabledActions:ACTIONS.filter(item=>!item.enabledNow).map(item=>item.actionKey),safety:MATRIX.safety};}
-
-
-
