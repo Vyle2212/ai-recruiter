@@ -25,6 +25,7 @@ ROUTES.push(rule("/admin/platform-readiness","Platform Readiness Preview","admin
 ROUTES.push(rule("/admin/staging-readiness","Staging Implementation Readiness","admin_data",ADMIN,"admin_only_preview","Manual evidence gate before staging auth implementation; no enforcement.",true));
 ROUTES.push(rule("/admin/staging-evidence","Staging Evidence & Approval","admin_data",ADMIN,"admin_only_preview","Read-only evidence and manual approval preview; no persistence.",true));
 ROUTES.push(rule("/admin/staging-runbook","Staging Auth Implementation Runbook","admin_data",ADMIN,"admin_only_preview","Display-only staging execution sequence; no commands execute.",true));
+ROUTES.push(rule("/admin/staging-execution-gate","Staging Auth Execution Gate","admin_data",ADMIN,"admin_only_preview","Server-side gate scaffold locked by default; no execution.",true));
 ROUTES.push(rule("/portal","AI Primus Portal","public",ALL,"public_preview","Unified public entry point for all portal previews."));
 const nav=(role:UserRole)=>({primary:RECRUITER.includes(role)?primary:[],adminData:role==="admin"?adminData:[],client:CLIENT.includes(role)?client:[],candidate:CANDIDATE.includes(role)?candidate:[],publicLegacy:role==="admin"?[...publicLegacy]:["Auth Preview"]});
 const MATRIX:RoleAccessMatrix={roles:ROLES,routeRules:ROUTES,actionPermissions:ACTIONS,navVisibility:Object.fromEntries(ROLES.map(role=>[role,nav(role)])) as RoleAccessMatrix["navVisibility"],safety:{previewOnly:true,authCalls:0,middlewareEnforcement:false,userDbWrites:0,candidateDbWrites:0,openAiCalls:0,emailSends:0}};
