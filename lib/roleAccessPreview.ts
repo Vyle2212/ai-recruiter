@@ -21,6 +21,7 @@ const primary=["Dashboard","Jobs","Search","Shortlist","Compare","Submissions","
 ROUTES.push(rule("/auth/mock-session","Mock Auth Session Preview","public",ALL,"public_preview","URL-only role and UI context preview; no authentication occurs."));
 ROUTES.push(rule("/auth/staging","Staging Auth Enablement Plan","admin_data",ADMIN,"admin_only_preview","Internal staging-only readiness and rollout plan; production remains blocked.",true));
 ROUTES.push(rule("/admin/portal","Admin Portal MVP Preview","admin_data",ADMIN,"admin_only_preview","Internal product health, data operations, auth planning, audit, and safety preview.",true));
+ROUTES.push(rule("/admin/platform-readiness","Platform Readiness Preview","admin_data",ADMIN,"admin_only_preview","Aggregate platform readiness preview; no enforcement.",true));
 ROUTES.push(rule("/portal","AI Primus Portal","public",ALL,"public_preview","Unified public entry point for all portal previews."));
 const nav=(role:UserRole)=>({primary:RECRUITER.includes(role)?primary:[],adminData:role==="admin"?adminData:[],client:CLIENT.includes(role)?client:[],candidate:CANDIDATE.includes(role)?candidate:[],publicLegacy:role==="admin"?[...publicLegacy]:["Auth Preview"]});
 const MATRIX:RoleAccessMatrix={roles:ROLES,routeRules:ROUTES,actionPermissions:ACTIONS,navVisibility:Object.fromEntries(ROLES.map(role=>[role,nav(role)])) as RoleAccessMatrix["navVisibility"],safety:{previewOnly:true,authCalls:0,middlewareEnforcement:false,userDbWrites:0,candidateDbWrites:0,openAiCalls:0,emailSends:0}};

@@ -4,6 +4,7 @@ const api=(route:string,feature:string,file:string,risk:"none"|"preview"="none",
 export const recruiterRouteRegistry:RecruiterRouteEntry[]=[
 page("/portal","Portal Navigation Preview","app/portal/page.tsx",["/","/auth/login","/auth/mock-session","/auth/landing-preview","/recruiter/dashboard","/client/portal","/candidate/portal","/admin/portal"]),
 page("/admin/portal","Admin Portal MVP Preview","app/admin/portal/page.tsx",["/recruiter/dashboard","/auth/mock-session"]),
+page("/admin/platform-readiness","Platform Readiness Preview","app/admin/platform-readiness/page.tsx",["/admin/portal","/portal"]),
 page("/auth/login","Login Preview","app/auth/login/page.tsx",["/recruiter/dashboard","/client/portal","/candidate/portal"]),
 page("/auth/signup","Request Access","app/auth/signup/page.tsx",["/auth/login"]),
 page("/auth/forgot-password","Forgot Password","app/auth/forgot-password/page.tsx",["/auth/login"]),
