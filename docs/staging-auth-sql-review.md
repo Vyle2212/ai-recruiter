@@ -66,3 +66,47 @@ FORCE RLS owner behavior, policy recursion, runtime grants, identity denial, pro
 **RLS NOT EXECUTED**
 **ROLLBACK NOT EXECUTED**
 **PRODUCTION BLOCKED**
+## V6 function privilege correction
+
+Real staging Phase 1 schema execution completed and passed verification. Real staging Phase 2 V4 helper execution also completed: nine functions and eight triggers were structurally correct, all seven tables remained empty, policies and RLS remained absent, and missing-profile behavior passed. Privilege verification failed because `authenticated` and `anon` could execute all nine functions despite PUBLIC being denied.
+
+V6 is pending manual review and has not executed:
+
+- `supabase/migrations/202607230020_staging_auth_function_privileges_v6.sql` - `e9e7894363319f981476d69f956c1062a29c9d92e1fff7238d5bfc4c1f39c752`
+- `supabase/rollback/202607230020_staging_auth_function_privileges_rollback_v6.sql` - `9fb6d6f23d83f24bff85146add90411ba7d1be730a018a32eaedbb0afcd87d34`
+
+The patch first revokes EXECUTE on all nine functions from PUBLIC, `anon`, `authenticated`, and `service_role`. It then grants only `authenticated` access to the six `current_user_*` identity helpers. The three trigger-only functions receive no application-role grant. No function body, trigger, table, policy, RLS state, bootstrap row, or data is changed.
+
+The safe V6 rollback intentionally does not restore the observed insecure grants. It removes the six V6 authenticated grants and leaves all nine functions denied to PUBLIC, `anon`, `authenticated`, and `service_role`. Restoring the insecure state is prohibited.
+
+No `ALTER DEFAULT PRIVILEGES` statement is included. Future public-schema functions may receive platform defaults and require explicit privilege review. Any broader default-function privilege hardening requires a separate artifact and approval.
+
+### V6 composite chain
+
+Execution order:
+
+1. V4 preflight
+2. V4 schema - completed and verified
+3. V4 helpers - completed; structure passed, privilege verification failed
+4. V6 function privilege correction - pending manual review
+5. V5 bootstrap - blocked
+6. V4 RLS - blocked
+
+Rollback order:
+
+1. V4 RLS rollback
+2. V5 bootstrap rollback
+3. V6 safe privilege rollback
+4. V4 helpers rollback
+5. V4 schema rollback
+
+FORCE RLS behavior still requires real staging validation after privilege correction, bootstrap, and RLS approval. Production remains blocked.
+
+**V4 HELPER EXECUTION COMPLETED**
+**V4 HELPER STRUCTURAL VERIFICATION PASSED**
+**V4 HELPER PRIVILEGE VERIFICATION FAILED**
+**V6 PRIVILEGE PATCH PENDING MANUAL REVIEW**
+**V6 PRIVILEGE CORRECTION NOT EXECUTED**
+**BOOTSTRAP BLOCKED**
+**RLS BLOCKED**
+**PRODUCTION BLOCKED**

@@ -1,38 +1,43 @@
 import {mkdirSync,writeFileSync} from "node:fs";
 import {resolve} from "node:path";
-import {buildStagingAuthSqlArtifactReview,readStagingAuthSqlArtifact,STAGING_AUTH_SQL_ARTIFACT_PATHS,validateStagingAuthSqlArtifacts} from "../lib/stagingAuthSqlArtifacts";
+import {buildStagingAuthSqlArtifactReview,calculateStagingAuthSqlArtifactFingerprint,readStagingAuthSqlArtifact,STAGING_AUTH_SQL_ARTIFACT_PATHS,STAGING_AUTH_SQL_V4_CORE_FINGERPRINTS,STAGING_AUTH_SQL_V4_PATHS,validateStagingAuthSqlArtifacts} from "../lib/stagingAuthSqlArtifacts";
 const review=buildStagingAuthSqlArtifactReview(),validation=validateStagingAuthSqlArtifacts(),yes=(v:boolean)=>v?"yes":"no",read=(k:keyof typeof STAGING_AUTH_SQL_ARTIFACT_PATHS)=>readStagingAuthSqlArtifact(STAGING_AUTH_SQL_ARTIFACT_PATHS[k]);
-const bootstrap=read("bootstrap"),rollback=read("bootstrapRollback"),all=review.artifacts.map(x=>readStagingAuthSqlArtifact(x.path)).join("\n");
-const ambiguous=(sql:string)=>(sql.match(/btrim\s*\(\s*bootstrap_reference\s*\)|\bbootstrap_reference\s+constant\s+text/gi)||[]).length;
+const sql=read("privileges"),rollback=read("privilegesRollback"),code=sql.split(/\r?\n/).filter(x=>!x.trim().startsWith("--")).join("\n"),all=review.artifacts.map(x=>readStagingAuthSqlArtifact(x.path)).join("\n");
+const count=(pattern:RegExp)=>(code.match(pattern)||[]).length;
 const lines=[
-"Mode: read-only Staging Auth Bootstrap Patch v5 audit; no database connection; no SQL execution",
-"V3 read-only preflight passed: YES",
-"V4 bootstrap preserved as rejected: "+yes(review.historicalArtifacts.some(x=>x.artifactVersion==="v4"&&x.phase==="bootstrap"&&x.reviewStatus==="rejected")),
-"V5 bootstrap available: "+yes(review.artifacts.some(x=>x.phase==="bootstrap"&&x.exists)),
-"V5 bootstrap rollback available: "+yes(review.artifacts.some(x=>x.phase==="bootstrap_rollback"&&x.exists)),
-"V5 composite chain authoritative: "+yes(review.authoritativeVersion==="v5"&&review.artifacts.every(x=>x.authoritative)),
-"Bootstrap local reference variable: "+(/v_bootstrap_reference constant text/.test(bootstrap)?"v_bootstrap_reference":"missing"),
-"Bootstrap unqualified ambiguous reference count: "+ambiguous(bootstrap),
-"Rollback unqualified ambiguous reference count: "+ambiguous(rollback),
-"Provenance columns explicitly qualified: "+yes(/p\.bootstrap_reference\s*=\s*v_bootstrap_reference/.test(bootstrap)&&/p\.bootstrap_reference\s*=\s*v_bootstrap_reference/.test(rollback)),
-"Bootstrap exact insert assertions retained: "+yes((bootstrap.match(/insert_count_invalid/g)||[]).length===3),
-"Rollback exact deletion assertions retained: "+yes((rollback.match(/delete_count_invalid/g)||[]).length===3),
-"V4 core fingerprints unchanged: "+yes(validation.checks.v4CoreUnchanged),
-"FORCE RLS real staging validation required: yes",
-"V5 manually reviewed: no",
-"V5 bootstrap manually approved: no",
-"V5 rollback manually approved: no",
-"Candidate-domain mutation statements: "+([...all.matchAll(/(?:alter|update|delete|drop|insert into|copy)\s+(?:table\s+|from\s+)?public\.candidates\b/gi)].length),
-"Production mutation statements: 0",
-"Staging implementation approved: no",
-"SQL executed: no",
-"Migrations executed: no",
+"Mode: read-only Staging Auth Function Privilege V6 audit; no database connection; no SQL execution",
+"V4 helpers preserved unchanged: "+yes(calculateStagingAuthSqlArtifactFingerprint(readStagingAuthSqlArtifact(STAGING_AUTH_SQL_V4_PATHS.helpers))===STAGING_AUTH_SQL_V4_CORE_FINGERPRINTS.helpers),
+"V4 helper execution completed externally: yes",
+"V4 helper structural verification passed: yes",
+"V4 helper privilege verification failed: yes",
+"V6 privilege artifact available: "+yes(review.artifacts.some(x=>x.phase==="function_privileges"&&x.exists)),
+"V6 safe rollback artifact available: "+yes(review.artifacts.some(x=>x.phase==="function_privileges_rollback"&&x.exists)),
+"V6 composite chain authoritative: "+yes(review.authoritativeVersion==="v6"&&review.artifacts.every(x=>x.authoritative)),
+"All nine functions revoked from PUBLIC: "+yes(count(/^revoke execute on function public\.[a-z_]+\(\) from public;$/gim)===9),
+"All nine functions revoked from anon: "+yes(count(/^revoke execute on function public\.[a-z_]+\(\) from anon;$/gim)===9),
+"All nine functions revoked from authenticated before regrant: "+yes(count(/^revoke execute on function public\.[a-z_]+\(\) from authenticated;$/gim)===9),
+"All nine functions revoked from service_role: "+yes(count(/^revoke execute on function public\.[a-z_]+\(\) from service_role;$/gim)===9),
+"Authenticated identity-helper grants: "+count(/^grant execute on function public\.current_user_[a-z_]+\(\) to authenticated;$/gim),
+"Authenticated trigger-function grants: "+count(/^grant execute on function public\.(?:set_staging_auth_updated_at|guard_user_profile_protected_columns|reject_access_audit_log_mutation)\(\) to authenticated;$/gim),
+"Anon helper grants: "+count(/^grant execute .* to anon;$/gim),
+"Service-role helper grants: "+count(/^grant execute .* to service_role;$/gim),
+"Public helper grants: "+count(/^grant execute .* to public;$/gim),
+"Function definitions changed: "+yes(/^\s*(?:create|alter|drop)\s+(?:or replace\s+)?function\b/im.test(code)),
+"Triggers changed: "+yes(/^\s*(?:create|alter|drop)\s+trigger\b/im.test(code)),
+"Tables changed: "+yes(/^\s*(?:create|alter|drop)\s+table\b/im.test(code)),
+"Policies created: "+count(/^\s*create\s+policy\b/gim),
+"RLS changed: "+yes(/row level security/i.test(code)),
+"Safe rollback restores insecure grants: "+yes(/^grant execute/im.test(rollback)),
+"Candidate-domain mutations: "+([...all.matchAll(/(?:alter|update|delete|drop|insert into|copy)\s+(?:table\s+|from\s+)?public\.candidates\b/gi)].length),
+"Production mutations: 0",
+"V6 manually reviewed: no",
+"V6 privilege correction executed: no",
 "Bootstrap executed: no",
 "RLS executed: no",
-"Rollback executed: no",
+"SQL executed: no",
 "Production blocked: yes",
 "Routes backward-compatible: "+yes(validation.valid)
 ];
 mkdirSync(resolve("reports"),{recursive:true});
-writeFileSync(resolve("reports/staging-auth-bootstrap-v5-audit.json"),JSON.stringify({id:"staging-auth-bootstrap-v5-audit",generatedAt:new Date().toISOString(),review,validation},null,2)+"\n");
+writeFileSync(resolve("reports/staging-auth-function-privileges-v6-audit.json"),JSON.stringify({id:"staging-auth-function-privileges-v6-audit",generatedAt:new Date().toISOString(),review,validation},null,2)+"\n");
 console.log(lines.join("\n"));
