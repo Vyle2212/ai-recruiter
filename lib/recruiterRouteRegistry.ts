@@ -6,6 +6,7 @@ page("/portal","Portal Navigation Preview","app/portal/page.tsx",["/","/auth/log
 page("/admin/portal","Admin Portal MVP Preview","app/admin/portal/page.tsx",["/recruiter/dashboard","/auth/mock-session"]),
 page("/admin/platform-readiness","Platform Readiness Preview","app/admin/platform-readiness/page.tsx",["/admin/portal","/portal"]),
 page("/admin/staging-readiness","Staging Implementation Readiness","app/admin/staging-readiness/page.tsx",["/admin/platform-readiness","/admin/portal","/auth/staging"]),
+page("/admin/staging-evidence","Staging Evidence & Approval","app/admin/staging-evidence/page.tsx",["/admin/staging-readiness","/admin/platform-readiness","/admin/portal","/auth/staging"]),
 page("/auth/login","Login Preview","app/auth/login/page.tsx",["/recruiter/dashboard","/client/portal","/candidate/portal"]),
 page("/auth/signup","Request Access","app/auth/signup/page.tsx",["/auth/login"]),
 page("/auth/forgot-password","Forgot Password","app/auth/forgot-password/page.tsx",["/auth/login"]),
