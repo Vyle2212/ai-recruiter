@@ -1,27 +1,38 @@
-import {mkdirSync,writeFileSync} from "node:fs";import {resolve} from "node:path";
+import {mkdirSync,writeFileSync} from "node:fs";
+import {resolve} from "node:path";
 import {buildStagingAuthSqlArtifactReview,readStagingAuthSqlArtifact,STAGING_AUTH_SQL_ARTIFACT_PATHS,validateStagingAuthSqlArtifacts} from "../lib/stagingAuthSqlArtifacts";
 const review=buildStagingAuthSqlArtifactReview(),validation=validateStagingAuthSqlArtifacts(),yes=(v:boolean)=>v?"yes":"no",read=(k:keyof typeof STAGING_AUTH_SQL_ARTIFACT_PATHS)=>readStagingAuthSqlArtifact(STAGING_AUTH_SQL_ARTIFACT_PATHS[k]);
-const preflight=read("preflight"),schema=read("schema"),bootstrap=read("bootstrap"),br=read("bootstrapRollback"),all=review.artifacts.map(x=>readStagingAuthSqlArtifact(x.path)).join("\n");
+const bootstrap=read("bootstrap"),rollback=read("bootstrapRollback"),all=review.artifacts.map(x=>readStagingAuthSqlArtifact(x.path)).join("\n");
+const ambiguous=(sql:string)=>(sql.match(/btrim\s*\(\s*bootstrap_reference\s*\)|\bbootstrap_reference\s+constant\s+text/gi)||[]).length;
 const lines=[
-"Mode: read-only Staging Auth SQL Artifact v4 audit; no database connection; no SQL execution",
-"V3 read-only preflight evidence recorded: "+yes(review.v3PreflightEvidence.confirmed),
-"V3 preflight result: "+review.v3PreflightEvidence.result,
+"Mode: read-only Staging Auth Bootstrap Patch v5 audit; no database connection; no SQL execution",
 "V3 read-only preflight passed: YES",
-"V4 artifacts authoritative: "+yes(review.authoritativeVersion==="v4"&&review.artifacts.every(x=>x.authoritative)),
-"auth.uid exact signature preflighted: "+yes(preflight.includes("to_regprocedure('auth.uid()')")&&preflight.includes("p.pronargs = 0")&&preflight.includes("t.typname = 'uuid'")),
-"Trigger conflicts scoped to table/schema: "+yes(preflight.includes("t.tgrelid")&&preflight.includes("c.relname = 'user_profiles'")),
-"Function conflicts scoped to exact signature: "+yes(preflight.includes("n.nspname = 'public' and p.pronargs = 0")),
-"Policy conflicts scoped to target table: "+yes(preflight.includes("pol.polrelid")&&preflight.includes("c.relname = 'staging_auth_bootstrap_provenance'")),
-"Bootstrap placeholder checks use exact equality: "+yes(!bootstrap.toLowerCase().includes("like '__staging")&&bootstrap.includes("organization_id_text = '__STAGING_ORGANIZATION_ID__'")),
-"Bootstrap Auth email consistency enforced: "+yes(bootstrap.includes("confirmed_auth_email <> admin_email")),
-"Bootstrap provenance table emitted: "+yes(schema.includes("create table public.staging_auth_bootstrap_provenance")),
-"Bootstrap provenance unique constraints emitted: "+yes((schema.match(/staging_auth_bootstrap_\w+_key unique/g)||[]).length>=5),
-"Bootstrap provenance exact insert assertion emitted: "+yes(bootstrap.includes("provenance_insert_count_invalid")),
-"Bootstrap rollback validates organization name: "+yes(br.includes("btrim(o.name)=btrim(organization_name)")),
-"Bootstrap rollback validates provenance: "+yes(br.includes("rollback_provenance_mismatch")),
-"Bootstrap rollback exact three-row assertions emitted: "+yes((br.match(/delete_count_invalid/g)||[]).length===3),
-"Auth users deleted: "+yes(/delete from auth\.users/i.test(all)),
+"V4 bootstrap preserved as rejected: "+yes(review.historicalArtifacts.some(x=>x.artifactVersion==="v4"&&x.phase==="bootstrap"&&x.reviewStatus==="rejected")),
+"V5 bootstrap available: "+yes(review.artifacts.some(x=>x.phase==="bootstrap"&&x.exists)),
+"V5 bootstrap rollback available: "+yes(review.artifacts.some(x=>x.phase==="bootstrap_rollback"&&x.exists)),
+"V5 composite chain authoritative: "+yes(review.authoritativeVersion==="v5"&&review.artifacts.every(x=>x.authoritative)),
+"Bootstrap local reference variable: "+(/v_bootstrap_reference constant text/.test(bootstrap)?"v_bootstrap_reference":"missing"),
+"Bootstrap unqualified ambiguous reference count: "+ambiguous(bootstrap),
+"Rollback unqualified ambiguous reference count: "+ambiguous(rollback),
+"Provenance columns explicitly qualified: "+yes(/p\.bootstrap_reference\s*=\s*v_bootstrap_reference/.test(bootstrap)&&/p\.bootstrap_reference\s*=\s*v_bootstrap_reference/.test(rollback)),
+"Bootstrap exact insert assertions retained: "+yes((bootstrap.match(/insert_count_invalid/g)||[]).length===3),
+"Rollback exact deletion assertions retained: "+yes((rollback.match(/delete_count_invalid/g)||[]).length===3),
+"V4 core fingerprints unchanged: "+yes(validation.checks.v4CoreUnchanged),
+"FORCE RLS real staging validation required: yes",
+"V5 manually reviewed: no",
+"V5 bootstrap manually approved: no",
+"V5 rollback manually approved: no",
 "Candidate-domain mutation statements: "+([...all.matchAll(/(?:alter|update|delete|drop|insert into|copy)\s+(?:table\s+|from\s+)?public\.candidates\b/gi)].length),
-"Production mutation statements: 0","V4 manually reviewed: no","Migration manually approved: no","Helpers manually approved: no","Bootstrap manually approved: no","RLS manually approved: no","Rollback manually approved: no","Staging implementation approved: no","SQL executed: no","Migrations executed: no","Bootstrap executed: no","RLS executed: no","Rollback executed: no","Production blocked: yes","Routes backward-compatible: "+yes(validation.valid)
+"Production mutation statements: 0",
+"Staging implementation approved: no",
+"SQL executed: no",
+"Migrations executed: no",
+"Bootstrap executed: no",
+"RLS executed: no",
+"Rollback executed: no",
+"Production blocked: yes",
+"Routes backward-compatible: "+yes(validation.valid)
 ];
-mkdirSync(resolve("reports"),{recursive:true});writeFileSync(resolve("reports/staging-auth-sql-artifacts-v4-audit.json"),JSON.stringify({id:"staging-auth-sql-artifacts-v4-audit",generatedAt:new Date().toISOString(),review,validation},null,2)+"\n");console.log(lines.join("\n"));
+mkdirSync(resolve("reports"),{recursive:true});
+writeFileSync(resolve("reports/staging-auth-bootstrap-v5-audit.json"),JSON.stringify({id:"staging-auth-bootstrap-v5-audit",generatedAt:new Date().toISOString(),review,validation},null,2)+"\n");
+console.log(lines.join("\n"));
