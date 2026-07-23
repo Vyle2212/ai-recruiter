@@ -13,6 +13,7 @@ page("/admin/staging-auth-adapter","Staging Auth Adapter","app/admin/staging-aut
 page("/admin/staging-auth-operations","Staging Auth Operations","app/admin/staging-auth-operations/page.tsx",["/admin/staging-auth-adapter","/admin/staging-execution-gate","/admin/staging-runbook","/admin/staging-evidence","/admin/staging-readiness","/admin/platform-readiness","/admin/portal","/auth/staging"]),
 page("/admin/staging-auth-e2e","Staging Auth End-to-End Preview","app/admin/staging-auth-e2e/page.tsx",["/auth/login","/admin/staging-auth-operations","/admin/staging-auth-adapter","/admin/staging-execution-gate","/admin/platform-readiness"]),
 page("/admin/staging-auth-security","Staging Auth Security Review","app/admin/staging-auth-security/page.tsx",["/admin/staging-auth-e2e","/admin/staging-readiness","/admin/platform-readiness","/admin/portal"]),
+page("/admin/staging-auth-go-no-go","Staging Auth Go/No-Go","app/admin/staging-auth-go-no-go/page.tsx",["/admin/staging-auth-security","/admin/staging-readiness","/admin/staging-evidence","/admin/staging-runbook","/admin/platform-readiness","/admin/portal"]),
 page("/auth/login","Login Preview","app/auth/login/page.tsx",["/recruiter/dashboard","/client/portal","/candidate/portal"]),
 page("/auth/signup","Request Access","app/auth/signup/page.tsx",["/auth/login"]),
 page("/auth/forgot-password","Forgot Password","app/auth/forgot-password/page.tsx",["/auth/login"]),
