@@ -1,3 +1,4 @@
+// LEGACY DRAFT SQL GENERATOR: display compatibility only. Authoritative review SQL lives under supabase/migrations/.
 import type {AuthMigrationColumnPreview,AuthMigrationPreview,AuthMigrationTablePreview,AuthRlsPolicyPreview,AuthSeedRolePreview} from "./authMigrationTypes";
 const column=(name:string,type:string,nullable:boolean,description:string,options:Partial<AuthMigrationColumnPreview>={}):AuthMigrationColumnPreview=>({name,type,nullable,sensitive:false,description,...options});
 const table=(tableName:string,purpose:string,columns:AuthMigrationColumnPreview[],foreignKeys:string[]=[],uniqueConstraints:string[]=[],indexes:string[]=[]):AuthMigrationTablePreview=>({tableName,purpose,columns,primaryKey:"id",foreignKeys,uniqueConstraints,indexes,rlsRequired:true,notes:["Preview only; schema has not been created.","Requires manual review and RLS validation."]});
