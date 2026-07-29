@@ -1,5 +1,43 @@
 # Staging Auth Validation Plan
 
+## CURRENT AUTHORITATIVE STAGING CHAIN
+
+This is the only current executable artifact chain.
+
+Completed:
+
+1. V4 read-only preflight
+2. V4 schema
+3. V4 helpers
+4. V6 privilege correction
+
+Current pending phase:
+
+5. V8 bootstrap
+
+Not authorized:
+
+6. V4 RLS
+
+Current rollback order:
+
+1. V4 RLS rollback — only after RLS is applied
+2. V8 bootstrap rollback
+3. V6 safe privilege rollback
+4. V4 helpers rollback
+5. V4 schema rollback
+
+**V5 REJECTED**
+**V7 REJECTED**
+**V8 PENDING MANUAL REVIEW**
+**V8 BOOTSTRAP NOT EXECUTED**
+**V8 ROLLBACK NOT EXECUTED**
+**RLS NOT EXECUTED**
+**PRODUCTION BLOCKED**
+
+All V1-V7 chains or execution sequences below are historical review evidence
+only and are labeled do-not-execute where they appear.
+
 Instructions only. Phase 1 schema and Phase 2 V4 helpers completed externally. The V6 privilege patch, bootstrap, RLS, and rollbacks have not executed.
 
 **V3 READ-ONLY PREFLIGHT PASSED.**
@@ -30,7 +68,7 @@ After V6 fingerprint review and explicit owner approval, validation must first v
 12. Reverse-order rollback drill using the V5 exact-provenance bootstrap rollback.
 
 No production data, candidate-domain data, production credentials, or secret values may be used.
-## V6 post-patch read-only verification SQL
+## HISTORICAL — DO NOT EXECUTE — V6 post-patch read-only verification SQL
 
 Run only after separate manual approval and successful V6 execution. This verification is read-only and must end in rollback.
 
@@ -142,7 +180,7 @@ ROLLBACK;
 
 Expected: nine functions, eight triggers, zero policies, zero RLS-enabled/forced tables, zero rows, safe missing-profile results all true, and the exact role/function privilege matrix described above.
 
-## V7 bootstrap validation amendment
+## HISTORICAL — DO NOT EXECUTE — V7 bootstrap validation amendment
 
 This section supersedes earlier V5/V6 pending-state statements where they
 conflict with the current evidence.

@@ -1,5 +1,46 @@
 # Staging Auth SQL Review
 
+## CURRENT AUTHORITATIVE STAGING CHAIN
+
+This is the only current executable artifact chain. Every later V1-V7 chain
+section in this document is historical and must not be executed.
+
+Completed:
+
+1. V4 read-only preflight
+2. V4 schema
+3. V4 helpers
+4. V6 privilege correction
+
+Current pending phase:
+
+5. V8 bootstrap — `supabase/bootstrap/202607230022_staging_initial_owner_bootstrap_v8.sql`
+
+Not authorized:
+
+6. V4 RLS
+
+Current rollback order:
+
+1. V4 RLS rollback — only after RLS is applied
+2. V8 bootstrap rollback — `supabase/rollback/202607230022_staging_initial_owner_bootstrap_rollback_v8.sql`
+3. V6 safe privilege rollback
+4. V4 helpers rollback
+5. V4 schema rollback
+
+**V5 REJECTED**
+**V7 REJECTED**
+**V8 PENDING MANUAL REVIEW**
+**V8 BOOTSTRAP NOT EXECUTED**
+**V8 ROLLBACK NOT EXECUTED**
+**RLS NOT EXECUTED**
+**PRODUCTION BLOCKED**
+
+V8 uses one Base64-encoded UTF-8 JSON configuration token. Its fixed
+fingerprints are documented in the private preparation helper below. Manual
+review, private preflight, backup confirmation, and explicit approval remain
+mandatory. This document does not authorize execution.
+
 Read-only review package. It contains no credentials or project identifiers and authorizes no mutation.
 
 ## Review history
@@ -8,7 +49,9 @@ Read-only review package. It contains no credentials or project identifiers and 
 - V2: rejected.
 - V3: read-only preflight passed; mutation chain rejected.
 - V4: complete chain rejected because `bootstrap_reference` was ambiguous in the bootstrap and bootstrap rollback.
-- V5: composite chain pending manual review.
+- V5: rejected after two safe failed substitution attempts.
+- V7: rejected after manual static review.
+- V8: pending manual review; not executed.
 
 V3 safe evidence: `STG-PREFLIGHT-V3-20260723-01`. The V3 preflight ran as `postgres` on 2026-07-23, returned no rows, used a read-only transaction, rolled back, and caused no database, candidate, or production mutation.
 
@@ -25,7 +68,7 @@ V5 introduces only:
 
 Both use the distinct local name `v_bootstrap_reference`. Provenance columns use explicit aliases, including `p.bootstrap_reference = v_bootstrap_reference`. No unqualified `btrim(bootstrap_reference)` expression remains. Exact placeholders, Auth/profile email consistency, advisory locking, immutable provenance, dependency checks, and exact three-row insert/delete assertions are retained.
 
-## V5 composite authoritative chain
+## HISTORICAL — DO NOT EXECUTE — V5 composite chain
 
 Execution order:
 
@@ -67,7 +110,7 @@ FORCE RLS owner behavior, policy recursion, runtime grants, identity denial, pro
 **ROLLBACK NOT EXECUTED**
 **PRODUCTION BLOCKED**
 
-## V7 initial-owner bootstrap patch (current state)
+## HISTORICAL — DO NOT EXECUTE — V7 initial-owner bootstrap patch
 
 The earlier V5 status above is superseded by this record.
 
@@ -106,77 +149,83 @@ Artifacts pending manual review:
 - Rollback: `supabase/rollback/202607230021_staging_initial_owner_bootstrap_rollback_v7.sql`
   - SHA-256: `afbfd440dab7ed02aab909b145594f81906946fa9f0e74a2ddbcfd08336dcca0`
 
-### Private clipboard-only preparation helper
+## CURRENT V8 PRIVATE PREPARATION HELPER
 
-Run locally and privately. Do not paste inputs or the populated clipboard into
-chat, Codex, Git, screenshots, logs, or documentation. The function never
-writes populated SQL to disk and never prints a private value or populated SQL.
-Use the bootstrap fingerprint above for bootstrap preparation and the rollback
-fingerprint above for separately authorized rollback preparation.
+Run only from the clean repository root after manual review and authorization.
+The caller selects `Bootstrap` or `Rollback`; artifact paths and approved hashes
+are internal and cannot be supplied by the caller. The helper prompts privately
+for the seven values, encodes compact UTF-8 JSON as Base64, never writes
+populated SQL to disk, and never prints private data or populated SQL.
 
 ```powershell
-function Copy-StagingBootstrapV7Sql {
+function Copy-StagingBootstrapV8Sql {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)] [string] $ArtifactPath,
-        [Parameter(Mandatory)] [string] $ExpectedSha256,
-        [string] $ProvenanceId,
-        [string] $OrganizationId,
-        [string] $OrganizationName,
-        [string] $AuthUserId,
-        [string] $AdminProfileId,
-        [string] $AdminEmail,
-        [string] $BootstrapReference
+        [Parameter(Mandatory)]
+        [ValidateSet("Bootstrap", "Rollback")]
+        [string] $Mode
     )
 
-    $token = '__STAGING_BOOTSTRAP_CONFIG_JSON__'
-    $sql = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $ArtifactPath))
-    $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ArtifactPath).Hash
-    if ($actualHash -ine $ExpectedSha256) { throw 'V7 artifact fingerprint mismatch.' }
+    $approved = @{
+        Bootstrap = @{
+            Path = '.\supabase\bootstrap\202607230022_staging_initial_owner_bootstrap_v8.sql'
+            Sha256 = '61fbe659d76471f33bcf0f6e0cf55b288e7511d8e034d23d87f8b3d42b0418d9'
+        }
+        Rollback = @{
+            Path = '.\supabase\rollback\202607230022_staging_initial_owner_bootstrap_rollback_v8.sql'
+            Sha256 = '9cb8606cbb3e190d3f0602652e4ed23c9619804fd7b294a53922d22fafb69ce9'
+        }
+    }
+    $token = '__STAGING_BOOTSTRAP_CONFIG_B64__'
+    $selected = $approved[$Mode]
 
-    if ([string]::IsNullOrWhiteSpace($ProvenanceId)) { $ProvenanceId = Read-Host 'Provenance UUID' }
-    if ([string]::IsNullOrWhiteSpace($OrganizationId)) { $OrganizationId = Read-Host 'Organization UUID' }
-    if ([string]::IsNullOrWhiteSpace($OrganizationName)) { $OrganizationName = Read-Host 'Organization name' }
-    if ([string]::IsNullOrWhiteSpace($AuthUserId)) { $AuthUserId = Read-Host 'Existing staging Auth-user UUID' }
-    if ([string]::IsNullOrWhiteSpace($AdminProfileId)) { $AdminProfileId = Read-Host 'Admin profile UUID' }
-    if ([string]::IsNullOrWhiteSpace($AdminEmail)) { $AdminEmail = Read-Host 'Existing staging Auth-user email' }
-    if ([string]::IsNullOrWhiteSpace($BootstrapReference)) { $BootstrapReference = Read-Host 'Bootstrap reference' }
+    $gitState = git status --porcelain --untracked-files=all 2>$null
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to verify Git working tree.' }
+    if ($gitState) { throw 'Git working tree is not clean.' }
+    if (-not (Test-Path -LiteralPath $selected.Path -PathType Leaf)) {
+        throw 'Approved V8 artifact is missing.'
+    }
+    $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $selected.Path).Hash
+    if ($actualHash -ine $selected.Sha256) { throw 'Approved V8 artifact fingerprint mismatch.' }
+
+    $sql = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $selected.Path))
+    $beforeCount = ([regex]::Matches($sql, [regex]::Escape($token))).Count
+    if ($beforeCount -ne 1) { throw 'V8 config placeholder count is not exactly one.' }
 
     $config = [ordered]@{
-        provenance_id = $ProvenanceId
-        organization_id = $OrganizationId
-        organization_name = $OrganizationName
-        auth_user_id = $AuthUserId
-        admin_profile_id = $AdminProfileId
-        admin_email = $AdminEmail
-        bootstrap_reference = $BootstrapReference
+        provenance_id = Read-Host 'Provenance UUID'
+        organization_id = Read-Host 'Organization UUID'
+        organization_name = Read-Host 'Organization name'
+        auth_user_id = Read-Host 'Existing staging Auth-user UUID'
+        admin_profile_id = Read-Host 'Admin profile UUID'
+        admin_email = Read-Host 'Existing staging Auth-user email'
+        bootstrap_reference = Read-Host 'Bootstrap reference'
     }
     $json = $config | ConvertTo-Json -Compress
-    $escapedJson = $json.Replace("'", "''")
+    $jsonBytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+    $configB64 = [System.Convert]::ToBase64String($jsonBytes)
+    $populatedSql = $sql.Replace($token, $configB64)
 
-    $beforeCount = ([regex]::Matches($sql, [regex]::Escape($token))).Count
-    if ($beforeCount -ne 1) { throw 'V7 config placeholder count is not exactly one.' }
-    $populatedSql = $sql.Replace($token, $escapedJson)
     $afterCount = ([regex]::Matches($populatedSql, [regex]::Escape($token))).Count
-    if ($afterCount -ne 0) { throw 'V7 config placeholder remains after substitution.' }
+    if ($afterCount -ne 0) { throw 'V8 config placeholder remains after substitution.' }
     if ($populatedSql -notmatch '(?im)^\s*begin\s*;' -or
         $populatedSql -notmatch '(?im)^\s*commit\s*;') {
-        throw 'V7 transaction boundary missing.'
+        throw 'V8 transaction boundary missing.'
     }
-    if ($populatedSql -match 'ConvertTo-Json|Read-Host|Set-Clipboard|Copy-StagingBootstrapV7Sql') {
-        throw 'PowerShell source detected in populated SQL.'
+    if ($populatedSql -match 'ConvertTo-Json|Read-Host|Set-Clipboard|Copy-StagingBootstrapV8Sql') {
+        throw 'PowerShell source marker detected in populated SQL.'
     }
 
     Set-Clipboard -Value $populatedSql
-    Remove-Variable config, json, escapedJson, populatedSql -ErrorAction SilentlyContinue
-    Write-Output 'Fingerprint and structure verified; populated SQL copied to clipboard.'
+    Remove-Variable config, json, jsonBytes, configB64, populatedSql -ErrorAction SilentlyContinue
+    Write-Output 'Approved V8 fingerprint and structure verified; populated SQL copied to clipboard.'
 }
 ```
 
-The success message contains no UUID, email, JSON, or SQL. Clear the clipboard
-immediately after the separately approved manual execution. Manual review and a
-fresh private preflight remain mandatory; this helper grants no authorization.
-## V6 function privilege correction
+The success message contains no UUID, email, JSON, Base64 configuration, or
+SQL. Clear the clipboard immediately after separately approved manual use. This
+helper grants no authorization.
+## HISTORICAL — DO NOT EXECUTE — V6 function privilege correction
 
 Real staging Phase 1 schema execution completed and passed verification. Real staging Phase 2 V4 helper execution also completed: nine functions and eight triggers were structurally correct, all seven tables remained empty, policies and RLS remained absent, and missing-profile behavior passed. Privilege verification failed because `authenticated` and `anon` could execute all nine functions despite PUBLIC being denied.
 
@@ -191,7 +240,7 @@ The safe V6 rollback intentionally does not restore the observed insecure grants
 
 No `ALTER DEFAULT PRIVILEGES` statement is included. Future public-schema functions may receive platform defaults and require explicit privilege review. Any broader default-function privilege hardening requires a separate artifact and approval.
 
-### V6 composite chain
+### HISTORICAL — DO NOT EXECUTE — V6 composite chain
 
 Execution order:
 

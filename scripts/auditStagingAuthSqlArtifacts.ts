@@ -1,51 +1,83 @@
-import {mkdirSync,writeFileSync} from "node:fs";
+import {mkdirSync,readFileSync,writeFileSync} from "node:fs";
 import {resolve} from "node:path";
-import {buildStagingAuthSqlArtifactReview,calculateStagingAuthSqlArtifactFingerprint,readStagingAuthSqlArtifact,STAGING_AUTH_SQL_ARTIFACT_PATHS,STAGING_AUTH_SQL_V4_CORE_FINGERPRINTS,STAGING_AUTH_SQL_V4_PATHS,STAGING_AUTH_SQL_V5_PATHS,validateStagingAuthSqlArtifacts} from "../lib/stagingAuthSqlArtifacts";
-const review=buildStagingAuthSqlArtifactReview(),validation=validateStagingAuthSqlArtifacts(),yes=(v:boolean)=>v?"yes":"no",read=(k:keyof typeof STAGING_AUTH_SQL_ARTIFACT_PATHS)=>readStagingAuthSqlArtifact(STAGING_AUTH_SQL_ARTIFACT_PATHS[k]);
-const sql=read("privileges"),rollback=read("privilegesRollback"),code=sql.split(/\r?\n/).filter(x=>!x.trim().startsWith("--")).join("\n"),all=review.artifacts.map(x=>readStagingAuthSqlArtifact(x.path)).join("\n");
-const count=(pattern:RegExp)=>(code.match(pattern)||[]).length;
+import {
+  buildStagingAuthSqlArtifactReview,
+  calculateStagingAuthSqlArtifactFingerprint,
+  readStagingAuthSqlArtifact,
+  STAGING_AUTH_SQL_ARTIFACT_PATHS,
+  STAGING_AUTH_SQL_V5_PATHS,
+  STAGING_AUTH_SQL_V7_PATHS,
+  validateStagingAuthSqlArtifacts
+} from "../lib/stagingAuthSqlArtifacts";
+
+const review=buildStagingAuthSqlArtifactReview();
+const validation=validateStagingAuthSqlArtifacts();
+const yes=(value:boolean)=>value?"yes":"no";
+const read=(key:keyof typeof STAGING_AUTH_SQL_ARTIFACT_PATHS)=>readStagingAuthSqlArtifact(STAGING_AUTH_SQL_ARTIFACT_PATHS[key]);
+const bootstrap=read("bootstrap");
+const rollback=read("bootstrapRollback");
+const combined=bootstrap+"\n"+rollback;
+const docs=readFileSync("docs/staging-auth-sql-review.md","utf8");
+const token="__STAGING_BOOTSTRAP_CONFIG_B64__";
+const tokenCount=(sql:string)=>(sql.match(new RegExp(token,"g"))||[]).length;
+const integrityConditions=/unique_violation[\s\S]*foreign_key_violation[\s\S]*check_violation[\s\S]*not_null_violation[\s\S]*restrict_violation[\s\S]*exclusion_violation/i;
+const hasSanitizedBlock=(sql:string,operation:RegExp,error:string)=>{
+  const match=sql.match(operation);
+  return Boolean(match&&integrityConditions.test(match[0])&&match[0].includes(error));
+};
+const customMessages=[...combined.matchAll(/message\s*=\s*'([^']+)'/gi)].map(match=>match[1]);
+const candidateMutationCount=[...combined.matchAll(/\b(?:insert\s+into|update|delete\s+from|alter\s+table|drop\s+table|truncate\s+table|copy)\s+public\.(?:candidates|candidate_accounts)\b/gi)].length;
+const productionMutationCount=[...combined.matchAll(/\b(?:insert\s+into|update|delete\s+from|alter\s+table|drop\s+table|truncate\s+table|copy)\s+(?:production|prod)\./gi)].length;
+
 const lines=[
-"Mode: read-only Staging Initial Owner Bootstrap V7 audit; no database connection; no SQL execution",
-"V5 bootstrap preserved unchanged: "+yes(calculateStagingAuthSqlArtifactFingerprint(readStagingAuthSqlArtifact(STAGING_AUTH_SQL_V5_PATHS.bootstrap))==="8182a28057d5c3276e3a23443c03159c141511ea6df2b5c8a858527e08886b1d"),
-"V5 rejected: yes",
-"V5 execution attempt 1 safely failed with no rows created: yes",
-"V5 execution attempt 2 safely failed with no rows created: yes",
-"V5 failure reason substitution/sentinel collision: yes",
-"V4 helpers preserved unchanged: "+yes(calculateStagingAuthSqlArtifactFingerprint(readStagingAuthSqlArtifact(STAGING_AUTH_SQL_V4_PATHS.helpers))===STAGING_AUTH_SQL_V4_CORE_FINGERPRINTS.helpers),
-"V4 helper execution completed externally: yes",
-"V4 helper structural verification passed: yes",
-"V4 helper privilege verification failed: yes",
-"V6 privilege artifact available: "+yes(review.artifacts.some(x=>x.phase==="function_privileges"&&x.exists)),
-"V6 safe rollback artifact available: "+yes(review.artifacts.some(x=>x.phase==="function_privileges_rollback"&&x.exists)),
-"V7 composite chain authoritative: "+yes(review.authoritativeVersion==="v7"&&review.artifacts.every(x=>x.authoritative)),
-"V7 bootstrap available: "+yes(review.artifacts.some(x=>x.phase==="bootstrap"&&x.exists)),
-"V7 rollback available: "+yes(review.artifacts.some(x=>x.phase==="bootstrap_rollback"&&x.exists)),
-"All nine functions revoked from PUBLIC: "+yes(count(/^revoke execute on function public\.[a-z_]+\(\) from public;$/gim)===9),
-"All nine functions revoked from anon: "+yes(count(/^revoke execute on function public\.[a-z_]+\(\) from anon;$/gim)===9),
-"All nine functions revoked from authenticated before regrant: "+yes(count(/^revoke execute on function public\.[a-z_]+\(\) from authenticated;$/gim)===9),
-"All nine functions revoked from service_role: "+yes(count(/^revoke execute on function public\.[a-z_]+\(\) from service_role;$/gim)===9),
-"Authenticated identity-helper grants: "+count(/^grant execute on function public\.current_user_[a-z_]+\(\) to authenticated;$/gim),
-"Authenticated trigger-function grants: "+count(/^grant execute on function public\.(?:set_staging_auth_updated_at|guard_user_profile_protected_columns|reject_access_audit_log_mutation)\(\) to authenticated;$/gim),
-"Anon helper grants: "+count(/^grant execute .* to anon;$/gim),
-"Service-role helper grants: "+count(/^grant execute .* to service_role;$/gim),
-"Public helper grants: "+count(/^grant execute .* to public;$/gim),
-"Function definitions changed: "+yes(/^\s*(?:create|alter|drop)\s+(?:or replace\s+)?function\b/im.test(code)),
-"Triggers changed: "+yes(/^\s*(?:create|alter|drop)\s+trigger\b/im.test(code)),
-"Tables changed: "+yes(/^\s*(?:create|alter|drop)\s+table\b/im.test(code)),
-"Policies created: "+count(/^\s*create\s+policy\b/gim),
-"RLS changed: "+yes(/row level security/i.test(code)),
-"Safe rollback restores insecure grants: "+yes(/^grant execute/im.test(rollback)),
-"Candidate-domain mutations: "+([...all.matchAll(/(?:alter|update|delete|drop|insert into|copy)\s+(?:table\s+|from\s+)?public\.candidates\b/gi)].length),
-"Production mutations: 0",
-"V6 privilege correction executed: yes",
-"V7 manually reviewed: no",
-"V7 bootstrap executed: no",
-"V7 rollback executed: no",
-"RLS executed: no",
-"SQL executed: no",
-"Production blocked: yes",
-"Routes backward-compatible: "+yes(validation.valid)
+  "Mode: read-only Staging Initial Owner Bootstrap V8 audit; no database connection; no SQL execution",
+  "V5 preserved as rejected: "+yes(
+    calculateStagingAuthSqlArtifactFingerprint(readStagingAuthSqlArtifact(STAGING_AUTH_SQL_V5_PATHS.bootstrap))==="8182a28057d5c3276e3a23443c03159c141511ea6df2b5c8a858527e08886b1d"&&
+    review.historicalArtifacts.filter(item=>item.artifactVersion==="v5").every(item=>item.reviewStatus==="rejected")
+  ),
+  "V7 preserved as rejected: "+yes(
+    calculateStagingAuthSqlArtifactFingerprint(readStagingAuthSqlArtifact(STAGING_AUTH_SQL_V7_PATHS.bootstrap))==="2915afc31882bd5ebae3df54cb03f7eeeca351ce73a1a4f201f7fa3c9335ab2e"&&
+    review.historicalArtifacts.filter(item=>item.artifactVersion==="v7").every(item=>item.reviewStatus==="rejected")
+  ),
+  "V8 bootstrap available: "+yes(review.artifacts.some(item=>item.phase==="bootstrap"&&item.exists)),
+  "V8 rollback available: "+yes(review.artifacts.some(item=>item.phase==="bootstrap_rollback"&&item.exists)),
+  "V8 Base64 config token count bootstrap: "+tokenCount(bootstrap),
+  "V8 Base64 config token count rollback: "+tokenCount(rollback),
+  "Raw JSON substitution used: "+yes(/__STAGING_BOOTSTRAP_CONFIG_JSON__/.test(combined)),
+  "Base64 decoding errors sanitized: "+yes(/config_base64_invalid/.test(bootstrap)&&/rollback_config_base64_invalid/.test(rollback)),
+  "UTF-8 decoding errors sanitized: "+yes(/config_utf8_invalid/.test(bootstrap)&&/rollback_config_utf8_invalid/.test(rollback)),
+  "JSON parsing errors sanitized: "+yes(/config_json_invalid/.test(bootstrap)&&/rollback_config_json_invalid/.test(rollback)),
+  "Organization insert integrity errors sanitized: "+yes(hasSanitizedBlock(bootstrap,/begin[\s\S]*?insert into public\.organizations[\s\S]*?end;/i,"staging_owner_v8_organization_insert_failed")),
+  "Profile insert integrity errors sanitized: "+yes(hasSanitizedBlock(bootstrap,/begin[\s\S]*?insert into public\.user_profiles[\s\S]*?end;/i,"staging_owner_v8_profile_insert_failed")),
+  "Provenance insert integrity errors sanitized: "+yes(hasSanitizedBlock(bootstrap,/begin[\s\S]*?insert into public\.staging_auth_bootstrap_provenance[\s\S]*?end;/i,"staging_owner_v8_provenance_insert_failed")),
+  "Provenance delete integrity errors sanitized: "+yes(hasSanitizedBlock(rollback,/begin[\s\S]*?delete from public\.staging_auth_bootstrap_provenance[\s\S]*?end;/i,"staging_owner_v8_provenance_delete_failed")),
+  "Profile delete integrity errors sanitized: "+yes(hasSanitizedBlock(rollback,/begin[\s\S]*?delete from public\.user_profiles[\s\S]*?end;/i,"staging_owner_v8_profile_delete_failed")),
+  "Organization delete integrity errors sanitized: "+yes(hasSanitizedBlock(rollback,/begin[\s\S]*?delete from public\.organizations[\s\S]*?end;/i,"staging_owner_v8_organization_delete_failed")),
+  "Private values included in custom errors: "+yes(customMessages.some(message=>!/^staging_owner_v8_[a-z0-9_]+$/.test(message))),
+  "SQLERRM exposed: "+yes(/SQLERRM/i.test(combined)),
+  "PG_EXCEPTION_DETAIL exposed: "+yes(/PG_EXCEPTION_DETAIL/i.test(combined)),
+  "Caller-controlled artifact path: "+yes(/\$ArtifactPath|\[string\]\s*\$ArtifactPath/.test(docs)),
+  "Caller-controlled expected fingerprint: "+yes(/\$ExpectedSha256|\$ExpectedFingerprint/.test(docs)),
+  "PowerShell artifact allowlist emitted: "+yes(/ValidateSet\("Bootstrap",\s*"Rollback"\)/.test(docs)&&/202607230022_staging_initial_owner_bootstrap_v8\.sql/.test(docs)&&/202607230022_staging_initial_owner_bootstrap_rollback_v8\.sql/.test(docs)),
+  "One authoritative documentation chain: "+yes((docs.match(/^## CURRENT AUTHORITATIVE STAGING CHAIN$/gm)||[]).length===1),
+  "Historical chains marked do-not-execute: "+yes(!/^#{2,3} (?!HISTORICAL — DO NOT EXECUTE).*V[1-7].*chain/im.test(docs)),
+  "Three insert assertions retained: "+yes((bootstrap.match(/insert_count_invalid/g)||[]).length===3),
+  "Three delete assertions retained: "+yes((rollback.match(/delete_count_invalid/g)||[]).length===3),
+  "Auth user modified: "+yes(/\b(?:insert\s+into|update|delete\s+from)\s+auth\.users\b/i.test(combined)),
+  "Candidate-domain mutation statements: "+candidateMutationCount,
+  "Production mutation statements: "+productionMutationCount,
+  "V8 manually reviewed: no",
+  "V8 bootstrap executed: no",
+  "V8 rollback executed: no",
+  "SQL executed: no",
+  "RLS executed: no",
+  "Production blocked: yes",
+  "Routes backward-compatible: "+yes(validation.valid)
 ];
+
 mkdirSync(resolve("reports"),{recursive:true});
-writeFileSync(resolve("reports/staging-auth-bootstrap-v7-audit.json"),JSON.stringify({id:"staging-auth-bootstrap-v7-audit",generatedAt:new Date().toISOString(),review,validation},null,2)+"\n");
+writeFileSync(
+  resolve("reports/staging-auth-bootstrap-v8-audit.json"),
+  JSON.stringify({id:"staging-auth-bootstrap-v8-audit",generatedAt:new Date().toISOString(),review,validation},null,2)+"\n"
+);
 console.log(lines.join("\n"));

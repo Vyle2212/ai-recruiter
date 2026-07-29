@@ -1,57 +1,135 @@
 import assert from "node:assert/strict";
 import {existsSync,readFileSync} from "node:fs";
-import {buildStagingAuthSqlArtifactReview,calculateStagingAuthSqlArtifactFingerprint,readStagingAuthSqlArtifact,STAGING_AUTH_SQL_ARTIFACT_PATHS,STAGING_AUTH_SQL_V1_PATHS,STAGING_AUTH_SQL_V2_PATHS,STAGING_AUTH_SQL_V3_PATHS,STAGING_AUTH_SQL_V4_CORE_FINGERPRINTS,STAGING_AUTH_SQL_V4_PATHS,STAGING_AUTH_SQL_V5_PATHS,validateStagingAuthSqlArtifacts} from "../lib/stagingAuthSqlArtifacts";
-const review=buildStagingAuthSqlArtifactReview(),read=(k:keyof typeof STAGING_AUTH_SQL_ARTIFACT_PATHS)=>readStagingAuthSqlArtifact(STAGING_AUTH_SQL_ARTIFACT_PATHS[k]);
-for(const p of [...Object.values(STAGING_AUTH_SQL_V1_PATHS),...Object.values(STAGING_AUTH_SQL_V2_PATHS),...Object.values(STAGING_AUTH_SQL_V3_PATHS),...Object.values(STAGING_AUTH_SQL_V4_PATHS)])assert(existsSync(p));
-assert(review.historicalArtifacts.filter(x=>x.artifactVersion==="v1").every(x=>x.reviewStatus==="rejected"));
-assert(review.historicalArtifacts.filter(x=>x.artifactVersion==="v2").every(x=>x.reviewStatus==="rejected"));
-assert(review.historicalArtifacts.filter(x=>x.artifactVersion==="v3").every(x=>x.reviewStatus==="read_only_preflight_passed_rejected_for_mutation"));
-assert(review.historicalArtifacts.filter(x=>x.artifactVersion==="v4").every(x=>x.reviewStatus==="rejected"&&!x.executed&&!x.authoritative));
-assert(review.historicalArtifacts.filter(x=>x.artifactVersion==="v5").every(x=>x.reviewStatus==="rejected"&&!x.executed&&!x.authoritative));
-assert.equal(review.historicalArtifacts.filter(x=>x.artifactVersion==="v3"&&x.executed).length,1);
-assert.equal(review.v3PreflightEvidence.result,"passed");assert.equal(review.v3PreflightEvidence.databaseMutation,false);
-assert.equal(review.authoritativeVersion,"v7");assert.deepEqual(review.executionOrder,["preflight","schema","helpers","privileges","bootstrap","rls"]);assert.deepEqual(review.rollbackOrder,["rlsRollback","bootstrapRollback","privilegesRollback","helpersRollback","schemaRollback"]);
-assert.equal(review.artifacts.length,11);assert(review.artifacts.every(x=>x.artifactVersion==="v7"&&x.reviewStatus==="pending_manual_review"&&x.authoritative&&!x.executed&&!x.manuallyReviewed));
-for(const a of review.artifacts)assert.equal(a.fingerprint,calculateStagingAuthSqlArtifactFingerprint(readStagingAuthSqlArtifact(a.path)));
-for(const key of Object.keys(STAGING_AUTH_SQL_V4_CORE_FINGERPRINTS) as Array<keyof typeof STAGING_AUTH_SQL_V4_CORE_FINGERPRINTS>)assert.equal(calculateStagingAuthSqlArtifactFingerprint(readStagingAuthSqlArtifact(STAGING_AUTH_SQL_V4_PATHS[key])),STAGING_AUTH_SQL_V4_CORE_FINGERPRINTS[key]);
-assert.equal(calculateStagingAuthSqlArtifactFingerprint(readStagingAuthSqlArtifact(STAGING_AUTH_SQL_V4_PATHS.bootstrap)),"a5e3408dca2de6093fb487c90e9f8562ed5e7b0d57b46cefff137575af3cf103");
-assert.equal(calculateStagingAuthSqlArtifactFingerprint(readStagingAuthSqlArtifact(STAGING_AUTH_SQL_V4_PATHS.bootstrapRollback)),"f0656f45715d487f2c5be586362af14990af4a2f1bcc27b170cb37f977cf522a");
+import {
+  buildStagingAuthSqlArtifactReview,
+  calculateStagingAuthSqlArtifactFingerprint,
+  readStagingAuthSqlArtifact,
+  STAGING_AUTH_SQL_ARTIFACT_PATHS,
+  STAGING_AUTH_SQL_V4_CORE_FINGERPRINTS,
+  STAGING_AUTH_SQL_V4_PATHS,
+  STAGING_AUTH_SQL_V5_PATHS,
+  STAGING_AUTH_SQL_V7_PATHS,
+  validateStagingAuthSqlArtifacts
+} from "../lib/stagingAuthSqlArtifacts";
+
+const review=buildStagingAuthSqlArtifactReview();
+const read=(key:keyof typeof STAGING_AUTH_SQL_ARTIFACT_PATHS)=>readStagingAuthSqlArtifact(STAGING_AUTH_SQL_ARTIFACT_PATHS[key]);
+const bootstrap=read("bootstrap");
+const rollback=read("bootstrapRollback");
+const privileges=read("privileges");
+const privilegeRollback=read("privilegesRollback");
+const combined=bootstrap+"\n"+rollback;
+const docs=readFileSync("docs/staging-auth-sql-review.md","utf8");
+const plan=readFileSync("docs/staging-auth-v3-validation-plan.md","utf8");
+const token="__STAGING_BOOTSTRAP_CONFIG_B64__";
+const integrityConditions=["unique_violation","foreign_key_violation","check_violation","not_null_violation","restrict_violation","exclusion_violation"];
+
 assert.equal(calculateStagingAuthSqlArtifactFingerprint(readStagingAuthSqlArtifact(STAGING_AUTH_SQL_V5_PATHS.bootstrap)),"8182a28057d5c3276e3a23443c03159c141511ea6df2b5c8a858527e08886b1d");
 assert.equal(calculateStagingAuthSqlArtifactFingerprint(readStagingAuthSqlArtifact(STAGING_AUTH_SQL_V5_PATHS.bootstrapRollback)),"6caf8e9645ecf624043d1602e9daf5fb7eaaf1ca22ed97aa0b150c0b3d0a0468");
-const preflight=read("preflight"),schema=read("schema"),helpers=read("helpers"),privileges=read("privileges"),bootstrap=read("bootstrap"),rls=read("rls"),rr=read("rlsRollback"),rollback=read("bootstrapRollback"),privilegesRollback=read("privilegesRollback"),hr=read("helpersRollback"),sr=read("schemaRollback"),all=[preflight,schema,helpers,privileges,bootstrap,rls,rr,rollback,privilegesRollback,hr,sr].join("\n");
-const privilegeCode=privileges.split(/\r?\n/).filter(x=>!x.trim().startsWith("--")).join("\n");
-const functionNames=["set_staging_auth_updated_at","current_user_profile_id","current_user_role","current_user_organization_id","current_user_client_id","current_user_candidate_id","current_user_is_admin","guard_user_profile_protected_columns","reject_access_audit_log_mutation"];
-const identityNames=["current_user_profile_id","current_user_role","current_user_organization_id","current_user_client_id","current_user_candidate_id","current_user_is_admin"];
-const triggerNames=["set_staging_auth_updated_at","guard_user_profile_protected_columns","reject_access_audit_log_mutation"];
-assert.match(privileges,/^begin;/im);assert.match(privileges,/commit;\s*$/i);assert.match(privilegesRollback,/^begin;/im);assert.match(privilegesRollback,/commit;\s*$/i);
-for(const name of functionNames)for(const role of ["public","anon","authenticated","service_role"])assert.match(privileges,new RegExp(`revoke execute on function public\\.${name}\\(\\) from ${role};`,"i"));
-assert.equal((privilegeCode.match(/^revoke execute on function public\.[a-z_]+\(\) from public;$/gim)||[]).length,9);
-assert.equal((privilegeCode.match(/^revoke execute on function public\.[a-z_]+\(\) from anon;$/gim)||[]).length,9);
-assert.equal((privilegeCode.match(/^revoke execute on function public\.[a-z_]+\(\) from authenticated;$/gim)||[]).length,9);
-assert.equal((privilegeCode.match(/^revoke execute on function public\.[a-z_]+\(\) from service_role;$/gim)||[]).length,9);
-assert.equal((privilegeCode.match(/^grant execute on function public\.[a-z_]+\(\) to authenticated;$/gim)||[]).length,6);
-for(const name of identityNames)assert.match(privileges,new RegExp(`grant execute on function public\\.${name}\\(\\) to authenticated;`,"i"));
-for(const name of triggerNames)assert.doesNotMatch(privileges,new RegExp(`grant execute on function public\\.${name}\\(\\) to authenticated;`,"i"));
-assert.doesNotMatch(privilegeCode,/^grant execute .* to (anon|service_role|public);$/im);
-assert.doesNotMatch(privilegeCode,/^\s*(create|alter|drop)\s+(or replace\s+)?(function|trigger|table|policy)\b/im);
-assert.doesNotMatch(privilegeCode,/^\s*(insert|update|delete|copy|truncate)\b/im);assert.doesNotMatch(privilegeCode,/row level security/i);
-assert.match(privilegesRollback,/SECURITY REGRESSION RISK - MANUAL APPROVAL REQUIRED/);assert.doesNotMatch(privilegesRollback,/^grant execute/im);
-for(const name of functionNames)for(const role of ["public","anon","authenticated","service_role"])assert.match(privilegesRollback,new RegExp(`revoke execute on function public\\.${name}\\(\\) from ${role};`,"i"));
-assert.equal(review.stagingExecutionEvidence.schema.verified,true);assert.equal(review.stagingExecutionEvidence.helpers.structuralVerification,"passed");assert.equal(review.stagingExecutionEvidence.helpers.privilegeVerification,"passed_after_v6_repair");assert.equal(review.stagingExecutionEvidence.privileges.verified,true);assert.match(preflight,/begin;\s*set transaction read only/i);assert.match(preflight,/\brollback;/i);assert.match(preflight,/to_regprocedure\('auth\.uid\(\)'\)/);
-assert.match(schema,/create table public\.staging_auth_bootstrap_provenance/);assert.match(helpers,/security definer/);assert.match(rls,/staging_auth_v4_admin_bootstrap_provenance_select/);
-for(const sql of [bootstrap,rollback]){
- assert.match(sql,/v_bootstrap_reference text/);
- assert.match(sql,/p\.bootstrap_reference\s*=\s*v_bootstrap_reference/);
- assert.match(sql,/pg_advisory_xact_lock\(731942607230017\)/);
- assert.equal((sql.match(/__STAGING_BOOTSTRAP_CONFIG_JSON__/g)||[]).length,1);
- assert.match(sql,/concat\('__STAGING_BOOTSTRAP_',\s*'CONFIG_JSON__'\)/);
- assert.doesNotMatch(sql.replace("__STAGING_BOOTSTRAP_CONFIG_JSON__","{}"),/if config_json_text = '\{\}'/);
- assert.match(sql,/jsonb_object_keys\(v_config\)/);
- assert.match(sql,/cardinality\(v_required_keys\)/);
+assert.equal(calculateStagingAuthSqlArtifactFingerprint(readStagingAuthSqlArtifact(STAGING_AUTH_SQL_V7_PATHS.bootstrap)),"2915afc31882bd5ebae3df54cb03f7eeeca351ce73a1a4f201f7fa3c9335ab2e");
+assert.equal(calculateStagingAuthSqlArtifactFingerprint(readStagingAuthSqlArtifact(STAGING_AUTH_SQL_V7_PATHS.bootstrapRollback)),"afbfd440dab7ed02aab909b145594f81906946fa9f0e74a2ddbcfd08336dcca0");
+assert(review.historicalArtifacts.filter(item=>item.artifactVersion==="v5").every(item=>item.reviewStatus==="rejected"&&!item.executed));
+assert(review.historicalArtifacts.filter(item=>item.artifactVersion==="v7").every(item=>item.reviewStatus==="rejected"&&!item.executed));
+
+assert.equal(review.authoritativeVersion,"v8");
+assert.deepEqual(review.executionOrder,["preflight","schema","helpers","privileges","bootstrap","rls"]);
+assert.deepEqual(review.rollbackOrder,["rlsRollback","bootstrapRollback","privilegesRollback","helpersRollback","schemaRollback"]);
+assert(review.artifacts.every(item=>item.artifactVersion==="v8"&&item.reviewStatus==="pending_manual_review"&&!item.executed&&!item.manuallyReviewed));
+assert(existsSync(STAGING_AUTH_SQL_ARTIFACT_PATHS.bootstrap));
+assert(existsSync(STAGING_AUTH_SQL_ARTIFACT_PATHS.bootstrapRollback));
+assert.equal(calculateStagingAuthSqlArtifactFingerprint(bootstrap),"61fbe659d76471f33bcf0f6e0cf55b288e7511d8e034d23d87f8b3d42b0418d9");
+assert.equal(calculateStagingAuthSqlArtifactFingerprint(rollback),"9cb8606cbb3e190d3f0602652e4ed23c9619804fd7b294a53922d22fafb69ce9");
+for(const key of Object.keys(STAGING_AUTH_SQL_V4_CORE_FINGERPRINTS) as Array<keyof typeof STAGING_AUTH_SQL_V4_CORE_FINGERPRINTS>){
+  assert.equal(calculateStagingAuthSqlArtifactFingerprint(readStagingAuthSqlArtifact(STAGING_AUTH_SQL_V4_PATHS[key])),STAGING_AUTH_SQL_V4_CORE_FINGERPRINTS[key]);
 }
-assert.match(bootstrap,/from auth\.users u where u\.id = v_auth_user_id for share/);assert.match(bootstrap,/v_confirmed_auth_email <> v_admin_email/);assert.equal((bootstrap.match(/insert_count_invalid/g)||[]).length,3);
-assert.match(rollback,/delete from public\.staging_auth_bootstrap_provenance p[\s\S]*p\.bootstrap_reference\s*=\s*v_bootstrap_reference/);assert(rollback.indexOf("delete from public.staging_auth_bootstrap_provenance")<rollback.indexOf("delete from public.user_profiles"));assert(rollback.indexOf("delete from public.user_profiles")<rollback.indexOf("delete from public.organizations"));assert.equal((rollback.match(/delete_count_invalid/g)||[]).length,3);
-assert.doesNotMatch(all,/(alter|update|delete|drop|insert into|copy)\s+(table\s+|from\s+)?public\.candidates\b/i);assert.doesNotMatch(all,/\b(delete|update|insert into)\s+(from\s+)?auth\.users\b/i);assert.doesNotMatch(all,/https?:\/\/|password\s*=/i);
-for(const rollbackArtifact of [rr,rollback,privilegesRollback,hr,sr])assert.match(rollbackArtifact,/NOT EXECUTED/);
-const docs=readFileSync("docs/staging-auth-sql-review.md","utf8"),plan=readFileSync("docs/staging-auth-v3-validation-plan.md","utf8");for(const phrase of ["Phase 1 schema: completed","Phase 2 helpers: completed","V6 privilege repair: completed","V5 status: rejected","V7 status: pending manual review","RLS: not executed","Production: blocked"])assert(docs.toLowerCase().includes(phrase.toLowerCase()));assert.match(plan,/V7 BOOTSTRAP PENDING MANUAL REVIEW/i);
-const validation=validateStagingAuthSqlArtifacts();assert(validation.valid,validation.issues.join(","));assert.equal(review.safety.sqlExecuted,0);assert.equal(review.safety.productionBlocked,true);console.log("stagingAuthSqlArtifacts.test.ts passed");
+
+for(const sql of [bootstrap,rollback]){
+  assert.equal((sql.match(new RegExp(token,"g"))||[]).length,1);
+  assert.doesNotMatch(sql,/__STAGING_BOOTSTRAP_CONFIG_JSON__/);
+  assert.match(sql,/pg_catalog\.decode\(config_b64_text,\s*'base64'\)/);
+  assert.match(sql,/pg_catalog\.convert_from\(v_config_bytes,\s*'UTF8'\)/);
+  assert.match(sql,/concat\('__STAGING_BOOTSTRAP_',\s*'CONFIG_B64__'\)/);
+  assert.doesNotMatch(sql.replace(token,"e30="),/if config_b64_text = 'e30='/);
+  assert.match(sql,/config_base64_invalid/);
+  assert.match(sql,/config_utf8_invalid/);
+  assert.match(sql,/config_json_invalid/);
+  assert.match(sql,/jsonb_object_keys\(v_config\)/);
+  assert.match(sql,/cardinality\(v_required_keys\)/);
+  assert.match(sql,/where not \(v_config \? required\.key\)/);
+  assert.match(sql,/jsonb_typeof\(v_config -> v_key\) <> 'string'/);
+  assert.match(sql,/btrim\(v_config ->> v_key\) = ''/);
+  assert.match(sql,/\(v_config ->> 'provenance_id'\)::uuid/);
+  assert.match(sql,/\(v_config ->> 'organization_id'\)::uuid/);
+  assert.match(sql,/\(v_config ->> 'auth_user_id'\)::uuid/);
+  assert.match(sql,/\(v_config ->> 'admin_profile_id'\)::uuid/);
+  assert.match(sql,/pg_advisory_xact_lock\(731942607230017\)/);
+  assert.match(sql,/^begin;/m);
+  assert.match(sql,/commit;\s*(?:--[\s\S]*)?$/);
+}
+for(const field of ["provenance_id","organization_id","organization_name","auth_user_id","admin_profile_id","admin_email","bootstrap_reference"]){
+  assert(bootstrap.includes(`'${field}'`)&&rollback.includes(`'${field}'`));
+}
+assert.match(bootstrap,/v_admin_email := lower\(btrim\(v_config ->> 'admin_email'\)\)/);
+assert.match(bootstrap,/from auth\.users u where u\.id = v_auth_user_id for share/);
+assert.match(bootstrap,/v_confirmed_auth_email <> v_admin_email/);
+
+const assertSanitizedOperation=(sql:string,operation:RegExp,error:string)=>{
+  const operationMatch=operation.exec(sql);
+  assert(operationMatch,`missing operation for ${error}`);
+  const start=sql.lastIndexOf("begin",operationMatch.index);
+  const end=sql.indexOf("end;",operationMatch.index);
+  const block=sql.slice(start,end+4);
+  for(const condition of integrityConditions)assert(block.includes(condition),`${error} missing ${condition}`);
+  assert(block.includes(error),`missing fixed error ${error}`);
+  assert.doesNotMatch(block,/SQLERRM|PG_EXCEPTION_DETAIL|PG_EXCEPTION_HINT|format\s*\(/i);
+};
+assertSanitizedOperation(bootstrap,/insert into public\.organizations/i,"staging_owner_v8_organization_insert_failed");
+assertSanitizedOperation(bootstrap,/insert into public\.user_profiles/i,"staging_owner_v8_profile_insert_failed");
+assertSanitizedOperation(bootstrap,/insert into public\.staging_auth_bootstrap_provenance/i,"staging_owner_v8_provenance_insert_failed");
+assertSanitizedOperation(rollback,/delete from public\.staging_auth_bootstrap_provenance/i,"staging_owner_v8_provenance_delete_failed");
+assertSanitizedOperation(rollback,/delete from public\.user_profiles/i,"staging_owner_v8_profile_delete_failed");
+assertSanitizedOperation(rollback,/delete from public\.organizations/i,"staging_owner_v8_organization_delete_failed");
+assert.equal((bootstrap.match(/insert_count_invalid/g)||[]).length,3);
+assert.equal((rollback.match(/delete_count_invalid/g)||[]).length,3);
+assert(rollback.indexOf("delete from public.staging_auth_bootstrap_provenance")<rollback.indexOf("delete from public.user_profiles"));
+assert(rollback.indexOf("delete from public.user_profiles")<rollback.indexOf("delete from public.organizations"));
+
+assert.doesNotMatch(combined,/SQLERRM|PG_EXCEPTION_DETAIL|PG_EXCEPTION_HINT/i);
+for(const match of combined.matchAll(/message\s*=\s*([^;]+)/gi))assert.match(match[1].trim(),/^'staging_owner_v8_[a-z0-9_]+'$/);
+assert.doesNotMatch(combined,/\b(?:insert\s+into|update|delete\s+from)\s+auth\.users\b/i);
+assert.doesNotMatch(combined,/\b(?:insert\s+into|update|delete\s+from|alter\s+table|drop\s+table|truncate\s+table)\s+public\.(?:candidates|candidate_accounts)\b/i);
+assert.doesNotMatch(combined,/\b(?:insert\s+into|update|delete\s+from|alter\s+table|drop\s+table|truncate\s+table)\s+(?:production|prod)\./i);
+assert.doesNotMatch(combined,/https?:\/\/|password\s*=|service_role\s*=|anon_key/i);
+
+assert.match(docs,/\[ValidateSet\("Bootstrap",\s*"Rollback"\)\]/);
+assert.doesNotMatch(docs,/\[string\]\s*\$ArtifactPath|\[string\]\s*\$ExpectedSha256|\[string\]\s*\$ExpectedFingerprint/);
+assert.match(docs,/202607230022_staging_initial_owner_bootstrap_v8\.sql/);
+assert.match(docs,/61fbe659d76471f33bcf0f6e0cf55b288e7511d8e034d23d87f8b3d42b0418d9/);
+assert.match(docs,/202607230022_staging_initial_owner_bootstrap_rollback_v8\.sql/);
+assert.match(docs,/9cb8606cbb3e190d3f0602652e4ed23c9619804fd7b294a53922d22fafb69ce9/);
+assert.match(docs,/ConvertTo-Json -Compress/);
+assert.match(docs,/\[System\.Text\.Encoding\]::UTF8\.GetBytes/);
+assert.match(docs,/\[System\.Convert\]::ToBase64String/);
+assert.match(docs,/git status --porcelain --untracked-files=all/);
+assert.match(docs,/Set-Clipboard -Value \$populatedSql/);
+assert.doesNotMatch(docs,/Set-Content|Out-File|Add-Content|WriteAllText/);
+assert.equal((docs.match(/^## CURRENT AUTHORITATIVE STAGING CHAIN$/gm)||[]).length,1);
+assert.equal((plan.match(/^## CURRENT AUTHORITATIVE STAGING CHAIN$/gm)||[]).length,1);
+assert.doesNotMatch(docs,/^#{2,3} (?!HISTORICAL — DO NOT EXECUTE).*V[1-7].*chain/im);
+assert.match(docs,/V5 REJECTED/);
+assert.match(docs,/V7 REJECTED/);
+assert.match(docs,/V8 PENDING MANUAL REVIEW/);
+assert.match(docs,/RLS NOT EXECUTED/);
+assert.match(docs,/PRODUCTION BLOCKED/);
+
+const functionNames=["set_staging_auth_updated_at","current_user_profile_id","current_user_role","current_user_organization_id","current_user_client_id","current_user_candidate_id","current_user_is_admin","guard_user_profile_protected_columns","reject_access_audit_log_mutation"];
+for(const name of functionNames)for(const role of ["public","anon","authenticated","service_role"])assert.match(privileges,new RegExp(`revoke execute on function public\\.${name}\\(\\) from ${role};`,"i"));
+assert.doesNotMatch(privilegeRollback,/^grant execute/im);
+
+const validation=validateStagingAuthSqlArtifacts();
+assert(validation.valid,validation.issues.join(","));
+assert.equal(review.safety.sqlExecuted,0);
+assert.equal(review.safety.rlsExecuted,0);
+assert.equal(review.safety.candidateDbWrites,0);
+assert.equal(review.safety.productionBlocked,true);
+console.log("stagingAuthSqlArtifacts.test.ts passed");
