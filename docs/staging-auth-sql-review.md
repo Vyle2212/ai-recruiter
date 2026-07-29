@@ -66,6 +66,116 @@ FORCE RLS owner behavior, policy recursion, runtime grants, identity denial, pro
 **RLS NOT EXECUTED**
 **ROLLBACK NOT EXECUTED**
 **PRODUCTION BLOCKED**
+
+## V7 initial-owner bootstrap patch (current state)
+
+The earlier V5 status above is superseded by this record.
+
+- Phase 1 schema: completed
+- Phase 2 helpers: completed
+- V6 privilege repair: completed
+- V5 bootstrap execution attempt 1: safely failed; `staging_owner_v5_placeholder_not_replaced`; no rows created
+- V5 bootstrap execution attempt 2: safely failed; `staging_owner_v5_placeholder_not_replaced`; no rows created
+- Failure reason: substitution/sentinel collision
+- V5 status: rejected
+- V7 status: pending manual review
+- V7 bootstrap executed: no
+- V7 rollback executed: no
+- RLS: not executed
+- Candidate-domain modified: no
+- Production modified: no
+- Production: blocked
+
+V5 is preserved unchanged. Each of its seven placeholders occurs twice in both
+directions: once in an assignment and once in a validation comparison. Global
+replacement changes the validation sentinel as well as the assignment, making
+the guard compare each populated value with itself. This explains both safe
+`staging_owner_v5_placeholder_not_replaced` failures before insertion.
+
+V7 uses a single `__STAGING_BOOTSTRAP_CONFIG_JSON__` token. The SQL sentinel is
+assembled from two immutable string fragments, so deterministic replacement of
+the one token cannot modify the comparison value. The JSON must contain exactly
+the seven documented string fields; malformed JSON, missing or extra fields,
+blank values, and invalid UUIDs fail with fixed non-sensitive errors. Raw JSON
+is held only in transaction-local PL/pgSQL variables and is never persisted.
+
+Artifacts pending manual review:
+
+- Bootstrap: `supabase/bootstrap/202607230021_staging_initial_owner_bootstrap_v7.sql`
+  - SHA-256: `2915afc31882bd5ebae3df54cb03f7eeeca351ce73a1a4f201f7fa3c9335ab2e`
+- Rollback: `supabase/rollback/202607230021_staging_initial_owner_bootstrap_rollback_v7.sql`
+  - SHA-256: `afbfd440dab7ed02aab909b145594f81906946fa9f0e74a2ddbcfd08336dcca0`
+
+### Private clipboard-only preparation helper
+
+Run locally and privately. Do not paste inputs or the populated clipboard into
+chat, Codex, Git, screenshots, logs, or documentation. The function never
+writes populated SQL to disk and never prints a private value or populated SQL.
+Use the bootstrap fingerprint above for bootstrap preparation and the rollback
+fingerprint above for separately authorized rollback preparation.
+
+```powershell
+function Copy-StagingBootstrapV7Sql {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string] $ArtifactPath,
+        [Parameter(Mandatory)] [string] $ExpectedSha256,
+        [string] $ProvenanceId,
+        [string] $OrganizationId,
+        [string] $OrganizationName,
+        [string] $AuthUserId,
+        [string] $AdminProfileId,
+        [string] $AdminEmail,
+        [string] $BootstrapReference
+    )
+
+    $token = '__STAGING_BOOTSTRAP_CONFIG_JSON__'
+    $sql = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $ArtifactPath))
+    $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ArtifactPath).Hash
+    if ($actualHash -ine $ExpectedSha256) { throw 'V7 artifact fingerprint mismatch.' }
+
+    if ([string]::IsNullOrWhiteSpace($ProvenanceId)) { $ProvenanceId = Read-Host 'Provenance UUID' }
+    if ([string]::IsNullOrWhiteSpace($OrganizationId)) { $OrganizationId = Read-Host 'Organization UUID' }
+    if ([string]::IsNullOrWhiteSpace($OrganizationName)) { $OrganizationName = Read-Host 'Organization name' }
+    if ([string]::IsNullOrWhiteSpace($AuthUserId)) { $AuthUserId = Read-Host 'Existing staging Auth-user UUID' }
+    if ([string]::IsNullOrWhiteSpace($AdminProfileId)) { $AdminProfileId = Read-Host 'Admin profile UUID' }
+    if ([string]::IsNullOrWhiteSpace($AdminEmail)) { $AdminEmail = Read-Host 'Existing staging Auth-user email' }
+    if ([string]::IsNullOrWhiteSpace($BootstrapReference)) { $BootstrapReference = Read-Host 'Bootstrap reference' }
+
+    $config = [ordered]@{
+        provenance_id = $ProvenanceId
+        organization_id = $OrganizationId
+        organization_name = $OrganizationName
+        auth_user_id = $AuthUserId
+        admin_profile_id = $AdminProfileId
+        admin_email = $AdminEmail
+        bootstrap_reference = $BootstrapReference
+    }
+    $json = $config | ConvertTo-Json -Compress
+    $escapedJson = $json.Replace("'", "''")
+
+    $beforeCount = ([regex]::Matches($sql, [regex]::Escape($token))).Count
+    if ($beforeCount -ne 1) { throw 'V7 config placeholder count is not exactly one.' }
+    $populatedSql = $sql.Replace($token, $escapedJson)
+    $afterCount = ([regex]::Matches($populatedSql, [regex]::Escape($token))).Count
+    if ($afterCount -ne 0) { throw 'V7 config placeholder remains after substitution.' }
+    if ($populatedSql -notmatch '(?im)^\s*begin\s*;' -or
+        $populatedSql -notmatch '(?im)^\s*commit\s*;') {
+        throw 'V7 transaction boundary missing.'
+    }
+    if ($populatedSql -match 'ConvertTo-Json|Read-Host|Set-Clipboard|Copy-StagingBootstrapV7Sql') {
+        throw 'PowerShell source detected in populated SQL.'
+    }
+
+    Set-Clipboard -Value $populatedSql
+    Remove-Variable config, json, escapedJson, populatedSql -ErrorAction SilentlyContinue
+    Write-Output 'Fingerprint and structure verified; populated SQL copied to clipboard.'
+}
+```
+
+The success message contains no UUID, email, JSON, or SQL. Clear the clipboard
+immediately after the separately approved manual execution. Manual review and a
+fresh private preflight remain mandatory; this helper grants no authorization.
 ## V6 function privilege correction
 
 Real staging Phase 1 schema execution completed and passed verification. Real staging Phase 2 V4 helper execution also completed: nine functions and eight triggers were structurally correct, all seven tables remained empty, policies and RLS remained absent, and missing-profile behavior passed. Privilege verification failed because `authenticated` and `anon` could execute all nine functions despite PUBLIC being denied.

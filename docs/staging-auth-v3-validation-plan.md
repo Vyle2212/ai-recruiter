@@ -141,3 +141,43 @@ ROLLBACK;
 ```
 
 Expected: nine functions, eight triggers, zero policies, zero RLS-enabled/forced tables, zero rows, safe missing-profile results all true, and the exact role/function privilege matrix described above.
+
+## V7 bootstrap validation amendment
+
+This section supersedes earlier V5/V6 pending-state statements where they
+conflict with the current evidence.
+
+- Phase 1 schema: completed
+- Phase 2 helpers: completed
+- V6 privilege repair: completed
+- V5 attempt 1: safely failed before insertion; no rows created
+- V5 attempt 2: safely failed before insertion; no rows created
+- V5 failure: substitution/sentinel collision
+- V5 status: rejected
+- V7 bootstrap pending manual review
+- V7 bootstrap executed: no
+- V7 rollback executed: no
+- RLS: not executed
+- Candidate-domain modified: no
+- Production modified: no
+- Production: blocked
+
+Before any V7 execution, independently recalculate the V7 fingerprint, use the
+clipboard-only private helper documented in `staging-auth-sql-review.md`, and
+prove that the single JSON token occurs exactly once before substitution and
+zero times afterward. Confirm that the existing staging Auth identity and its
+normalized email match privately. Do not create an Auth user. Stop on any
+artifact, environment, count, identity, conflict, or transaction discrepancy.
+
+After a separately authorized bootstrap, perform read-only verification before
+any RLS consideration. Require exactly one organization, one active admin
+profile, and one exact provenance row; zero invites, memberships, candidate
+accounts, and access-audit rows; nine functions; eight triggers; zero policies;
+and zero RLS-enabled or forced tables. End the verification transaction with
+`ROLLBACK`. V7 review does not authorize bootstrap, rollback, or RLS execution.
+
+**V7 BOOTSTRAP PENDING MANUAL REVIEW**
+**V7 BOOTSTRAP NOT EXECUTED**
+**V7 ROLLBACK NOT EXECUTED**
+**RLS NOT EXECUTED**
+**PRODUCTION BLOCKED**
