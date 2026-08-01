@@ -107,7 +107,7 @@ BEGIN
     (SELECT count(*)
      FROM public.organizations o
      JOIN pg_catalog.jsonb_array_elements(
-       c#>'{setup,organizations}' || c#>'{admin_runtime,organizations}'
+       (c#>'{setup,organizations}') || (c#>'{admin_runtime,organizations}')
      ) x
        ON o.id=(x->>'id')::uuid
       AND o.name=x->>'name'
@@ -118,7 +118,7 @@ BEGIN
     (SELECT count(*)
      FROM public.user_profiles p
      JOIN pg_catalog.jsonb_array_elements(
-       c#>'{setup,profiles}' || c#>'{admin_runtime,profiles}'
+       (c#>'{setup,profiles}') || (c#>'{admin_runtime,profiles}')
      ) x
        ON p.id=(x->>'id')::uuid
       AND p.auth_user_id=(x->>'auth_user_id')::uuid
@@ -159,7 +159,7 @@ BEGIN
     (SELECT count(*)
      FROM public.client_memberships m
      JOIN pg_catalog.jsonb_array_elements(
-       c#>'{setup,memberships}' || c#>'{admin_runtime,memberships}'
+       (c#>'{setup,memberships}') || (c#>'{admin_runtime,memberships}')
      ) x
        ON m.id=(x->>'id')::uuid
       AND m.user_profile_id=(x->>'user_profile_id')::uuid
@@ -171,8 +171,7 @@ BEGIN
     (SELECT count(*)
      FROM public.candidate_accounts a
      JOIN pg_catalog.jsonb_array_elements(
-       c#>'{setup,candidate_accounts}'
-       || c#>'{admin_runtime,candidate_accounts}'
+       (c#>'{setup,candidate_accounts}') || (c#>'{admin_runtime,candidate_accounts}')
      ) x
        ON a.id=(x->>'id')::uuid
       AND a.user_profile_id=(x->>'user_profile_id')::uuid
@@ -230,8 +229,7 @@ BEGIN
   WHERE id IN(
     SELECT (x->>'id')::uuid
     FROM pg_catalog.jsonb_array_elements(
-      c#>'{setup,candidate_accounts}'
-      || c#>'{admin_runtime,candidate_accounts}'
+      (c#>'{setup,candidate_accounts}') || (c#>'{admin_runtime,candidate_accounts}')
     ) x
   );
   GET DIAGNOSTICS affected=ROW_COUNT;
@@ -244,7 +242,7 @@ BEGIN
   WHERE id IN(
     SELECT (x->>'id')::uuid
     FROM pg_catalog.jsonb_array_elements(
-      c#>'{setup,memberships}' || c#>'{admin_runtime,memberships}'
+      (c#>'{setup,memberships}') || (c#>'{admin_runtime,memberships}')
     ) x
   );
   GET DIAGNOSTICS affected=ROW_COUNT;
@@ -268,7 +266,7 @@ BEGIN
   WHERE id IN(
     SELECT (x->>'id')::uuid
     FROM pg_catalog.jsonb_array_elements(
-      c#>'{setup,profiles}' || c#>'{admin_runtime,profiles}'
+      (c#>'{setup,profiles}') || (c#>'{admin_runtime,profiles}')
     ) x
   );
   GET DIAGNOSTICS affected=ROW_COUNT;
@@ -281,7 +279,7 @@ BEGIN
   WHERE id IN(
     SELECT (x->>'id')::uuid
     FROM pg_catalog.jsonb_array_elements(
-      c#>'{setup,organizations}' || c#>'{admin_runtime,organizations}'
+      (c#>'{setup,organizations}') || (c#>'{admin_runtime,organizations}')
     ) x
   );
   GET DIAGNOSTICS affected=ROW_COUNT;
