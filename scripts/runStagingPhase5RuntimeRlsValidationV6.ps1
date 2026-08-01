@@ -159,7 +159,7 @@ try {
 
     if ($FixtureInputMode -eq 'Clipboard') {
         $fixtureB64 = Get-Clipboard -Raw
-        Set-Clipboard -Value ''
+        Set-Clipboard -Value ' '
     }
     else {
         $fixtureB64 = Read-PrivateText 'Private Phase 5 V6 fixture Base64'
@@ -228,7 +228,7 @@ try {
     Write-Output 'Phase 5 V6 sanitized runtime evidence: PASS'
 }
 finally {
-    Set-Clipboard -Value ''
+    Set-Clipboard -Value ' '
     if ($process -and -not $process.HasExited) {
         try { $process.Kill() } catch {}
     }
