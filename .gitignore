@@ -71,3 +71,4 @@ reports/candidate-reextraction-review.json
 
 # AI extraction cache
 reports/ai-extraction-cache/
+!docs/staging-phase5-runtime-evidence-schema-v6.json
