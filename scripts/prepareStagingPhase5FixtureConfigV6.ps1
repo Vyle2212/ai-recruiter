@@ -63,12 +63,21 @@ function ConvertTo-UuidV5 {
 
 function New-IdFactory {
     param([Guid]$Namespace,[string]$Batch)
+
+    $converter = (
+        Get-Command ConvertTo-UuidV5 -CommandType Function
+    ).ScriptBlock
+
     return {
         param([string]$Label)
-        (ConvertTo-UuidV5 -Namespace $Namespace -Name "$Batch::$Label").ToString()
+
+        $generated = & $converter `
+            -Namespace $Namespace `
+            -Name "$Batch::$Label"
+
+        $generated.ToString()
     }.GetNewClosure()
 }
-
 function Assert-NoForbiddenConfigKeys {
     param([object]$Object)
     $forbidden = '(?i)(password|secret|token|jwt|url|connection|string|api.?key|anon.?key|private.?key)'

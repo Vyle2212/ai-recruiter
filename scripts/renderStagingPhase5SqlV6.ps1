@@ -35,7 +35,7 @@ try {
 
     if ($InputMode -eq 'Clipboard') {
         $configB64 = Get-Clipboard -Raw
-        Set-Clipboard -Value ''
+        Set-Clipboard -Value ' '
     }
     else {
         $secure = Read-Host 'Private Base64 fixture configuration' -AsSecureString
