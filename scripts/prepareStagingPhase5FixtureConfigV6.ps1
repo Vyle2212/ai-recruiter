@@ -289,12 +289,12 @@ try {
     $configB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
     $roundTrip = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($configB64)) | ConvertFrom-Json
     if ($roundTrip.config_version -ne 'phase5-fixtures-v6' -or
-        $roundTrip.auth_users.PSObject.Properties.Count -ne 8 -or
+        @($roundTrip.auth_users.PSObject.Properties).Count -ne 8 -or
         $roundTrip.setup.organizations.Count -ne 3 -or
         $roundTrip.setup.profiles.Count -ne 6 -or
         $roundTrip.admin_runtime.organizations.Count -ne 1 -or
-        $roundTrip.denied_attempts.PSObject.Properties.Count -ne 8 -or
-        $roundTrip.immutable_attempts.PSObject.Properties.Count -ne 9) {
+        @($roundTrip.denied_attempts.PSObject.Properties).Count -ne 8 -or
+        @($roundTrip.immutable_attempts.PSObject.Properties).Count -ne 9) {
         throw 'phase5_v6_roundtrip_invalid'
     }
 
