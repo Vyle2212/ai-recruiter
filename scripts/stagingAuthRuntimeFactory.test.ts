@@ -8,6 +8,8 @@ import {
   canUseSupabaseStagingRuntimeProvider,
 } from "../lib/stagingAuthRuntimeFactory";
 import type { SupabaseStagingAuthClient } from "../lib/stagingAuthSupabaseRuntimeAdapter";
+import type { StagingAuthGateInput } from "../lib/stagingAuthExecutionGateTypes";
+import type { StagingAuthGateInput } from "../lib/stagingAuthExecutionGateTypes";
 
 const full = {
   appEnvironment: "staging" as const,
@@ -28,7 +30,7 @@ const unusedClientFactory = async () => {
   throw new Error("client_factory_must_not_run_during_selection");
 };
 
-function build(input: Partial<typeof full> = {}) {
+function build(input: Partial<StagingAuthGateInput> = {}) {
   const gate = buildStagingAuthExecutionGate({
     ...full,
     ...input,
