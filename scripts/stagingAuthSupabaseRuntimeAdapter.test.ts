@@ -45,12 +45,25 @@ async function main() {
   assert(!serialized.includes("discarded-password"));
   assert(!serialized.includes("discarded-token"));
 
-  assert.throws(
-    () =>
-      createSupabaseStagingRuntimeAdapter({
-        explicitlyEnabled: true,
-      }),
-    /supabase_staging_runtime_provider_not_implemented/,
+  const enabledWithoutClient =
+    createSupabaseStagingRuntimeAdapter({
+      explicitlyEnabled: true,
+    });
+
+  assert.equal(enabledWithoutClient.provider, "disabled");
+
+  const enabledWithoutClientResult =
+    await enabledWithoutClient.getSession();
+
+  assert.equal(enabledWithoutClientResult.status, "blocked");
+  assert.equal(
+    enabledWithoutClientResult.realActionExecuted,
+    false,
+  );
+  assert(
+    enabledWithoutClientResult.blockerKeys.includes(
+      "supabase_staging_runtime_disabled",
+    ),
   );
 
   const providerSource = readFileSync(
@@ -60,7 +73,7 @@ async function main() {
 
   assert.doesNotMatch(
     providerSource,
-    /createServerClient|createClient\s*\(|\.auth\.|cookies\s*\(|process\.env/,
+    /from\s+["']@supabase\/ssr["']|from\s+["']@supabase\/supabase-js["']|createServerClient|cookies\s*\(|process\.env/,
   );
 
   console.log(
