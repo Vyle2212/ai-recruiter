@@ -31,6 +31,10 @@ export function StagingRuntimeAuthResultPanel({
         <p>Successful: {state.ok ? "yes" : "no"}</p>
         <p>{state.safeMessage}</p>
 
+        {state.errorCode ? (
+          <p>Error code: {state.errorCode}</p>
+        ) : null}
+
         {state.emailMasked ? (
           <p>Masked email: {state.emailMasked}</p>
         ) : null}
