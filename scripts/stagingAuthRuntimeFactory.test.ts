@@ -9,7 +9,6 @@ import {
 } from "../lib/stagingAuthRuntimeFactory";
 import type { SupabaseStagingAuthClient } from "../lib/stagingAuthSupabaseRuntimeAdapter";
 import type { StagingAuthGateInput } from "../lib/stagingAuthExecutionGateTypes";
-import type { StagingAuthGateInput } from "../lib/stagingAuthExecutionGateTypes";
 
 const full = {
   appEnvironment: "staging" as const,
