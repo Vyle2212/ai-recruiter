@@ -51,3 +51,24 @@ export type StagingAuthRuntimeActionResult = {
   realActionExecuted: boolean;
   productionBlocked: true;
 };
+export function buildInitialStagingAuthRuntimeActionResult(
+  operation: StagingAuthOperationKey,
+): StagingAuthRuntimeActionResult {
+  return {
+    operation,
+    provider: "disabled",
+    status: "disabled",
+    ok: false,
+    safeMessage:
+      "Staging authentication has not been executed.",
+    blockerKeys: [],
+    warningKeys: [],
+    sensitiveInputReturned: false,
+    passwordReturned: false,
+    invitationTokenReturned: false,
+    tokenReturned: false,
+    stackTraceReturned: false,
+    realActionExecuted: false,
+    productionBlocked: true,
+  };
+}
