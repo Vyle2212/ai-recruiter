@@ -6,6 +6,8 @@ import { createSupabaseStagingRuntimeAdapter } from "../lib/stagingAuthSupabaseR
 async function main() {
   const adapter = createSupabaseStagingRuntimeAdapter();
 
+  assert.equal(adapter.provider, "disabled");
+
   const results = await Promise.all([
     adapter.getSession(),
     adapter.getUser(),
