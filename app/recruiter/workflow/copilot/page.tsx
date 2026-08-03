@@ -10,6 +10,7 @@ import type {
   RecruiterWorkflowInsights,
   RecruiterWorkflowRecommendation,
 } from "@/lib/recruiterWorkflowInsights";
+import { CopilotSuggestionList } from "@/app/recruiter/components/CopilotSuggestionList";
 
 type CopilotQuestion =
   | "attention_today"
@@ -333,6 +334,12 @@ export default function RecruiterWorkflowCopilotPage() {
               </section>
             </section>
 
+            <CopilotSuggestionList
+              title="Next best recruiter actions"
+              description="Candidate-specific and workflow-level recommendations ranked by deterministic priority."
+              limit={10}
+            />
+
             <section>
               <div className="mb-3">
                 <h2 className="text-lg font-semibold text-white">
@@ -389,13 +396,13 @@ export default function RecruiterWorkflowCopilotPage() {
 
               <p className="mt-2 text-sm text-slate-300">
                 Candidate DB writes: {data.safety.candidateDbWrites}
-                {" · "}
+                {" Â· "}
                 Workflow writes: {data.safety.workflowWrites}
-                {" · "}
+                {" Â· "}
                 Email sends: {data.safety.emailSends}
-                {" · "}
+                {" Â· "}
                 OpenAI calls: {data.safety.openAiCalls}
-                {" · "}
+                {" Â· "}
                 Read only: {data.safety.readOnly ? "yes" : "no"}
               </p>
             </section>
