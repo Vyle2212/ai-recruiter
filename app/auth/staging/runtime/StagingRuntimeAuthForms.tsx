@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   stagingRuntimeProfileAction,
@@ -27,7 +28,21 @@ const input =
 const button =
   "mt-5 w-full rounded-lg bg-cyan-300 px-4 py-3 font-semibold text-slate-950 disabled:opacity-50";
 
-export function StagingRuntimeSignInForm() {
+const landingRouteByRole = {
+  admin: "/admin/portal",
+  recruiter_manager: "/recruiter/dashboard",
+  recruiter: "/recruiter/dashboard",
+  client: "/client/portal",
+  candidate: "/candidate/portal",
+  guest: "/auth/login",
+} as const;
+
+export function StagingRuntimeSignInForm({
+  redirectOnSuccess = false,
+}: {
+  redirectOnSuccess?: boolean;
+} = {}) {
+  const router = useRouter();
   const [state, action, pending] = useActionState(
     stagingRuntimeSignInAction,
     buildInitialStagingAuthRuntimeActionResult("sign_in"),
@@ -36,10 +51,17 @@ export function StagingRuntimeSignInForm() {
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
-    if (state.ok) {
-      formRef.current?.reset();
+    if (!state.ok) return;
+
+    formRef.current?.reset();
+
+    if (redirectOnSuccess && state.role) {
+      const destination =
+        landingRouteByRole[state.role] || "/auth/login";
+
+      router.replace(destination);
     }
-  }, [state.ok]);
+  }, [redirectOnSuccess, router, state.ok, state.role]);
 
   return (
     <section className={card}>
@@ -73,7 +95,7 @@ export function StagingRuntimeSignInForm() {
         </label>
 
         <button className={button} disabled={pending}>
-          {pending ? "Signing in…" : "Sign in to staging"}
+          {pending ? "Signing inâ€¦" : "Sign in to staging"}
         </button>
       </form>
 
@@ -92,7 +114,7 @@ export function StagingRuntimeSignOutForm() {
     <section className={card}>
       <form action={action}>
         <button className={button + " mt-0"} disabled={pending}>
-          {pending ? "Signing out…" : "Sign out of staging"}
+          {pending ? "Signing outâ€¦" : "Sign out of staging"}
         </button>
       </form>
 
@@ -129,7 +151,7 @@ function DiagnosticButton({
           className={button + " mt-0"}
           disabled={pending}
         >
-          {pending ? "Running…" : label}
+          {pending ? "Runningâ€¦" : label}
         </button>
       </form>
 
