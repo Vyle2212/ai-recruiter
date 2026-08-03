@@ -114,22 +114,19 @@ export const DEFAULT_STAGE_SLA_DAYS: Record<
   number
 > = {
   sourced: 7,
-  contacted: 5,
   screening: 5,
-  shortlisted: 4,
   submitted: 5,
   interview: 7,
   offer: 5,
-  placed: 0,
+  hired: 0,
   rejected: 0,
-  archived: 0,
+  on_hold: 14,
 };
 
 const TERMINAL_STAGES =
   new Set<CandidatePipelineStage>([
-    "placed",
+    "hired",
     "rejected",
-    "archived",
   ]);
 
 function parseClock(
