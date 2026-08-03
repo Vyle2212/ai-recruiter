@@ -89,3 +89,91 @@ export function legacyStatesToPersisted(states: RecruiterWorkflowState[]) {
     auditNotes: state.reasons,
   })));
 }
+
+function safeTimestamp(value = new Date()) {
+  return value
+    .toISOString()
+    .replace(/[:.]/g, "-");
+}
+
+export function writePersistedRecruiterWorkflowStoreAtomic(
+  file: PersistedWorkflowStateFile,
+  baseDir = process.cwd(),
+) {
+  const validation =
+    validateWorkflowStateFile(file);
+
+  if (
+    validation.invalidStates.length ||
+    validation.duplicateCandidateIds.length
+  ) {
+    throw new Error(
+      [
+        "Workflow state validation failed.",
+        `Invalid states: ${validation.invalidStates.length}.`,
+        `Duplicate candidate IDs: ${validation.duplicateCandidateIds.length}.`,
+      ].join(" "),
+    );
+  }
+
+  const filePath =
+    recruiterWorkflowStatePath(baseDir);
+
+  const directory =
+    path.dirname(filePath);
+
+  fs.mkdirSync(
+    directory,
+    { recursive: true },
+  );
+
+  const timestamp = safeTimestamp();
+
+  const backupPath =
+    fs.existsSync(filePath)
+      ? path.join(
+          directory,
+          `recruiter-workflow-state.backup-${timestamp}.json`,
+        )
+      : null;
+
+  if (backupPath) {
+    fs.copyFileSync(
+      filePath,
+      backupPath,
+    );
+  }
+
+  const temporaryPath =
+    `${filePath}.tmp-${process.pid}-${Date.now()}`;
+
+  try {
+    fs.writeFileSync(
+      temporaryPath,
+      `${JSON.stringify(file, null, 2)}\n`,
+      "utf8",
+    );
+
+    fs.renameSync(
+      temporaryPath,
+      filePath,
+    );
+  } catch (error) {
+    if (
+      fs.existsSync(temporaryPath)
+    ) {
+      fs.unlinkSync(
+        temporaryPath,
+      );
+    }
+
+    throw error;
+  }
+
+  return {
+    store: file,
+    path: filePath,
+    backupPath,
+    atomicWrite: true as const,
+  };
+}

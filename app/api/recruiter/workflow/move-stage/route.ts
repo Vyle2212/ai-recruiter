@@ -4,11 +4,8 @@ import {
 } from "next/server";
 
 import {
-  previewCandidateLifecycleTransition,
-} from "@/lib/candidateLifecycleEngine";
-import {
-  hydrateCandidate360Workflow,
-} from "@/lib/recruiterWorkflowStateHydration";
+  executeCandidateLifecycleTransition,
+} from "@/lib/candidateLifecyclePersistence";
 import type {
   CandidatePipelineStage,
 } from "@/lib/candidateLifecycleTypes";
@@ -42,44 +39,38 @@ export async function POST(
       );
     }
 
-    const workflow =
-      hydrateCandidate360Workflow(
+    const result =
+      executeCandidateLifecycleTransition({
         candidateId,
-      );
-
-    if (!workflow) {
-      return NextResponse.json(
-        {
-          error:
-            "Candidate workflow state not found",
-        },
-        { status: 404 },
-      );
-    }
-
-    const decision =
-      previewCandidateLifecycleTransition({
-        lifecycle: workflow.lifecycle,
         toStage,
-        note: body.note,
-        dueAt: body.dueAt,
-        actorId: body.actorId,
-        actorName: body.actorName,
+        expectedStage:
+          body.expectedStage,
+        note:
+          body.note,
+        dueAt:
+          body.dueAt,
+        actorId:
+          body.actorId,
+        actorName:
+          body.actorName,
+        execute:
+          body.execute === true,
       });
 
-    return NextResponse.json({
-      mode:
-        "lifecycle transition preview only; no workflow or candidate DB writes",
-      candidateId,
-      decision,
-    });
+    return NextResponse.json(
+      result,
+      {
+        status:
+          result.status,
+      },
+    );
   } catch (error) {
     return NextResponse.json(
       {
         error:
           error instanceof Error
             ? error.message
-            : "Unable to preview lifecycle transition",
+            : "Unable to process lifecycle transition",
       },
       { status: 500 },
     );

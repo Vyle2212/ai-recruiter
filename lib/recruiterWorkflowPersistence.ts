@@ -1,3 +1,4 @@
+import type { CandidateLifecycleRecord } from "./candidateLifecycleTypes";
 import { actionForStatus } from "./recruiterWorkflowRules";
 import type { RecruiterActionQueueItem, RecruiterWorkflowActionType, RecruiterWorkflowStatus, WorkflowPriority, WorkflowSummary } from "./recruiterWorkflowTypes";
 
@@ -23,6 +24,7 @@ export type PersistedWorkflowState = {
   lastUpdatedAt: string;
   source: "workflow_inference";
   auditNotes: string[];
+  lifecycle?: CandidateLifecycleRecord;
   stale?: boolean;
 };
 
