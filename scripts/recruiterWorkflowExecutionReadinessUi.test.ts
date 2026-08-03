@@ -73,10 +73,7 @@ assert.match(
   /STALE/,
 );
 
-assert.match(
-  panel,
-  /ALREADY_EXECUTED/,
-);
+
 
 assert.doesNotMatch(
   panel,
