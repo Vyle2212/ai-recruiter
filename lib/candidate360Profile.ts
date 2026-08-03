@@ -1,3 +1,4 @@
+import { buildCandidateLifecycleRecord } from "./candidateLifecycle";
 import {
   Candidate360FieldSource as Source,
   Candidate360VerificationStatus as Status,
@@ -149,7 +150,9 @@ export function buildCandidate360Profile(candidate: AnyRecord, workflowState?: A
   const needsCandidateConfirmation = missingFields.length > 0 || allFields.some((item) => item.verificationStatus === Status.NeedsCandidateConfirmation);
   const workflowStatus = clean(workflowState?.currentStatus || workflowState?.status) || "unknown";
   const readyForShortlist = Boolean(workflowState?.readyForShortlist || workflowStatus === "ready_for_shortlist");
+  const lifecycle = buildCandidateLifecycleRecord(candidate, workflowState);
   return {
+    lifecycle,
     candidateId: idOf(candidate), displayName, headline, currentTitle, currentCompany, location,
     contactInfo: { email, phone }, yearsOfExperience, sapModules, techSkills, workExperience, education, languages,
     workExperienceSummary: workExperience.length ? `${workExperience.length} experience entr${workExperience.length === 1 ? "y" : "ies"} available` : "No structured work experience available",

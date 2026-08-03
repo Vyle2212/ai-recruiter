@@ -1,3 +1,4 @@
+import type { CandidateLifecycleRecord } from "./candidateLifecycleTypes";
 export enum Candidate360FieldSource {
   ParserExtracted = "parser_extracted",
   AiExtracted = "ai_extracted",
@@ -73,6 +74,7 @@ export type Candidate360ProfileCompleteness = {
 };
 
 export type Candidate360Profile = {
+  lifecycle: CandidateLifecycleRecord;
   candidateId: string;
   displayName: Candidate360Field<string>;
   headline: Candidate360Field<string>;
