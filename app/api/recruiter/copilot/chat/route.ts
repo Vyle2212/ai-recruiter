@@ -12,6 +12,9 @@ import {
 import {
   readPersistedWorkflowState,
 } from "@/lib/recruiterWorkflowStateHydration";
+import {
+  appendRecruiterCopilotExchange,
+} from "@/lib/recruiterCopilotConversationStore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -72,12 +75,57 @@ export async function POST(
         },
       );
 
-    return NextResponse.json(
+    const answer =
       answerRecruiterCopilotQuestion(
         question,
         context,
-      ),
-    );
+      );
+
+    let conversation: {
+      conversationId: string | null;
+      saved: boolean;
+      saveError: string | null;
+    } = {
+      conversationId: null,
+      saved: false,
+      saveError: null,
+    };
+
+    try {
+      const savedExchange =
+        appendRecruiterCopilotExchange({
+          conversationId:
+            typeof body?.conversationId === "string"
+              ? body.conversationId.trim() || undefined
+              : undefined,
+          question,
+          answer,
+        });
+
+      conversation = {
+        conversationId:
+          savedExchange.conversation.conversationId,
+        saved: true,
+        saveError: null,
+      };
+    } catch (historyError) {
+      conversation = {
+        conversationId:
+          typeof body?.conversationId === "string"
+            ? body.conversationId.trim() || null
+            : null,
+        saved: false,
+        saveError:
+          historyError instanceof Error
+            ? historyError.message
+            : "Unable to save Copilot conversation history",
+      };
+    }
+
+    return NextResponse.json({
+      ...answer,
+      conversation,
+    });
   } catch (error) {
     return NextResponse.json(
       {

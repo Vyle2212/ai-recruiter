@@ -101,9 +101,9 @@ export function detectRecruiterCopilotIntent(
       "today priority",
       "focus today",
       "do today",
-      "cần làm gì hôm nay",
-      "ưu tiên hôm nay",
-      "hôm nay cần làm gì",
+      "cáº§n lÃ m gÃ¬ hÃ´m nay",
+      "Æ°u tiÃªn hÃ´m nay",
+      "hÃ´m nay cáº§n lÃ m gÃ¬",
     ])
   ) {
     return {
@@ -118,9 +118,9 @@ export function detectRecruiterCopilotIntent(
       "late follow up",
       "late follow-up",
       "past due",
-      "quá hạn",
-      "follow up trễ",
-      "follow-up trễ",
+      "quÃ¡ háº¡n",
+      "follow up trá»…",
+      "follow-up trá»…",
     ])
   ) {
     return {
@@ -136,9 +136,9 @@ export function detectRecruiterCopilotIntent(
       "stuck stage",
       "aging stage",
       "pipeline issue",
-      "stage nào chậm",
-      "điểm nghẽn",
-      "tắc ở đâu",
+      "stage nÃ o cháº­m",
+      "Ä‘iá»ƒm ngháº½n",
+      "táº¯c á»Ÿ Ä‘Ã¢u",
     ])
   ) {
     return {
@@ -154,8 +154,8 @@ export function detectRecruiterCopilotIntent(
       "best recruiter",
       "recruiter ranking",
       "active recruiter",
-      "recruiter nào",
-      "ai hoạt động nhiều nhất",
+      "recruiter nÃ o",
+      "ai hoáº¡t Ä‘á»™ng nhiá»u nháº¥t",
     ])
   ) {
     return {
@@ -171,10 +171,10 @@ export function detectRecruiterCopilotIntent(
       "priority candidate",
       "review first",
       "who should i review",
-      "candidate nào",
-      "ứng viên nào",
-      "xem ai trước",
-      "ưu tiên ứng viên",
+      "candidate nÃ o",
+      "á»©ng viÃªn nÃ o",
+      "xem ai trÆ°á»›c",
+      "Æ°u tiÃªn á»©ng viÃªn",
     ])
   ) {
     return {
@@ -191,9 +191,9 @@ export function detectRecruiterCopilotIntent(
       "how is the pipeline",
       "overall status",
       "workflow status",
-      "tình hình workflow",
-      "tình trạng pipeline",
-      "workflow thế nào",
+      "tÃ¬nh hÃ¬nh workflow",
+      "tÃ¬nh tráº¡ng pipeline",
+      "workflow tháº¿ nÃ o",
     ])
   ) {
     return {
@@ -290,7 +290,7 @@ function answerTodayPriorities(
       : "There are no overdue or due-today workflow actions. Review scheduled follow-ups and pipeline bottlenecks next.";
 
   return {
-    title: "Today’s workflow priorities",
+    title: "Todayâ€™s workflow priorities",
     answer,
     evidence: [
       {
@@ -697,7 +697,7 @@ function answerCandidatePriority(
           label:
             `${index + 1}. ${candidate.candidateName}`,
           value:
-            `${candidate.reminderLabel} · ${readableAction(
+            `${candidate.reminderLabel} Â· ${readableAction(
               candidate.nextAction,
             )}`,
           source:
@@ -892,7 +892,18 @@ export function answerRecruiterCopilotQuestion(
     evidence:
       content.evidence,
     suggestedActions:
-      content.suggestedActions,
+      content.suggestedActions.map(
+        (
+          action,
+        ): RecruiterCopilotSuggestedAction => ({
+          ...action,
+          priority:
+            action.priority as
+              | "low"
+              | "medium"
+              | "high",
+        }),
+      ),
     generatedAt:
       options.generatedAt ||
       context.generatedAt,

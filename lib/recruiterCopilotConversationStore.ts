@@ -238,7 +238,8 @@ export function readRecruiterCopilotConversations(
           .map(normalizeConversation)
           .filter(
             (
-              conversation,
+              conversation:
+                RecruiterCopilotConversation | null,
             ): conversation is RecruiterCopilotConversation =>
               Boolean(conversation),
           )
@@ -250,7 +251,10 @@ export function readRecruiterCopilotConversations(
         parseDate(parsed?.generatedAt) ||
         new Date().toISOString(),
       conversations: conversations.sort(
-        (left, right) =>
+        (
+          left: RecruiterCopilotConversation,
+          right: RecruiterCopilotConversation,
+        ) =>
           Date.parse(right.updatedAt) -
           Date.parse(left.updatedAt),
       ),
