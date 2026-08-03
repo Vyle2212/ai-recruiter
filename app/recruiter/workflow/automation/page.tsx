@@ -18,6 +18,9 @@ import type {
 import {
   WorkflowAutomationDecisionControls,
 } from "./WorkflowAutomationDecisionControls";
+import {
+  WorkflowExecutionPreviewPanel,
+} from "./WorkflowExecutionPreviewPanel";
 
 const card =
   "rounded-2xl border border-slate-800 bg-[#0B0F16] p-5";
@@ -505,6 +508,18 @@ export default function WorkflowAutomationPage() {
                         proposal={item}
                       />
 
+                      <WorkflowExecutionPreviewPanel
+                        approved={
+                          decisions[
+                            item.proposalId
+                          ]?.decision ===
+                          "approved"
+                        }
+                        proposalId={
+                          item.proposalId
+                        }
+                      />
+
                       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                         <Link
                           className="text-sm font-semibold text-cyan-300"
@@ -547,7 +562,7 @@ export default function WorkflowAutomationPage() {
                     </p>
 
                     <div className="mt-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-200">
-                      Enabled Â· Preview only
+                      Enabled Ã‚Â· Preview only
                     </div>
                   </article>
                 ))}
@@ -557,19 +572,19 @@ export default function WorkflowAutomationPage() {
             <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 text-sm text-slate-300">
               Automatic actions:{" "}
               {data.safety.automaticActions}
-              {" Â· "}
+              {" Ã‚Â· "}
               Candidate DB writes:{" "}
               {data.safety.candidateDbWrites}
-              {" Â· "}
+              {" Ã‚Â· "}
               Workflow writes:{" "}
               {data.safety.workflowWrites}
-              {" Â· "}
+              {" Ã‚Â· "}
               Email sends:{" "}
               {data.safety.emailSends}
-              {" Â· "}
+              {" Ã‚Â· "}
               OpenAI calls:{" "}
               {data.safety.openAiCalls}
-              {" Â· "}
+              {" Ã‚Â· "}
               Human approval: required
             </section>
           </>
