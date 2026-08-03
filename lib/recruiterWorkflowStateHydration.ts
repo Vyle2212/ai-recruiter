@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { buildRecruiterWorkflowAuditFromReports } from "./recruiterWorkflowAudit";
+import { buildCandidateLifecycleRecord } from "./candidateLifecycle";
 import { buildActionQueue } from "./recruiterWorkflowActions";
 import { buildPersistedWorkflowStateFile, buildPersistedWorkflowStates, type PersistedWorkflowState, type PersistedWorkflowStateFile } from "./recruiterWorkflowPersistence";
 import { validateWorkflowStateFile } from "./recruiterWorkflowStateValidator";
@@ -32,6 +33,53 @@ export function readPersistedWorkflowState(filePath = workflowStatePath()): Pers
   }
 }
 
+
+function lifecycleFromPersistedState(
+  state: PersistedWorkflowState,
+) {
+  return buildCandidateLifecycleRecord(
+    {
+      id: state.candidateId,
+      name: state.displayName,
+      status: state.currentStatus,
+      updated_at: state.lastUpdatedAt,
+    },
+    {
+      currentStatus: state.currentStatus,
+      priority: state.priority,
+      nextActionNote:
+        state.auditNotes[0] ||
+        "Review workflow state",
+      lastUpdated: state.lastUpdatedAt,
+      missingFields: state.missingFields,
+    },
+  );
+}
+
+function enrichActionQueueWithLifecycle(
+  actionQueue: any[],
+  states: PersistedWorkflowState[],
+) {
+  const stateByCandidateId = new Map(
+    states.map((state) => [
+      state.candidateId,
+      state,
+    ]),
+  );
+
+  return actionQueue.map((item) => {
+    const state = stateByCandidateId.get(
+      item.candidateId,
+    );
+
+    return {
+      ...item,
+      lifecycle: state
+        ? lifecycleFromPersistedState(state)
+        : null,
+    };
+  });
+}
 function actionQueueFromPersisted(states: PersistedWorkflowState[]) {
   return states.filter((state) => !["placed", "rejected", "archived"].includes(state.currentStatus)).map((state) => ({
     actionId: `${state.candidateId}:${state.recommendedNextAction}`,
@@ -57,7 +105,10 @@ export function hydrateRecruiterWorkflow(options: { statePath?: string } = {}): 
       lastUpdatedAt: saved.generatedAt,
       summary: saved.summary,
       states: saved.states,
-      actionQueue: actionQueueFromPersisted(saved.states),
+      actionQueue: enrichActionQueueWithLifecycle(
+        actionQueueFromPersisted(saved.states),
+        saved.states,
+      ),
       files: { workflowState: { path: statePath, found: true } },
     };
   }
@@ -70,7 +121,10 @@ export function hydrateRecruiterWorkflow(options: { statePath?: string } = {}): 
     lastUpdatedAt: file.generatedAt,
     summary: file.summary,
     states,
-    actionQueue: buildActionQueue(audit.states),
+    actionQueue: enrichActionQueueWithLifecycle(
+      buildActionQueue(audit.states),
+      states,
+    ),
     files: { workflowState: { path: statePath, found: false } },
   };
 }
@@ -80,10 +134,12 @@ export function hydrateCandidate360Workflow(candidateId: string, options: { stat
   const state = hydration.states.find((item) => item.candidateId === candidateId);
   if (!state) return null;
   const recommended = hydration.actionQueue.filter((item) => item.candidateId === candidateId);
+  const lifecycle = lifecycleFromPersistedState(state);
   return {
     candidateId,
     candidateName: state.displayName,
     currentWorkflowStatus: state.currentStatus,
+    lifecycle,
     recommendedNextAction: state.recommendedNextAction,
     allowedActions: state.allowedActions.map((action) => ({ action, reasons: ["Saved workflow state action"] })),
     blockedActions: state.blockedActions.map((action) => ({ action, reasons: state.blockerReasons.length ? state.blockerReasons : ["Action is not currently recommended"] })),

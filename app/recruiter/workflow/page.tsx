@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import type { CandidateLifecycleRecord } from "@/lib/candidateLifecycleTypes";
 
 type WorkflowSummaryResponse = {
   generatedAt: string;
   lastUpdatedAt?: string;
   stateSource?: string;
   summary: Record<string, number>;
-  actionQueue: Array<{ actionId: string; candidateId: string; candidateName: string; currentStatus: string; recommendedNextAction: string; reason: string; priority: "high" | "medium" | "low"; missingData: string[]; lastUpdated: string; safetyNote: string }>;
+  actionQueue: Array<{ actionId: string; candidateId: string; candidateName: string; currentStatus: string; recommendedNextAction: string; reason: string; priority: "high" | "medium" | "low"; missingData: string[]; lastUpdated: string; safetyNote: string; lifecycle?: CandidateLifecycleRecord | null }>;
 };
 
 const CARDS: Array<[string, string]> = [
@@ -64,7 +65,21 @@ export default function RecruiterWorkflowPage() {
     const text = query.trim().toLowerCase();
     return (data?.actionQueue || []).filter((item) => {
       const matchesFilter = filter === "all" || item.priority === filter || item.currentStatus === filter;
-      const haystack = `${item.candidateName} ${item.candidateId} ${item.currentStatus} ${item.recommendedNextAction} ${item.reason} ${item.missingData.join(" ")}`.toLowerCase();
+      const haystack = [
+        item.candidateName,
+        item.candidateId,
+        item.currentStatus,
+        item.recommendedNextAction,
+        item.reason,
+        item.missingData.join(" "),
+        item.lifecycle?.stage,
+        item.lifecycle?.ownerName,
+        item.lifecycle?.nextAction,
+        item.lifecycle?.nextActionDueAt,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
       return matchesFilter && (!text || haystack.includes(text));
     });
   }, [data, filter, query]);
@@ -95,9 +110,9 @@ export default function RecruiterWorkflowPage() {
             </div>
             <div className="mt-5 text-xs text-slate-500">Scroll horizontally to review complete workflow evidence and safety notes ?</div><div className="mt-2 overflow-auto rounded-xl border border-slate-800 bg-[#0B0F16]">
               <table className="min-w-[1200px] w-full border-collapse text-left text-sm">
-                <thead className="text-xs uppercase text-slate-500"><tr className="border-b border-slate-800">{["Candidate", "Candidate ID", "Current status", "Recommended next action", "Reason", "Priority", "Missing data", "Last updated", "Safety note"].map((head) => <th key={head} className={`px-3 py-3 font-semibold ${head==="Candidate"?"sticky left-0 z-20 bg-[#0B0F16]":""}`}>{head}</th>)}</tr></thead>
+                <thead className="text-xs uppercase text-slate-500"><tr className="border-b border-slate-800">{["Candidate", "Candidate ID", "Pipeline stage", "Owner", "Lifecycle next action", "Due date", "Legacy status", "Reason", "Priority", "Missing data", "Last updated", "Safety note"].map((head) => <th key={head} className={`px-3 py-3 font-semibold ${head==="Candidate"?"sticky left-0 z-20 bg-[#0B0F16]":""}`}>{head}</th>)}</tr></thead>
                 <tbody className="divide-y divide-slate-800">
-                  {queue.map((item) => <tr key={item.actionId} className="align-top hover:bg-slate-900/40"><td className="sticky left-0 z-10 bg-[#0B0F16] px-3 py-3 text-slate-100"><Link href={`/recruiter/candidate360/${item.candidateId}`} className="hover:text-cyan-100">{item.candidateName}</Link></td><td className="px-3 py-3 text-xs text-slate-400">{item.candidateId}</td><td className="px-3 py-3 text-slate-300">{item.currentStatus.replace(/_/g, " ")}</td><td className="px-3 py-3 text-cyan-100">{item.recommendedNextAction.replace(/_/g, " ")}</td><td className="px-3 py-3 text-slate-400">{item.reason}</td><td className="px-3 py-3"><span className={`rounded-md border px-2 py-1 text-xs font-semibold ${priorityTone(item.priority)}`}>{item.priority}</span></td><td className="px-3 py-3 text-slate-300">{item.missingData.join(", ") || "None"}</td><td className="px-3 py-3 text-xs text-slate-500">{item.lastUpdated}</td><td className="px-3 py-3 text-slate-400">{item.safetyNote}</td></tr>)}
+                  {queue.map((item) => <tr key={item.actionId} className="align-top hover:bg-slate-900/40"><td className="sticky left-0 z-10 bg-[#0B0F16] px-3 py-3 text-slate-100"><Link href={`/recruiter/candidate360/${item.candidateId}`} className="hover:text-cyan-100">{item.candidateName}</Link></td><td className="px-3 py-3 text-xs text-slate-400">{item.candidateId}</td><td className="px-3 py-3 font-semibold text-cyan-100">{(item.lifecycle?.stage || "sourced").replace(/_/g, " ")}</td><td className="px-3 py-3 text-slate-300">{item.lifecycle?.ownerName || "Unassigned"}</td><td className="px-3 py-3 text-cyan-100">{(item.lifecycle?.nextAction || item.recommendedNextAction).replace(/_/g, " ")}</td><td className="px-3 py-3 text-xs text-slate-400">{item.lifecycle?.nextActionDueAt || "Not scheduled"}</td><td className="px-3 py-3 text-slate-400">{item.currentStatus.replace(/_/g, " ")}</td><td className="px-3 py-3 text-slate-400">{item.reason}</td><td className="px-3 py-3"><span className={`rounded-md border px-2 py-1 text-xs font-semibold ${priorityTone(item.priority)}`}>{item.priority}</span></td><td className="px-3 py-3 text-slate-300">{item.missingData.join(", ") || "None"}</td><td className="px-3 py-3 text-xs text-slate-500">{item.lastUpdated}</td><td className="px-3 py-3 text-slate-400">{item.safetyNote}</td></tr>)}
                 </tbody>
               </table>
               {!queue.length ? <div className="p-5 text-sm text-slate-400">No workflow actions match this view.</div> : null}
