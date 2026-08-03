@@ -260,12 +260,16 @@ export function readWorkflowAutomationDecisions(
             .map(normalizeDecision)
             .filter(
               (
-                item,
+                item:
+                  WorkflowAutomationDecision | null,
               ): item is WorkflowAutomationDecision =>
                 Boolean(item),
             )
             .sort(
-              (left, right) =>
+              (
+                left: WorkflowAutomationDecision,
+                right: WorkflowAutomationDecision,
+              ) =>
                 Date.parse(
                   right.updatedAt,
                 ) -
