@@ -11,6 +11,13 @@ import type {
   RecruiterWorkflowAutomationPreview,
   RecruiterWorkflowAutomationProposal,
 } from "@/lib/recruiterWorkflowAutomationRules";
+import type {
+  WorkflowAutomationDecision,
+  WorkflowAutomationDecisionFile,
+} from "@/lib/recruiterWorkflowAutomationDecisions";
+import {
+  WorkflowAutomationDecisionControls,
+} from "./WorkflowAutomationDecisionControls";
 
 const card =
   "rounded-2xl border border-slate-800 bg-[#0B0F16] p-5";
@@ -53,6 +60,14 @@ export default function WorkflowAutomationPage() {
   const [priority, setPriority] =
     useState("all");
 
+  const [decisions, setDecisions] =
+    useState<Record<string, WorkflowAutomationDecision>>({});
+
+  const [decisionSummary, setDecisionSummary] =
+    useState<WorkflowAutomationDecisionFile["summary"] | null>(
+      null,
+    );
+
   useEffect(() => {
     const controller =
       new AbortController();
@@ -82,6 +97,45 @@ export default function WorkflowAutomationPage() {
         }
 
         setData(result);
+
+        const decisionResponse =
+          await fetch(
+            "/api/recruiter/workflow/automation-decisions",
+            {
+              signal:
+                controller.signal,
+            },
+          );
+
+        const decisionResult =
+          await decisionResponse.json();
+
+        if (!decisionResponse.ok) {
+          throw new Error(
+            decisionResult.error ||
+              "Unable to load automation decisions",
+          );
+        }
+
+        const decisionMap =
+          Object.fromEntries(
+            decisionResult.decisions.map(
+              (
+                item: WorkflowAutomationDecision,
+              ) => [
+                item.proposalId,
+                item,
+              ],
+            ),
+          );
+
+        setDecisions(
+          decisionMap,
+        );
+
+        setDecisionSummary(
+          decisionResult.summary,
+        );
       } catch (loadError) {
         if (
           loadError instanceof Error &&
@@ -109,6 +163,90 @@ export default function WorkflowAutomationPage() {
       controller.abort();
   }, []);
 
+  function handleDecisionSaved(
+    decision: WorkflowAutomationDecision,
+  ) {
+    setDecisions((current) => ({
+      ...current,
+      [decision.proposalId]:
+        decision,
+    }));
+
+    setDecisionSummary((current) => {
+      const next =
+        Object.values({
+          ...decisions,
+          [decision.proposalId]:
+            decision,
+        });
+
+      return {
+        total:
+          next.length,
+
+        approved:
+          next.filter(
+            (item) =>
+              item.decision === "approved",
+          ).length,
+
+        rejected:
+          next.filter(
+            (item) =>
+              item.decision === "rejected",
+          ).length,
+
+        deferred:
+          next.filter(
+            (item) =>
+              item.decision === "deferred",
+          ).length,
+
+        executed: 0,
+      };
+    });
+  }
+
+  function handleDecisionCleared(
+    proposalId: string,
+  ) {
+    setDecisions((current) => {
+      const next = {
+        ...current,
+      };
+
+      delete next[
+        proposalId
+      ];
+
+      setDecisionSummary({
+        total:
+          Object.values(next).length,
+
+        approved:
+          Object.values(next).filter(
+            (item) =>
+              item.decision === "approved",
+          ).length,
+
+        rejected:
+          Object.values(next).filter(
+            (item) =>
+              item.decision === "rejected",
+          ).length,
+
+        deferred:
+          Object.values(next).filter(
+            (item) =>
+              item.decision === "deferred",
+          ).length,
+
+        executed: 0,
+      });
+
+      return next;
+    });
+  }
   const proposals =
     useMemo(
       () =>
@@ -183,6 +321,33 @@ export default function WorkflowAutomationPage() {
 
         {data ? (
           <>
+            {decisionSummary ? (
+              <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                {[
+                  ["Reviewed", decisionSummary.total, "text-white"],
+                  ["Approved", decisionSummary.approved, "text-emerald-200"],
+                  ["Rejected", decisionSummary.rejected, "text-red-200"],
+                  ["Deferred", decisionSummary.deferred, "text-amber-200"],
+                  ["Executed", decisionSummary.executed, "text-slate-400"],
+                ].map(([label, value, tone]) => (
+                  <article
+                    className={card}
+                    key={String(label)}
+                  >
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      {label}
+                    </div>
+
+                    <div
+                      className={`mt-2 text-2xl font-semibold ${tone}`}
+                    >
+                      {value}
+                    </div>
+                  </article>
+                ))}
+              </section>
+            ) : null}
+
             <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
               {[
                 ["Total", data.summary.total, "text-white"],
@@ -325,6 +490,21 @@ export default function WorkflowAutomationPage() {
                         </div>
                       </div>
 
+                      <WorkflowAutomationDecisionControls
+                        decision={
+                          decisions[
+                            item.proposalId
+                          ] || null
+                        }
+                        onDecisionCleared={
+                          handleDecisionCleared
+                        }
+                        onDecisionSaved={
+                          handleDecisionSaved
+                        }
+                        proposal={item}
+                      />
+
                       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                         <Link
                           className="text-sm font-semibold text-cyan-300"
@@ -367,7 +547,7 @@ export default function WorkflowAutomationPage() {
                     </p>
 
                     <div className="mt-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-200">
-                      Enabled · Preview only
+                      Enabled Â· Preview only
                     </div>
                   </article>
                 ))}
@@ -377,19 +557,19 @@ export default function WorkflowAutomationPage() {
             <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 text-sm text-slate-300">
               Automatic actions:{" "}
               {data.safety.automaticActions}
-              {" · "}
+              {" Â· "}
               Candidate DB writes:{" "}
               {data.safety.candidateDbWrites}
-              {" · "}
+              {" Â· "}
               Workflow writes:{" "}
               {data.safety.workflowWrites}
-              {" · "}
+              {" Â· "}
               Email sends:{" "}
               {data.safety.emailSends}
-              {" · "}
+              {" Â· "}
               OpenAI calls:{" "}
               {data.safety.openAiCalls}
-              {" · "}
+              {" Â· "}
               Human approval: required
             </section>
           </>
