@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { WorkflowSlaBadge } from "@/app/recruiter/components/WorkflowSlaBadge";
 import {
   useEffect,
   useMemo,
@@ -153,6 +154,7 @@ export default function WorkflowNotificationsPage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
+              <WorkflowSlaBadge compact />
               <Link
                 className="rounded-md border border-cyan-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-cyan-100"
                 href="/recruiter/workflow"
@@ -334,15 +336,15 @@ export default function WorkflowNotificationsPage() {
 
             <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5 text-sm text-slate-300">
               Automatic actions: {data.safety.automaticActions}
-              {" · "}
+              {" Â· "}
               Candidate DB writes: {data.safety.candidateDbWrites}
-              {" · "}
+              {" Â· "}
               Workflow writes: {data.safety.workflowWrites}
-              {" · "}
+              {" Â· "}
               Email sends: {data.safety.emailSends}
-              {" · "}
+              {" Â· "}
               Push sends: {data.safety.pushSends}
-              {" · "}
+              {" Â· "}
               OpenAI calls: {data.safety.openAiCalls}
             </section>
           </>
