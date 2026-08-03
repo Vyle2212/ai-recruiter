@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { MockSessionBanner } from "./MockSessionBanner";
+import MockSessionBanner from "./MockSessionBanner";
 
 const primaryLinks = [
   ["Login", "/auth/login"],
@@ -60,7 +60,7 @@ export default function AuthLayout({
           </details>
 
           <span className="ml-auto text-xs text-emerald-200">
-            Staging auth active · production blocked
+            Staging auth active Â· production blocked
           </span>
         </div>
       </nav>
