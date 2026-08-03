@@ -9,6 +9,7 @@ import type {
 } from "../lib/recruiterWorkflowAutomationDecisions";
 import type {
   RecruiterWorkflowAutomationPreview,
+  RecruiterWorkflowAutomationProposal,
 } from "../lib/recruiterWorkflowAutomationRules";
 import type {
   CandidateLifecycleRecord,
@@ -17,7 +18,7 @@ import type {
   PersistedWorkflowState,
 } from "../lib/recruiterWorkflowPersistence";
 
-const proposal = {
+const proposal: RecruiterWorkflowAutomationProposal = {
   proposalId:
     "automation-preview:offer:candidate-1",
 
@@ -65,7 +66,7 @@ const proposal = {
     emailSends: 0,
     openAiCalls: 0,
   },
-} as const;
+};
 
 const automationPreview:
   RecruiterWorkflowAutomationPreview = {

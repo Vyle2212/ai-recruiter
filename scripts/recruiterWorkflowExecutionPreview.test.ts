@@ -9,9 +9,10 @@ import type {
 } from "../lib/recruiterWorkflowAutomationDecisions";
 import type {
   RecruiterWorkflowAutomationPreview,
+  RecruiterWorkflowAutomationProposal,
 } from "../lib/recruiterWorkflowAutomationRules";
 
-const proposal = {
+const proposal: RecruiterWorkflowAutomationProposal = {
   proposalId:
     "automation-preview:offer:candidate-1",
 
@@ -72,7 +73,7 @@ const proposal = {
     openAiCalls:
       0,
   },
-} as const;
+};
 
 const automationPreview:
   RecruiterWorkflowAutomationPreview = {
