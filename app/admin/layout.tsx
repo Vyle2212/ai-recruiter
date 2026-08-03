@@ -21,9 +21,7 @@ const links = [
   ["Data Import", "/recruiter/import-staging"],
   ["Merge Review", "/recruiter/import-merge"],
   ["Workflow", "/recruiter/workflow"],
-  ["Auth Planning", "/auth/preview"],
-  ["Mock Session", "/auth/mock-session?role=admin"],
-  ["Staging Plan", "/auth/staging"],
+  ["Auth Diagnostics", "/auth/staging/runtime"],
 ];
 
 export default function AdminLayout({
