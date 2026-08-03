@@ -8,27 +8,48 @@ type PortalRole =
   | "client"
   | "candidate";
 
-const portalRules: Array<{
-  pathname: string;
+type ProtectedArea = {
+  prefix: string;
   allowedRoles: PortalRole[];
-}> = [
+};
+
+const protectedAreas: ProtectedArea[] = [
   {
-    pathname: "/admin/portal",
+    prefix: "/admin",
     allowedRoles: ["admin"],
   },
   {
-    pathname: "/recruiter/dashboard",
-    allowedRoles: ["admin", "recruiter_manager", "recruiter"],
+    prefix: "/recruiter",
+    allowedRoles: [
+      "admin",
+      "recruiter_manager",
+      "recruiter",
+    ],
   },
   {
-    pathname: "/client/portal",
+    prefix: "/client",
     allowedRoles: ["client"],
   },
   {
-    pathname: "/candidate/portal",
+    prefix: "/candidate",
     allowedRoles: ["candidate"],
   },
 ];
+
+const publicRoutePrefixes = [
+  "/client/portal/preview",
+  "/candidate/self-confirm",
+];
+
+function pathnameMatchesPrefix(
+  pathname: string,
+  prefix: string,
+) {
+  return (
+    pathname === prefix ||
+    pathname.startsWith(`${prefix}/`)
+  );
+}
 
 function stagingGateApproved() {
   return (
@@ -40,7 +61,10 @@ function stagingGateApproved() {
   );
 }
 
-function loginRedirect(request: NextRequest, reason: string) {
+function loginRedirect(
+  request: NextRequest,
+  reason: string,
+) {
   const url = request.nextUrl.clone();
 
   url.pathname = "/auth/login";
@@ -54,12 +78,64 @@ function loginRedirect(request: NextRequest, reason: string) {
   return NextResponse.redirect(url);
 }
 
+function roleDeniedRedirect(request: NextRequest) {
+  const url = request.nextUrl.clone();
+
+  url.pathname = "/auth/login";
+  url.search = "";
+  url.searchParams.set("reason", "role_not_allowed");
+  url.searchParams.set(
+    "next",
+    request.nextUrl.pathname,
+  );
+
+  return NextResponse.redirect(url);
+}
+
+export function isPublicPortalRoute(
+  pathname: string,
+) {
+  return publicRoutePrefixes.some((prefix) =>
+    pathnameMatchesPrefix(pathname, prefix),
+  );
+}
+
+export function getProtectedPortalArea(
+  pathname: string,
+) {
+  if (isPublicPortalRoute(pathname)) {
+    return undefined;
+  }
+
+  return protectedAreas.find((area) =>
+    pathnameMatchesPrefix(pathname, area.prefix),
+  );
+}
+
+export function shouldProtectPortal(
+  pathname: string,
+) {
+  return Boolean(getProtectedPortalArea(pathname));
+}
+
+export function isStagingPortalGuardEnabled() {
+  return stagingGateApproved();
+}
+
 export async function updateStagingSession(
   request: NextRequest,
 ) {
   let response = NextResponse.next({
     request,
   });
+
+  const area = getProtectedPortalArea(
+    request.nextUrl.pathname,
+  );
+
+  if (!area) {
+    return response;
+  }
 
   const supabaseUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -135,42 +211,13 @@ export async function updateStagingSession(
     );
   }
 
-  const rule = portalRules.find(
-    (item) =>
-      request.nextUrl.pathname === item.pathname ||
-      request.nextUrl.pathname.startsWith(
-        item.pathname + "/",
-      ),
-  );
-
   if (
-    rule &&
-    !rule.allowedRoles.includes(
+    !area.allowedRoles.includes(
       profile.role as PortalRole,
     )
   ) {
-    const url = request.nextUrl.clone();
-
-    url.pathname = "/auth/login";
-    url.search = "";
-    url.searchParams.set("reason", "role_not_allowed");
-
-    return NextResponse.redirect(url);
+    return roleDeniedRedirect(request);
   }
 
   return response;
-}
-
-export function shouldProtectPortal(
-  pathname: string,
-) {
-  return portalRules.some(
-    (item) =>
-      pathname === item.pathname ||
-      pathname.startsWith(item.pathname + "/"),
-  );
-}
-
-export function isStagingPortalGuardEnabled() {
-  return stagingGateApproved();
 }

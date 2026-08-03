@@ -13,8 +13,8 @@ export async function proxy(request: NextRequest) {
   }
 
   /*
-   * This guard is intentionally staging-only.
-   * Production authentication remains disabled.
+   * The real route guard is staging-only.
+   * Production authentication remains blocked.
    */
   if (!isStagingPortalGuardEnabled()) {
     return NextResponse.next();
@@ -25,9 +25,9 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/admin/portal/:path*",
-    "/recruiter/dashboard/:path*",
-    "/client/portal/:path*",
-    "/candidate/portal/:path*",
+    "/admin/:path*",
+    "/recruiter/:path*",
+    "/client/:path*",
+    "/candidate/:path*",
   ],
 };
