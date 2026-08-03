@@ -1,3 +1,5 @@
+import { CandidateLifecycleControls } from "./CandidateLifecycleControls";
+
 import {
   PIPELINE_STAGE_LABELS,
   type CandidateLifecycleRecord,
@@ -232,7 +234,7 @@ export function CandidateLifecyclePanel({
 
                 {index < PRIMARY_STAGES.length - 1 ? (
                   <div className="absolute -right-2 top-1/2 z-10 hidden -translate-y-1/2 text-slate-600 md:block">
-                    →
+                    Ã¢â€ â€™
                   </div>
                 ) : null}
               </div>
@@ -257,6 +259,8 @@ export function CandidateLifecyclePanel({
         ) : null}
       </div>
 
+      <CandidateLifecycleControls lifecycle={lifecycle} />
+
       <div className="mt-6">
         <div className="flex items-center justify-between gap-3">
           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -279,7 +283,7 @@ export function CandidateLifecyclePanel({
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold text-white">
                     {event.fromStage
-                      ? `${PIPELINE_STAGE_LABELS[event.fromStage]} → `
+                      ? `${PIPELINE_STAGE_LABELS[event.fromStage]} Ã¢â€ â€™ `
                       : ""}
                     {PIPELINE_STAGE_LABELS[event.toStage]}
                   </span>
