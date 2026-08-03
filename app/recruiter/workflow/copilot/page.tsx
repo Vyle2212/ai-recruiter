@@ -11,6 +11,7 @@ import type {
   RecruiterWorkflowRecommendation,
 } from "@/lib/recruiterWorkflowInsights";
 import { CopilotSuggestionList } from "@/app/recruiter/components/CopilotSuggestionList";
+import { WorkflowNotificationBadge } from "@/app/recruiter/components/WorkflowNotificationBadge";
 
 type CopilotQuestion =
   | "attention_today"
@@ -255,6 +256,7 @@ export default function RecruiterWorkflowCopilotPage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
+              <WorkflowNotificationBadge compact />
               <Link
                 className="rounded-md border border-cyan-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-cyan-100"
                 href="/recruiter/workflow"
@@ -396,13 +398,13 @@ export default function RecruiterWorkflowCopilotPage() {
 
               <p className="mt-2 text-sm text-slate-300">
                 Candidate DB writes: {data.safety.candidateDbWrites}
-                {" Â· "}
+                {" Ã‚Â· "}
                 Workflow writes: {data.safety.workflowWrites}
-                {" Â· "}
+                {" Ã‚Â· "}
                 Email sends: {data.safety.emailSends}
-                {" Â· "}
+                {" Ã‚Â· "}
                 OpenAI calls: {data.safety.openAiCalls}
-                {" Â· "}
+                {" Ã‚Â· "}
                 Read only: {data.safety.readOnly ? "yes" : "no"}
               </p>
             </section>
