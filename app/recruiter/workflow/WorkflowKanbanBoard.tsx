@@ -18,6 +18,9 @@ import {
 import {
   findCandidateLifecycleTransition,
 } from "@/lib/candidateLifecycleTransitions";
+import {
+  evaluateCandidateLifecycleReminder,
+} from "@/lib/candidateLifecycleReminderEngine";
 
 export type WorkflowBoardItem = {
   actionId: string;
@@ -318,6 +321,9 @@ export function WorkflowKanbanBoard({
                         <div className="min-h-[340px] space-y-3 p-3">
                           {stageItems.map((item, index) => {
                             const lifecycle = item.lifecycle;
+                            const reminder = lifecycle
+                              ? evaluateCandidateLifecycleReminder(lifecycle)
+                              : null;
 
                             return (
                               <Draggable
@@ -342,7 +348,7 @@ export function WorkflowKanbanBoard({
                                         title="Drag candidate"
                                         {...dragProvided.dragHandleProps}
                                       >
-                                        ⋮⋮
+                                        ÃƒÂ¢Ã¢â‚¬Â¹Ã‚Â®ÃƒÂ¢Ã¢â‚¬Â¹Ã‚Â®
                                       </div>
 
                                       <Link
@@ -357,8 +363,22 @@ export function WorkflowKanbanBoard({
                                           item.priority,
                                         )}`}
                                       >
-                                        {item.priority}
+                                        {reminder?.effectivePriority ?? item.priority}
                                       </span>
+
+                                      {reminder?.requiresAttention ? (
+                                        <span
+                                          className={`rounded-md border px-2 py-1 text-[10px] font-semibold uppercase ${
+                                            reminder.dueStatus === "overdue"
+                                              ? "border-red-500/40 bg-red-500/10 text-red-100"
+                                              : reminder.dueStatus === "today"
+                                                ? "border-amber-500/40 bg-amber-500/10 text-amber-100"
+                                                : "border-cyan-500/40 bg-cyan-500/10 text-cyan-100"
+                                          }`}
+                                        >
+                                          {reminder.dueStatus}
+                                        </span>
+                                      ) : null}
                                     </div>
 
                                     <div className="mt-1 break-all text-[10px] text-slate-600">
@@ -398,6 +418,27 @@ export function WorkflowKanbanBoard({
                                           )}
                                         </dd>
                                       </div>
+
+                                      {reminder ? (
+                                        <div>
+                                          <dt className="text-slate-500">
+                                            Reminder
+                                          </dt>
+                                          <dd
+                                            className={`mt-0.5 font-medium ${
+                                              reminder.dueStatus === "overdue"
+                                                ? "text-red-200"
+                                                : reminder.dueStatus === "today"
+                                                  ? "text-amber-200"
+                                                  : reminder.dueStatus === "soon"
+                                                    ? "text-cyan-200"
+                                                    : "text-slate-300"
+                                            }`}
+                                          >
+                                            {reminder.reminderLabel}
+                                          </dd>
+                                        </div>
+                                      ) : null}
 
                                       <div>
                                         <dt className="text-slate-500">
@@ -477,7 +518,7 @@ export function WorkflowKanbanBoard({
                 </h3>
 
                 <p className="mt-1 text-sm text-slate-400">
-                  {PIPELINE_STAGE_LABELS[pendingMove.fromStage]} →{" "}
+                  {PIPELINE_STAGE_LABELS[pendingMove.fromStage]} ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢{" "}
                   {PIPELINE_STAGE_LABELS[pendingMove.toStage]}
                 </p>
               </div>
@@ -538,7 +579,7 @@ export function WorkflowKanbanBoard({
                 {preview.decision.blockers?.length ? (
                   <ul className="mt-3 space-y-1 text-sm text-red-100">
                     {preview.decision.blockers.map((blocker) => (
-                      <li key={blocker}>• {blocker}</li>
+                      <li key={blocker}>ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ {blocker}</li>
                     ))}
                   </ul>
                 ) : null}
@@ -546,7 +587,7 @@ export function WorkflowKanbanBoard({
                 {preview.decision.warnings?.length ? (
                   <ul className="mt-3 space-y-1 text-sm text-amber-100">
                     {preview.decision.warnings.map((warning) => (
-                      <li key={warning}>• {warning}</li>
+                      <li key={warning}>ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ {warning}</li>
                     ))}
                   </ul>
                 ) : null}
