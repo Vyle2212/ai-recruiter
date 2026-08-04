@@ -158,7 +158,9 @@
                     "audit:staging-auth-sql-artifacts":  "tsx scripts/auditStagingAuthSqlArtifacts.ts",
                     "validate:workflow":  "node scripts/validateWorkflowAutomationPlatform.cjs",
                     "validate:workflow:fast":  "node scripts/validateWorkflowAutomationPlatform.cjs --skip-build",
-                    "validate:workflow:tests":  "node scripts/validateWorkflowAutomationPlatform.cjs --only-tests"
+                    "validate:workflow:tests":  "node scripts/validateWorkflowAutomationPlatform.cjs --only-tests",
+                    "smoke:workflow":  "node scripts/smokeWorkflowAutomationRuntime.cjs",
+                    "smoke:workflow:local":  "node scripts/smokeWorkflowAutomationRuntime.cjs http://localhost:3000"
                 },
     "dependencies":  {
                          "@google-cloud/vision":  "^5.3.6",
