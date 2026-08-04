@@ -24,6 +24,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CANDIDATE_SUPABASE_URL: ${{ secrets.CANDIDATE_SUPABASE_URL }}
+      CANDIDATE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.CANDIDATE_SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_TELEMETRY_DISABLED: "1"
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -52,6 +62,16 @@ jobs:
     timeout-minutes: 20
     needs:
       - validate
+
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CANDIDATE_SUPABASE_URL: ${{ secrets.CANDIDATE_SUPABASE_URL }}
+      CANDIDATE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.CANDIDATE_SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_TELEMETRY_DISABLED: "1"
 
     steps:
       - name: Checkout repository
