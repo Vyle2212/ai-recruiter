@@ -708,6 +708,75 @@ export default function WorkflowAutomationApprovalQueuePage() {
         );
       }
 
+      const historyResponse =
+        await fetch(
+          "/api/recruiter/workflow/automation-approval-history",
+          {
+            method:
+              "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify({
+                proposalId:
+                  item.proposal
+                    .proposalId,
+
+                candidateId:
+                  item.proposal
+                    .candidateId,
+
+                candidateName:
+                  item.proposal
+                    .candidateName,
+
+                ruleId:
+                  item.proposal
+                    .ruleId,
+
+                proposedAction:
+                  item.proposal
+                    .proposedAction,
+
+                previousDecision:
+                  item.decision
+                    ?.decision ||
+                  null,
+
+                decision,
+
+                reason:
+                  decision ===
+                  "approved"
+                    ? "Approved from the workflow automation approval queue."
+                    : decision ===
+                        "rejected"
+                      ? "Rejected from the workflow automation approval queue."
+                      : "Deferred for later recruiter review.",
+
+                reviewerId:
+                  "recruiter",
+
+                reviewerName:
+                  "Recruiter",
+              }),
+          },
+        );
+
+      const historyResult =
+        await historyResponse.json();
+
+      if (!historyResponse.ok) {
+        throw new Error(
+          historyResult.error ||
+          "Decision saved, but approval history could not be recorded",
+        );
+      }
+
       setMessage(
         `${item.proposal.candidateName}: ${decision}.`,
       );
@@ -939,12 +1008,12 @@ export default function WorkflowAutomationApprovalQueuePage() {
                         {readable(
                           item.proposal.ruleId,
                         )}
-                        {" · "}
+                        {" Â· "}
                         Action:{" "}
                         {readable(
                           item.proposal.proposedAction,
                         )}
-                        {" · "}
+                        {" Â· "}
                         Stage:{" "}
                         {readable(
                           item.proposal.currentStage,
@@ -1022,7 +1091,7 @@ export default function WorkflowAutomationApprovalQueuePage() {
 
                   <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
                     <div className="text-xs text-slate-600">
-                      Candidate writes: 0 · Workflow writes: 0 · Email sends: 0
+                      Candidate writes: 0 Â· Workflow writes: 0 Â· Email sends: 0
                     </div>
 
                     <div className="flex flex-wrap gap-2">
@@ -1090,7 +1159,7 @@ export default function WorkflowAutomationApprovalQueuePage() {
         </section>
 
         <div className="mt-6 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-xs leading-6 text-slate-400">
-          Review decisions only · Candidate DB writes: 0 · Workflow writes: 0 · Audit writes: 0 · Email sends: 0 · Automatic execution: disabled
+          Review decisions only Â· Candidate DB writes: 0 Â· Workflow writes: 0 Â· Audit writes: 0 Â· Email sends: 0 Â· Automatic execution: disabled
         </div>
       </div>
     </main>
