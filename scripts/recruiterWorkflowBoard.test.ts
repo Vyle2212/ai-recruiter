@@ -64,9 +64,44 @@ assert.match(
   /No candidates/,
 );
 
+assert.match(
+  board,
+  /fetch\(\s*["']\/api\/recruiter\/workflow\/move-stage/,
+);
+
+assert.match(
+  board,
+  /method:\s*["']POST["']/,
+);
+
+assert.match(
+  board,
+  /async function postMove\(execute: boolean\)/,
+);
+
+assert.match(
+  board,
+  /execute,/,
+);
+
+assert.match(
+  board,
+  /result\.executed/,
+);
+
+assert.match(
+  board,
+  /Preview approved/,
+);
+
+assert.match(
+  board,
+  /window\.location\.reload\(\)/,
+);
+
 assert.doesNotMatch(
   board,
-  /move-stage|rollback-stage|execute:\s*true/,
+  /\/api\/recruiter\/workflow\/rollback-stage/,
 );
 
 assert.match(
