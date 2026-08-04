@@ -369,6 +369,7 @@ export function buildWorkflowExecutionReleaseGateReport(
           /^[a-f0-9]{64}$/.test(
             auditChecksum,
           ),
+        ),
         auditChecksum
           ? "Audit preview contains a SHA-256 checksum."
           : "Audit preview checksum is missing.",
