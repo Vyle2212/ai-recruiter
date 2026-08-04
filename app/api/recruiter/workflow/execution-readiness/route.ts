@@ -13,6 +13,9 @@ import {
   buildRecruiterWorkflowAutomationPreview,
 } from "@/lib/recruiterWorkflowAutomationRules";
 import {
+  readWorkflowAutomationRuleConfigs,
+} from "@/lib/recruiterWorkflowAutomationRuleConfig";
+import {
   buildWorkflowExecutionReadinessReport,
 } from "@/lib/recruiterWorkflowExecutionReadiness";
 import {
@@ -90,6 +93,7 @@ export async function GET(
         context,
         slaReport,
         {
+  ruleConfigs: readWorkflowAutomationRuleConfigs(),
           generatedAt:
             saved?.generatedAt,
 

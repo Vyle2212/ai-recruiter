@@ -7,6 +7,10 @@ import type {
 import type {
   RecruiterWorkflowSlaReport,
 } from "./recruiterWorkflowSla";
+import type {
+  WorkflowAutomationRuleConfig,
+  WorkflowAutomationRuleConfigFile,
+} from "./recruiterWorkflowAutomationRuleConfig";
 
 export type RecruiterWorkflowAutomationRuleId =
   | "overdue_follow_up"
@@ -82,7 +86,7 @@ export type RecruiterWorkflowAutomationPreview = {
 
   rules: Array<{
     ruleId: RecruiterWorkflowAutomationRuleId;
-    enabled: true;
+    enabled: boolean;
     previewOnly: true;
     description: string;
   }>;
@@ -107,6 +111,9 @@ export type RecruiterWorkflowAutomationOptions = {
   overdueEscalationDays?: number;
   onHoldReviewDays?: number;
   rollbackThreshold?: number;
+
+  ruleConfigs?:
+    WorkflowAutomationRuleConfigFile;
 };
 
 const RULES: RecruiterWorkflowAutomationPreview["rules"] = [
@@ -146,6 +153,64 @@ const RULES: RecruiterWorkflowAutomationPreview["rules"] = [
       "Propose workflow audit when a candidate has repeated rollback events.",
   },
 ];
+
+function configuredRule(
+  options:
+    RecruiterWorkflowAutomationOptions,
+  ruleId:
+    RecruiterWorkflowAutomationRuleId,
+): WorkflowAutomationRuleConfig | null {
+  return (
+    options.ruleConfigs?.rules.find(
+      (rule) =>
+        rule.ruleId === ruleId,
+    ) || null
+  );
+}
+
+function ruleEnabled(
+  options:
+    RecruiterWorkflowAutomationOptions,
+  ruleId:
+    RecruiterWorkflowAutomationRuleId,
+) {
+  return (
+    configuredRule(
+      options,
+      ruleId,
+    )?.enabled ?? true
+  );
+}
+
+function applyConfiguredPriority(
+  proposal:
+    RecruiterWorkflowAutomationProposal,
+  options:
+    RecruiterWorkflowAutomationOptions,
+): RecruiterWorkflowAutomationProposal {
+  const configured =
+    configuredRule(
+      options,
+      proposal.ruleId,
+    )?.priority;
+
+  if (!configured) {
+    return proposal;
+  }
+
+  /*
+   * Keep deterministic critical escalations.
+   * Configuration overrides non-critical priority.
+   */
+  return {
+    ...proposal,
+
+    priority:
+      proposal.priority === "critical"
+        ? "critical"
+        : configured,
+  };
+}
 
 function readable(value: string) {
   return value.replace(/_/g, " ");
@@ -636,59 +701,113 @@ export function buildRecruiterWorkflowAutomationPreview(
   const overdueEscalationDays =
     Math.max(
       1,
-      options.overdueEscalationDays ?? 3,
+
+      configuredRule(
+        options,
+        "overdue_follow_up",
+      )?.settings
+        .overdueEscalationDays ??
+        options.overdueEscalationDays ??
+        3,
     );
 
   const onHoldReviewDays =
     Math.max(
       1,
-      options.onHoldReviewDays ?? 14,
+
+      configuredRule(
+        options,
+        "on_hold_review",
+      )?.settings
+        .onHoldReviewDays ??
+        options.onHoldReviewDays ??
+        14,
     );
 
   const rollbackThreshold =
     Math.max(
       1,
-      options.rollbackThreshold ?? 2,
+
+      configuredRule(
+        options,
+        "repeated_rollback_review",
+      )?.settings
+        .rollbackThreshold ??
+        options.rollbackThreshold ??
+        2,
     );
 
   const proposals =
     states.flatMap((state) => {
       const candidateProposals = [
-        overdueProposal(
-          state,
-          context,
-          overdueEscalationDays,
-        ),
+        ruleEnabled(
+          options,
+          "overdue_follow_up",
+        )
+          ? overdueProposal(
+              state,
+              context,
+              overdueEscalationDays,
+            )
+          : null,
 
-        interviewFeedbackProposal(
-          state,
-          slaReport,
-        ),
+        ruleEnabled(
+          options,
+          "interview_feedback_missing",
+        )
+          ? interviewFeedbackProposal(
+              state,
+              slaReport,
+            )
+          : null,
 
-        offerProposal(
-          state,
-          context,
-          slaReport,
-        ),
+        ruleEnabled(
+          options,
+          "offer_follow_up",
+        )
+          ? offerProposal(
+              state,
+              context,
+              slaReport,
+            )
+          : null,
 
-        onHoldProposal(
-          state,
-          slaReport,
-          onHoldReviewDays,
-        ),
+        ruleEnabled(
+          options,
+          "on_hold_review",
+        )
+          ? onHoldProposal(
+              state,
+              slaReport,
+              onHoldReviewDays,
+            )
+          : null,
 
-        rollbackProposal(
-          state,
-          rollbackThreshold,
-        ),
+        ruleEnabled(
+          options,
+          "repeated_rollback_review",
+        )
+          ? rollbackProposal(
+              state,
+              rollbackThreshold,
+            )
+          : null,
       ];
 
-      return candidateProposals.filter(
-        (
-          item,
-        ): item is RecruiterWorkflowAutomationProposal =>
-          Boolean(item),
-      );
+      return candidateProposals
+        .filter(
+          (
+            item,
+          ): item is RecruiterWorkflowAutomationProposal =>
+            Boolean(item),
+        )
+        .map(
+          (proposal) =>
+            applyConfiguredPriority(
+              proposal,
+              options,
+            ),
+        );
     });
 
   const deduplicated =
@@ -790,7 +909,27 @@ export function buildRecruiterWorkflowAutomationPreview(
       visible,
 
     rules:
-      RULES,
+      RULES.map(
+        (rule) => {
+          const configured =
+            configuredRule(
+              options,
+              rule.ruleId,
+            );
+
+          return {
+            ...rule,
+
+            enabled:
+              configured?.enabled ??
+              true,
+
+            description:
+              configured?.description ||
+              rule.description,
+          };
+        },
+      ),
 
     safety: {
       candidateDbWrites: 0,
