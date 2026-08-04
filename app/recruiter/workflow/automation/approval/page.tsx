@@ -835,6 +835,12 @@ export default function WorkflowAutomationApprovalQueuePage() {
             >
               Open simulator
             </Link>
+            <Link
+              className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-4 py-2 text-sm font-semibold text-indigo-100"
+              href="/recruiter/workflow/automation/approval/batch"
+            >
+              Batch review
+            </Link>
 
             <button
               className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-4 py-2 text-sm font-semibold text-violet-100"
@@ -1008,12 +1014,12 @@ export default function WorkflowAutomationApprovalQueuePage() {
                         {readable(
                           item.proposal.ruleId,
                         )}
-                        {" Â· "}
+                        {" Ã‚Â· "}
                         Action:{" "}
                         {readable(
                           item.proposal.proposedAction,
                         )}
-                        {" Â· "}
+                        {" Ã‚Â· "}
                         Stage:{" "}
                         {readable(
                           item.proposal.currentStage,
@@ -1091,7 +1097,7 @@ export default function WorkflowAutomationApprovalQueuePage() {
 
                   <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
                     <div className="text-xs text-slate-600">
-                      Candidate writes: 0 Â· Workflow writes: 0 Â· Email sends: 0
+                      Candidate writes: 0 Ã‚Â· Workflow writes: 0 Ã‚Â· Email sends: 0
                     </div>
 
                     <div className="flex flex-wrap gap-2">
@@ -1159,7 +1165,7 @@ export default function WorkflowAutomationApprovalQueuePage() {
         </section>
 
         <div className="mt-6 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-xs leading-6 text-slate-400">
-          Review decisions only Â· Candidate DB writes: 0 Â· Workflow writes: 0 Â· Audit writes: 0 Â· Email sends: 0 Â· Automatic execution: disabled
+          Review decisions only Ã‚Â· Candidate DB writes: 0 Ã‚Â· Workflow writes: 0 Ã‚Â· Audit writes: 0 Ã‚Â· Email sends: 0 Ã‚Â· Automatic execution: disabled
         </div>
       </div>
     </main>
