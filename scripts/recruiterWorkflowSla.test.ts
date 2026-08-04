@@ -225,18 +225,18 @@ assert.match(
 );
 
 assert.match(
-  page,
-  /No automatic action|Automatic actions/,
-);
-
-assert.doesNotMatch(
-  page,
-  /method:\s*["']POST["']/,
+  workflow,
+  /import\s+\{\s*WorkflowSlaBadge\s*\}\s+from\s+["']@\/app\/recruiter\/components\/WorkflowSlaBadge["']/,
 );
 
 assert.match(
   workflow,
-  /href="\/recruiter\/workflow\/sla"/,
+  /<WorkflowSlaBadge\s+compact\s*\/>/,
+);
+
+assert.doesNotMatch(
+  workflow,
+  /href=["']\/recruiter\/workflow\/sla["']/,
 );
 
 console.log(

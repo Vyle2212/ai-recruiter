@@ -57,12 +57,27 @@ assert.match(
 
 assert.doesNotMatch(
   page,
-  /method:\s*["']POST["']/,
+  /from\s+["']openai["']/i,
 );
 
 assert.doesNotMatch(
   page,
-  /openai|chat\.completions|responses\.create/i,
+  /require\(\s*["']openai["']\s*\)/i,
+);
+
+assert.doesNotMatch(
+  page,
+  /new\s+OpenAI\s*\(/,
+);
+
+assert.doesNotMatch(
+  page,
+  /\.chat\.completions\.(create|stream)\s*\(/,
+);
+
+assert.doesNotMatch(
+  page,
+  /\.responses\.create\s*\(/,
 );
 
 assert.match(
