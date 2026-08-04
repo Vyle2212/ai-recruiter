@@ -100,10 +100,49 @@ function runCommand(
   const started =
     Date.now();
 
+  let executable =
+    command;
+
+  let commandArgs =
+    args;
+
+  if (
+    process.platform === "win32" &&
+    (
+      command === "npm" ||
+      command === "npx"
+    )
+  ) {
+    const npmCli =
+      process.env.npm_execpath;
+
+    if (!npmCli) {
+      throw new Error(
+        "npm_execpath is unavailable; cannot invoke npm safely on Windows.",
+      );
+    }
+
+    executable =
+      process.execPath;
+
+    commandArgs =
+      command === "npm"
+        ? [
+            npmCli,
+            ...args,
+          ]
+        : [
+            npmCli,
+            "exec",
+            "--",
+            ...args,
+          ];
+  }
+
   const result =
     spawnSync(
-      command,
-      args,
+      executable,
+      commandArgs,
       {
         cwd:
           root,
@@ -112,8 +151,7 @@ function runCommand(
           "inherit",
 
         shell:
-          process.platform ===
-          "win32",
+          false,
 
         env: {
           ...process.env,
@@ -375,7 +413,7 @@ function validateRequiredFiles() {
     );
 
     console.log(
-      `✓ ${requiredFile}`,
+      `Ã¢Å“â€œ ${requiredFile}`,
     );
   }
 
@@ -421,7 +459,7 @@ function validateRouteContracts() {
     );
 
     console.log(
-      `✓ GET-only: ${routePath}`,
+      `Ã¢Å“â€œ GET-only: ${routePath}`,
     );
   }
 
@@ -545,7 +583,7 @@ function validateSafetyInvariants() {
     }
 
     console.log(
-      `✓ Safe: ${relativePath}`,
+      `Ã¢Å“â€œ Safe: ${relativePath}`,
     );
   }
 
@@ -693,7 +731,7 @@ function validateAtomicFileStores() {
     );
 
     console.log(
-      `✓ Atomic write: ${relativePath}`,
+      `Ã¢Å“â€œ Atomic write: ${relativePath}`,
     );
   }
 
@@ -763,15 +801,15 @@ function printSummary(
     const symbol =
       result.status ===
       "PASSED"
-        ? "✓"
-        : "×";
+        ? "Ã¢Å“â€œ"
+        : "Ãƒâ€”";
 
     console.log(
       `${symbol} ${result.status.padEnd(
         6,
       )} ${result.name} (${seconds}s)${
         result.detail
-          ? ` — ${result.detail}`
+          ? ` Ã¢â‚¬â€ ${result.detail}`
           : ""
       }`,
     );
