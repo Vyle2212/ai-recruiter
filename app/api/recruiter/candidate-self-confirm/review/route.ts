@@ -1,0 +1,4 @@
+import { NextResponse } from "next/server";import { loadSelfConfirmDecisions,loadSelfConfirmStaging } from "@/lib/candidateSelfConfirmFiles";
+export const runtime="nodejs";export const dynamic="force-dynamic";
+export async function GET(){try{const staging=loadSelfConfirmStaging(),decisions=loadSelfConfirmDecisions(staging);return NextResponse.json({generatedAt:new Date().toISOString(),mode:"read-only candidate self-confirm recruiter review; no candidate DB writes",summary:staging.summary,items:staging.items,decisions:decisions.decisions,noDbWrites:true});}catch(error){return NextResponse.json({generatedAt:new Date().toISOString(),mode:"read-only candidate self-confirm recruiter review; no candidate DB writes",summary:{fieldsSubmitted:0,safeConfirmations:0,needsRecruiterReview:0,blockedChanges:0},items:[],decisions:[],warning:error instanceof Error?error.message:"No staging available",noDbWrites:true});}}
+

@@ -1,0 +1,166 @@
+{
+  "$id": "urn:ai-recruiter:staging:phase5:runtime-evidence:v6",
+  "title": "Phase 5 V6 Runtime RLS Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "batchReference",
+    "mode",
+    "productionAccessed",
+    "sequential",
+    "identities",
+    "passed"
+  ],
+  "properties": {
+    "version": {
+      "const": "phase5-runtime-rls-v6"
+    },
+    "batchReference": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "anyOf": [
+          {
+            "pattern": "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}"
+          },
+          {
+            "pattern": "@"
+          },
+          {
+            "pattern": "https?://"
+          },
+          {
+            "pattern": "eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+"
+          }
+        ]
+      }
+    },
+    "mode": {
+      "const": "live"
+    },
+    "productionAccessed": {
+      "const": false
+    },
+    "sequential": {
+      "const": true
+    },
+    "passed": {
+      "type": "boolean"
+    },
+    "identities": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "identityReference",
+          "context",
+          "sessionCleared",
+          "tests",
+          "passed"
+        ],
+        "properties": {
+          "identityReference": {
+            "type": "string",
+            "minLength": 1
+          },
+          "context": {
+            "enum": [
+              "anon",
+              "authenticated"
+            ]
+          },
+          "sessionCleared": {
+            "type": "boolean"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "tests": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "testReference",
+                "identityReference",
+                "table",
+                "operation",
+                "expectedCategory",
+                "actualCategory",
+                "httpStatusClass",
+                "returnedRows",
+                "affectedRows",
+                "passed"
+              ],
+              "properties": {
+                "testReference": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "identityReference": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "table": {
+                  "enum": [
+                    "organizations",
+                    "user_profiles",
+                    "user_invites",
+                    "client_memberships",
+                    "candidate_accounts",
+                    "access_audit_logs",
+                    "staging_auth_bootstrap_provenance"
+                  ]
+                },
+                "operation": {
+                  "enum": [
+                    "select",
+                    "insert",
+                    "update",
+                    "delete"
+                  ]
+                },
+                "expectedCategory": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "actualCategory": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "httpStatusClass": {
+                  "type": "string",
+                  "pattern": "^(?:[1-5]xx|unknown)$"
+                },
+                "returnedRows": {
+                  "enum": [
+                    "zero",
+                    "one",
+                    "multiple",
+                    "error"
+                  ]
+                },
+                "affectedRows": {
+                  "enum": [
+                    "zero",
+                    "one",
+                    "multiple",
+                    "error"
+                  ]
+                },
+                "passed": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

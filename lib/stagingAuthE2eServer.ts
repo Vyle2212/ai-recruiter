@@ -1,0 +1,3 @@
+import "server-only";import {buildProductionSignInBlockedScenario,buildSignInApprovedSimulationScenario,buildSignInDefaultBlockedScenario,buildStagingAuthE2ePreview} from "./stagingAuthE2ePreview";import type {StagingAuthE2eScenarioKey} from "./stagingAuthE2eTypes";
+export function runStagingAuthE2eScenario(scenarioKey:StagingAuthE2eScenarioKey){return buildStagingAuthE2ePreview().scenarios.find(x=>x.scenarioKey===scenarioKey)||buildSignInDefaultBlockedScenario()}
+export const runDefaultBlockedSignInE2e=buildSignInDefaultBlockedScenario;export const runApprovedSimulationSignInE2e=buildSignInApprovedSimulationScenario;export const runProductionBlockedSignInE2e=buildProductionSignInBlockedScenario;

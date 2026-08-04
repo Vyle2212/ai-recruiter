@@ -1,0 +1,2 @@
+import {AuthHeader,AuthLinks} from "../AuthUiPreview";import {StagingInvitationPreviewForm} from "../StagingAuthPreviewForms";
+export default function InvitePage(){return <main className="min-h-screen bg-[#05070A] text-slate-100"><AuthHeader title="Accept invite" subtitle="Preview-bound invitation handling without validating or storing a token."/><div className="mx-auto max-w-3xl space-y-6 px-6 py-8"><StagingInvitationPreviewForm/><AuthLinks/></div></main>}

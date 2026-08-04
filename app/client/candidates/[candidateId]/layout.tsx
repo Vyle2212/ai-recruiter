@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default async function ClientCandidateLayout({children,params}:{children:React.ReactNode;params:Promise<{candidateId:string}>}){const {candidateId}=await params;return <><aside className="border-b border-cyan-500/25 bg-cyan-500/5 px-6 py-3 text-center text-sm"><Link className="text-cyan-200" href={"/client/portal?candidateId="+encodeURIComponent(candidateId)}>Back to Client Portal MVP Preview</Link><span className="ml-3 text-xs text-slate-400">Feedback remains disabled and unsaved.</span></aside>{children}</>;}

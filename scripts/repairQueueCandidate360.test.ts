@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import { buildRepairQueueCandidate360 } from "../lib/repairQueueCandidate360";
+import { buildRepairQueueAudit } from "../lib/repairQueueAudit";
+const audit = buildRepairQueueAudit();
+const first = audit.items[0];
+assert.ok(first, "repair queue has testable item");
+const panel = buildRepairQueueCandidate360(first.candidateId);
+assert.equal(panel?.candidateId, first.candidateId, "Candidate360 repair panel summary works");
+assert.equal(Boolean(panel?.repairCategory), true, "repair panel has category");
+console.log("Repair queue Candidate360 tests passed");

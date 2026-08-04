@@ -1,0 +1,4 @@
+import assert from "node:assert/strict";
+import { buildUiCheckRoutes,loadUiCheckRoutes } from "./printUiCheckRoutes";
+async function main(){const sample={sampleCandidateId:"candidate-1",candidateIds:["candidate-1","candidate-2","candidate-3"]};const routes=buildUiCheckRoutes(sample);assert.equal(routes.dashboard,"/recruiter/dashboard");assert.equal(routes.candidate360,"/recruiter/candidate360/candidate-1");assert.ok(new URL(`http://local${routes.candidateCompare}`).searchParams.get("candidateIds")!.split(",").length>=2);assert.ok(new URL(`http://local${routes.clientReport}`).searchParams.get("candidateIds")!.split(",").length<=5);const fallback=await loadUiCheckRoutes(async()=>{throw new Error("no samples")});assert.equal(fallback.sampleAvailable,false);assert.match(fallback.candidate360,/sampleCandidateId/);assert.equal(routes.candidateDbWrites,0);assert.equal(routes.openAiCalls,0);console.log("uiCheckRoutes.test.ts passed");}void main();
+

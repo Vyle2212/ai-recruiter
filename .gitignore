@@ -48,3 +48,27 @@ node_modules
 *.json
 .env
 .env.local
+node_modules/
+.next/
+.env
+.env.local
+*.log
+*.lnk
+*.zip
+desktop.ini
+.codex-dev-server*.log
+recruiterMatchEngine-full.txt
+sapKnowledgeGraph-full.txt
+# candidate display QA artifacts
+repair-preview.json
+candidate-display-repair-review.csv
+candidate-display-repair-rollback.json
+
+# searchable profile quality review artifact
+reports/searchable-profile-quality-review.json
+reports/must-repair-before-search.json
+reports/candidate-reextraction-review.json
+
+# AI extraction cache
+reports/ai-extraction-cache/
+!docs/staging-phase5-runtime-evidence-schema-v6.json

@@ -1,0 +1,15 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { buildQuickFixApplySubset, writeQuickFixApplySubsetFile } from "../lib/quickFixApplySubsetAudit";
+const tmp=fs.mkdtempSync(path.join(os.tmpdir(),"qf-subset-"));
+const decisionsPath=path.join(tmp,"decisions.json"); const stagingPath=path.join(tmp,"staging.json");
+fs.writeFileSync(decisionsPath,JSON.stringify({decisions:[{decisionId:"s1",stagingId:"s1",candidateId:"c1",fieldName:"currentCompany",suggestedValue:"EY Consulting",decision:"approve_for_apply"},{decisionId:"s2",stagingId:"s2",candidateId:"c2",fieldName:"currentCompany",suggestedValue:"Under Accenture Technology",decision:"hold_for_review"},{decisionId:"s3",stagingId:"s3",candidateId:"c3",fieldName:"currentCompany",suggestedValue:"X",decision:"keep_existing"}]}));
+fs.writeFileSync(stagingPath,JSON.stringify({items:[{stagingId:"s1",candidateId:"c1",fieldName:"currentCompany",approvedValue:"EY Consulting"},{stagingId:"s2",candidateId:"c2",fieldName:"currentCompany",approvedValue:"Under Accenture Technology"},{stagingId:"s3",candidateId:"c3",fieldName:"currentCompany",approvedValue:"X"}]}));
+const subset=buildQuickFixApplySubset({decisionsPath,stagingPath});
+assert.equal(subset.subsetItems.length,1,"subset includes only approve_for_apply decisions");
+assert.equal(subset.excludedItems.length,2,"held/rejected/keep_existing excluded");
+const out=path.join(tmp,"subset.json"); writeQuickFixApplySubsetFile(subset,false,out); assert.equal(fs.existsSync(out),true,"dry-run preview writes preview file only when requested output is preview");
+const real=path.join(tmp,"quick-fix-apply-subset.json"); writeQuickFixApplySubsetFile(subset,true,real); assert.equal(JSON.parse(fs.readFileSync(real,"utf8")).subsetItems.length,1,"writeSubsetFile writes subset file");
+console.log("Quick fix apply subset executor tests passed");

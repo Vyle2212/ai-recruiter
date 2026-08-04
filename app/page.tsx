@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 export default function Home() {
   const [jd, setJd] = useState<File | null>(null);
@@ -29,6 +30,7 @@ export default function Home() {
 
   return (
     <div className="p-10 text-white bg-black min-h-screen">
+      <Link className="mb-6 inline-block text-cyan-300" href="/portal">Open AI Primus Portal</Link>
       <h1 className="text-3xl mb-4">🚀 AI Recruiter Pro</h1>
 
       <div className="mb-4">

@@ -1,0 +1,6 @@
+export type UserRole="admin"|"recruiter"|"recruiter_manager"|"client"|"candidate"|"guest";
+export type RouteAccessLevel="public_preview"|"authenticated_preview"|"role_restricted_preview"|"admin_only_preview"|"internal_only_preview"|"disabled_preview";
+export type AccessArea="recruiter"|"admin_data"|"client"|"candidate"|"public"|"legacy";
+export type RouteAccessRule={routePattern:string;label:string;area:AccessArea;allowedRoles:UserRole[];deniedRoles?:UserRole[];accessLevel:RouteAccessLevel;description:string;previewOnly:boolean;requiresAuthEventually:boolean;sensitive:boolean;safetyNotes:string[]};
+export type ActionPermission={actionKey:string;label:string;area:AccessArea;allowedRoles:UserRole[];previewOnly:boolean;enabledNow:boolean;requiresAuthEventually:boolean;dbWrites:number;emailSends:number;openAiCalls:number;description:string};
+export type RoleAccessMatrix={roles:UserRole[];routeRules:RouteAccessRule[];actionPermissions:ActionPermission[];navVisibility:Record<UserRole,{primary:string[];adminData:string[];client:string[];candidate:string[];publicLegacy:string[]}>;safety:{previewOnly:true;authCalls:0;middlewareEnforcement:false;userDbWrites:0;candidateDbWrites:0;openAiCalls:0;emailSends:0}};

@@ -1,0 +1,131 @@
+name: Workflow Platform CI
+
+on:
+  push:
+    branches:
+      - foundation-refactor
+      - main
+  pull_request:
+    branches:
+      - main
+      - foundation-refactor
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workflow-platform-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate workflow platform
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CANDIDATE_SUPABASE_URL: ${{ secrets.CANDIDATE_SUPABASE_URL }}
+      CANDIDATE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.CANDIDATE_SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run workflow regression tests
+        run: npm run validate:workflow:tests
+
+      - name: Run workflow safety and type validation
+        run: npm run validate:workflow:fast
+
+      - name: Run production build
+        run: npm run build
+
+  smoke:
+    name: Runtime smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs:
+      - validate
+
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CANDIDATE_SUPABASE_URL: ${{ secrets.CANDIDATE_SUPABASE_URL }}
+      CANDIDATE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.CANDIDATE_SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production application
+        run: npm run build
+
+      - name: Start production server
+        shell: bash
+        run: |
+          npm run start > workflow-server.log 2>&1 &
+          echo $! > workflow-server.pid
+
+      - name: Wait for local server
+        shell: bash
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then
+              echo "Server is ready."
+              exit 0
+            fi
+
+            echo "Waiting for server: attempt ${attempt}/60"
+            sleep 2
+          done
+
+          echo "Server did not become ready."
+          cat workflow-server.log || true
+          exit 1
+
+      - name: Run workflow runtime smoke test
+        env:
+          WORKFLOW_SMOKE_BASE_URL: http://127.0.0.1:3000
+          WORKFLOW_SMOKE_TIMEOUT_MS: "30000"
+        run: npm run smoke:workflow
+
+      - name: Show server log on failure
+        if: failure()
+        run: cat workflow-server.log || true
+
+      - name: Stop production server
+        if: always()
+        shell: bash
+        run: |
+          if [ -f workflow-server.pid ]; then
+            kill "$(cat workflow-server.pid)" || true
+          fi

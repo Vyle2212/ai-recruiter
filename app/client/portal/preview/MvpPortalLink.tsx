@@ -1,0 +1,2 @@
+"use client";import Link from "next/link";import {useSearchParams} from "next/navigation";
+export default function MvpPortalLink(){const params=useSearchParams(),href="/client/portal"+(params.size?"?"+params.toString():"");return <aside className="border-b border-cyan-500/25 bg-cyan-500/5 px-6 py-3 text-center text-sm"><Link className="text-cyan-200" href={href}>Open Client Portal MVP Preview</Link><span className="ml-3 text-xs text-slate-400">Jobs, packs, candidate review, reports, and disabled feedback actions.</span></aside>;}

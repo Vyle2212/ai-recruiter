@@ -1,0 +1,12 @@
+import assert from "node:assert/strict";
+import { mergeQuickFixReviewItems, hasMatchingQuickFixReviewItem } from "../lib/quickFixReviewMerge";
+const suggestion: any = { suggestionId: "c1:currentCompany", candidateId: "c1", candidateName: "Candidate", fieldName: "currentCompany", currentValue: "", suggestedValue: "Acme Consulting", confidence: 92, evidenceSource: "structured", evidenceSnippet: "Acme Consulting", repairCategory: "quick_fix_missing_company", priority: "P1", validationStatus: "safe_suggestion", approvalReadiness: "ready_for_manual_approval", validationReasons: [] };
+const review = { summary: {}, queueItems: [], fieldComparisons: [] };
+const merged = mergeQuickFixReviewItems(review, [suggestion, { ...suggestion, suggestionId: "c2:currentCompany", candidateId: "c2", validationStatus: "blocked" }]);
+assert.equal(merged.ready.length, 1, "quick-fix suggestion promoted to review item");
+assert.equal(merged.blocked.length, 1, "blocked suggestion not promoted");
+assert.equal(hasMatchingQuickFixReviewItem(merged.merged, "c1", "currentCompany"), true, "matching promoted review item exists");
+const duplicate = mergeQuickFixReviewItems(merged.merged, [suggestion]);
+assert.equal(duplicate.duplicates.length, 1, "duplicate review item skipped");
+assert.equal(duplicate.ready.length, 0, "existing review preserved");
+console.log("Quick fix review merge tests passed");

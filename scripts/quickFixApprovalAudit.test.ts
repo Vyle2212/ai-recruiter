@@ -1,0 +1,17 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { buildQuickFixApprovalAudit } from "../lib/quickFixApprovalAudit";
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "quick-fix-audit-"));
+const approvalsPath = path.join(tmp, "ai-extraction-approvals.json");
+fs.writeFileSync(approvalsPath, JSON.stringify({ approvals: [{ approvalId: "c1:currentCompany", candidateId: "c1", fieldName: "currentCompany", suggestedValue: "Acme", decision: "approve_suggestion", source: "quick_fix_repair", decisionMode: "quick_fix_approval" }, { approvalId: "c2:title", candidateId: "c2", fieldName: "title", suggestedValue: "SAP Consultant", decision: "approve_suggestion", source: "quick_fix_repair", decisionMode: "quick_fix_approval" }] }));
+const audit = buildQuickFixApprovalAudit({ approvalsPath });
+assert.equal(audit.quickFixApprovalsFound, 2, "audit counts quick fix approvals");
+assert.equal(audit.approvedCurrentCompany, 1, "audit counts approved currentCompany");
+assert.equal(audit.readyForStagingPreview, 2, "audit counts ready for staging preview");
+const source = fs.readFileSync(new URL("../lib/quickFixApprovalWrite.ts", import.meta.url), "utf8") + fs.readFileSync(new URL("../lib/quickFixApprovalAudit.ts", import.meta.url), "utf8");
+assert.equal(/\.delete\(|\.update\(|\.insert\(|upsert\(/i.test(source), false, "no candidate DB writes and no delete");
+assert.equal(/from ["']openai["']|new\s+OpenAI\b/i.test(source), false, "no OpenAI calls");
+assert.equal(/stageApproved|applyCandidate|rollbackCandidate|confirmApply/i.test(source), false, "no stage/apply/rollback calls");
+console.log("Quick fix approval audit tests passed");

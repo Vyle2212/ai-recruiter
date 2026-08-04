@@ -1,0 +1,72 @@
+-- STAGING AUTH RLS ROLLBACK v2 - REVIEW ONLY - NOT EXECUTED
+-- VERSIONED, PHASE-SPECIFIC, STAGING-ONLY. BACKUP AND EXPLICIT MANUAL APPROVAL REQUIRED.
+-- Safe for absent/partial tables: policy statements run only after to_regclass() confirms the table.
+begin;
+
+do $$ begin if to_regclass('public.organizations') is not null then
+  execute 'drop policy if exists staging_auth_v2_recruiter_organizations_select on public.organizations';
+  execute 'drop policy if exists staging_auth_v2_recruiter_manager_organizations_select on public.organizations';
+  execute 'drop policy if exists staging_auth_v2_client_organizations_select on public.organizations';
+  execute 'drop policy if exists staging_auth_v2_admin_organizations_update on public.organizations';
+  execute 'drop policy if exists staging_auth_v2_admin_organizations_insert on public.organizations';
+  execute 'drop policy if exists staging_auth_v2_admin_organizations_select on public.organizations';
+  execute 'revoke all on public.organizations from anon';
+  execute 'revoke all on public.organizations from authenticated';
+  execute 'alter table public.organizations disable row level security';
+end if; end $$;
+
+do $$ begin if to_regclass('public.user_profiles') is not null then
+  execute 'drop policy if exists staging_auth_v2_candidate_user_profiles_update on public.user_profiles';
+  execute 'drop policy if exists staging_auth_v2_candidate_user_profiles_select on public.user_profiles';
+  execute 'drop policy if exists staging_auth_v2_client_user_profiles_update on public.user_profiles';
+  execute 'drop policy if exists staging_auth_v2_client_user_profiles_select on public.user_profiles';
+  execute 'drop policy if exists staging_auth_v2_recruiter_manager_user_profiles_self_update on public.user_profiles';
+  execute 'drop policy if exists staging_auth_v2_recruiter_manager_user_profiles_self_select on public.user_profiles';
+  execute 'drop policy if exists staging_auth_v2_recruiter_user_profiles_update on public.user_profiles';
+  execute 'drop policy if exists staging_auth_v2_recruiter_user_profiles_select on public.user_profiles';
+  execute 'drop policy if exists staging_auth_v2_admin_user_profiles_update on public.user_profiles';
+  execute 'drop policy if exists staging_auth_v2_admin_user_profiles_insert on public.user_profiles';
+  execute 'drop policy if exists staging_auth_v2_admin_user_profiles_select on public.user_profiles';
+  execute 'revoke all on public.user_profiles from anon';
+  execute 'revoke all on public.user_profiles from authenticated';
+  execute 'alter table public.user_profiles disable row level security';
+end if; end $$;
+
+do $$ begin if to_regclass('public.user_invites') is not null then
+  execute 'drop policy if exists staging_auth_v2_admin_user_invites_update on public.user_invites';
+  execute 'drop policy if exists staging_auth_v2_admin_user_invites_insert on public.user_invites';
+  execute 'drop policy if exists staging_auth_v2_admin_user_invites_select on public.user_invites';
+  execute 'revoke all on public.user_invites from anon';
+  execute 'revoke all on public.user_invites from authenticated';
+  execute 'alter table public.user_invites disable row level security';
+end if; end $$;
+
+do $$ begin if to_regclass('public.client_memberships') is not null then
+  execute 'drop policy if exists staging_auth_v2_client_client_memberships_select on public.client_memberships';
+  execute 'drop policy if exists staging_auth_v2_admin_client_memberships_update on public.client_memberships';
+  execute 'drop policy if exists staging_auth_v2_admin_client_memberships_insert on public.client_memberships';
+  execute 'drop policy if exists staging_auth_v2_admin_client_memberships_select on public.client_memberships';
+  execute 'revoke all on public.client_memberships from anon';
+  execute 'revoke all on public.client_memberships from authenticated';
+  execute 'alter table public.client_memberships disable row level security';
+end if; end $$;
+
+do $$ begin if to_regclass('public.candidate_accounts') is not null then
+  execute 'drop policy if exists staging_auth_v2_candidate_candidate_accounts_select on public.candidate_accounts';
+  execute 'drop policy if exists staging_auth_v2_admin_candidate_accounts_update on public.candidate_accounts';
+  execute 'drop policy if exists staging_auth_v2_admin_candidate_accounts_insert on public.candidate_accounts';
+  execute 'drop policy if exists staging_auth_v2_admin_candidate_accounts_select on public.candidate_accounts';
+  execute 'revoke all on public.candidate_accounts from anon';
+  execute 'revoke all on public.candidate_accounts from authenticated';
+  execute 'alter table public.candidate_accounts disable row level security';
+end if; end $$;
+
+do $$ begin if to_regclass('public.access_audit_logs') is not null then
+  execute 'drop policy if exists staging_auth_v2_admin_access_audit_logs_select on public.access_audit_logs';
+  execute 'revoke all on public.access_audit_logs from anon';
+  execute 'revoke all on public.access_audit_logs from authenticated';
+  execute 'alter table public.access_audit_logs disable row level security';
+end if; end $$;
+
+commit;
+-- No tables, functions, domain candidates, jobs, submissions, packs, reports, or production objects are dropped.

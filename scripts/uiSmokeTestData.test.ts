@@ -1,0 +1,3 @@
+import assert from "node:assert/strict";import { buildUiSmokeTestData } from "../lib/uiSmokeTestData";async function main(){const smoke=await buildUiSmokeTestData();assert.ok(smoke.sampleCandidateId);assert.ok(smoke.sampleCandidate360Url.endsWith(smoke.sampleCandidateId));assert.equal(new URL(`http://local${smoke.sampleCompareUrl}`).searchParams.get("candidateIds")?.split(",").length,3);assert.equal(new URL(`http://local${smoke.sampleClientReportUrl}`).searchParams.get("candidateIds")?.split(",").length,3);assert.equal(smoke.sampleDashboardUrl,"/recruiter/dashboard");console.log("uiSmokeTestData.test.ts passed");}void main();
+
+

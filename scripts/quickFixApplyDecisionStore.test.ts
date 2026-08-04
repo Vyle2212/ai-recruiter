@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { writeQuickFixApplyDecisions, loadQuickFixApplyDecisions } from "../lib/quickFixApplyDecisionStore";
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "quick-fix-decisions-"));
+const decisionsPath = path.join(tmp, "quick-fix-apply-decisions.json");
+const board: any = { items: [{ stagingId: "s1", candidateId: "c1", fieldName: "currentCompany", dbFieldName: "current_company", suggestedValue: "EY Consulting", reviewRecommendation: "approve_for_apply", safetyReasons: ["clean"] }] };
+const preview = writeQuickFixApplyDecisions({ board, decisionsPath });
+assert.equal(fs.existsSync(decisionsPath), false, "preview does not write decision file");
+writeQuickFixApplyDecisions({ board, decisionsPath, writeDecisionFile: true });
+assert.equal(fs.existsSync(decisionsPath), true, "decision file write only writes decisions file");
+assert.equal(loadQuickFixApplyDecisions(decisionsPath).decisions.length, 1, "decision file loads");
+console.log("Quick fix apply decision store tests passed");

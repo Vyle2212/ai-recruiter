@@ -1,0 +1,2 @@
+import {AuthHeader,AuthLinks} from "../AuthUiPreview";import {StagingSignOutPreviewForm} from "../StagingAuthPreviewForms";
+export default function LogoutPage(){return <main className="min-h-screen bg-[#05070A] text-slate-100"><AuthHeader title="Logout preview" subtitle="Preview-bound sign out with no session or cookie operation."/><div className="mx-auto max-w-3xl space-y-6 px-6 py-8"><StagingSignOutPreviewForm/><AuthLinks/></div></main>}
