@@ -172,6 +172,97 @@ function asStringArray(
   return [];
 }
 
+function expandSapModuleAliases(
+  values: string[],
+) {
+  const normalized =
+    Array.from(
+      new Set(
+        values
+          .map(
+            (value) =>
+              value
+                .normalize("NFKC")
+                .trim(),
+          )
+          .filter(Boolean),
+      ),
+    );
+
+  const upper =
+    normalized.map(
+      (value) =>
+        value
+          .toUpperCase()
+          .replace(
+            /^SAP\s+/,
+            "",
+          )
+          .replace(
+            /\s+/g,
+            " ",
+          ),
+    );
+
+  const expanded =
+    new Set<string>(
+      normalized,
+    );
+
+  for (const moduleName of upper) {
+    expanded.add(
+      moduleName,
+    );
+
+    expanded.add(
+      `SAP ${moduleName}`,
+    );
+
+    if (
+      moduleName === "FICO" ||
+      moduleName === "FI/CO" ||
+      moduleName === "FI-CO"
+    ) {
+      expanded.add("FICO");
+      expanded.add("SAP FICO");
+      expanded.add("FI");
+      expanded.add("SAP FI");
+      expanded.add("CO");
+      expanded.add("SAP CO");
+    }
+  }
+
+  const hasFi =
+    upper.some(
+      (value) =>
+        value === "FI" ||
+        value === "FICO" ||
+        value === "FI/CO" ||
+        value === "FI-CO",
+    );
+
+  const hasCo =
+    upper.some(
+      (value) =>
+        value === "CO" ||
+        value === "FICO" ||
+        value === "FI/CO" ||
+        value === "FI-CO",
+    );
+
+  if (
+    hasFi &&
+    hasCo
+  ) {
+    expanded.add("FICO");
+    expanded.add("SAP FICO");
+  }
+
+  return Array.from(
+    expanded,
+  );
+}
+
 function collectNestedRecord(
   record: UnknownRecord,
 ) {
@@ -399,6 +490,10 @@ export function adaptCandidateToSearchV2Document(
       ),
     );
 
+  const resolvedCountry =
+    country ||
+    location;
+
   const skills =
     asStringArray(
       firstValue(
@@ -437,18 +532,7 @@ export function adaptCandidateToSearchV2Document(
       ),
     );
 
-  const combinedSkills =
-    Array.from(
-      new Set(
-        [
-          ...skills,
-          ...profileSkills,
-          ...normalizedSkills,
-        ],
-      ),
-    );
-
-  const sapModules =
+  const legacySapModules =
     asStringArray(
       firstValue(
         record,
@@ -456,6 +540,61 @@ export function adaptCandidateToSearchV2Document(
           "sapModules",
           "sap_modules",
           "modules",
+        ],
+      ),
+    );
+
+  const primarySapModules =
+    asStringArray(
+      firstValue(
+        record,
+        [
+          "primary_module",
+          "primaryModule",
+        ],
+      ),
+    );
+
+  const secondarySapModules =
+    asStringArray(
+      firstValue(
+        record,
+        [
+          "secondary_modules",
+          "secondaryModules",
+        ],
+      ),
+    );
+
+  const sapSubmodules =
+    asStringArray(
+      firstValue(
+        record,
+        [
+          "sap_submodules",
+          "sapSubmodules",
+        ],
+      ),
+    );
+
+  const sapModules =
+    expandSapModuleAliases(
+      [
+        ...legacySapModules,
+        ...primarySapModules,
+        ...secondarySapModules,
+        ...sapSubmodules,
+      ],
+    );
+
+  const combinedSkills =
+    Array.from(
+      new Set(
+        [
+          ...skills,
+          ...profileSkills,
+          ...normalizedSkills,
+          ...sapModules,
         ],
       ),
     );
@@ -524,6 +663,7 @@ export function adaptCandidateToSearchV2Document(
           "total_years_experience",
           "yearsOfExperience",
           "years_of_experience",
+          "years",
           "experienceYears",
           "experience_years",
         ],
@@ -574,7 +714,7 @@ export function adaptCandidateToSearchV2Document(
       currentTitle,
       currentEmployer,
       location,
-      country,
+      resolvedCountry,
       ...combinedSkills,
       ...sapModules,
       ...industries,
@@ -590,6 +730,9 @@ export function adaptCandidateToSearchV2Document(
             "executive_summary",
             "searchableText",
             "searchable_text",
+            "resume_text",
+            "raw_text",
+            "raw_cv",
           ],
         ),
       ),
@@ -602,7 +745,9 @@ export function adaptCandidateToSearchV2Document(
     candidateName,
     currentTitle,
     currentEmployer,
-    country,
+    country:
+      resolvedCountry,
+
     location,
 
     totalYearsExperience,
