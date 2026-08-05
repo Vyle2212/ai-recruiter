@@ -101,6 +101,350 @@ function parseList(
   );
 }
 
+const INVALID_CANDIDATE_NAMES = new Set([
+  "candidate profile pending validation",
+  "prefer contract role only",
+  "unknown candidate",
+  "candidate",
+  "n/a",
+  "na",
+]);
+
+function normalizeDisplayValue(
+  value:
+    | string
+    | null
+    | undefined,
+) {
+  return String(
+    value ||
+    "",
+  )
+    .normalize("NFKC")
+    .replace(
+      /\s+/g,
+      " ",
+    )
+    .trim();
+}
+
+function cleanCandidateName(
+  result: SearchResult,
+) {
+  const candidateName =
+    normalizeDisplayValue(
+      result.candidateName,
+    );
+
+  if (
+    candidateName &&
+    !INVALID_CANDIDATE_NAMES.has(
+      candidateName.toLowerCase(),
+    )
+  ) {
+    return candidateName;
+  }
+
+  const identifier =
+    normalizeDisplayValue(
+      result.candidateId,
+    )
+      .replace(
+        /[^a-z0-9]/gi,
+        "",
+      )
+      .slice(
+        -6,
+      )
+      .toUpperCase();
+
+  return "Unnamed Candidate";
+}
+
+function candidateShortId(
+  candidateId:
+    | string
+    | null
+    | undefined,
+) {
+  const identifier =
+    normalizeDisplayValue(
+      candidateId,
+    )
+      .replace(
+        /[^a-z0-9]/gi,
+        "",
+      )
+      .slice(
+        -6,
+      )
+      .toUpperCase();
+
+  return identifier ||
+    "UNKNOWN";
+}
+
+function inferEmployerFromTitle(
+  title:
+    | string
+    | null
+    | undefined,
+) {
+  const normalizedTitle =
+    normalizeDisplayValue(
+      title,
+    );
+
+  const match =
+    normalizedTitle.match(
+      /\s+at\s+(.+)$/i,
+    );
+
+  return normalizeDisplayValue(
+    match?.[1],
+  );
+}
+
+function cleanCurrentTitle(
+  title:
+    | string
+    | null
+    | undefined,
+) {
+  return normalizeDisplayValue(
+    title,
+  )
+    .replace(
+      /^\d+\)\s*(?:position\s*:\s*)?/i,
+      "",
+    )
+    .replace(
+      /\s+at\s+.+$/i,
+      "",
+    )
+    .replace(
+      /\s*:\s*$/,
+      "",
+    )
+    .replace(
+      /\(\s*/g,
+      " (",
+    )
+    .replace(
+      /\s*\)/g,
+      ")",
+    )
+    .replace(
+      /\s*,\s*/g,
+      ", ",
+    )
+    .replace(
+      /\s+/g,
+      " ",
+    )
+    .trim();
+}
+
+function resolvedEmployer(
+  result: SearchResult,
+) {
+  return (
+    normalizeDisplayValue(
+      result.currentEmployer,
+    ) ||
+    inferEmployerFromTitle(
+      result.currentTitle,
+    )
+  );
+}
+
+function uniqueLocationParts(
+  result: SearchResult,
+) {
+  const values =
+    [
+      resolvedEmployer(
+        result,
+      ),
+      normalizeDisplayValue(
+        result.location,
+      ),
+      normalizeDisplayValue(
+        result.country,
+      ),
+    ].filter(Boolean);
+
+  const seen =
+    new Set<string>();
+
+  return values.filter(
+    (value) => {
+      const key =
+        value.toLowerCase();
+
+      if (
+        seen.has(
+          key,
+        )
+      ) {
+        return false;
+      }
+
+      seen.add(
+        key,
+      );
+
+      return true;
+    },
+  );
+}
+
+function derivedConfidenceLevel(
+  result: SearchResult,
+):
+  | "high"
+  | "medium"
+  | "low" {
+  const dataConfidence =
+    Number(
+      result.score.confidenceScore,
+    ) || 0;
+
+  const profileQuality =
+    Number(
+      result.score.qualityScore,
+    ) || 0;
+
+  const skillScore =
+    Number(
+      result.score.skillScore,
+    ) || 0;
+
+  const titleScore =
+    Number(
+      result.score.titleScore,
+    ) || 0;
+
+  if (
+    dataConfidence >=
+    70
+  ) {
+    return "high";
+  }
+
+  if (
+    dataConfidence >=
+    40
+  ) {
+    return "medium";
+  }
+
+  if (
+    profileQuality >=
+      85 &&
+    skillScore >=
+      80 &&
+    titleScore >=
+      50
+  ) {
+    return "medium";
+  }
+
+  return "low";
+}
+
+function recruiterRankScore(
+  result: SearchResult,
+) {
+  const baseScore =
+    Number(
+      result.score.finalScore,
+    ) || 0;
+
+  const titleBonus =
+    (
+      Number(
+        result.score.titleScore,
+      ) || 0
+    ) *
+    0.025;
+
+  const confidenceBonus =
+    (
+      Number(
+        result.score.confidenceScore,
+      ) || 0
+    ) *
+    0.015;
+
+  const recencyBonus =
+    (
+      Number(
+        result.score.recencyScore,
+      ) || 0
+    ) *
+    0.01;
+
+  const employerBonus =
+    resolvedEmployer(
+      result,
+    )
+      ? 1.25
+      : 0;
+
+  const validNameBonus =
+    cleanCandidateName(
+      result,
+    ) ===
+    "Unnamed Candidate"
+      ? 0
+      : 0.75;
+
+  const warningPenalty =
+    Math.min(
+      result.explanation.warnings.length *
+        0.35,
+      1.5,
+    );
+
+  return Math.min(
+    100,
+    Math.max(
+      0,
+      baseScore +
+        titleBonus +
+        confidenceBonus +
+        recencyBonus +
+        employerBonus +
+        validNameBonus -
+        warningPenalty,
+    ),
+  );
+}
+
+function confidenceBadgeClasses(
+  level:
+    | "high"
+    | "medium"
+    | "low",
+) {
+  if (
+    level ===
+    "high"
+  ) {
+    return "border-emerald-700 bg-emerald-950/50 text-emerald-200";
+  }
+
+  if (
+    level ===
+    "medium"
+  ) {
+    return "border-cyan-800 bg-cyan-950/40 text-cyan-200";
+  }
+
+  return "border-amber-800 bg-amber-950/30 text-amber-200";
+}
+
 function ScoreBar({
   label,
   value,
@@ -108,33 +452,37 @@ function ScoreBar({
   label: string;
   value: number;
 }) {
-  const normalized =
-    Math.min(
-      100,
-      Math.max(
-        0,
-        Number(value) || 0,
+  const safeValue =
+    Math.max(
+      0,
+      Math.min(
+        100,
+        Number.isFinite(value)
+          ? value
+          : 0,
       ),
     );
 
   return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between gap-3 text-xs">
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-3 text-[11px]">
         <span className="text-slate-400">
           {label}
         </span>
 
-        <span className="font-medium text-slate-200">
-          {normalized.toFixed(1)}
+        <span className="font-semibold tabular-nums text-slate-200">
+          {safeValue.toFixed(
+            1,
+          )}
         </span>
       </div>
 
-      <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
+      <div className="h-1 overflow-hidden rounded-full bg-slate-800">
         <div
-          className="h-full rounded-full bg-cyan-400"
+          className="h-full rounded-full bg-cyan-400 transition-[width] duration-300"
           style={{
             width:
-              `${normalized}%`,
+              `${safeValue}%`,
           }}
         />
       </div>
@@ -167,51 +515,165 @@ function CandidateCard({
   ] =
     useState(false);
 
+  const [
+    showReasons,
+    setShowReasons,
+  ] =
+    useState(false);
+
+  const [
+    showWarnings,
+    setShowWarnings,
+  ] =
+    useState(false);
+
+  const candidateName =
+    cleanCandidateName(
+      result,
+    );
+
+  const candidateTitle =
+    cleanCurrentTitle(
+      result.currentTitle,
+    );
+
+  const anonymousCandidate =
+    candidateName ===
+    "Unnamed Candidate";
+
+  const shortCandidateId =
+    candidateShortId(
+      result.candidateId,
+    );
+
+  const candidateEmployer =
+    resolvedEmployer(
+      result,
+    );
+
+  const locationParts =
+    uniqueLocationParts(
+      result,
+    );
+
+  const confidenceLevel =
+    derivedConfidenceLevel(
+      result,
+    );
+
+  const rankScore =
+    recruiterRankScore(
+      result,
+    );
+
   const candidateHref =
     `/recruiter/candidate360/${encodeURIComponent(
       result.candidateId,
     )}`;
 
+  const shortlistHref =
+    `/recruiter/shortlist?candidateId=${encodeURIComponent(
+      result.candidateId,
+    )}`;
+
+  const compareHref =
+    `/recruiter/compare?candidateId=${encodeURIComponent(
+      result.candidateId,
+    )}`;
+
+  const matchLabel =
+    rankScore >= 80
+      ? "Excellent match"
+      : rankScore >= 65
+        ? "Strong match"
+        : rankScore >= 50
+          ? "Good match"
+          : "Review match";
+
+  const warningCount =
+    result.explanation
+      .warnings.length;
+
+  const reasonCount =
+    result.explanation
+      .reasons.length;
+
+  const confidenceLabel =
+    `${confidenceLevel.toUpperCase()} CONFIDENCE`;
+
+  const confidenceClasses =
+    confidenceLevel ===
+    "high"
+      ? "border-emerald-700/80 bg-emerald-950/35 text-emerald-300"
+      : confidenceLevel ===
+          "medium"
+        ? "border-amber-700/80 bg-amber-950/25 text-amber-300"
+        : "border-rose-800/80 bg-rose-950/25 text-rose-300";
+
   return (
-    <article className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5 shadow-sm">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1">
+    <article className="rounded-xl border border-slate-800 bg-slate-950/55 px-4 py-3 shadow-sm transition hover:border-slate-700 lg:px-5">
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_15rem]">
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-xs font-semibold text-slate-300">
+            <span className="inline-flex h-6 items-center rounded-md border border-slate-700 bg-slate-900 px-2 text-xs font-semibold tabular-nums text-slate-300">
               #{rank}
             </span>
 
-            <span className="rounded-md border border-emerald-900 bg-emerald-950/40 px-2 py-1 text-xs font-semibold text-emerald-300">
-              {result.explanation.confidenceLevel.toUpperCase()} CONFIDENCE
+            <span
+              className={`inline-flex h-6 items-center rounded-md border px-2 text-[11px] font-semibold tracking-wide ${confidenceClasses}`}
+            >
+              {confidenceLabel}
             </span>
           </div>
 
-          <div className="mt-4">
-            <h2 className="truncate text-xl font-semibold text-white">
-              {result.candidateName ||
-                "Candidate profile pending validation"}
-            </h2>
+          <div className="mt-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="min-w-0 text-base font-semibold leading-tight text-white sm:text-lg">
+                {candidateName}
+              </h2>
 
-            <p className="mt-1 text-sm text-slate-300">
-              {result.currentTitle ||
+              {anonymousCandidate ? (
+                <span className="inline-flex min-h-6 items-center rounded-md border border-slate-700 bg-slate-900 px-2 py-0.5 font-mono text-[11px] font-semibold tracking-wide text-slate-300">
+                  #{shortCandidateId}
+                </span>
+              ) : null}
+            </div>
+
+            <p className="mt-1 text-sm font-medium leading-snug text-slate-200">
+              {candidateTitle ||
                 "Current title not available"}
             </p>
 
-            <p className="mt-1 text-sm text-slate-500">
-              {[
-                result.currentEmployer,
-                result.location,
-                result.country,
-              ]
-                .filter(Boolean)
-                .join(" · ") ||
-                "Employer and location not verified"}
-            </p>
+            {locationParts.length >
+            0 ? (
+              <p className="mt-1 text-sm leading-snug text-slate-500">
+                {locationParts.join(
+                  " / ",
+                )}
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-slate-500">
+                Location not verified
+              </p>
+            )}
+
+            {!candidateEmployer ? (
+              <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-amber-800/80 bg-amber-950/20 px-2 py-0.5 text-[11px] font-semibold text-amber-300">
+                <span
+                  aria-hidden="true"
+                >
+                  !
+                </span>
+
+                Employer pending verification
+              </span>
+            ) : null}
           </div>
 
-          {result.explanation.matchedSkills.length >
+          {result.explanation
+            .matchedSkills.length >
           0 ? (
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {result.explanation.matchedSkills.map(
                 (skill) => (
                   <Tag key={skill}>
@@ -222,9 +684,78 @@ function CandidateCard({
             </div>
           ) : null}
 
-          {result.explanation.reasons.length >
-          0 ? (
-            <ul className="mt-4 space-y-1.5 text-sm text-slate-300">
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            {reasonCount >
+            0 ? (
+              <button
+                type="button"
+                aria-expanded={
+                  showReasons
+                }
+                onClick={() =>
+                  setShowReasons(
+                    (current) =>
+                      !current,
+                  )
+                }
+                className="inline-flex min-h-7 items-center gap-1.5 rounded-md px-1 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-950/25 hover:text-cyan-200"
+              >
+                <span
+                  aria-hidden="true"
+                  className={`inline-block text-xs transition-transform ${
+                    showReasons
+                      ? "rotate-90"
+                      : ""
+                  }`}
+                >
+                  ▸
+                </span>
+
+                <span>
+                  Why this candidate
+                  {" "}
+                  ({reasonCount})
+                </span>
+              </button>
+            ) : null}
+
+            {warningCount >
+            0 ? (
+              <button
+                type="button"
+                aria-expanded={
+                  showWarnings
+                }
+                onClick={() =>
+                  setShowWarnings(
+                    (current) =>
+                      !current,
+                  )
+                }
+                className="inline-flex min-h-7 items-center gap-1.5 rounded-full border border-amber-800/80 bg-amber-950/15 px-2.5 text-xs font-semibold text-amber-300 transition hover:bg-amber-950/30"
+              >
+                <span
+                  aria-hidden="true"
+                >
+                  !
+                </span>
+
+                <span>
+                  {warningCount}
+                  {" "}
+                  review
+                  {" "}
+                  {warningCount ===
+                  1
+                    ? "warning"
+                    : "warnings"}
+                </span>
+              </button>
+            ) : null}
+          </div>
+
+          {showReasons ? (
+            <ul className="mt-2 grid gap-1.5">
               {result.explanation.reasons.map(
                 (
                   reason,
@@ -232,10 +763,13 @@ function CandidateCard({
                 ) => (
                   <li
                     key={`${reason}-${index}`}
-                    className="flex gap-2"
+                    className="flex gap-2 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2 text-sm text-slate-300"
                   >
-                    <span className="text-emerald-400">
-                      ✓
+                    <span
+                      aria-hidden="true"
+                      className="shrink-0 font-semibold text-emerald-400"
+                    >
+                      +
                     </span>
 
                     <span>
@@ -247,48 +781,108 @@ function CandidateCard({
             </ul>
           ) : null}
 
-          {result.explanation.warnings.length >
-          0 ? (
-            <div className="mt-4 rounded-xl border border-amber-900/80 bg-amber-950/20 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-amber-300">
-                Review warnings
-              </p>
-
-              <ul className="mt-2 space-y-1 text-sm text-amber-100">
-                {result.explanation.warnings.map(
-                  (
-                    warning,
-                    index,
-                  ) => (
-                    <li
-                      key={`${warning}-${index}`}
+          {showWarnings ? (
+            <ul className="mt-2 grid gap-1.5">
+              {result.explanation.warnings.map(
+                (
+                  warning,
+                  index,
+                ) => (
+                  <li
+                    key={`${warning}-${index}`}
+                    className="flex gap-2 rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-sm text-amber-100"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="shrink-0 font-semibold text-amber-400"
                     >
-                      • {warning}
-                    </li>
-                  ),
-                )}
-              </ul>
-            </div>
+                      !
+                    </span>
+
+                    <span>
+                      {warning}
+                    </span>
+                  </li>
+                ),
+              )}
+            </ul>
           ) : null}
+
+          <div className="mt-3 flex flex-wrap gap-2 lg:hidden">
+            <a
+              href={candidateHref}
+              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-cyan-700 bg-cyan-950/30 px-3 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-900/40"
+            >
+              Open Candidate 360
+            </a>
+
+            <a
+              href={shortlistHref}
+              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-300 transition hover:bg-slate-900"
+            >
+              Shortlist
+            </a>
+
+            <a
+              href={compareHref}
+              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-300 transition hover:bg-slate-900"
+            >
+              Compare
+            </a>
+
+            <button
+              type="button"
+              aria-expanded={
+                expanded
+              }
+              onClick={() =>
+                setExpanded(
+                  (current) =>
+                    !current,
+                )
+              }
+              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-300 transition hover:bg-slate-900"
+            >
+              {expanded
+                ? "Hide details"
+                : "Details"}
+            </button>
+          </div>
         </div>
 
-        <div className="w-full shrink-0 lg:w-72">
-          <div className="rounded-xl border border-cyan-900/80 bg-cyan-950/20 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-cyan-300">
-              Overall match
-            </p>
+        <aside className="hidden min-w-0 flex-col lg:flex">
+          <div className="rounded-xl border border-cyan-900/80 bg-cyan-950/20 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-300">
+                  Recruiter rank
+                </p>
 
-            <p className="mt-1 text-4xl font-bold text-white">
-              {result.score.finalScore.toFixed(
-                1,
-              )}
-            </p>
+                <p className="mt-1 text-3xl font-bold leading-none tabular-nums text-white">
+                  {rankScore.toFixed(
+                    1,
+                  )}
+                </p>
 
-            <p className="text-xs text-slate-400">
-              out of 100
-            </p>
+                <p className="mt-1 text-xs font-semibold text-slate-200">
+                  {matchLabel}
+                </p>
+              </div>
 
-            <div className="mt-4 space-y-3">
+              <div className="text-right">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-slate-600">
+                  AI score
+                </p>
+
+                <p className="mt-1 text-sm font-semibold tabular-nums text-slate-400">
+                  {result.score.finalScore.toFixed(
+                    1,
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3 space-y-2">
               <ScoreBar
                 label="Skills"
                 value={
@@ -326,42 +920,60 @@ function CandidateCard({
             </div>
           </div>
 
-          <div className="mt-3 flex gap-2">
+          <div className="mt-2 grid grid-cols-2 gap-2">
             <a
               href={candidateHref}
-              className="flex-1 rounded-lg border border-cyan-700 bg-cyan-950/40 px-3 py-2 text-center text-sm font-semibold text-cyan-200 transition hover:bg-cyan-900/50"
+              className="col-span-2 inline-flex min-h-9 items-center justify-center rounded-lg border border-cyan-700 bg-cyan-950/35 px-3 text-center text-sm font-semibold text-cyan-200 transition hover:bg-cyan-900/45"
             >
               Open Candidate 360
             </a>
 
+            <a
+              href={shortlistHref}
+              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-700 px-2 text-sm font-semibold text-slate-300 transition hover:bg-slate-900"
+            >
+              Shortlist
+            </a>
+
+            <a
+              href={compareHref}
+              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-700 px-2 text-sm font-semibold text-slate-300 transition hover:bg-slate-900"
+            >
+              Compare
+            </a>
+
             <button
               type="button"
+              aria-expanded={
+                expanded
+              }
               onClick={() =>
                 setExpanded(
                   (current) =>
                     !current,
                 )
               }
-              className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-300 transition hover:bg-slate-900"
+              className="col-span-2 inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-300 transition hover:bg-slate-900"
             >
               {expanded
-                ? "Hide"
+                ? "Hide details"
                 : "Details"}
             </button>
           </div>
-        </div>
+        </aside>
       </div>
 
       {expanded ? (
-        <div className="mt-5 grid gap-4 border-t border-slate-800 pt-5 lg:grid-cols-3">
+        <div className="mt-3 grid gap-3 border-t border-slate-800 pt-3 lg:grid-cols-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Matched terms
             </p>
 
-            <div className="mt-2 flex flex-wrap gap-2">
-              {result.explanation.matchedTerms
-                .length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {result.explanation
+                .matchedTerms.length >
+              0 ? (
                 result.explanation.matchedTerms.map(
                   (term) => (
                     <Tag key={term}>
@@ -382,12 +994,14 @@ function CandidateCard({
               SAP modules
             </p>
 
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {result.explanation
-                .matchedSapModules
-                .length > 0 ? (
+                .matchedSapModules.length >
+              0 ? (
                 result.explanation.matchedSapModules.map(
-                  (moduleName) => (
+                  (
+                    moduleName,
+                  ) => (
                     <Tag
                       key={
                         moduleName
@@ -399,7 +1013,7 @@ function CandidateCard({
                 )
               ) : (
                 <span className="text-sm text-slate-500">
-                  Derived from skills or title
+                  Derived from title or skills
                 </span>
               )}
             </div>
@@ -410,7 +1024,7 @@ function CandidateCard({
               Evidence
             </p>
 
-            <div className="mt-2 space-y-2 text-sm">
+            <div className="mt-2 space-y-1.5">
               {result.evidence &&
               result.evidence.length >
                 0 ? (
@@ -421,20 +1035,20 @@ function CandidateCard({
                   ) => (
                     <div
                       key={`${evidence.label}-${index}`}
-                      className="rounded-lg border border-slate-800 bg-slate-900/50 p-2"
+                      className="rounded-lg border border-slate-800 bg-slate-900/50 p-2 text-sm"
                     >
                       <p className="font-medium text-slate-300">
                         {evidence.label}
                       </p>
 
-                      <p className="mt-0.5 text-slate-500">
+                      <p className="mt-0.5 break-words text-slate-500">
                         {evidence.value}
                       </p>
                     </div>
                   ),
                 )
               ) : (
-                <span className="text-slate-500">
+                <span className="text-sm text-slate-500">
                   No evidence attached
                 </span>
               )}
@@ -506,8 +1120,29 @@ export default function CandidateSearchV2Client() {
     );
 
   const results =
-    response?.results ||
-    [];
+    useMemo(
+      () =>
+        [
+          ...(
+            response?.results ||
+            []
+          ),
+        ].sort(
+          (
+            first,
+            second,
+          ) =>
+            recruiterRankScore(
+              second,
+            ) -
+            recruiterRankScore(
+              first,
+            ),
+        ),
+      [
+        response,
+      ],
+    );
 
   const summaryText =
     useMemo(
@@ -832,7 +1467,7 @@ export default function CandidateSearchV2Client() {
             </div>
           ) : null}
 
-          <div className="mt-5 space-y-4">
+          <div className="mt-4 space-y-3">
             {results.map(
               (
                 result,

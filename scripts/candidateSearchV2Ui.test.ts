@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const pagePath =
@@ -66,6 +66,76 @@ assert.match(
 assert.match(
   client,
   /Open Candidate 360/,
+);
+
+assert.match(
+  client,
+  /Unnamed Candidate/,
+);
+
+assert.match(
+  client,
+  /Candidate ID:/,
+);
+
+assert.match(
+  client,
+  /Employer not verified/,
+);
+
+assert.match(
+  client,
+  /aria-expanded={showReasons}/,
+);
+
+assert.match(
+  client,
+  /aria-expanded={showWarnings}/,
+);
+
+assert.match(
+  client,
+  /Match reasons/,
+);
+
+assert.match(
+  client,
+  /Review warnings/,
+);
+
+assert.match(
+  client,
+  /#{shortCandidateId}/,
+);
+
+assert.doesNotMatch(
+  client,
+  /Candidate ID:/,
+);
+
+assert.doesNotMatch(
+  client,
+  /REVIEW WARNINGS/,
+);
+
+assert.match(
+  client,
+  /match reasons/,
+);
+
+assert.match(
+  client,
+  /Review warnings/,
+);
+
+assert.doesNotMatch(
+  client,
+  /calibrated ranking score/,
+);
+
+assert.doesNotMatch(
+  client,
+  /Employer requires validation/,
 );
 
 assert.match(
