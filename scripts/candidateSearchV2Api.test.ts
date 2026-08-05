@@ -113,12 +113,40 @@ assert.ok(
   ),
 );
 
-assert.deepEqual(
-  candidate.sapModules,
-  [
+assert.ok(
+  candidate.sapModules?.includes(
     "FI",
+  ),
+);
+
+assert.ok(
+  candidate.sapModules?.includes(
     "CO",
-  ],
+  ),
+);
+
+assert.ok(
+  candidate.sapModules?.includes(
+    "SAP FI",
+  ),
+);
+
+assert.ok(
+  candidate.sapModules?.includes(
+    "SAP CO",
+  ),
+);
+
+assert.ok(
+  candidate.sapModules?.includes(
+    "FICO",
+  ),
+);
+
+assert.ok(
+  candidate.sapModules?.includes(
+    "SAP FICO",
+  ),
 );
 
 const collection =
