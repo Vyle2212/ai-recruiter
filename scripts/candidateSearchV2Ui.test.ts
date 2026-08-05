@@ -1,4 +1,4 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const pagePath =
@@ -60,12 +60,37 @@ assert.match(
 
 assert.match(
   client,
-  /Matched skills/,
+  /Open Candidate 360/,
 );
 
 assert.match(
   client,
-  /Open Candidate 360/,
+  /Why this candidate/,
+);
+
+assert.match(
+  client,
+  /review/,
+);
+
+assert.match(
+  client,
+  /Recruiter rank/,
+);
+
+assert.match(
+  client,
+  /AI score/,
+);
+
+assert.match(
+  client,
+  /Shortlist/,
+);
+
+assert.match(
+  client,
+  /Compare/,
 );
 
 assert.match(
@@ -75,62 +100,47 @@ assert.match(
 
 assert.match(
   client,
-  /Candidate ID:/,
+  /shortCandidateId/,
 );
 
 assert.match(
   client,
-  /Employer not verified/,
+  /Employer pending verification/,
 );
 
 assert.match(
   client,
-  /aria-expanded={showReasons}/,
+  /aria-expanded/,
 );
 
 assert.match(
   client,
-  /aria-expanded={showWarnings}/,
+  /matchedSkills/,
 );
 
 assert.match(
   client,
-  /Match reasons/,
+  /matchedTerms/,
 );
 
 assert.match(
   client,
-  /Review warnings/,
+  /matchedSapModules/,
 );
 
 assert.match(
   client,
-  /#{shortCandidateId}/,
+  /readOnly|READ ONLY/,
+);
+
+assert.doesNotMatch(
+  client,
+  /Matched skills/,
 );
 
 assert.doesNotMatch(
   client,
   /Candidate ID:/,
-);
-
-assert.doesNotMatch(
-  client,
-  /REVIEW WARNINGS/,
-);
-
-assert.match(
-  client,
-  /match reasons/,
-);
-
-assert.match(
-  client,
-  /Review warnings/,
-);
-
-assert.doesNotMatch(
-  client,
-  /calibrated ranking score/,
 );
 
 assert.doesNotMatch(
@@ -138,9 +148,9 @@ assert.doesNotMatch(
   /Employer requires validation/,
 );
 
-assert.match(
+assert.doesNotMatch(
   client,
-  /readOnly|READ ONLY/,
+  /calibrated ranking score/,
 );
 
 assert.doesNotMatch(
