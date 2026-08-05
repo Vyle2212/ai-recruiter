@@ -7,6 +7,10 @@ import {
 } from "./candidateSearchV2Request";
 
 import {
+  candidateHasSearchV2PrimaryModuleRelevance,
+} from "./candidateSearchV2ModuleRelevance";
+
+import {
   scoreCandidateSearchV2Document,
 } from "./candidateSearchV2Scoring";
 
@@ -31,6 +35,10 @@ export function searchCandidatesV2(
     documents.filter(
       (candidate) =>
         candidatePassesSearchV2Filters(
+          candidate,
+          request,
+        ) &&
+        candidateHasSearchV2PrimaryModuleRelevance(
           candidate,
           request,
         ),

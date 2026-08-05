@@ -9,6 +9,10 @@ import type {
   NormalizedCandidateSearchV2Request,
 } from "./candidateSearchV2Request";
 
+import {
+  candidateSearchV2PrimaryModuleScore,
+} from "./candidateSearchV2ModuleRelevance";
+
 function clampScore(
   value: number,
 ) {
@@ -323,6 +327,12 @@ export function scoreCandidateSearchV2Document(
       ) * 100,
     );
 
+  const primaryModuleScore =
+    candidateSearchV2PrimaryModuleScore(
+      candidate,
+      request,
+    );
+
   const skillScore =
     Math.max(
       calculateListCoverage(
@@ -335,6 +345,7 @@ export function scoreCandidateSearchV2Document(
         candidate.sapModules ||
           [],
       ),
+      primaryModuleScore,
     );
 
   const titleScore =
@@ -510,6 +521,22 @@ export function scoreCandidateSearchV2Document(
 
   const reasons: string[] =
     [];
+
+  if (
+    primaryModuleScore >=
+    100
+  ) {
+    reasons.push(
+      "Primary SAP module exactly matches the search requirement.",
+    );
+  } else if (
+    primaryModuleScore >=
+    80
+  ) {
+    reasons.push(
+      "Current title provides direct SAP module evidence.",
+    );
+  }
 
   if (
     matchedSkills.length

@@ -83,13 +83,34 @@ assert.equal(
   "Senior SAP FICO Consultant",
 );
 
-assert.deepEqual(
-  candidate.skills,
-  [
+assert.ok(
+  candidate.skills?.includes(
     "SAP FICO",
+  ),
+);
+
+assert.ok(
+  candidate.skills?.includes(
     "S/4HANA",
+  ),
+);
+
+assert.ok(
+  candidate.skills?.includes(
     "R2R",
-  ],
+  ),
+);
+
+assert.ok(
+  candidate.skills?.includes(
+    "FI",
+  ),
+);
+
+assert.ok(
+  candidate.skills?.includes(
+    "CO",
+  ),
 );
 
 assert.deepEqual(
