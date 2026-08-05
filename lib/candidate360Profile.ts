@@ -24,7 +24,15 @@ function array(value: unknown): any[] {
   try { const parsed = JSON.parse(value); if (Array.isArray(parsed)) return parsed; } catch {}
   return value.split(/[,;|]/).map(clean).filter(Boolean);
 }
-function idOf(candidate: AnyRecord) { return clean(candidate.id || candidate.candidate_id); }
+function idOf(candidate: AnyRecord) {
+  return clean(
+    candidate.id ||
+    candidate.candidate_id ||
+    candidate.candidateId ||
+    candidate.candidate_uuid ||
+    candidate.candidateUuid
+  );
+}
 function baseSource(candidate: AnyRecord): Source {
   const raw = clean(candidate.extraction_source || candidate.source || candidate.import_source).toLowerCase();
   if (raw.includes("candidate_confirm")) return Source.CandidateConfirmed;
@@ -109,31 +117,196 @@ function nestedField(name: string, value: unknown, source: Source) { return fiel
 
 export function buildCandidate360Profile(candidate: AnyRecord, workflowState?: AnyRecord, approvals?: any, decisions?: any, applyHistory?: any): Candidate360Profile {
   const source = baseSource(candidate);
-  const displayName = stringField(candidate, "displayName", ["name", "display_name", "candidate_name", "full_name"], approvals, decisions, applyHistory);
-  const currentTitle = stringField(candidate, "currentTitle", ["current_title", "title", "headline"], approvals, decisions, applyHistory);
-  const currentCompany = stringField(candidate, "currentCompany", ["current_company", "company", "employer"], approvals, decisions, applyHistory);
-  const location = stringField(candidate, "location", ["location", "current_location", "country"], approvals, decisions, applyHistory);
-  const email = stringField(candidate, "email", ["email", "email_address"], approvals, decisions, applyHistory);
-  const phone = stringField(candidate, "phone", ["phone", "phone_number", "mobile"], approvals, decisions, applyHistory);
-  const headline = stringField(candidate, "headline", ["headline", "current_title", "title"], approvals, decisions, applyHistory);
-  const rawYears = candidate.years_of_experience ?? candidate.yearsExperience ?? candidate.years ?? candidate.total_experience_years;
+    const displayName = stringField(
+    candidate,
+    "displayName",
+    [
+      "name",
+      "display_name",
+      "displayName",
+      "candidate_name",
+      "candidateName",
+      "full_name",
+      "fullName",
+    ],
+    approvals,
+    decisions,
+    applyHistory,
+  );
+    const currentTitle = stringField(
+    candidate,
+    "currentTitle",
+    [
+      "current_title",
+      "currentTitle",
+      "title",
+      "job_title",
+      "jobTitle",
+      "latest_title",
+      "latestTitle",
+      "headline",
+    ],
+    approvals,
+    decisions,
+    applyHistory,
+  );
+    const currentCompany = stringField(
+    candidate,
+    "currentCompany",
+    [
+      "current_company",
+      "currentCompany",
+      "company",
+      "company_name",
+      "companyName",
+      "employer",
+      "current_employer",
+      "currentEmployer",
+      "latest_company",
+      "latestCompany",
+    ],
+    approvals,
+    decisions,
+    applyHistory,
+  );
+    const location = stringField(
+    candidate,
+    "location",
+    [
+      "location",
+      "current_location",
+      "currentLocation",
+      "country",
+      "country_name",
+      "countryName",
+      "city",
+    ],
+    approvals,
+    decisions,
+    applyHistory,
+  );
+    const email = stringField(
+    candidate,
+    "email",
+    [
+      "email",
+      "email_address",
+      "emailAddress",
+      "primary_email",
+      "primaryEmail",
+    ],
+    approvals,
+    decisions,
+    applyHistory,
+  );
+    const phone = stringField(
+    candidate,
+    "phone",
+    [
+      "phone",
+      "phone_number",
+      "phoneNumber",
+      "mobile",
+      "mobile_number",
+      "mobileNumber",
+      "contact_number",
+      "contactNumber",
+    ],
+    approvals,
+    decisions,
+    applyHistory,
+  );
+    const headline = stringField(
+    candidate,
+    "headline",
+    [
+      "headline",
+      "professional_headline",
+      "professionalHeadline",
+      "current_title",
+      "currentTitle",
+      "title",
+    ],
+    approvals,
+    decisions,
+    applyHistory,
+  );
+    const rawYears =
+    candidate.years_of_experience ??
+    candidate.yearsOfExperience ??
+    candidate.yearsExperience ??
+    candidate.total_experience_years ??
+    candidate.totalExperienceYears ??
+    candidate.years;
   const yearsValue = Number.isFinite(Number(rawYears)) && clean(rawYears) ? Number(rawYears) : null;
   const yearsOfExperience = resolveField(candidate, "yearsOfExperience", yearsValue, approvals, decisions, applyHistory);
-  const modules = array(candidate.sap_modules || candidate.secondary_modules || candidate.modules);
-  const primaryModule = clean(candidate.primary_module || candidate.primarySapModule);
+    const modules = array(
+    candidate.sap_modules ??
+    candidate.sapModules ??
+    candidate.secondary_modules ??
+    candidate.secondaryModules ??
+    candidate.modules ??
+    candidate.module_names ??
+    candidate.moduleNames
+  );
+    const primaryModule = clean(
+    candidate.primary_module ||
+    candidate.primaryModule ||
+    candidate.primary_sap_module ||
+    candidate.primarySapModule
+  );
   const moduleNames = Array.from(new Set([primaryModule, ...modules.map((item) => clean(item?.name || item))].filter(Boolean)));
-  const skillNames = Array.from(new Set(array(candidate.tech_skills || candidate.technical_skills || candidate.skills).map((item) => clean(item?.name || item)).filter(Boolean)));
+    const skillNames = Array.from(
+    new Set(
+      array(
+        candidate.tech_skills ??
+        candidate.techSkills ??
+        candidate.technical_skills ??
+        candidate.technicalSkills ??
+        candidate.normalized_skills ??
+        candidate.normalizedSkills ??
+        candidate.skills
+      )
+        .map((item) =>
+          clean(
+            item?.name ||
+            item?.skill ||
+            item?.skillName ||
+            item,
+          ),
+        )
+        .filter(Boolean),
+    ),
+  );
   const sapModules: Candidate360Skill[] = moduleNames.map((name) => ({ name: nestedField("sapModule", name, source), category: "sap_module" }));
   const techSkills: Candidate360Skill[] = skillNames.filter((name) => !moduleNames.includes(name)).map((name) => ({ name: nestedField("techSkill", name, source), category: "technical" }));
-  const workExperience: Candidate360Experience[] = array(candidate.work_experience || candidate.experience || candidate.employment_history).map((item, index) => {
+    const workExperience: Candidate360Experience[] = array(
+    candidate.work_experience ??
+    candidate.workExperience ??
+    candidate.experience ??
+    candidate.experiences ??
+    candidate.employment_history ??
+    candidate.employmentHistory ??
+    candidate.career_history ??
+    candidate.careerHistory
+  ).map((item, index) => {
     const entry = typeof item === "object" ? item : { description: item };
     return { id: clean(entry.id) || `experience-${index + 1}`, title: nestedField("experience.title", entry.title || entry.role, source), company: nestedField("experience.company", entry.company || entry.employer, source), startDate: nestedField("experience.startDate", entry.startDate || entry.start_date, source), endDate: nestedField("experience.endDate", entry.endDate || entry.end_date, source), description: nestedField("experience.description", entry.description || entry.summary, source) };
   });
-  const education: Candidate360Education[] = array(candidate.education || candidate.education_history).map((item, index) => {
+    const education: Candidate360Education[] = array(
+    candidate.education ??
+    candidate.educations ??
+    candidate.education_history ??
+    candidate.educationHistory
+  ).map((item, index) => {
     const entry = typeof item === "object" ? item : { qualification: item };
     return { id: clean(entry.id) || `education-${index + 1}`, institution: nestedField("education.institution", entry.institution || entry.school, source), qualification: nestedField("education.qualification", entry.qualification || entry.degree, source), fieldOfStudy: nestedField("education.fieldOfStudy", entry.fieldOfStudy || entry.field_of_study, source), graduationYear: nestedField("education.graduationYear", entry.graduationYear || entry.graduation_year || entry.year, source) };
   });
-  const languages: Candidate360Language[] = array(candidate.languages).map((item) => {
+    const languages: Candidate360Language[] = array(
+    candidate.languages ??
+    candidate.language_skills ??
+    candidate.languageSkills
+  ).map((item) => {
     const entry = typeof item === "object" ? item : { language: item };
     return { language: nestedField("language", entry.language || entry.name, source), proficiency: nestedField("language.proficiency", entry.proficiency || entry.level, source) };
   });
