@@ -1,4 +1,4 @@
-import { candidateProfileTimestampLabels } from "./candidateDuplicateIdentity";
+﻿import { candidateProfileTimestampLabels } from "./candidateDuplicateIdentity";
 type AnyRecord = Record<string, any>;
 
 export type Candidate360Section = {
@@ -339,8 +339,8 @@ function deriveConsultingLevel(careerLevel: string, d: AnyRecord): string {
 function cleanExecutiveTitle(value: any): string {
   return String(value || "")
     .replace(/\s+/g, " ")
-    .replace(/[：:]+$/g, "")
-    .replace(/\s+in\s+the\s+domain\s+of\s+/i, " – ")
+    .replace(/[ï¼š:]+$/g, "")
+    .replace(/\s+in\s+the\s+domain\s+of\s+/i, " â€“ ")
     .trim();
 }
 
@@ -369,7 +369,7 @@ function buildExecutivePositioning(input: {
   const yearsLabel = input.years
     ? `${input.years} Years SAP Experience`
     : "SAP Experience to Validate";
-  const heroLine = `${input.location || "APAC"} • ${primary === "UNKNOWN" ? "SAP" : `SAP ${primary}`} • ${yearsLabel}`;
+  const heroLine = `${input.location || "APAC"} â€¢ ${primary === "UNKNOWN" ? "SAP" : `SAP ${primary}`} â€¢ ${yearsLabel}`;
 
   return { displayTitle, leadershipHeadline, heroLine };
 }
@@ -536,8 +536,8 @@ function buildRankingRationale(
   const ams = n(d.amsProjects ?? d.ams_support_project_count ?? d.ams_count);
   const items = [
     `${title} with primary SAP ${primaryModule} positioning${company ? ` at ${company}` : ""}.`,
-    years ? `${years} years SAP experience${implementation ? ` with ${implementation} implementation(s)` : ""}${s4hana ? ` and ${s4hana} S/4HANA program(s)` : ""}.` : "SAP experience duration should be validated.",
-    rollout || ams ? `Delivery footprint includes ${rollout} rollout(s) and ${ams} AMS/support engagement(s).` : "Project delivery scope should be validated during recruiter screening.",
+    years ? `${years} years SAP experience${implementation ? ` with ${implementation} full-cycle implementation project${implementation === 1 ? "" : "s"}` : ""}${s4hana ? ` and ${s4hana} S/4HANA program${s4hana === 1 ? "" : "s"}` : ""}.` : "SAP experience duration should be validated.",
+    rollout || ams ? `Delivery footprint includes ${rollout} rollout${rollout === 1 ? "" : "s"} and ${ams} AMS/support engagement${ams === 1 ? "" : "s"}.` : "Project delivery scope should be validated during recruiter screening.",
     matchScore >= 88 ? `Good SAP ${primaryModule} search alignment.` : `SAP ${primaryModule} fit should be confirmed before client submission.`,
   ];
   return items.filter(Boolean);
@@ -733,7 +733,7 @@ function buildModuleEvolution(d: AnyRecord): Candidate360TimelineItem[] {
     items.push({
       title: "Implementation experience",
       company: "SAP project delivery",
-      period: `${impl} implementation(s)`,
+      period: `${impl} full-cycle implementation project${impl === 1 ? "" : "s"}`,
       description: impl >= 3 ? "Multiple implementation engagements detected; validate ownership, phase involvement and full-cycle scope." : "Implementation exposure detected; validate whether this was full-cycle, rollout support, or module-specific delivery.",
       tags: ["Implementation", impl >= 3 ? "Multi-project" : "Validate scope"],
     });
@@ -753,7 +753,7 @@ function buildModuleEvolution(d: AnyRecord): Candidate360TimelineItem[] {
     items.push({
       title: rollout > 0 ? "Rollout / support delivery" : "AMS / support delivery",
       company: "Post-go-live delivery",
-      period: `${rollout} rollout(s) · ${ams} AMS/support`,
+      period: `${rollout} rollout${rollout === 1 ? "" : "s"} · ${ams} AMS/support`,
       description: "Post-go-live delivery signal detected, useful for roles requiring production support, hypercare, enhancement or rollout experience.",
       tags: [rollout > 0 ? "Rollout" : "AMS", "Support"],
     });
@@ -919,7 +919,7 @@ function deriveMarketBenchmark(input: {
         explicit.marketBasis,
         explicit.basis,
         explicit.sourceSummary,
-        `${country} • SAP ${moduleKey} • ${careerLevel}\nBenchmark Sample Pending\nLive Internal Pool`,
+        `${country} â€¢ SAP ${moduleKey} â€¢ ${careerLevel}\nBenchmark Sample Pending\nLive Internal Pool`,
       ),
     ),
     marketPosition: String(
@@ -1048,7 +1048,7 @@ export function buildCandidate360(
   const mobility = inferMobilitySignal(countryCoverage, years);
   const regionalSignal =
     countryCoverage.length > 1
-      ? `Regional Coverage: ${regionalCoverage} · Countries Served: ${countryCoverage.length}`
+      ? `Regional Coverage: ${regionalCoverage} Â· Countries Served: ${countryCoverage.length}`
       : `${country} market exposure`;
   const scoreBreakdown = buildScoreBreakdown(d, matchScore);
   const totalContribution = scoreBreakdown.reduce(
@@ -1073,9 +1073,9 @@ export function buildCandidate360(
   const employer = text(d.current_company || d.company, "");
   const projectPhrase = [
     implementation ? `${implementation} implementation program(s)` : "",
-    rollout ? `${rollout} rollout(s)` : "",
+    rollout ? `${rollout} rollout${rollout === 1 ? "" : "s"}` : "",
     ams ? `${ams} AMS/support program(s)` : "",
-    s4hana ? `${s4hana} S/4HANA program(s)` : "",
+    s4hana ? `${s4hana} S/4HANA program${s4hana === 1 ? "" : "s"}` : "",
   ].filter(Boolean).join(", ");
 
   const cleanName = cleanCandidateName(d.name || d.candidate_name);
@@ -1122,7 +1122,7 @@ export function buildCandidate360(
             lower.includes("mobility")
           )
             return "Mobility & Travel Alignment";
-          return String(item || "").replace(/[.•]+$/g, "");
+          return String(item || "").replace(/[.â€¢]+$/g, "");
         })
       : buildWatchouts([], implementation, s4hana, Boolean(email || phone));
 
@@ -1250,7 +1250,7 @@ export function buildCandidate360(
         : [
             `${primaryModule} module positioning`,
             implementation ? `${implementation} implementation program(s)` : "",
-            s4hana ? `${s4hana} S/4HANA program(s)` : "",
+            s4hana ? `${s4hana} S/4HANA program${s4hana === 1 ? "" : "s"}` : "",
             years ? `${years} years SAP experience` : "",
           ].filter(Boolean),
       validationNotes: arrayify(d.validationNotes).length
@@ -1282,3 +1282,5 @@ export function buildCandidate360(
     },
   };
 }
+
+

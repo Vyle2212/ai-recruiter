@@ -1,0 +1,15 @@
+﻿import assert from "node:assert/strict";
+import fs from "node:fs";
+const client = fs.readFileSync("app/recruiter/candidate360-v2/[candidateId]/Candidate360V2Client.tsx", "utf8");
+const dashboard = fs.readFileSync("app/recruiter/candidate360-v2/[candidateId]/HiringDashboard.tsx", "utf8");
+const intelligence = fs.readFileSync("app/recruiter/candidate360-v2/[candidateId]/CandidateIntelligencePanel.tsx", "utf8");
+const analyst = fs.readFileSync("app/recruiter/candidate360-v2/[candidateId]/RecruiterAICopilot.tsx", "utf8");
+for (const label of ["Derived", "Structured project · strong", "Structured employment · strong", "not independently confirmed"]) assert.ok(client.includes(label));
+for (const label of ["Profile completeness", "Evidence quality", "Decision confidence", "Coverage only; not decision certainty"]) assert.ok(dashboard.includes(label));
+assert.ok(intelligence.includes("Conclusion confidence"));
+assert.ok(intelligence.includes("View evidence provenance &amp; reasoning"));
+assert.ok(analyst.includes("provenance?.sourceLabel"));
+assert.ok(analyst.includes("provenance?.strength"));
+assert.ok(client.includes("highlights.slice(0, 6)"));
+assert.ok(client.includes("orderedProjects.slice(0, 5)"));
+console.log("candidate360 evidence UX tests passed");

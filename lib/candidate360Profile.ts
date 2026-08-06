@@ -279,7 +279,7 @@ export function buildCandidate360Profile(candidate: AnyRecord, workflowState?: A
     ),
   );
   const sapModules: Candidate360Skill[] = moduleNames.map((name) => ({ name: nestedField("sapModule", name, source), category: "sap_module" }));
-  const techSkills: Candidate360Skill[] = skillNames.filter((name) => !moduleNames.includes(name)).map((name) => ({ name: nestedField("techSkill", name, source), category: "technical" }));
+  const techSkills: Candidate360Skill[] = skillNames.map((name) => ({ name: nestedField("techSkill", name, source), category: "technical" }));
     const workExperience: Candidate360Experience[] = array(
     candidate.work_experience ??
     candidate.workExperience ??
@@ -324,10 +324,29 @@ export function buildCandidate360Profile(candidate: AnyRecord, workflowState?: A
   const workflowStatus = clean(workflowState?.currentStatus || workflowState?.status) || "unknown";
   const readyForShortlist = Boolean(workflowState?.readyForShortlist || workflowStatus === "ready_for_shortlist");
   const lifecycle = buildCandidateLifecycleRecord(candidate, workflowState);
+  const projectExperience = Array.isArray(candidate.projectExperience) ? candidate.projectExperience : [];
+  const certifications = array(candidate.certifications).map((item) => clean(item?.name || item?.title || item)).filter(Boolean);
+  const summaryParts: string[] = [];
+  const role = clean(currentTitle.value);
+  const employer = clean(currentCompany.value);
+  if (role) summaryParts.push(`${role}${employer ? ` at ${employer}` : ""}.`);
+  if (yearsValue && yearsValue > 0) summaryParts.push(`${yearsValue} years of experience.`);
+  if (primaryModule) summaryParts.push(`Primary SAP module: ${primaryModule}.`);
+  const implementationCount = Number(candidate.implementationProjectCount);
+  const amsCount = Number(candidate.amsProjectCount);
+  if (implementationCount > 0 || candidate.implementationExperience === true) summaryParts.push(implementationCount > 0 ? `${implementationCount} implementation projects recorded.` : "Implementation experience recorded.");
+  if (amsCount > 0) summaryParts.push(`${amsCount} AMS projects recorded.`);
+  const region = clean(location.value);
+  if (region) summaryParts.push(`Location or regional exposure: ${region}.`);
+  const executiveSummary = summaryParts.join(" ") || "Structured career summary is not yet available.";
   return {
     lifecycle,
+    enterpriseProfile: candidate.enterpriseProfile,
     candidateId: idOf(candidate), displayName, headline, currentTitle, currentCompany, location,
     contactInfo: { email, phone }, yearsOfExperience, sapModules, techSkills, workExperience, education, languages,
+    projectExperience, certifications, executiveSummary,
+    profileQualityScore: Number.isFinite(Number(candidate.profileQualityScore)) ? Number(candidate.profileQualityScore) : null,
+    dataConfidence: Number.isFinite(Number(candidate.extractionConfidence)) ? Number(candidate.extractionConfidence) : null,
     workExperienceSummary: workExperience.length ? `${workExperience.length} experience entr${workExperience.length === 1 ? "y" : "ies"} available` : "No structured work experience available",
     educationSummary: education.length ? `${education.length} education entr${education.length === 1 ? "y" : "ies"} available` : "No structured education available",
     verificationSummary,

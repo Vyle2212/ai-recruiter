@@ -1,4 +1,5 @@
 import type { CandidateLifecycleRecord } from "./candidateLifecycleTypes";
+import type { EnterpriseCandidateProfile } from "./candidate360SchemaNormalize";
 export enum Candidate360FieldSource {
   ParserExtracted = "parser_extracted",
   AiExtracted = "ai_extracted",
@@ -59,6 +60,19 @@ export type Candidate360Language = {
   proficiency: Candidate360Field<string>;
 };
 
+export type Candidate360Project = {
+  id: string;
+  name: string;
+  client: string;
+  role: string;
+  modules: string[];
+  location: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  projectType: string;
+};
+
 export type Candidate360ContactInfo = {
   email: Candidate360Field<string>;
   phone: Candidate360Field<string>;
@@ -75,6 +89,7 @@ export type Candidate360ProfileCompleteness = {
 
 export type Candidate360Profile = {
   lifecycle: CandidateLifecycleRecord;
+  enterpriseProfile: EnterpriseCandidateProfile;
   candidateId: string;
   displayName: Candidate360Field<string>;
   headline: Candidate360Field<string>;
@@ -88,6 +103,11 @@ export type Candidate360Profile = {
   workExperience: Candidate360Experience[];
   education: Candidate360Education[];
   languages: Candidate360Language[];
+  projectExperience: Candidate360Project[];
+  certifications: string[];
+  executiveSummary: string;
+  profileQualityScore: number | null;
+  dataConfidence: number | null;
   workExperienceSummary: string;
   educationSummary: string;
   verificationSummary: Record<Candidate360VerificationStatus, number>;

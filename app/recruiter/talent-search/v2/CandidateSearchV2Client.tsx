@@ -2,9 +2,12 @@
 
 import {
   FormEvent,
+  useEffect,
   useMemo,
   useState,
 } from "react";
+
+const CANDIDATE360_SEARCH_CONTEXT_KEY = "candidate360.searchContext.v1";
 
 type SearchScore = {
   keywordScore: number;
@@ -567,19 +570,19 @@ function CandidateCard({
     );
 
   const candidateHref =
-    `/recruiter/candidate360/${encodeURIComponent(
+    `/recruiter/candidate360-v2/${encodeURIComponent(
       result.candidateId,
-    )}`;
+    )}?from=search-v2`;
 
   const shortlistHref =
     `/recruiter/shortlist?candidateId=${encodeURIComponent(
       result.candidateId,
-    )}`;
+    )}?from=search-v2`;
 
   const compareHref =
     `/recruiter/compare?candidateId=${encodeURIComponent(
       result.candidateId,
-    )}`;
+    )}?from=search-v2`;
 
   const matchLabel =
     rankScore >= 80
@@ -708,7 +711,7 @@ function CandidateCard({
                       : ""
                   }`}
                 >
-                  ▸
+                  â–¸
                 </span>
 
                 <span>
@@ -1158,6 +1161,35 @@ export default function CandidateSearchV2Client() {
       ],
     );
 
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.sessionStorage.getItem(CANDIDATE360_SEARCH_CONTEXT_KEY) || "null");
+      if (!saved || typeof saved !== "object") return;
+      if (typeof saved.query === "string") setQuery(saved.query);
+      if (typeof saved.countries === "string") setCountries(saved.countries);
+      if (typeof saved.skills === "string") setSkills(saved.skills);
+      if (typeof saved.sapModules === "string") setSapModules(saved.sapModules);
+      if (Number.isFinite(saved.minimumScore)) setMinimumScore(saved.minimumScore);
+      if (saved.response?.results) setResponse(saved.response as SearchResponse);
+      requestAnimationFrame(() => window.scrollTo({ top: Number(saved.searchScrollY) || 0 }));
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (!response) return;
+    const save = () => {
+      const matchedByCandidate = Object.fromEntries(response.results.map((item) => [item.candidateId, item.explanation]));
+      window.sessionStorage.setItem(CANDIDATE360_SEARCH_CONTEXT_KEY, JSON.stringify({
+        query, countries, skills, sapModules, minimumScore, response,
+        candidateIds: results.map((item) => item.candidateId), matchedByCandidate,
+        filters: { countries: parseList(countries), skills: parseList(skills), sapModules: parseList(sapModules) },
+        returnUrl: "/recruiter/talent-search/v2", searchScrollY: window.scrollY,
+      }));
+    };
+    save();
+    window.addEventListener("scroll", save, { passive: true });
+    return () => window.removeEventListener("scroll", save);
+  }, [response, query, countries, skills, sapModules, minimumScore, results]);
   async function handleSubmit(
     event:
       FormEvent<HTMLFormElement>,
@@ -1438,7 +1470,7 @@ export default function CandidateSearchV2Client() {
             {response ? (
               <div className="text-xs text-slate-500">
                 Returned{" "}
-                {response.summary.returned} ·
+                {response.summary.returned} Â·
                 Minimum score{" "}
                 {response.request.minimumScore}
               </div>

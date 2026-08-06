@@ -10,6 +10,7 @@ import {
 import {
   buildCandidate360Profile,
 } from "./candidate360Profile";
+import { normalizeActualCandidateSchema } from "./candidate360SchemaNormalize";
 
 type UnknownRecord =
   Record<string, unknown>;
@@ -1076,69 +1077,11 @@ export async function loadCandidate360Profile(
     return null;
   }
 
-  const candidate =
-    normalizeCandidate(
-      data,
-    );
+  const candidate = normalizeCandidate({
+    ...data,
+    ...normalizeActualCandidateSchema(data),
+  });
 
-  if (
-    process.env.NODE_ENV !==
-    "production"
-  ) {
-    console.log(
-      "[Candidate360 deep normalization]",
-      {
-        candidateId,
-
-        rawKeys:
-          Object.keys(
-            data,
-          ).sort(),
-
-        normalized: {
-          name:
-            candidate.candidateName,
-
-          title:
-            candidate.currentTitle,
-
-          company:
-            candidate.currentCompany,
-
-          country:
-            candidate.country,
-
-          skills:
-            Array.isArray(
-              candidate.skills,
-            )
-              ? candidate.skills.length
-              : 0,
-
-          sapModules:
-            Array.isArray(
-              candidate.sapModules,
-            )
-              ? candidate.sapModules.length
-              : 0,
-
-          employmentHistory:
-            Array.isArray(
-              candidate.employmentHistory,
-            )
-              ? candidate.employmentHistory.length
-              : 0,
-
-          projectExperience:
-            Array.isArray(
-              candidate.projectExperience,
-            )
-              ? candidate.projectExperience.length
-              : 0,
-        },
-      },
-    );
-  }
 
   const workflowFile =
     readJson(
