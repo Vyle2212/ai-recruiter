@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { safeRequestedAuthRoute } from "../../../lib/stagingAuthRedirect";
 
 import {
   AuthHeader,
@@ -8,7 +9,9 @@ import {
   StagingRuntimeSignInForm,
 } from "../staging/runtime/StagingRuntimeAuthForms";
 
-export default function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const query = await searchParams;
+  const requestedNext = safeRequestedAuthRoute(typeof query.next === "string" ? query.next : null);
   return (
     <main className="min-h-screen bg-[#05070A] text-slate-100">
       <AuthHeader
@@ -34,7 +37,7 @@ export default function LoginPage() {
           </p>
         </section>
 
-        <StagingRuntimeSignInForm redirectOnSuccess />
+        <StagingRuntimeSignInForm redirectOnSuccess requestedNext={requestedNext} />
 
         <section className={card}>
           <div className="flex flex-wrap gap-4 text-sm text-cyan-300">

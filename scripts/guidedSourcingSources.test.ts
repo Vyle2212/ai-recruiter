@@ -1,0 +1,17 @@
+import assert from "node:assert/strict";
+import JSZip from "jszip";
+import { extractGuidedUpload, formatPostedJobBrief } from "../lib/guidedSourcingSource";
+
+function pdfWithText(text:string){const stream=`BT\n/F1 12 Tf\n72 720 Td\n(${text}) Tj\nET`;const objects=["<< /Type /Catalog /Pages 2 0 R >>","<< /Type /Pages /Kids [3 0 R] /Count 1 >>","<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>","<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",`<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`];let out="%PDF-1.4\n",offsets=[0];objects.forEach((o,i)=>{offsets.push(Buffer.byteLength(out));out+=`${i+1} 0 obj\n${o}\nendobj\n`;});const xref=Buffer.byteLength(out);out+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`+offsets.slice(1).map(x=>String(x).padStart(10,"0")+" 00000 n \n").join("")+`trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;return Buffer.from(out);}
+async function main(){
+const text="Senior SAP FICO consultant in Malaysia with 5 years implementation experience";
+const txt=await extractGuidedUpload(new File([text],"role.txt",{type:"text/plain"}));assert.match(txt,/SAP FICO/);
+const pdf=await extractGuidedUpload(new File([pdfWithText(text)],"role.pdf",{type:"application/pdf"}),{parsePdf:async()=>text});assert.match(pdf,/SAP FICO/);
+const zip=new JSZip();zip.file("[Content_Types].xml",'<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');zip.file("_rels/.rels",'<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');zip.file("word/document.xml",`<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:body></w:document>`);const docxBytes=await zip.generateAsync({type:"uint8array"});const docx=await extractGuidedUpload(new File([Buffer.from(docxBytes)],"role.docx",{type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"}));assert.match(docx,/SAP FICO/);
+await assert.rejects(()=>extractGuidedUpload(new File(["bad"],"bad.pdf",{type:"application/pdf"})));
+await assert.rejects(()=>extractGuidedUpload(new File([Buffer.from("%PDF-1.4 /Encrypt")],"encrypted.pdf",{type:"application/pdf"})));
+const posted=formatPostedJobBrief({id:"job",title:"SAP Project Manager",clientName:"",location:"Kuala Lumpur",employmentType:"",status:"active",structuredRequirementsAvailable:true,requirements:["S/4HANA implementation"],skills:["Stakeholder management"],modules:["SAP FI/CO"],sap_modules:["SAP FI/CO"],primary_module:"SAP FI/CO",languages:[],years_required:5,level:"Senior",project_types:["Implementation"],requires_implementation:true,requires_ams_support:false,requires_rollout:false,requires_migration:false,requires_s4hana:true,requires_consulting:true});
+assert.match(posted,/Role: SAP Project Manager/);assert.match(posted,/Location: Kuala Lumpur/);assert(!posted.includes("false"));
+console.log("guided source TXT/PDF/DOCX extraction tests passed");
+}
+main().catch(error=>{console.error(error);process.exitCode=1});

@@ -2,10 +2,13 @@
 
 import {
   FormEvent,
+  useCallback,
   useEffect,
   useMemo,
   useState,
 } from "react";
+import GuidedSourcingPanel from "./GuidedSourcingPanel";
+import type { GuidedSearchHandoff } from "@/lib/guidedSourcingTypes";
 
 const CANDIDATE360_SEARCH_CONTEXT_KEY = "candidate360.searchContext.v1";
 
@@ -1063,7 +1066,7 @@ function CandidateCard({
   );
 }
 
-export default function CandidateSearchV2Client() {
+export default function CandidateSearchV2Client({ guidedSourcingEnabled = false }: { guidedSourcingEnabled?: boolean }) {
   const [
     query,
     setQuery,
@@ -1121,6 +1124,13 @@ export default function CandidateSearchV2Client() {
     useState<SearchResponse | null>(
       null,
     );
+
+  const [guidedWorkspace, setGuidedWorkspace] =
+    useState<"idle" | "source" | "review" | "prepared">("idle");
+  const handleGuidedWorkspaceState = useCallback(
+    (state: "idle" | "source" | "review" | "prepared") => setGuidedWorkspace(state),
+    [],
+  );
 
   const results =
     useMemo(
@@ -1190,6 +1200,14 @@ export default function CandidateSearchV2Client() {
     window.addEventListener("scroll", save, { passive: true });
     return () => window.removeEventListener("scroll", save);
   }, [response, query, countries, skills, sapModules, minimumScore, results]);
+  function applyGuidedHandoff(handoff: GuidedSearchHandoff) {
+    setQuery(handoff.query);
+    setCountries(handoff.filters.countries.join(", "));
+    setSkills(handoff.filters.skills.join(", "));
+    setSapModules(handoff.filters.sapModules.join(", "));
+    setError(null);
+  }
+
   async function handleSubmit(
     event:
       FormEvent<HTMLFormElement>,
@@ -1324,11 +1342,29 @@ export default function CandidateSearchV2Client() {
       </section>
 
       <div className="mx-auto max-w-7xl px-5 py-8">
+        {guidedSourcingEnabled ? (
+          <GuidedSourcingPanel
+            onConfirm={applyGuidedHandoff}
+            onManualFallback={(brief) => { setQuery(brief); setError(null); }}
+            onWorkspaceStateChange={handleGuidedWorkspaceState}
+          />
+        ) : null}
+        {guidedWorkspace === "review" ? (
+          <section className="mb-5 rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-3 text-sm text-slate-400">
+            <span className="font-medium text-slate-200">Manual Search is paused while you review the guided plan.</span>{" "}
+            Your current query and committed results remain unchanged.
+          </section>
+        ) : null}
+        {guidedWorkspace === "prepared" ? (
+          <p role="status" className="mb-5 rounded-xl border border-emerald-700/40 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-200">
+            Search plan prepared. Review it, then click Search.
+          </p>
+        ) : null}
         <form
           onSubmit={
             handleSubmit
           }
-          className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5"
+          className={guidedWorkspace === "review" ? "hidden" : "rounded-2xl border border-slate-800 bg-slate-900/40 p-5"}
         >
           <div className="grid gap-4 lg:grid-cols-12">
             <label className="lg:col-span-12">
@@ -1455,7 +1491,7 @@ export default function CandidateSearchV2Client() {
           </div>
         </form>
 
-        <section className="mt-7">
+        <section id="search-results" className={guidedWorkspace === "review" ? "hidden" : "mt-7"}>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-semibold text-white">

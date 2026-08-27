@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { resolvePostLoginRoute } from "../../../../lib/stagingAuthRedirect";
 
 import {
   stagingRuntimeProfileAction,
@@ -28,19 +29,12 @@ const input =
 const button =
   "mt-5 w-full rounded-lg bg-cyan-300 px-4 py-3 font-semibold text-slate-950 disabled:opacity-50";
 
-const landingRouteByRole = {
-  admin: "/admin/portal",
-  recruiter_manager: "/recruiter/dashboard",
-  recruiter: "/recruiter/dashboard",
-  client: "/client/portal",
-  candidate: "/candidate/portal",
-  guest: "/auth/login",
-} as const;
-
 export function StagingRuntimeSignInForm({
   redirectOnSuccess = false,
+  requestedNext,
 }: {
   redirectOnSuccess?: boolean;
+  requestedNext?: string | null;
 } = {}) {
   const router = useRouter();
   const [state, action, pending] = useActionState(
@@ -56,12 +50,11 @@ export function StagingRuntimeSignInForm({
     formRef.current?.reset();
 
     if (redirectOnSuccess && state.role) {
-      const destination =
-        landingRouteByRole[state.role] || "/auth/login";
+      const destination = resolvePostLoginRoute(state.role, requestedNext);
 
       router.replace(destination);
     }
-  }, [redirectOnSuccess, router, state.ok, state.role]);
+  }, [redirectOnSuccess, requestedNext, router, state.ok, state.role]);
 
   return (
     <section className={card}>

@@ -15,6 +15,6 @@ export const metadata:
 
 export default function CandidateSearchV2Page() {
   return (
-    <CandidateSearchV2Client />
+    <CandidateSearchV2Client guidedSourcingEnabled={process.env.AI_GUIDED_SOURCING_PHASE1 === "true"} />
   );
 }
