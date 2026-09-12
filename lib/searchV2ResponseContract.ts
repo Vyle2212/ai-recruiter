@@ -366,7 +366,7 @@ export function buildExternalSearchV2ClientResponse<
     },
     source: "external_talent_network" as const,
     requestId,
-    wording: `${externalResult.evaluatedTotal} external profiles loaded and evaluated`,
+    wording: `${externalResult.evaluatedTotal} external profiles sampled; ${externalResult.eligibleEvaluatedTotal} matched current criteria`,
   };
 }
 

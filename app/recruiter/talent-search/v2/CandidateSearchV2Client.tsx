@@ -1809,7 +1809,7 @@ export default function CandidateSearchV2Client({
       committedSnapshot?.committedRequirements.talentPool ===
       "linkedin_talent_pool"
     )
-      return `${(response.loadedExternalTotal ?? response.summary.totalDocuments).toLocaleString()} external profiles loaded and evaluated`;
+      return `${(response.loadedExternalTotal ?? response.summary.totalDocuments).toLocaleString()} external profiles sampled · ${response.summary.visibleTotal.toLocaleString()} matched current criteria`;
     if (
       ["candidate_name_lookup", "identity_token_lookup"].includes(
         response.searchIntent?.type || "",
@@ -3541,8 +3541,8 @@ export default function CandidateSearchV2Client({
                 </button>
               ) : response.providerExhausted ? (
                 <p className="text-sm text-slate-400">
-                  All available external profiles for this search have been
-                  loaded.
+                  End of this provider sample. This is not an exhaustive list
+                  of professionals in the selected market.
                 </p>
               ) : null}
             </div>

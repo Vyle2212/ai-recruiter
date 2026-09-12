@@ -154,10 +154,10 @@ async function main() {
     /pendingResultsScrollPageRef\.current = pageNumber/,
   );
   assert.match(clientSource, /Load 50 more candidates/);
-  assert.match(clientSource, /external profiles loaded and evaluated/);
+  assert.match(clientSource, /external profiles sampled/);
   assert.match(
     clientSource,
-    /All available external profiles for this search have been/,
+    /not an exhaustive list/,
   );
 
   assert.equal(validateExternalProfileUrl("javascript:alert(1)"), null);
@@ -1278,7 +1278,7 @@ async function main() {
   assert.equal(batchThree.nextProviderBatchCursor, null);
   assert.match(
     batchThree.warnings.join(" "),
-    /All available external profiles for this search have been loaded/,
+    /provider sample, not an exhaustive market list/,
   );
   await assert.rejects(() =>
     executeExternalTalentSearch(

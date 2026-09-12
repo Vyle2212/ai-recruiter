@@ -119,11 +119,16 @@ const drawer = fs.readFileSync(
   "app/recruiter/talent-search/v2/CandidateDetailsDrawer.tsx",
   "utf8",
 );
-assert.match(drawer, /Import candidate-provided profile/);
-assert.match(drawer, /Apply to this profile view/);
+assert.doesNotMatch(drawer, /Import candidate-provided profile/);
+assert.doesNotMatch(drawer, />\s*Import profile\s*</);
 assert.match(drawer, /AI Match unavailable/);
-assert.match(drawer, /does not change ranking/);
+assert.match(drawer, /Only information returned/);
 assert.match(drawer, /ExternalEvidenceList/);
+assert.doesNotMatch(
+  drawer,
+  /if \(overview && availableTabs\.includes\(initialTab\)\) setTab\(initialTab\)/,
+  "External profile rerenders must not reset a recruiter-selected tab to Overview",
+);
 
 const results = fs.readFileSync(
   "app/recruiter/talent-search/v2/CandidateSearchV2Client.tsx",
@@ -131,5 +136,7 @@ const results = fs.readFileSync(
 );
 assert.match(results, /Preliminary match/);
 assert.match(results, /Profile completeness/);
+assert.match(results, /external profiles sampled/);
+assert.match(results, /not an exhaustive list/);
 
 console.log("Search V2 external profile enrichment tests passed");

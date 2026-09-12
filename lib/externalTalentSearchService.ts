@@ -375,8 +375,8 @@ export async function executeExternalTalentSearch(
     warnings: [
       ...warnings,
       snapshot.providerExhausted
-        ? "All available external profiles for this search have been loaded."
-        : `${snapshot.loadedExternalTotal} external profiles loaded and evaluated.`,
+        ? "The connected provider returned no continuation cursor. Results are a provider sample, not an exhaustive market list."
+        : `${snapshot.loadedExternalTotal} external profiles sampled and evaluated.`,
     ],
     unsupportedRequirements: snapshot.plan.unsupportedRequirements,
     rejectionSummary: snapshot.rejectionSummary,
