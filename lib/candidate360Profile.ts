@@ -1,4 +1,4 @@
-import { buildCandidateLifecycleRecord } from "./candidateLifecycle";
+﻿import { buildCandidateLifecycleRecord } from "./candidateLifecycle";
 import {
   Candidate360FieldSource as Source,
   Candidate360VerificationStatus as Status,
@@ -9,6 +9,7 @@ import {
   type Candidate360Profile,
   type Candidate360Skill,
 } from "./candidate360Types";
+import { buildCanonicalProfileOverview } from "./candidateProfileOverview";
 
 type AnyRecord = Record<string, any>;
 const SOURCE_RANK: Record<Candidate360FieldSourceValue, number> = {
@@ -317,6 +318,11 @@ export function buildCandidate360Profile(candidate: AnyRecord, workflowState?: A
   const totalFields = 9;
   const completedFields = totalFields - missingFields.length;
   const score = Math.max(0, Math.round((completedFields / totalFields) * 100));
+  const enterpriseQuality = candidate.enterpriseProfile?.quality;
+  const profileSectionMissingFields: string[] = Array.isArray(enterpriseQuality?.missingSections) ? enterpriseQuality.missingSections : missingFields;
+  const profileSectionTotal = 9;
+  const profileSectionScore = Number.isFinite(Number(enterpriseQuality?.profileCompleteness)) ? Number(enterpriseQuality.profileCompleteness) : score;
+  const profileSectionCompleted = Math.max(0, profileSectionTotal - profileSectionMissingFields.length);
   const allFields = [...core, ...sapModules.map((item) => item.name), ...techSkills.map((item) => item.name)];
   const verificationSummary = Object.fromEntries(Object.values(Status).map((status) => [status, allFields.filter((item) => item.verificationStatus === status).length])) as Record<Status, number>;
   const needsRecruiterReview = allFields.some((item) => [Status.CandidateEditedNeedsRecruiterReview, Status.ConflictDetected].includes(item.verificationStatus));
@@ -339,7 +345,7 @@ export function buildCandidate360Profile(candidate: AnyRecord, workflowState?: A
   const region = clean(location.value);
   if (region) summaryParts.push(`Location or regional exposure: ${region}.`);
   const executiveSummary = summaryParts.join(" ") || "Structured career summary is not yet available.";
-  return {
+  const profile: Candidate360Profile = {
     lifecycle,
     enterpriseProfile: candidate.enterpriseProfile,
     candidateId: idOf(candidate), displayName, headline, currentTitle, currentCompany, location,
@@ -350,7 +356,7 @@ export function buildCandidate360Profile(candidate: AnyRecord, workflowState?: A
     workExperienceSummary: workExperience.length ? `${workExperience.length} experience entr${workExperience.length === 1 ? "y" : "ies"} available` : "No structured work experience available",
     educationSummary: education.length ? `${education.length} education entr${education.length === 1 ? "y" : "ies"} available` : "No structured education available",
     verificationSummary,
-    completeness: { score, completedFields, totalFields, highCompleteness: score >= 80, lowCompleteness: score < 50, missingFields },
+    completeness: { score: profileSectionScore, completedFields: profileSectionCompleted, totalFields: profileSectionTotal, highCompleteness: profileSectionScore >= 80, lowCompleteness: profileSectionScore < 50, missingFields: profileSectionMissingFields },
     missingFields,
     recommendedCandidateActions: [...(missingFields.length ? [`Complete missing fields: ${missingFields.join(", ")}`] : []), ...(needsCandidateConfirmation ? ["Review and confirm profile accuracy"] : [])],
     recommendedRecruiterActions: [...(needsRecruiterReview ? ["Review candidate edits that conflict with trusted values"] : []), ...(workflowState?.recommendedNextAction ? [clean(workflowState.recommendedNextAction).replace(/_/g, " ")] : [])],
@@ -360,4 +366,7 @@ export function buildCandidate360Profile(candidate: AnyRecord, workflowState?: A
     readiness: { searchable: !missingFields.includes("displayName") && !missingFields.includes("currentTitle"), readyForShortlist, needsCandidateConfirmation, needsRecruiterReview },
     mode: "read-only Candidate360 profile; no candidate DB writes",
   };
+  if (profile.enterpriseProfile)
+    profile.canonicalOverview = buildCanonicalProfileOverview(profile);
+  return profile;
 }

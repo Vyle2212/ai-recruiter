@@ -1,4 +1,6 @@
-export const TALENT_SEARCH_DISPLAY_RESOLVER_VERSION = "canonical-display-v3";
+import { publicIdentityTokensFor } from "./searchV2PublicIdentity";
+
+export const TALENT_SEARCH_DISPLAY_RESOLVER_VERSION = "canonical-display-v4-stable-public-token";
 
 export type TalentSearchViewerRole = "admin" | "recruiter" | "client";
 
@@ -86,8 +88,8 @@ export function isTalentSearchPlaceholderName(value: any) {
   return /profile under review|candidate profile pending validation|name requires validation|identity under review|pending validation/i.test(text(value));
 }
 
-const TALENT_SEARCH_BAD_DISPLAY_NAME = /profile under review|candidate profile pending validation|name requires validation|identity under review|current location|technology consulting|academic background|nationality|gender|father'?s name|date of birth|subjectmatterex|mdmanalyst|curriculum vitae|\bcv\b|\bresume\b|personal particular|professional objective|professional synopsis|authorization concepts|relevant mast(?: ewm)?|from date|to date|from data acquisition|data acquisition to reporting|company profile|project section|education section|certification section|roles and|managed\s*&|managed and|\bbachelor\b|\bmaster\b|\bdegree\b|\bdiploma\b|\buniversity\b|\bcertificate\b|\bcertification\b|\bprofessional certificate\b|\bkey competencies\b|\bresponsibilities\b|\bemployment history\b|\bcareer history\b|\bsoftware\b|\bsolutions\b|\btechnolog(?:y|ies)\b|\bconsulting\b|\bconsultancy\b|\bsdn\s*bhd\b|\bpte\s*ltd\b|\bltd\b|\binc\b|\bcorp\b|\bcorporation\b/i;
-const TALENT_SEARCH_GENERIC_NAME_START = /^(currently|experience|experienced|tools|responsibilities|responsibility|project|projects|for|from|with|and|each|installation|strictly|willing|light|extended|managed|roles?|curriculum|personal|professional|authorization|relevant)\b/i;
+const TALENT_SEARCH_BAD_DISPLAY_NAME = /profile under review|candidate profile pending validation|name requires validation|identity under review|current location|technology consulting|academic background|nationality|gender|father'?s name|date of birth|subjectmatterex|mdmanalyst|curriculum vitae|\bcv\b|\bresume\b|personal particular|professional objective|professional synopsis|authorization concepts|relevant mast(?: ewm)?|from date|to date|from data acquisition|data acquisition to reporting|company profile|project section|education section|certification section|roles and|managed\s*&|managed and|\bbachelor\b|\bmaster\b|\bdegree\b|\bdiploma\b|\buniversity\b|\bcertificate\b|\bcertification\b|\bprofessional certificate\b|\bkey competencies\b|\bresponsibilities\b|\bemployment history\b|\bcareer history\b|\bsoftware\b|\bservices\b|\bsolutions\b|\btravel\b|\bchannel\b|\btechnolog(?:y|ies)\b|\bconsulting\b|\bconsultancy\b|\bcity\b|\bsdn\s*bhd\b|\bpte\s*ltd\b|\bltd\b|\binc\b|\bcorp\b|\bcorporation\b/i;
+const TALENT_SEARCH_GENERIC_NAME_START = /^(currently|experience|experienced|tools|responsibilities|responsibility|responsible|accountable|monitoring|priorities|priority|period\s+end|closing|configured|configuring|implemented|implementing|managed|managing|supporting|developed|developing|project|projects|for|from|with|and|each|installation|strictly|willing|light|extended|roles?|curriculum|personal|professional|authorization|relevant)\b/i;
 
 export function normalizeTalentSearchIdentity(value: any) {
   return text(value)
@@ -107,8 +109,36 @@ export function isTalentSearchBadDisplayName(value: any) {
   if (!name) return true;
   if (TALENT_SEARCH_BAD_DISPLAY_NAME.test(name) || TALENT_SEARCH_GENERIC_NAME_START.test(name)) return true;
   const parts = name.split(/\s+/).filter(Boolean);
+  if (/[.!?;:]$/.test(name) || /\b(?:process|procedure|agreement|compliance|accountable|responsible|responsibility|monitoring|sla)\b/i.test(name)) return true;
   if (parts.length < 2 || parts.length > 7) return true;
   return !parts.every((part) => /^[A-Za-z][A-Za-z'.-]*$/.test(part));
+}
+
+export type CanonicalTalentSearchIdentity = Readonly<{
+  displayName: string;
+  identityToken: string;
+  nameAvailable: boolean;
+}>;
+
+export function canonicalTalentSearchIdentity(
+  candidateId: unknown,
+  ...candidateNames: unknown[]
+): CanonicalTalentSearchIdentity {
+  const displayName = candidateNames
+    .map(text)
+    .find(
+      (name) =>
+        Boolean(name) &&
+        !/^(?:unknown candidate|candidate|n\/?a|na)$/i.test(name) &&
+        !isTalentSearchPlaceholderName(name) &&
+        !isTalentSearchBadDisplayName(name),
+    );
+  const publicIdentity = publicIdentityTokensFor([candidateId]);
+  return {
+    displayName: displayName || "Name unavailable",
+    identityToken: publicIdentity.token,
+    nameAvailable: Boolean(displayName),
+  };
 }
 
 export type TalentSearchQueryType = "empty" | "email" | "phone" | "placeholder" | "human-name" | "company" | "sap-skill" | "generic";

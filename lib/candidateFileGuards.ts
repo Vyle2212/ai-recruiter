@@ -6,6 +6,7 @@ export type CandidateFileClassification = {
   confidence: number;
   signals: string[];
 };
+import { hasContextualSapModuleEvidence } from "./sapModuleEvidenceContext";
 
 export type NormalizeCandidateInput = Record<string, any>;
 
@@ -204,6 +205,7 @@ export function derivePrimaryModuleStrict(input: {
 
 function firstModuleMatch(text: string): string | null {
   for (const [module, re] of SAP_MODULE_PATTERNS) {
+    if (["MM", "SD", "FI", "CO", "FICO"].includes(module) && !hasContextualSapModuleEvidence(text, module)) continue;
     if (re.test(text)) return module;
   }
   return null;
@@ -220,7 +222,7 @@ export function classifyCandidateText(rawText: string, fileName?: string): Candi
 
   const jdHits = JD_STRONG_PATTERNS.filter((re) => re.test(text)).length;
   const cvHits = CV_SIGNALS.filter((re) => re.test(text)).length;
-  const moduleHits = SAP_MODULE_PATTERNS.filter(([, re]) => re.test(text)).map(([module]) => module);
+  const moduleHits = SAP_MODULE_PATTERNS.filter(([module, re]) => re.test(text) && (!["MM", "SD", "FI", "CO", "FICO"].includes(module) || hasContextualSapModuleEvidence(text, module))).map(([module]) => module);
   const nonSapHits = NON_SAP_STRONG_PATTERNS.filter((re) => re.test(text)).length;
 
   if (jdHits >= 2 && cvHits <= 2) {

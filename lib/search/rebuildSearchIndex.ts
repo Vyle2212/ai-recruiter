@@ -2,10 +2,10 @@ import { createClient } from "@supabase/supabase-js";
 import { buildSearchIndexRow, CandidateRow } from "./buildSearchIndexRow";
 
 const SUPABASE_URL =
-  process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  process.env.CANDIDATE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 
 const SUPABASE_SERVICE_ROLE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+  process.env.CANDIDATE_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
 
 const CANDIDATE_PAGE_SIZE = 300;
 const INDEX_PAGE_SIZE = 1000;

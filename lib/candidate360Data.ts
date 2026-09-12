@@ -3,104 +3,75 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 
-import {
-  createCandidateSupabaseAdminClient,
-} from "./candidateSupabase";
+import { createCandidateSupabaseAdminClient } from "./candidateSupabase";
 
-import {
-  buildCandidate360Profile,
-} from "./candidate360Profile";
+import { buildCandidate360Profile } from "./candidate360Profile";
 import { normalizeActualCandidateSchema } from "./candidate360SchemaNormalize";
 
-type UnknownRecord =
-  Record<string, unknown>;
+type UnknownRecord = Record<string, unknown>;
 
-type CandidateValue =
-  unknown;
+type CandidateValue = unknown;
 
-function isRecord(
-  value: unknown,
-): value is UnknownRecord {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value)
-  );
+export const CANDIDATE_360_SUPPORT_ARTIFACT_CACHE_VERSION =
+  "candidate360-support-artifacts-v1-file-signature";
+
+type CachedJsonArtifact = {
+  signature: string;
+  value: unknown;
+};
+
+const candidate360DataRuntime = globalThis as typeof globalThis & {
+  __candidate360SupportArtifactCacheV1?: Map<string, CachedJsonArtifact>;
+};
+const supportArtifactCache =
+  candidate360DataRuntime.__candidate360SupportArtifactCacheV1 ||
+  (candidate360DataRuntime.__candidate360SupportArtifactCacheV1 = new Map());
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function readJson(
-  fileName: string,
-): unknown {
-  const filePath =
-    path.join(
-      process.cwd(),
-      "reports",
-      fileName,
-    );
+function readJson(fileName: string): unknown {
+  const filePath = path.join(process.cwd(), "reports", fileName);
 
   try {
-    return JSON.parse(
-      fs.readFileSync(
-        filePath,
-        "utf8",
-      ),
-    );
+    const stat = fs.statSync(filePath);
+    const signature = `${CANDIDATE_360_SUPPORT_ARTIFACT_CACHE_VERSION}:${stat.size}:${stat.mtimeMs}`;
+    const cached = supportArtifactCache.get(filePath);
+    if (cached?.signature === signature) return cached.value;
+    const value = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    supportArtifactCache.set(filePath, { signature, value });
+    return value;
   } catch {
+    supportArtifactCache.delete(filePath);
     return null;
   }
 }
 
-function normalizeKey(
-  value: string,
-): string {
-  return value
-    .replace(
-      /[^a-zA-Z0-9]/g,
-      "",
-    )
-    .toLowerCase();
+function normalizeKey(value: string): string {
+  return value.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
 }
 
-function parseJsonValue(
-  value: unknown,
-): unknown {
-  if (
-    typeof value !== "string"
-  ) {
+function parseJsonValue(value: unknown): unknown {
+  if (typeof value !== "string") {
     return value;
   }
 
-  const trimmed =
-    value.trim();
+  const trimmed = value.trim();
 
-  if (
-    !(
-      trimmed.startsWith("{") ||
-      trimmed.startsWith("[")
-    )
-  ) {
+  if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) {
     return value;
   }
 
   try {
-    return JSON.parse(
-      trimmed,
-    );
+    return JSON.parse(trimmed);
   } catch {
     return value;
   }
 }
 
-function deepFindValue(
-  root: unknown,
-  keys: string[],
-): CandidateValue {
-  const targetKeys =
-    new Set(
-      keys.map(
-        normalizeKey,
-      ),
-    );
+function deepFindValue(root: unknown, keys: string[]): CandidateValue {
+  const targetKeys = new Set(keys.map(normalizeKey));
 
   const queue: Array<{
     value: unknown;
@@ -112,89 +83,47 @@ function deepFindValue(
     },
   ];
 
-  const visited =
-    new WeakSet<object>();
+  const visited = new WeakSet<object>();
 
-  while (
-    queue.length > 0
-  ) {
-    const item =
-      queue.shift();
+  while (queue.length > 0) {
+    const item = queue.shift();
 
     if (!item) {
       break;
     }
 
-    if (
-      item.depth > 8
-    ) {
+    if (item.depth > 8) {
       continue;
     }
 
-    const parsedValue =
-      parseJsonValue(
-        item.value,
-      );
+    const parsedValue = parseJsonValue(item.value);
 
-    if (
-      Array.isArray(
-        parsedValue,
-      )
-    ) {
-      for (
-        const child
-        of parsedValue
-      ) {
+    if (Array.isArray(parsedValue)) {
+      for (const child of parsedValue) {
         queue.push({
           value: child,
-          depth:
-            item.depth + 1,
+          depth: item.depth + 1,
         });
       }
 
       continue;
     }
 
-    if (
-      !isRecord(
-        parsedValue,
-      )
-    ) {
+    if (!isRecord(parsedValue)) {
       continue;
     }
 
-    if (
-      visited.has(
-        parsedValue,
-      )
-    ) {
+    if (visited.has(parsedValue)) {
       continue;
     }
 
-    visited.add(
-      parsedValue,
-    );
+    visited.add(parsedValue);
 
-    for (
-      const [
-        key,
-        rawValue,
-      ]
-      of Object.entries(
-        parsedValue,
-      )
-    ) {
-      const value =
-        parseJsonValue(
-          rawValue,
-        );
+    for (const [key, rawValue] of Object.entries(parsedValue)) {
+      const value = parseJsonValue(rawValue);
 
       if (
-        targetKeys.has(
-          normalizeKey(
-            key,
-          ),
-        ) &&
+        targetKeys.has(normalizeKey(key)) &&
         value !== undefined &&
         value !== null &&
         value !== ""
@@ -203,16 +132,10 @@ function deepFindValue(
       }
     }
 
-    for (
-      const value
-      of Object.values(
-        parsedValue,
-      )
-    ) {
+    for (const value of Object.values(parsedValue)) {
       queue.push({
         value,
-        depth:
-          item.depth + 1,
+        depth: item.depth + 1,
       });
     }
   }
@@ -220,168 +143,89 @@ function deepFindValue(
   return undefined;
 }
 
-function toText(
-  value: unknown,
-): string | null {
-  const parsedValue =
-    parseJsonValue(
-      value,
-    );
+function toText(value: unknown): string | null {
+  const parsedValue = parseJsonValue(value);
 
-  if (
-    typeof parsedValue ===
-    "string"
-  ) {
-    const trimmed =
-      parsedValue.trim();
+  if (typeof parsedValue === "string") {
+    const trimmed = parsedValue.trim();
 
     return trimmed || null;
   }
 
-  if (
-    typeof parsedValue ===
-      "number" ||
-    typeof parsedValue ===
-      "boolean"
-  ) {
-    return String(
-      parsedValue,
-    );
+  if (typeof parsedValue === "number" || typeof parsedValue === "boolean") {
+    return String(parsedValue);
   }
 
-  if (
-    isRecord(
-      parsedValue,
-    )
-  ) {
-    const nestedValue =
-      deepFindValue(
-        parsedValue,
-        [
-          "name",
-          "label",
-          "value",
-          "text",
-          "title",
-          "description",
-        ],
-      );
+  if (isRecord(parsedValue)) {
+    const nestedValue = deepFindValue(parsedValue, [
+      "name",
+      "label",
+      "value",
+      "text",
+      "title",
+      "description",
+    ]);
 
-    if (
-      nestedValue !==
-      parsedValue
-    ) {
-      return toText(
-        nestedValue,
-      );
+    if (nestedValue !== parsedValue) {
+      return toText(nestedValue);
     }
   }
 
   return null;
 }
 
-function splitTextList(
-  value: string,
-): string[] {
+function splitTextList(value: string): string[] {
   return value
-    .split(
-      /[,;|\n]/,
-    )
-    .map(
-      (item) =>
-        item.trim(),
-    )
+    .split(/[,;|\n]/)
+    .map((item) => item.trim())
     .filter(Boolean);
 }
 
-function toStringArray(
-  value: unknown,
-): string[] {
-  const parsedValue =
-    parseJsonValue(
-      value,
-    );
+function toStringArray(value: unknown): string[] {
+  const parsedValue = parseJsonValue(value);
 
-  const result:
-    string[] = [];
+  const result: string[] = [];
 
-  function add(
-    text: string | null,
-  ) {
+  function add(text: string | null) {
     if (!text) {
       return;
     }
 
-    for (
-      const item
-      of splitTextList(
-        text,
-      )
-    ) {
-      if (
-        !result.includes(
-          item,
-        )
-      ) {
-        result.push(
-          item,
-        );
+    for (const item of splitTextList(text)) {
+      if (!result.includes(item)) {
+        result.push(item);
       }
     }
   }
 
-  if (
-    typeof parsedValue ===
-    "string"
-  ) {
-    add(
-      parsedValue,
-    );
+  if (typeof parsedValue === "string") {
+    add(parsedValue);
 
     return result;
   }
 
-  if (
-    Array.isArray(
-      parsedValue,
-    )
-  ) {
-    for (
-      const item
-      of parsedValue
-    ) {
-      if (
-        typeof item ===
-        "string"
-      ) {
-        add(
-          item,
-        );
+  if (Array.isArray(parsedValue)) {
+    for (const item of parsedValue) {
+      if (typeof item === "string") {
+        add(item);
 
         continue;
       }
 
-      if (
-        isRecord(
-          item,
-        )
-      ) {
+      if (isRecord(item)) {
         add(
           toText(
-            deepFindValue(
-              item,
-              [
-                "name",
-                "label",
-                "value",
-                "title",
-                "skill",
-                "module",
-                "industry",
-                "language",
-                "certification",
-              ],
-            ),
+            deepFindValue(item, [
+              "name",
+              "label",
+              "value",
+              "title",
+              "skill",
+              "module",
+              "industry",
+              "language",
+              "certification",
+            ]),
           ),
         );
       }
@@ -390,28 +234,10 @@ function toStringArray(
     return result;
   }
 
-  if (
-    isRecord(
-      parsedValue,
-    )
-  ) {
-    for (
-      const [
-        key,
-        itemValue,
-      ]
-      of Object.entries(
-        parsedValue,
-      )
-    ) {
-      if (
-        itemValue === true ||
-        itemValue === 1 ||
-        itemValue === "true"
-      ) {
-        add(
-          key,
-        );
+  if (isRecord(parsedValue)) {
+    for (const [key, itemValue] of Object.entries(parsedValue)) {
+      if (itemValue === true || itemValue === 1 || itemValue === "true") {
+        add(key);
       }
     }
   }
@@ -419,132 +245,64 @@ function toStringArray(
   return result;
 }
 
-function toRecordArray(
-  value: unknown,
-): UnknownRecord[] {
-  const parsedValue =
-    parseJsonValue(
-      value,
-    );
+function toRecordArray(value: unknown): UnknownRecord[] {
+  const parsedValue = parseJsonValue(value);
 
-  if (
-    Array.isArray(
-      parsedValue,
-    )
-  ) {
-    return parsedValue
-      .map(
-        parseJsonValue,
-      )
-      .filter(
-        isRecord,
-      );
+  if (Array.isArray(parsedValue)) {
+    return parsedValue.map(parseJsonValue).filter(isRecord);
   }
 
-  if (
-    isRecord(
-      parsedValue,
-    )
-  ) {
-    const nestedArray =
-      deepFindValue(
-        parsedValue,
-        [
-          "items",
-          "results",
-          "data",
-          "history",
-          "experiences",
-          "projects",
-          "employment",
-        ],
-      );
+  if (isRecord(parsedValue)) {
+    const nestedArray = deepFindValue(parsedValue, [
+      "items",
+      "results",
+      "data",
+      "history",
+      "experiences",
+      "projects",
+      "employment",
+    ]);
 
-    if (
-      Array.isArray(
-        nestedArray,
-      )
-    ) {
-      return nestedArray
-        .map(
-          parseJsonValue,
-        )
-        .filter(
-          isRecord,
-        );
+    if (Array.isArray(nestedArray)) {
+      return nestedArray.map(parseJsonValue).filter(isRecord);
     }
 
-    return [
-      parsedValue,
-    ];
+    return [parsedValue];
   }
 
   return [];
 }
 
-function findText(
-  candidate: UnknownRecord,
-  keys: string[],
-): string | null {
-  return toText(
-    deepFindValue(
-      candidate,
-      keys,
-    ),
-  );
+function findText(candidate: UnknownRecord, keys: string[]): string | null {
+  return toText(deepFindValue(candidate, keys));
 }
 
-function findArray(
-  candidate: UnknownRecord,
-  keys: string[],
-): string[] {
-  return toStringArray(
-    deepFindValue(
-      candidate,
-      keys,
-    ),
-  );
+function findArray(candidate: UnknownRecord, keys: string[]): string[] {
+  return toStringArray(deepFindValue(candidate, keys));
 }
 
 function findRecords(
   candidate: UnknownRecord,
   keys: string[],
 ): UnknownRecord[] {
-  return toRecordArray(
-    deepFindValue(
-      candidate,
-      keys,
-    ),
-  );
+  return toRecordArray(deepFindValue(candidate, keys));
 }
 
 function deriveTitleAndCompany(
   titleValue: string | null,
   companyValue: string | null,
 ) {
-  let title =
-    titleValue;
+  let title = titleValue;
 
-  let company =
-    companyValue;
+  let company = companyValue;
 
-  if (
-    title &&
-    !company
-  ) {
-    const match =
-      title.match(
-        /^(.*?)\s+at\s+(.+)$/i,
-      );
+  if (title && !company) {
+    const match = title.match(/^(.*?)\s+at\s+(.+)$/i);
 
     if (match) {
-      title =
-        match[1]?.trim() ||
-        title;
+      title = match[1]?.trim() || title;
 
-      company =
-        match[2]?.trim() ||
-        null;
+      company = match[2]?.trim() || null;
     }
   }
 
@@ -554,337 +312,231 @@ function deriveTitleAndCompany(
   };
 }
 
-function normalizeCandidate(
-  rawCandidate: UnknownRecord,
-): UnknownRecord {
-  const candidateId =
-    findText(
-      rawCandidate,
-      [
-        "id",
-        "candidateId",
-        "candidate_id",
-        "candidateID",
-        "uuid",
-      ],
-    );
+function normalizeCandidate(rawCandidate: UnknownRecord): UnknownRecord {
+  const candidateId = findText(rawCandidate, [
+    "id",
+    "candidateId",
+    "candidate_id",
+    "candidateID",
+    "uuid",
+  ]);
 
-  const candidateName =
-    findText(
-      rawCandidate,
-      [
-        "candidateName",
-        "candidate_name",
-        "fullName",
-        "full_name",
-        "displayName",
-        "display_name",
-        "personName",
-        "person_name",
-        "name",
-      ],
-    );
+  const candidateName = findText(rawCandidate, [
+    "candidateName",
+    "candidate_name",
+    "fullName",
+    "full_name",
+    "displayName",
+    "display_name",
+    "personName",
+    "person_name",
+    "name",
+  ]);
 
-  const rawTitle =
-    findText(
-      rawCandidate,
-      [
-        "currentTitle",
-        "current_title",
-        "jobTitle",
-        "job_title",
-        "currentPosition",
-        "current_position",
-        "headline",
-        "position",
-        "role",
-        "title",
-      ],
-    );
+  const rawTitle = findText(rawCandidate, [
+    "currentTitle",
+    "current_title",
+    "jobTitle",
+    "job_title",
+    "currentPosition",
+    "current_position",
+    "headline",
+    "position",
+    "role",
+    "title",
+  ]);
 
-  const rawCompany =
-    findText(
-      rawCandidate,
-      [
-        "currentCompany",
-        "current_company",
-        "currentEmployer",
-        "current_employer",
-        "employerName",
-        "employer_name",
-        "companyName",
-        "company_name",
-        "employer",
-        "company",
-      ],
-    );
+  const rawCompany = findText(rawCandidate, [
+    "currentCompany",
+    "current_company",
+    "currentEmployer",
+    "current_employer",
+    "employerName",
+    "employer_name",
+    "companyName",
+    "company_name",
+    "employer",
+    "company",
+  ]);
 
-  const {
-    title:
-      currentTitle,
-    company:
-      currentCompany,
-  } =
-    deriveTitleAndCompany(
-      rawTitle,
-      rawCompany,
-    );
+  const { title: currentTitle, company: currentCompany } =
+    deriveTitleAndCompany(rawTitle, rawCompany);
 
-  const country =
-    findText(
-      rawCandidate,
-      [
-        "country",
-        "locationCountry",
-        "location_country",
-        "candidateCountry",
-        "candidate_country",
-        "nationality",
-      ],
-    );
+  const country = findText(rawCandidate, [
+    "country",
+    "locationCountry",
+    "location_country",
+    "candidateCountry",
+    "candidate_country",
+    "nationality",
+  ]);
 
-  const location =
-    findText(
-      rawCandidate,
-      [
-        "location",
-        "currentLocation",
-        "current_location",
-        "city",
-        "address",
-      ],
-    );
+  const location = findText(rawCandidate, [
+    "location",
+    "currentLocation",
+    "current_location",
+    "city",
+    "address",
+  ]);
 
-  const email =
-    findText(
-      rawCandidate,
-      [
-        "email",
-        "emailAddress",
-        "email_address",
-        "candidateEmail",
-        "candidate_email",
-      ],
-    );
+  const email = findText(rawCandidate, [
+    "email",
+    "emailAddress",
+    "email_address",
+    "candidateEmail",
+    "candidate_email",
+  ]);
 
-  const phone =
-    findText(
-      rawCandidate,
-      [
-        "phone",
-        "phoneNumber",
-        "phone_number",
-        "mobile",
-        "mobileNumber",
-        "mobile_number",
-      ],
-    );
+  const phone = findText(rawCandidate, [
+    "phone",
+    "phoneNumber",
+    "phone_number",
+    "mobile",
+    "mobileNumber",
+    "mobile_number",
+  ]);
 
-  const executiveSummary =
-    findText(
-      rawCandidate,
-      [
-        "executiveSummary",
-        "executive_summary",
-        "professionalSummary",
-        "professional_summary",
-        "profileSummary",
-        "profile_summary",
-        "careerSummary",
-        "career_summary",
-        "summary",
-        "about",
-      ],
-    );
+  const executiveSummary = findText(rawCandidate, [
+    "executiveSummary",
+    "executive_summary",
+    "professionalSummary",
+    "professional_summary",
+    "profileSummary",
+    "profile_summary",
+    "careerSummary",
+    "career_summary",
+    "summary",
+    "about",
+  ]);
 
-  const skills =
-    findArray(
-      rawCandidate,
-      [
-        "normalizedSkills",
-        "normalized_skills",
-        "technicalSkills",
-        "technical_skills",
-        "coreSkills",
-        "core_skills",
-        "skillSet",
-        "skill_set",
-        "skills",
-      ],
-    );
+  const skills = findArray(rawCandidate, [
+    "normalizedSkills",
+    "normalized_skills",
+    "technicalSkills",
+    "technical_skills",
+    "coreSkills",
+    "core_skills",
+    "skillSet",
+    "skill_set",
+    "skills",
+  ]);
 
-  const sapModules =
-    findArray(
-      rawCandidate,
-      [
-        "sapModules",
-        "sap_modules",
-        "primarySapModules",
-        "primary_sap_modules",
-        "sapModule",
-        "sap_module",
-        "moduleExperience",
-        "module_experience",
-        "modules",
-      ],
-    );
+  const sapModules = findArray(rawCandidate, [
+    "sapModules",
+    "sap_modules",
+    "primarySapModules",
+    "primary_sap_modules",
+    "sapModule",
+    "sap_module",
+    "moduleExperience",
+    "module_experience",
+    "modules",
+  ]);
 
-  const employmentHistory =
-    findRecords(
-      rawCandidate,
-      [
-        "employmentHistory",
-        "employment_history",
-        "workExperience",
-        "work_experience",
-        "careerHistory",
-        "career_history",
-        "employment",
-        "experiences",
-        "experience",
-      ],
-    );
+  const employmentHistory = findRecords(rawCandidate, [
+    "employmentHistory",
+    "employment_history",
+    "workExperience",
+    "work_experience",
+    "careerHistory",
+    "career_history",
+    "employment",
+    "experiences",
+    "experience",
+  ]);
 
-  const projectExperience =
-    findRecords(
-      rawCandidate,
-      [
-        "projectExperience",
-        "project_experience",
-        "projectHistory",
-        "project_history",
-        "projectDetails",
-        "project_details",
-        "projects",
-      ],
-    );
+  const projectExperience = findRecords(rawCandidate, [
+    "projectExperience",
+    "project_experience",
+    "projectHistory",
+    "project_history",
+    "projectDetails",
+    "project_details",
+    "projects",
+  ]);
 
-  const industries =
-    findArray(
-      rawCandidate,
-      [
-        "industryExperience",
-        "industry_experience",
-        "industries",
-        "industry",
-      ],
-    );
+  const industries = findArray(rawCandidate, [
+    "industryExperience",
+    "industry_experience",
+    "industries",
+    "industry",
+  ]);
 
-  const languages =
-    findArray(
-      rawCandidate,
-      [
-        "languageSkills",
-        "language_skills",
-        "languages",
-        "language",
-      ],
-    );
+  const languages = findArray(rawCandidate, [
+    "languageSkills",
+    "language_skills",
+    "languages",
+    "language",
+  ]);
 
-  const certifications =
-    findArray(
-      rawCandidate,
-      [
-        "professionalCertifications",
-        "professional_certifications",
-        "certifications",
-        "certificates",
-        "certification",
-      ],
-    );
+  const certifications = findArray(rawCandidate, [
+    "professionalCertifications",
+    "professional_certifications",
+    "certifications",
+    "certificates",
+    "certification",
+  ]);
 
-  const availability =
-    findText(
-      rawCandidate,
-      [
-        "availability",
-        "availableFrom",
-        "available_from",
-      ],
-    );
+  const availability = findText(rawCandidate, [
+    "availability",
+    "availableFrom",
+    "available_from",
+  ]);
 
-  const noticePeriod =
-    findText(
-      rawCandidate,
-      [
-        "noticePeriod",
-        "notice_period",
-      ],
-    );
+  const noticePeriod = findText(rawCandidate, [
+    "noticePeriod",
+    "notice_period",
+  ]);
 
-  const expectedSalary =
-    deepFindValue(
-      rawCandidate,
-      [
-        "expectedSalary",
-        "expected_salary",
-        "salaryExpectation",
-        "salary_expectation",
-      ],
-    );
+  const expectedSalary = deepFindValue(rawCandidate, [
+    "expectedSalary",
+    "expected_salary",
+    "salaryExpectation",
+    "salary_expectation",
+  ]);
 
   return {
     ...rawCandidate,
 
-    id:
-      candidateId,
+    id: candidateId,
 
-    candidateId:
-      candidateId,
+    candidateId: candidateId,
 
-    candidate_id:
-      candidateId,
+    candidate_id: candidateId,
 
-    name:
-      candidateName,
+    name: candidateName,
 
-    candidateName:
-      candidateName,
+    candidateName: candidateName,
 
-    candidate_name:
-      candidateName,
+    candidate_name: candidateName,
 
-    fullName:
-      candidateName,
+    fullName: candidateName,
 
-    full_name:
-      candidateName,
+    full_name: candidateName,
 
-    displayName:
-      candidateName,
+    displayName: candidateName,
 
-    currentTitle:
-      currentTitle,
+    currentTitle: currentTitle,
 
-    current_title:
-      currentTitle,
+    current_title: currentTitle,
 
-    jobTitle:
-      currentTitle,
+    jobTitle: currentTitle,
 
-    job_title:
-      currentTitle,
+    job_title: currentTitle,
 
-    title:
-      currentTitle,
+    title: currentTitle,
 
-    currentCompany:
-      currentCompany,
+    currentCompany: currentCompany,
 
-    current_company:
-      currentCompany,
+    current_company: currentCompany,
 
-    currentEmployer:
-      currentCompany,
+    currentEmployer: currentCompany,
 
-    current_employer:
-      currentCompany,
+    current_employer: currentCompany,
 
-    employer:
-      currentCompany,
+    employer: currentCompany,
 
-    company:
-      currentCompany,
+    company: currentCompany,
 
     country,
     location,
@@ -892,61 +544,44 @@ function normalizeCandidate(
     phone,
 
     executiveSummary,
-    executive_summary:
-      executiveSummary,
+    executive_summary: executiveSummary,
 
-    professionalSummary:
-      executiveSummary,
+    professionalSummary: executiveSummary,
 
-    professional_summary:
-      executiveSummary,
+    professional_summary: executiveSummary,
 
-    summary:
-      executiveSummary,
+    summary: executiveSummary,
 
     skills,
 
-    normalizedSkills:
-      skills,
+    normalizedSkills: skills,
 
-    normalized_skills:
-      skills,
+    normalized_skills: skills,
 
-    coreSkills:
-      skills,
+    coreSkills: skills,
 
-    core_skills:
-      skills,
+    core_skills: skills,
 
     sapModules,
-    sap_modules:
-      sapModules,
+    sap_modules: sapModules,
 
-    primarySapModules:
-      sapModules,
+    primarySapModules: sapModules,
 
-    primary_sap_modules:
-      sapModules,
+    primary_sap_modules: sapModules,
 
     employmentHistory,
-    employment_history:
-      employmentHistory,
+    employment_history: employmentHistory,
 
-    workExperience:
-      employmentHistory,
+    workExperience: employmentHistory,
 
-    work_experience:
-      employmentHistory,
+    work_experience: employmentHistory,
 
-    experiences:
-      employmentHistory,
+    experiences: employmentHistory,
 
     projectExperience,
-    project_experience:
-      projectExperience,
+    project_experience: projectExperience,
 
-    projects:
-      projectExperience,
+    projects: projectExperience,
 
     industries,
     languages,
@@ -955,200 +590,128 @@ function normalizeCandidate(
     availability,
 
     noticePeriod,
-    notice_period:
-      noticePeriod,
+    notice_period: noticePeriod,
 
     expectedSalary,
-    expected_salary:
-      expectedSalary,
+    expected_salary: expectedSalary,
   };
 }
 
-function getItems(
-  value: unknown,
-): UnknownRecord[] {
-  const parsedValue =
-    parseJsonValue(
-      value,
-    );
+function getItems(value: unknown): UnknownRecord[] {
+  const parsedValue = parseJsonValue(value);
 
-  if (
-    Array.isArray(
-      parsedValue,
-    )
-  ) {
-    return parsedValue.filter(
-      isRecord,
-    );
+  if (Array.isArray(parsedValue)) {
+    return parsedValue.filter(isRecord);
   }
 
-  if (
-    !isRecord(
-      parsedValue,
-    )
-  ) {
+  if (!isRecord(parsedValue)) {
     return [];
   }
 
-  for (
-    const key
-    of [
-      "items",
-      "states",
-      "data",
-      "results",
-      "candidates",
-    ]
-  ) {
-    const possibleArray =
-      parseJsonValue(
-        parsedValue[key],
-      );
+  for (const key of ["items", "states", "data", "results", "candidates"]) {
+    const possibleArray = parseJsonValue(parsedValue[key]);
 
-    if (
-      Array.isArray(
-        possibleArray,
-      )
-    ) {
-      return possibleArray.filter(
-        isRecord,
-      );
+    if (Array.isArray(possibleArray)) {
+      return possibleArray.filter(isRecord);
     }
   }
 
   return [];
 }
 
-function matchesCandidateId(
-  item: UnknownRecord,
-  candidateId: string,
-): boolean {
-  const itemId =
-    findText(
-      item,
-      [
-        "candidateId",
-        "candidate_id",
-        "id",
-      ],
-    );
+function matchesCandidateId(item: UnknownRecord, candidateId: string): boolean {
+  const itemId = findText(item, ["candidateId", "candidate_id", "id"]);
 
-  return (
-    itemId ===
-    candidateId
-  );
+  return itemId === candidateId;
 }
+
+export type Candidate360LoadTimings = {
+  sourceRowRetrievalMs: number;
+  normalizationMs: number;
+  presentationNormalizationMs: number;
+  supportArtifactMs: number;
+  supportLookupMs: number;
+  profileConstructionMs: number;
+  identityProjectionMs: number;
+  responseSerializationMs: number;
+  sourceBytes: number;
+  totalMs: number;
+};
 
 export async function loadCandidate360Profile(
   candidateId: string,
+  stageTimings?: Candidate360LoadTimings,
 ) {
-  const supabase =
-    createCandidateSupabaseAdminClient();
+  const totalStartedAt = performance.now();
+  const supabase = createCandidateSupabaseAdminClient();
 
-  const {
-    data,
-    error,
-  } =
-    await supabase
-      .from(
-        "candidates",
-      )
-      .select(
-        "*",
-      )
-      .eq(
-        "id",
-        candidateId,
-      )
-      .maybeSingle();
+  const sourceStartedAt = performance.now();
+  const { data, error } = await supabase
+    .from("candidates")
+    .select("*")
+    .eq("id", candidateId)
+    .maybeSingle();
+  if (stageTimings)
+    stageTimings.sourceRowRetrievalMs = performance.now() - sourceStartedAt;
 
   if (error) {
-    throw new Error(
-      `Candidate360 query failed: ${error.message}`,
-    );
+    throw new Error(`Candidate360 query failed: ${error.message}`);
   }
 
-  if (
-    !data ||
-    !isRecord(
-      data,
-    )
-  ) {
+  if (!data || !isRecord(data)) {
+    if (stageTimings) stageTimings.totalMs = performance.now() - totalStartedAt;
     return null;
   }
 
+  if (stageTimings)
+    stageTimings.sourceBytes = Buffer.byteLength(JSON.stringify(data), "utf8");
+  const normalizationStartedAt = performance.now();
+  const canonicalProjection = normalizeActualCandidateSchema(data);
+  if (stageTimings)
+    stageTimings.normalizationMs = performance.now() - normalizationStartedAt;
+  const presentationStartedAt = performance.now();
   const candidate = normalizeCandidate({
     ...data,
-    ...normalizeActualCandidateSchema(data),
+    ...canonicalProjection,
   });
+  if (stageTimings)
+    stageTimings.presentationNormalizationMs =
+      performance.now() - presentationStartedAt;
 
+  const supportStartedAt = performance.now();
+  const workflowFile = readJson("recruiter-workflow-state.json");
 
-  const workflowFile =
-    readJson(
-      "recruiter-workflow-state.json",
-    );
+  const repairFile = readJson("repair-queue-audit.json");
 
-  const repairFile =
-    readJson(
-      "repair-queue-audit.json",
-    );
+  const approvals = readJson("ai-extraction-approvals.json");
 
-  const approvals =
-    readJson(
-      "ai-extraction-approvals.json",
-    );
-
-  const decisions =
-    readJson(
-      "quick-fix-apply-decisions.json",
-    );
+  const decisions = readJson("quick-fix-apply-decisions.json");
 
   const applyHistory =
-    readJson(
-      "candidate-apply-history.json",
-    ) ??
-    readJson(
-      "quick-fix-post-apply-verification.json",
-    );
+    readJson("candidate-apply-history.json") ??
+    readJson("quick-fix-post-apply-verification.json");
+  if (stageTimings)
+    stageTimings.supportArtifactMs = performance.now() - supportStartedAt;
 
+  const supportLookupStartedAt = performance.now();
   const workflowState =
-    getItems(
-      workflowFile,
-    ).find(
-      (item) =>
-        matchesCandidateId(
-          item,
-          candidateId,
-        ),
+    getItems(workflowFile).find((item) =>
+      matchesCandidateId(item, candidateId),
     ) ?? {};
 
-  const repair =
-    getItems(
-      repairFile,
-    ).find(
-      (item) =>
-        matchesCandidateId(
-          item,
-          candidateId,
-        ),
-    );
+  const repair = getItems(repairFile).find((item) =>
+    matchesCandidateId(item, candidateId),
+  );
 
-  const repairQueueStatus =
-    repair
-      ? (
-          findText(
-            repair,
-            [
-              "repairCategory",
-              "repair_category",
-              "status",
-            ],
-          ) ??
-          "needs_repair"
-        )
-      : "not_in_repair_queue";
+  const repairQueueStatus = repair
+    ? (findText(repair, ["repairCategory", "repair_category", "status"]) ??
+      "needs_repair")
+    : "not_in_repair_queue";
+  if (stageTimings)
+    stageTimings.supportLookupMs = performance.now() - supportLookupStartedAt;
 
-  return buildCandidate360Profile(
+  const profileStartedAt = performance.now();
+  const profile = buildCandidate360Profile(
     candidate,
     {
       ...workflowState,
@@ -1158,4 +721,38 @@ export async function loadCandidate360Profile(
     decisions,
     applyHistory,
   );
+  if (stageTimings)
+    stageTimings.profileConstructionMs = performance.now() - profileStartedAt;
+
+  const identityStartedAt = performance.now();
+  const { resolveCandidateWorkspaceIdentity, buildCandidateNotesHref } =
+    await import("./candidateIdentityResolver");
+  const workspaceResolution = resolveCandidateWorkspaceIdentity(
+    data as Record<string, unknown>,
+  );
+  const result = {
+    ...profile,
+    sourceResumeAvailable: [data.resume_text, data.raw_text, data.raw_cv].some(
+      (value) => typeof value === "string" && value.trim().length > 0,
+    ),
+    workspace:
+      workspaceResolution.status === "linked"
+        ? {
+            primaryCandidateId: workspaceResolution.candidateId,
+            notesHref: buildCandidateNotesHref(
+              workspaceResolution.candidateId,
+              candidateId,
+            ),
+          }
+        : null,
+  };
+  if (stageTimings) {
+    stageTimings.identityProjectionMs = performance.now() - identityStartedAt;
+    const serializationStartedAt = performance.now();
+    JSON.stringify(result);
+    stageTimings.responseSerializationMs =
+      performance.now() - serializationStartedAt;
+    stageTimings.totalMs = performance.now() - totalStartedAt;
+  }
+  return result;
 }

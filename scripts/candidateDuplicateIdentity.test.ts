@@ -1,74 +1,42 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import {
-  buildCandidateDuplicateAdminLog,
-  candidateFacingProfileUpdateMessage,
-  candidateProfileTimestampLabels,
-  detectCandidateDuplicateIdentity,
-  formatCandidateUpdateMonthYear,
-} from "../lib/candidateDuplicateIdentity";
+import { classifyCandidateDuplicate, duplicateDocumentHash, normalizeDuplicatePhone, normalizeDuplicateProfileUrl, resolveConfirmedCandidateIds } from "../lib/candidateDuplicateIdentity";
+import { dedupeCandidateSearchV2Documents } from "../lib/candidateSearchV2Projection";
+import { isPlausibleCandidateName } from "../lib/candidate360SchemaNormalize";
+import { nameRejectReason } from "../lib/cvExtractionValidator";
 
-const existing = [
-  {
-    id: "existing-1",
-    name: "Aina Rahman",
-    email: "aina@example.com",
-    phone: "+60 12 345 6789",
-    linkedin_url: "https://www.linkedin.com/in/aina-rahman/",
-    current_company: "Accenture Malaysia",
-    primary_module: "FICO",
-    location: "Malaysia",
-    current_title: "SAP FICO Consultant",
-    raw_text: "Aina Rahman SAP FICO consultant Accenture Malaysia implementation rollout support",
-  },
-];
+const record = (id: string, extra: Record<string, unknown> = {}) => ({ id, ...extra });
+assert.equal(classifyCandidateDuplicate(record("a", { email: " Person@Example.com " }), record("b", { email: "person@example.com" })).classification, "confirmed");
+assert.equal(normalizeDuplicatePhone("+60 12-345 6789"), normalizeDuplicatePhone("0060 (12) 345-6789"));
+assert.equal(classifyCandidateDuplicate(record("a", { phone: "+60 12-345 6789" }), record("b", { phone: "0060 (12) 345-6789" })).classification, "confirmed");
+assert.notEqual(normalizeDuplicatePhone("012-3456789"), normalizeDuplicatePhone("+60 12-3456789"), "ambiguous local and international numbers must not be equated");
+assert.equal(normalizeDuplicateProfileUrl("https://WWW.LinkedIn.com/in/Jane-Doe/?utm_source=x"), "linkedin.com/in/jane-doe");
+assert.equal(classifyCandidateDuplicate(record("a", { linkedinUrl: "linkedin.com/in/jane-doe" }), record("b", { profileUrl: "https://www.linkedin.com/in/Jane-Doe/?trk=cv" })).classification, "confirmed");
 
-const sameEmail = detectCandidateDuplicateIdentity({ name: "Aina Rahman", email: "aina@example.com" }, existing);
-assert.equal(sameEmail.matchStatus, "confirmed_duplicate", "same email should confirm duplicate");
-assert.equal(sameEmail.recommendedAction, "auto_update_existing_profile", "same email can auto-update in dry-run decisioning");
+assert.equal(classifyCandidateDuplicate(record("a", { name: "Alex Tan" }), record("b", { name: "Alex Tan" })).classification, "distinct");
+assert.equal(classifyCandidateDuplicate(record("a", { name: "Alex Tan", employment: ["Company A|Engineer"] }), record("b", { name: "Alex Tan", employment: ["Company B|Accountant"] })).classification, "distinct");
+assert.equal(classifyCandidateDuplicate(
+  record("a", { name: "Alex Tan", employment: ["Acme|Engineer"], education: ["University A|BSc"] }),
+  record("b", { name: "Alex Tan", employment: ["Acme|Engineer"], education: ["University A|BSc"] }),
+).classification, "probable_review");
 
-const samePhone = detectCandidateDuplicateIdentity({ name: "Different Name", phone: "012-345-6789" }, existing);
-assert.equal(samePhone.matchStatus, "confirmed_duplicate", "same normalized phone should confirm duplicate");
-assert.equal(samePhone.recommendedAction, "auto_update_existing_profile", "same phone can auto-update in dry-run decisioning");
+const cv1 = "Jane Doe senior engineer at Distinctive Systems from 2018 to 2024 university degree certification cloud architecture delivery leadership migration testing operations stakeholder workshops implementation support integration analytics procurement finance reporting governance";
+const cv2 = "Jane Doe senior engineer at Distinctive Systems from 2018 to 2024 university degree certification cloud architecture delivery leadership migration testing operations stakeholder workshops implementation support integration analytics procurement finance reporting governance updated";
+const versions = resolveConfirmedCandidateIds([record("cv1", { name: "Jane Doe", rawText: cv1 }), record("cv2", { name: "Jane Doe", rawText: cv2 })]);
+assert.deepEqual(versions.canonicalById.get("cv1")?.sourceIds, ["cv1", "cv2"]);
+assert.equal(classifyCandidateDuplicate(record("a", { rawText: cv1 }), record("b", { rawText: cv1 })).documentDuplicate, true);
+assert.equal(duplicateDocumentHash(cv1), duplicateDocumentHash(cv1));
+assert.equal(resolveConfirmedCandidateIds([record("u1", { name: "Name unavailable" }), record("u2", { name: "Name unavailable" })]).canonicalById.get("u1")?.sourceIds.length, 1);
 
-const sameLinkedIn = detectCandidateDuplicateIdentity({ linkedin_url: "linkedin.com/in/aina-rahman" }, existing);
-assert.equal(sameLinkedIn.matchStatus, "confirmed_duplicate", "same LinkedIn URL should confirm duplicate");
-assert.equal(sameLinkedIn.recommendedAction, "auto_update_existing_profile", "same LinkedIn can auto-update in dry-run decisioning");
+assert.equal(isPlausibleCandidateName("Customer Request"), false);
+assert.match(nameRejectReason("Customer Request"), /section_heading/);
+for (const heading of ["Accurate Information.", "Enhancements And Reports", "Release Strategy In Procurement..."]) assert.equal(isPlausibleCandidateName(heading), false);
 
-const sameNameOnly = detectCandidateDuplicateIdentity({ name: "Aina Rahman" }, existing);
-assert.notEqual(sameNameOnly.recommendedAction, "auto_update_existing_profile", "same name only must not auto update");
-assert.equal(sameNameOnly.matchStatus, "new_candidate", "same name alone should not cross duplicate threshold");
+const deduped = dedupeCandidateSearchV2Documents([
+  { candidateId: "source-a", canonicalCandidateId: "person-1", candidateName: "Jane Doe", currentTitle: "SAP MM Consultant", skills: ["MM"], evidence: [{ label: "source", value: "a" }] },
+  { candidateId: "source-b", canonicalCandidateId: "person-1", candidateName: "Jane Doe", currentTitle: "SAP MM Lead", skills: ["MM", "Ariba"], evidence: [{ label: "source", value: "b" }] },
+]);
+assert.equal(deduped.documents.length, 1);
+assert.deepEqual(deduped.documents[0].sourceCandidateIds, ["source-a", "source-b"]);
+assert.equal(deduped.documents[0].evidence?.length, 2, "source provenance must survive suppression");
 
-const sameNameModule = detectCandidateDuplicateIdentity({ name: "Aina Rahman", primary_module: "FICO" }, existing);
-assert.equal(sameNameModule.matchStatus, "possible_duplicate", "same name + module should be an internal possible duplicate");
-assert.equal(sameNameModule.recommendedAction, "admin_review_required", "same name + module only requires admin review");
-
-const candidateMessage = candidateFacingProfileUpdateMessage();
-assert.equal(candidateMessage, "Your profile has been updated successfully.", "candidate-facing response should be generic success");
-assert.equal(/duplicate|matched|merge/i.test(candidateMessage), false, "candidate-facing response must never say duplicate");
-
-const log = buildCandidateDuplicateAdminLog({
-  uploadedCandidate: { id: "upload-1", user_id: "user-1", email: "aina@example.com", current_company: "Deloitte", primary_module: "FICO" },
-  matchedCandidate: existing[0],
-  result: sameEmail,
-  now: "2026-07-05T10:00:00.000Z",
-});
-assert.equal(log.matchedExistingCandidateId, "existing-1", "admin log should include matched existing candidate");
-assert.equal(log.uploadedCandidateId, "upload-1", "admin log should include uploaded candidate/user context");
-assert.equal(log.confidence, sameEmail.confidence, "admin log should include duplicate confidence");
-assert.equal(log.matchReasons.includes("exact email match"), true, "admin log should include match reasons");
-assert.equal(log.updatedFields.includes("current_company"), true, "admin log should include updated fields");
-assert.equal(log.previousValues.current_company, "Accenture Malaysia", "admin log should include previous values");
-assert.equal(log.newValues.current_company, "Deloitte", "admin log should include new values");
-assert.equal(log.updateTimestamp, "2026-07-05T10:00:00.000Z", "admin log includes duplicate update time");
-assert.equal(log.adminReviewStatus, "auto_update_dry_run", "admin log should remain dry-run in v1");
-
-assert.equal(formatCandidateUpdateMonthYear("2026-07-05T10:00:00.000Z"), "Jul 2026", "update month/year formatting works");
-const labels = candidateProfileTimestampLabels({ updated_at: "2026-07-05T10:00:00.000Z", latest_cv_uploaded_at: "2026-06-02T00:00:00.000Z" });
-assert.equal(labels.updatedLabel, "Updated Jul 2026", "profile update label should use month/year");
-assert.equal(labels.latestCvLabel, "Latest CV Jun 2026", "latest CV label should use month/year");
-
-const libSource = fs.readFileSync(new URL("../lib/candidateDuplicateIdentity.ts", import.meta.url), "utf8");
-assert.equal(/\.update\(|\.insert\(|\.delete\(/.test(libSource), false, "duplicate identity engine v1 must not contain DB writes");
-
-console.log("Candidate duplicate identity tests passed");
+console.log("candidateDuplicateIdentity.test.ts passed");

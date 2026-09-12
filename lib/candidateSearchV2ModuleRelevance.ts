@@ -5,6 +5,8 @@ import type {
 import type {
   NormalizedCandidateSearchV2Request,
 } from "./candidateSearchV2Request";
+import { canonicalSearchConcept, conceptsInText, mostSpecificSearchConcepts, searchConceptRelation, searchConceptRelationStrength, searchConceptSemanticEvidence } from "./candidateSearchConcepts";
+import { SAP_SEARCH_CONCEPT_IDS } from "./sapSearchTaxonomy";
 
 function normalize(
   value:
@@ -119,6 +121,9 @@ function canonicalModule(
     | null
     | undefined,
 ) {
+  const semanticConcept = canonicalSearchConcept(value);
+  if (semanticConcept && SAP_SEARCH_CONCEPT_IDS.has(semanticConcept)) return semanticConcept;
+
   const normalized =
     normalize(
       value,
@@ -161,8 +166,8 @@ function moduleFromFreeText(
       .normalize("NFKC")
       .toUpperCase();
 
-  const detected:
-    string[] = [];
+  const detected: string[] = conceptsInText(value).filter((concept) => SAP_SEARCH_CONCEPT_IDS.has(concept));
+  if (detected.length) return Array.from(new Set(detected));
 
   if (
     /\b(?:SAP\s*)?(?:FI\s*[\/-]\s*CO|FICO|FINANCE\s*(?:AND|&)\s*CONTROLLING)\b/i.test(
@@ -259,6 +264,12 @@ function moduleFromFreeText(
   );
 }
 
+function hasRetrievalConceptSupport(requestedConcept: string, evidenceConcept: string) {
+  if (requestedConcept === evidenceConcept) return true;
+  const relation = searchConceptRelation(requestedConcept, evidenceConcept);
+  return relation === "PARENT" || relation === "CHILD";
+}
+
 export function requestedCandidateSearchV2SapModules(
   request:
     NormalizedCandidateSearchV2Request,
@@ -289,14 +300,14 @@ export function requestedCandidateSearchV2SapModules(
       request.query,
     );
 
-  return Array.from(
+  return mostSpecificSearchConcepts(Array.from(
     new Set(
       [
         ...structured,
         ...queryModules,
       ],
     ),
-  );
+  ));
 }
 
 export function candidateSearchV2PrimaryModule(
@@ -331,16 +342,48 @@ function titleHasModuleEvidence(
   );
 }
 
+function candidateRetrievalConcepts(candidate: CandidateSearchV2Document) {
+  const strong = new Set([
+    candidateSearchV2PrimaryModule(candidate),
+    ...conceptsInText(candidate.currentTitle),
+  ].filter((value): value is string => typeof value === "string" && Boolean(value) && SAP_SEARCH_CONCEPT_IDS.has(value)));
+  const all = new Set([
+    ...strong,
+    ...(candidate.sapModules || []).flatMap((value) => [canonicalModule(value), ...conceptsInText(value)]),
+    ...(candidate.skills || []).flatMap((value) => [canonicalSearchConcept(value), ...conceptsInText(value)]),
+    ...conceptsInText(candidate.searchableText),
+  ].filter((value): value is string => typeof value === "string" && Boolean(value) && SAP_SEARCH_CONCEPT_IDS.has(value)));
+  return { strong, all };
+}
+
+export type CandidateSearchV2ModuleRelevanceContext = {
+  requested: readonly string[];
+};
+
+const candidateRetrievalConceptCache = new WeakMap<CandidateSearchV2Document, ReturnType<typeof candidateRetrievalConcepts>>();
+
+function cachedCandidateRetrievalConcepts(candidate: CandidateSearchV2Document) {
+  const cached = candidateRetrievalConceptCache.get(candidate);
+  if (cached) return cached;
+  const concepts = candidateRetrievalConcepts(candidate);
+  candidateRetrievalConceptCache.set(candidate, concepts);
+  return concepts;
+}
+
+export function prepareCandidateSearchV2ModuleRelevance(
+  request: NormalizedCandidateSearchV2Request,
+): CandidateSearchV2ModuleRelevanceContext {
+  return { requested: requestedCandidateSearchV2SapModules(request) };
+}
 export function candidateHasSearchV2PrimaryModuleRelevance(
   candidate:
     CandidateSearchV2Document,
   request:
     NormalizedCandidateSearchV2Request,
+  prepared?: CandidateSearchV2ModuleRelevanceContext,
 ) {
   const requested =
-    requestedCandidateSearchV2SapModules(
-      request,
-    );
+    prepared?.requested || requestedCandidateSearchV2SapModules(request);
 
   if (
     requested.length ===
@@ -349,19 +392,20 @@ export function candidateHasSearchV2PrimaryModuleRelevance(
     return true;
   }
 
-  const primary =
-    candidateSearchV2PrimaryModule(
-      candidate,
-    );
+  const evidenceConcepts = cachedCandidateRetrievalConcepts(candidate);
 
   return requested.every(
-    (requestedModule) =>
-      primary ===
-        requestedModule ||
-      titleHasModuleEvidence(
-        candidate,
-        requestedModule,
-      ),
+    (requestedModule) => {
+      if (evidenceConcepts.all.has(requestedModule) || titleHasModuleEvidence(candidate, requestedModule)) return true;
+      if (searchConceptSemanticEvidence(requestedModule, candidate.searchableText).supported) return true;
+      const hasOtherExactRequest = requested.some((other) => other !== requestedModule && evidenceConcepts.all.has(other));
+      return [...evidenceConcepts.all].some((evidence) => {
+        const relation = searchConceptRelation(requestedModule, evidence);
+        const isStrongEvidence = evidenceConcepts.strong.has(evidence);
+        return (isStrongEvidence && hasRetrievalConceptSupport(requestedModule, evidence))
+          || (relation === "RELATED" && (requested.length === 1 || hasOtherExactRequest) && (isStrongEvidence || searchConceptRelationStrength(relation) > 0));
+      });
+    },
   );
 }
 
@@ -403,6 +447,10 @@ export function candidateSearchV2PrimaryModuleScore(
         );
 
       continue;
+    }
+
+    if (hasRetrievalConceptSupport(requestedModule, primary)) {
+      score = Math.max(score, searchConceptRelationStrength(searchConceptRelation(requestedModule, primary)) * 100);
     }
 
     if (

@@ -90,7 +90,14 @@ export type Candidate360ProfileCompleteness = {
 export type Candidate360Profile = {
   lifecycle: CandidateLifecycleRecord;
   enterpriseProfile: EnterpriseCandidateProfile;
+  canonicalOverview?: import("./candidateProfileOverview").CanonicalProfileOverview;
   candidateId: string;
+  /** Validated linkage to the persisted primary candidate workspace. */
+  workspace?: {
+    primaryCandidateId: string;
+    notesHref: string;
+  } | null;
+  sourceResumeAvailable?: boolean;
   displayName: Candidate360Field<string>;
   headline: Candidate360Field<string>;
   currentTitle: Candidate360Field<string>;

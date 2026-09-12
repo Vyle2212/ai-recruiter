@@ -43,10 +43,39 @@ export type ConfirmedGuidedSourcingPlan = GuidedSourcingPlan & {
 export type GuidedSearchHandoff = {
   query: string;
   filters: { countries: string[]; skills: string[]; sapModules: string[] };
+  integrityPlan: {
+    version: "search-integrity-v20";
+    planIdentity: string;
+    requirements: Array<{
+      id: string;
+      criterionId: string;
+      label: string;
+      kind:
+        | "role"
+        | "location"
+        | "experience"
+        | "language"
+        | "sap"
+        | "implementation"
+        | "migration"
+        | "local_regulation"
+        | "presales"
+        | "manual";
+      required: boolean;
+      values: string[];
+      minimum?: number;
+      city?: string;
+      country?: string;
+    }>;
+    includeRelocationRemote: boolean;
+  };
   provenance: {
     schemaVersion: string;
     confirmedCriterionIds: string[];
     sourceType?: "guided" | "posted_job_jd" | "uploaded_jd";
+    jobId?: string;
+    sourceIdentity?: string;
+    sourceFingerprint?: string;
   };
   savePreviewParams: Record<string, string>;
 };

@@ -5,6 +5,7 @@ import type {
 import type {
   NormalizedCandidateSearchV2Request,
 } from "./candidateSearchV2Request";
+import { professionalRolesInText, seniorityInText } from "./searchV2RequirementOntology";
 
 function normalize(
   value:
@@ -23,7 +24,7 @@ function normalize(
 
 function normalizeValues(
   values:
-    | string[]
+    | readonly (string | null | undefined)[]
     | undefined,
 ) {
   return (
@@ -31,7 +32,28 @@ function normalizeValues(
     []
   ).map(
     normalize,
+  ).filter(
+    Boolean,
   );
+}
+
+function searchableCandidateValues(candidate: CandidateSearchV2Document) {
+  return normalizeValues([
+    candidate.candidateName,
+    candidate.currentTitle,
+    candidate.currentEmployer,
+    candidate.country,
+    candidate.location,
+    candidate.searchableText,
+    ...(candidate.historicalTitles || []),
+    ...(candidate.skills || []),
+    ...(candidate.sapModules || []),
+    ...(candidate.industries || []),
+    ...(candidate.languages || []),
+    ...(candidate.workAuthorization || []),
+    ...(candidate.evidence || []).flatMap((item) => [item.label, item.value]),
+    ...(candidate.trustedCandidateEvidence?.values || []).map((item) => item.value),
+  ]);
 }
 
 function includesAny(
@@ -95,6 +117,21 @@ export function candidatePassesSearchV2Filters(
       candidate.workAuthorization,
     );
 
+  const searchableValues =
+    searchableCandidateValues(
+      candidate,
+    );
+
+  if (
+    filters.candidateNames?.length &&
+    !includesAny(
+      [normalize(candidate.candidateName)],
+      filters.candidateNames,
+    )
+  ) {
+    return false;
+  }
+
   if (
     filters.countries?.length &&
     !includesAny(
@@ -115,6 +152,9 @@ export function candidatePassesSearchV2Filters(
       [
         normalize(
           candidate.location,
+        ),
+        normalize(
+          candidate.country,
         ),
       ],
       filters.locations,
@@ -146,6 +186,57 @@ export function candidatePassesSearchV2Filters(
         ),
       ],
       filters.currentEmployers,
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    filters.anyEmployers?.length &&
+    !includesAny(
+      normalizeValues([
+        candidate.currentEmployer,
+        ...(candidate.trustedCandidateEvidence?.values || [])
+          .filter((item) => item.sourceType === "raw_experience")
+          .map((item) => item.value),
+      ]),
+      filters.anyEmployers,
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    filters.anyTitles?.length &&
+    !includesAny(
+      normalizeValues([
+        candidate.currentTitle,
+        ...(candidate.historicalTitles || []),
+      ]),
+      filters.anyTitles,
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    filters.professionalRoles?.length &&
+    !includesAny(
+      professionalRolesInText([
+        candidate.currentTitle,
+        ...(candidate.historicalTitles || []),
+      ].join(" ")).flatMap((role) => [role.label, ...role.aliases]).map(normalize),
+      filters.professionalRoles,
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    filters.seniorities?.length &&
+    !includesAny(
+      [normalize(seniorityInText(candidate.currentTitle) || "")],
+      filters.seniorities,
     )
   ) {
     return false;
@@ -218,6 +309,46 @@ export function candidatePassesSearchV2Filters(
       normalize(
         candidate.qualityStatus,
       ),
+    )
+  ) {
+    return false;
+  }
+  for (const [language, proficiency] of Object.entries(filters.languageProficiencies || {})) {
+    const supported = (candidate.trustedCandidateEvidence?.values || []).some((entry) =>
+      normalize(entry.value).includes(normalize(language)) &&
+      normalize(entry.value).includes(normalize(proficiency)),
+    );
+    if (!supported) return false;
+  }
+
+  if (
+    filters.education?.length &&
+    !includesAny(
+      searchableValues,
+      filters.education,
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    filters.certifications?.length &&
+    !includesAny(
+      searchableValues,
+      filters.certifications,
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    filters.exclusions?.length &&
+    filters.exclusions.some(
+      (value) =>
+        includesAny(
+          searchableValues,
+          [value],
+        ),
     )
   ) {
     return false;

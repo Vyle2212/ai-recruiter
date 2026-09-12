@@ -1,6 +1,9 @@
 import type {
   CandidateSearchV2Document,
 } from "./candidateSearchV2Types";
+import { calculateTotalCareerYears } from "./candidateCareerExperience";
+import { normalizeActualCandidateSchema } from "./candidate360SchemaNormalize";
+import { canonicalTalentSearchIdentity } from "./talentSearchDisplay";
 
 type UnknownRecord =
   Record<string, unknown>;
@@ -34,6 +37,14 @@ function firstValue(
 
   return undefined;
 }
+function hasStructuredValue(records: UnknownRecord[], keys: string[]) {
+  return records.some((item) => {
+    const value = firstValue(item, keys);
+    if (Array.isArray(value)) return value.length > 0;
+    if (value && typeof value === "object") return Object.keys(value as UnknownRecord).length > 0;
+    return typeof value === "string" ? value.trim().length > 0 : false;
+  });
+}
 
 function asString(
   value: unknown,
@@ -56,6 +67,15 @@ function asString(
   }
 
   return null;
+}
+
+function trustedSourceFragments(value: unknown, depth = 0): string[] {
+  if (value === null || value === undefined || depth > 4) return [];
+  if (typeof value === "string") return value.trim() ? [value.trim()] : [];
+  if (typeof value === "number" || typeof value === "boolean") return [String(value)];
+  if (Array.isArray(value)) return value.flatMap((item) => trustedSourceFragments(item, depth + 1));
+  if (typeof value === "object") return Object.values(value as UnknownRecord).flatMap((item) => trustedSourceFragments(item, depth + 1));
+  return [];
 }
 
 function asNumber(
@@ -310,8 +330,12 @@ export function adaptCandidateToSearchV2Document(
   input: unknown,
   index = 0,
 ): CandidateSearchV2Document {
-  const record =
-    asRecord(input);
+  const sourceRecord = asRecord(input);
+  const canonical = normalizeActualCandidateSchema(sourceRecord);
+  const record: UnknownRecord = {
+    ...sourceRecord,
+    ...canonical,
+  };
 
   const {
     profile,
@@ -346,7 +370,7 @@ export function adaptCandidateToSearchV2Document(
     ) ||
     `candidate-${index + 1}`;
 
-  const candidateName =
+  const rawCandidateName =
     asString(
       firstValue(
         record,
@@ -369,6 +393,14 @@ export function adaptCandidateToSearchV2Document(
         ],
       ),
     );
+  const canonicalIdentity = canonicalTalentSearchIdentity(
+    candidateId,
+    canonical.enterpriseProfile.identity.name,
+    rawCandidateName,
+  );
+  const candidateName = canonicalIdentity.nameAvailable
+    ? canonicalIdentity.displayName
+    : null;
 
   const currentTitle =
     asString(
@@ -407,7 +439,7 @@ export function adaptCandidateToSearchV2Document(
       ),
     );
 
-  const currentEmployer =
+  const currentEmployer = canonical.enterpriseProfile.identity.currentCompany ||
     asString(
       firstValue(
         record,
@@ -587,6 +619,13 @@ export function adaptCandidateToSearchV2Document(
       ],
     );
 
+  const deliverySkills = [
+    asNumber(firstValue(record, ["implementationProjectCount", "implementation_project_count", "implementationCount"])) ? "Implementation" : "",
+    asNumber(firstValue(record, ["rolloutProjectCount", "rollout_project_count", "rolloutCount"])) ? "Rollout" : "",
+    asNumber(firstValue(record, ["amsProjectCount", "ams_project_count", "amsCount"])) ? "AMS" : "",
+    asNumber(firstValue(record, ["supportProjectCount", "support_project_count", "supportCount"])) ? "Support" : "",
+  ].filter(Boolean);
+
   const combinedSkills =
     Array.from(
       new Set(
@@ -595,6 +634,7 @@ export function adaptCandidateToSearchV2Document(
           ...profileSkills,
           ...normalizedSkills,
           ...sapModules,
+          ...deliverySkills,
         ],
       ),
     );
@@ -654,7 +694,7 @@ export function adaptCandidateToSearchV2Document(
       ),
     );
 
-  const totalYearsExperience =
+  const explicitTotalYearsExperience =
     asNumber(
       firstValue(
         record,
@@ -669,6 +709,23 @@ export function adaptCandidateToSearchV2Document(
         ],
       ),
     );
+
+  const employmentRecords = ["employmentTimeline", "employment_timeline", "employmentHistory", "employment_history", "workExperience", "work_experience"]
+    .flatMap((key) => Array.isArray(record[key]) ? record[key] as unknown[] : [])
+    .map(asRecord);
+  const historicalTitles = employmentRecords
+    .map((item) => asString(firstValue(item, ["title", "jobTitle", "job_title", "position", "role"])))
+    .filter((value): value is string => Boolean(value));
+  const derivedTotalYearsExperience = calculateTotalCareerYears(employmentRecords.map((item) => ({
+    start: firstValue(item, ["start", "startDate", "start_date", "from"]),
+    end: firstValue(item, ["end", "endDate", "end_date", "to"]),
+    current: firstValue(item, ["current", "isCurrent", "is_current"]),
+  })));
+  const totalYearsExperience = canonical.enterpriseProfile.experienceSummary.totalCareerYears ?? derivedTotalYearsExperience ?? (
+    explicitTotalYearsExperience !== null && explicitTotalYearsExperience > 0
+      ? explicitTotalYearsExperience
+      : null
+  );
 
   const relevantYearsExperience =
     asNumber(
@@ -752,6 +809,33 @@ export function adaptCandidateToSearchV2Document(
 
     totalYearsExperience,
     relevantYearsExperience,
+    historicalTitles,
+    implementationEvidenceCount: canonical.enterpriseProfile.careerHighlights.implementationProjects,
+    groundedImplementationProjectCount: canonical.enterpriseProfile.projects.filter((project) =>
+      /implementation|greenfield|brownfield/i.test(
+        `${project.projectType} ${project.implementationType} ${project.responsibilities.join(" ")}`,
+      ),
+    ).length,
+    canonicalCurrentEmployment: canonical.enterpriseProfile.employmentTimeline[0]
+      ? {
+          title: canonical.enterpriseProfile.employmentTimeline[0].title,
+          employer: canonical.enterpriseProfile.employmentTimeline[0].company,
+          location: canonical.enterpriseProfile.employmentTimeline[0].location,
+          start: canonical.enterpriseProfile.employmentTimeline[0].start,
+          end: canonical.enterpriseProfile.employmentTimeline[0].end,
+          duration: canonical.enterpriseProfile.employmentTimeline[0].duration,
+        }
+      : null,
+    implementationEvidenceLevel: canonical.enterpriseProfile.careerHighlights.implementationProjects > 0
+      ? "verified_structured_evidence"
+      : combinedSkills.some((value) => /\bimplement(?:ation|ations|ed|ing)?\b/i.test(value))
+        ? "source_text_evidence"
+        : "unverified",
+    seniorityEvidenceLevel: /\b(?:senior|sr\.?|lead|principal|manager|architect|director|head)\b/i.test(currentTitle || "")
+      ? "verified_structured_evidence"
+      : (totalYearsExperience || 0) >= 8 || canonical.enterpriseProfile.employmentTimeline.some((item) => /\b(?:senior|sr\.?|lead|principal|manager|architect|director|head)\b/i.test(item.title || ""))
+        ? "inferred_evidence"
+        : "unverified",
 
     skills:
       combinedSkills,
@@ -817,6 +901,18 @@ export function adaptCandidateToSearchV2Document(
       ),
 
     searchableText,
+    trustedCandidateEvidence: {
+      candidateId,
+      values: [
+        ...[["currentTitle", currentTitle], ...historicalTitles.map((value, index) => [`title_${index}`, value] as const)]
+          .filter(([, value]) => Boolean(value)).map(([field, value]) => ({ value: String(value), sourceType: "raw_title" as const, sourceField: `request_candidate.${field === "currentTitle" ? "currentTitle" : "title"}`, sourceRecordId: candidateId, provenance: "candidate_record_raw" as const, trusted: true })),
+        ...["summary", "professionalSummary", "professional_summary", "about", "experience", "work_experience", "project_experience", "projects", "responsibilities", "resume_text", "raw_text", "raw_cv"]
+          .flatMap((key) => trustedSourceFragments(record[key]).map((value) => ({ value, sourceType: (key.includes("project") ? "raw_project" : key.includes("experience") ? "raw_experience" : "raw_professional_text") as "raw_project" | "raw_experience" | "raw_professional_text", sourceField: `request_candidate.${key}`, sourceRecordId: candidateId, provenance: "candidate_record_raw" as const, trusted: true }))),
+        ...["certifications", "certificates"].flatMap((key) => trustedSourceFragments(record[key]).map((value) => ({ value, sourceType: "raw_certification" as const, sourceField: `request_candidate.${key}`, sourceRecordId: candidateId, provenance: "candidate_record_raw" as const, trusted: true }))),
+        ...["skills", "technicalSkills", "technical_skills"].flatMap((key) => trustedSourceFragments(record[key]).map((value) => ({ value, sourceType: "direct_skill" as const, sourceField: `request_candidate.${key}`, sourceRecordId: candidateId, provenance: "candidate_record_raw" as const, trusted: true }))),
+        ...languages.map((value) => ({ value, sourceType: "raw_professional_text" as const, sourceField: "request_candidate.languages", sourceRecordId: candidateId, provenance: "candidate_record_raw" as const, trusted: true })),
+      ],
+    },
 
     semanticSimilarity:
       asNumber(
@@ -830,6 +926,19 @@ export function adaptCandidateToSearchV2Document(
           ],
         ),
       ),
+
+    profileEvidence: {
+      name: Boolean(candidateName),
+      title: Boolean(currentTitle),
+      employer: Boolean(currentEmployer),
+      location: Boolean(location || resolvedCountry),
+      experienceDuration: Boolean(totalYearsExperience && totalYearsExperience > 0),
+      employmentHistory: hasStructuredValue([record, profile, normalized], ["employmentTimeline", "employment_timeline", "employmentHistory", "employment_history", "workExperience", "work_experience"]),
+      projectHistory: hasStructuredValue([record, profile, normalized], ["projects", "projectHistory", "project_history", "projectExperience", "project_experience"]),
+      education: hasStructuredValue([record, profile, normalized], ["education", "educationHistory", "education_history"]),
+      certifications: hasStructuredValue([record, profile, normalized], ["certifications", "certificates", "professionalCertifications", "professional_certifications"]),
+      skills: combinedSkills.length > 0,
+    },
 
     evidence: [
       currentTitle

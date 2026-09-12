@@ -146,6 +146,17 @@ function unique(values: any[]): string[] {
   return Array.from(new Set(values.map((x) => text(x)).filter(Boolean)));
 }
 
+function searchableEvidenceText(value: any, depth = 0): string[] {
+  if (value === null || value === undefined || depth > 4) return [];
+  if (["string", "number", "boolean"].includes(typeof value)) {
+    const normalized = text(value);
+    return normalized && normalized !== "[object Object]" ? [normalized] : [];
+  }
+  if (Array.isArray(value)) return value.slice(0, 100).flatMap((item) => searchableEvidenceText(item, depth + 1));
+  if (typeof value === "object") return Object.values(value).slice(0, 100).flatMap((item) => searchableEvidenceText(item, depth + 1));
+  return [];
+}
+
 function hasContact(c: CandidateRow): boolean {
   return Boolean(text(c.email) || text(c.phone));
 }
@@ -250,6 +261,7 @@ function cleanDisplayName(c: CandidateRow): string {
   for (const item of candidates) {
     if (!isGarbageName(item)) return item;
   }
+  if (c.__canonical_projection === true) return "Profile Under Review";
 
   const extracted = extractNameFromRawText(
     c.raw_text || c.resume_text || c.raw_cv || c.experience || c.summary
@@ -370,9 +382,48 @@ function buildProjectTypes(p: ReturnType<typeof projectCounts>): string[] {
 }
 
 export function buildSearchIndexRow(c: CandidateRow): SearchIndexRow | null {
+  const canonicalSnapshot = c?.parsed_json?.canonical_candidate;
+  const canonical = canonicalSnapshot?.payload;
+  const enterprise = canonical?.enterpriseProfile;
+  if (enterprise) {
+    const identity = enterprise.identity || {};
+    const experience = enterprise.experienceSummary || {};
+    const highlights = enterprise.careerHighlights || {};
+    c = {
+      ...c,
+      __canonical_projection: true,
+      name: identity.name || null,
+      candidate_name: null,
+      full_name: null,
+      display_name: null,
+      current_title: identity.currentTitle || null,
+      title: null,
+      headline: null,
+      current_company: identity.currentCompany || null,
+      company: null,
+      employer: null,
+      current_location: identity.location || identity.country || null,
+      location: identity.location || null,
+      country: identity.country || null,
+      years: experience.totalCareerYears ?? null,
+      years_experience: experience.totalCareerYears ?? null,
+      years_of_experience: experience.totalCareerYears ?? null,
+      calculated_experience_months: experience.totalCareerYears === null || experience.totalCareerYears === undefined ? null : Math.round(experience.totalCareerYears * 12),
+      sap_modules: enterprise.sapModules || [],
+      skills: [...(enterprise.technicalSkills || []), ...(enterprise.sapModules || [])],
+      implementation_project_count: highlights.implementationProjects || 0,
+      rollout_project_count: highlights.rolloutProjects || 0,
+      ams_support_project_count: highlights.amsProjects || 0,
+      s4_greenfield_count: highlights.greenfieldProjects || 0,
+      s4_conversion_count: highlights.brownfieldProjects || 0,
+      profile_quality_score: enterprise.quality?.profileCompleteness ?? c.profile_quality_score,
+    };
+  }
   // Production rule: search index must not invent a primary module.
   // Parser/saveCandidate owns primary_module; index builder only trusts it.
-  const primaryModule = normalizeIndexModule(c.primary_module);
+  const canonicalPrimaryDomain = Object.entries(canonicalSnapshot?.domain_evidence || {})
+    .find(([, classification]) => classification === "PRIMARY" || classification === "STRONG")?.[0];
+  const primaryModule = normalizeIndexModule(c.primary_module) || normalizeIndexModule(canonicalPrimaryDomain);
   if (!primaryModule) return null;
 
   const secondaryModules = filterModulesForPrimary(primaryModule, arr(c.secondary_modules));
@@ -393,6 +444,49 @@ export function buildSearchIndexRow(c: CandidateRow): SearchIndexRow | null {
     ...skills,
     ...submodules,
   ]);
+  const structuredProjects = Array.isArray(enterprise?.projects) ? enterprise.projects : [];
+  const structuredProjectText = structuredProjects.map((project: any) => [
+    project.projectType, project.implementationType, project.role, project.name, ...(project.responsibilities || []),
+  ].join(" ")).join(" ");
+  const structuredEmploymentText = (Array.isArray(enterprise?.employmentTimeline) ? enterprise.employmentTimeline : [])
+    .map((employment: any) => [employment.title, employment.summary, ...(employment.responsibilities || [])].join(" "))
+    .join(" ");
+  const sourceEvidenceText = [
+    ...(enterprise?.technicalSkills || []),
+    structuredProjectText,
+    structuredEmploymentText,
+    ...searchableEvidenceText(c.summary),
+    ...searchableEvidenceText(c.experience),
+    ...searchableEvidenceText(c.work_experience),
+    ...searchableEvidenceText(c.project_experience),
+    ...searchableEvidenceText(c.projects),
+    ...searchableEvidenceText(c.responsibilities),
+    ...searchableEvidenceText(c.resume_text),
+    ...searchableEvidenceText(c.raw_text),
+    ...searchableEvidenceText(c.raw_cv),
+  ].map(text).filter(Boolean).join(" ");
+  const canonicalCapabilities = canonicalSnapshot?.capabilities || {};
+  const capabilityCode = (name: string) => {
+    const item = canonicalCapabilities[name];
+    return item?.verification && item.verification !== "NOT_FOUND"
+      ? `${name.toUpperCase()}_${item.provenance}_${item.verification}`
+      : null;
+  };
+  const canonicalProjectTypes = enterprise ? [
+    capabilityCode("implementation"),
+    /\broll[ -]?out\b/i.test(structuredProjectText) ? "ROLLOUT_PROJECT_CONTEXT" : p.rollout > 0 ? "ROLLOUT_EXPLICIT_SOURCE_TEXT" : null,
+    /\bams\b/i.test(structuredProjectText) ? "AMS_PROJECT_CONTEXT" : p.ams > 0 ? "AMS_EXPLICIT_SOURCE_TEXT" : null,
+    p.s4 > 0 ? "S4_EXPLICIT_SOURCE_TEXT" : null,
+    capabilityCode("greenfield"),
+    /\bbrownfield\b/i.test(structuredProjectText) ? "BROWNFIELD_DIRECT_STRUCTURED" : p.brownfield > 0 ? "BROWNFIELD_EXPLICIT_SOURCE_TEXT" : null,
+    canonicalSnapshot?.fico_relevance ? `FICO_CLASS_${canonicalSnapshot.fico_relevance}` : null,
+    ...Object.entries(canonicalSnapshot?.domain_evidence || {}).map(([domain, classification]) => `DOMAIN_CLASS_${domain}_${classification}`),
+    ...Object.entries(canonicalSnapshot?.domain_implementation_evidence || {})
+      .filter(([, classification]) => classification !== "UNVERIFIED")
+      .map(([domain, classification]) => `DOMAIN_IMPLEMENTATION_${domain}_${classification}`),
+    canonicalSnapshot?.seniority?.level ? `SENIORITY_CLASS_${canonicalSnapshot.seniority.level}` : null,
+    canonicalSnapshot?.location_evidence ? `LOCATION_STATE_${canonicalSnapshot.location_evidence}` : null,
+  ].filter(Boolean) as string[] : buildProjectTypes(p);
 
   return {
     candidate_id: c.id,
@@ -406,7 +500,7 @@ export function buildSearchIndexRow(c: CandidateRow): SearchIndexRow | null {
     consulting_level: c.consulting_level ?? null,
     company_type: c.company_type ?? null,
     consulting_firms: arr(c.consulting_firm_evidence),
-    project_types: buildProjectTypes(p),
+    project_types: canonicalProjectTypes,
     greenfield_count: p.greenfield,
     brownfield_count: p.brownfield,
     rollout_count: p.rollout,
@@ -416,6 +510,7 @@ export function buildSearchIndexRow(c: CandidateRow): SearchIndexRow | null {
     quality_score: qualityScore(c, primaryModule),
     contactable: hasContact(c),
     search_text: [
+      canonicalSnapshot?.canonical_candidate_id ? `canonical_candidate_id:${canonicalSnapshot.canonical_candidate_id}` : null,
       displayName,
       c.email,
       c.phone,
@@ -427,6 +522,7 @@ export function buildSearchIndexRow(c: CandidateRow): SearchIndexRow | null {
       ...submodules,
       c.role_type,
       c.consulting_level,
+      sourceEvidenceText,
     ]
       .map(text)
       .filter(Boolean)

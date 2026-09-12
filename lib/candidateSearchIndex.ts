@@ -466,6 +466,7 @@ export async function syncCandidateSearchIndexSince(sinceIso?: string, limit = 2
     .from("candidates")
     .select("*")
     .order("updated_at", { ascending: false })
+    .order("id", { ascending: true })
     .limit(limit);
 
   if (sinceIso) query = query.gte("updated_at", sinceIso);

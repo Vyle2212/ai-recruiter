@@ -622,7 +622,7 @@ function isBadName(value: string) {
   if (words.length < 2 || words.length > 5) return true;
 
   // Reject glued parser artifacts such as Associatemanagingcon / Seniorinsid.
-  if (words.some((w) => w.length > 18 && !/[.'â€™-]/.test(w))) return true;
+  if (words.some((w) => w.length > 18 && !/[.'’-]/.test(w))) return true;
 
   return false;
 }
@@ -710,7 +710,7 @@ function nameFromEmail(email: string) {
 
   let parts = local
     .split(/\s+/)
-    .filter((p) => p.length >= 1 && /^[a-zA-Z'â€™-]+$/.test(p))
+    .filter((p) => p.length >= 1 && /^[a-zA-Z'’-]+$/.test(p))
     .slice(0, 4);
 
   if (parts.length >= 3 && parts[0].length === 1 && parts[1].length === 1) {
@@ -726,7 +726,7 @@ function nameFromEmail(email: string) {
     local = cleanupNameToken(compact.replace(/([a-z])([A-Z])/g, "$1 $2"));
     parts = local
       .split(/\s+/)
-      .filter((p) => p.length >= 2 && /^[a-zA-Z'â€™-]+$/.test(p))
+      .filter((p) => p.length >= 2 && /^[a-zA-Z'’-]+$/.test(p))
       .slice(0, 4);
   }
 
@@ -749,7 +749,7 @@ function nameFromFileName(fileName?: string) {
 
   const parts = base
     .split(/\s+/)
-    .filter((p) => /^[A-Za-z'â€™-]{2,}$/.test(p))
+    .filter((p) => /^[A-Za-z'’-]{2,}$/.test(p))
     .slice(0, 4);
 
   if (parts.length < 2) return null;
@@ -772,8 +772,8 @@ function deriveName(candidate: any, text: string) {
   const fileName = toText(candidate?.fileName || candidate?.source_file || candidate?.sourceFile || "");
 
   const explicitPatterns = [
-    /(?:CANDIDATE\s+NAME|FULL\s+NAME|NAME)\s*[:\-]\s*([A-Z][A-Z'â€™.\-\s]{3,45})/i,
-    /(?:CONSULTANT|CANDIDATE)\s*[:\-]\s*([A-Z][A-Za-z'â€™.\-\s]{3,45})/i,
+    /(?:CANDIDATE\s+NAME|FULL\s+NAME|NAME)\s*[:\-]\s*([A-Z][A-Z'’.\-\s]{3,45})/i,
+    /(?:CONSULTANT|CANDIDATE)\s*[:\-]\s*([A-Z][A-Za-z'’.\-\s]{3,45})/i,
   ];
 
   for (const pattern of explicitPatterns) {
@@ -806,7 +806,7 @@ function deriveName(candidate: any, text: string) {
     .slice(0, 60);
 
   for (const line of rawLines) {
-    const consultantName = line.match(/(?:consultant|candidate)\s*[:\-]\s*([A-Z][A-Za-z'â€™.\-\s]{3,45})/i)?.[1];
+    const consultantName = line.match(/(?:consultant|candidate)\s*[:\-]\s*([A-Z][A-Za-z'’.\-\s]{3,45})/i)?.[1];
     const cleaned = (consultantName || line)
       .replace(/^(name|candidate name|full name)\s*[:\-]\s*/i, "")
       .replace(/\s+/g, " ")
@@ -830,7 +830,7 @@ function deriveName(candidate: any, text: string) {
 
 function cleanTitle(line: string) {
   return line
-    .replace(/^[-â€“â€”â€¢\s]+/, "")
+    .replace(/^[-–—•\s]+/, "")
     .replace(/\s+/g, " ")
     .replace(/^(TITLE|POSITION|DESIGNATION|CURRENT POSITION|CURRENT TITLE|ROLE)\s*[:\-]\s*/i, "")
     .trim();
@@ -862,7 +862,7 @@ function isSummaryLikeTitle(line: string) {
 
 function normalizeDisplayTitle(value: any) {
   let title = String(value || "")
-    .replace(/^[-â€“â€”â€¢\s]+/, "")
+    .replace(/^[-–—•\s]+/, "")
     .replace(/\s+/g, " ")
     .replace(/^(TITLE|POSITION|DESIGNATION|CURRENT POSITION|CURRENT TITLE|ROLE|JOB TITLE)\s*[:\-]\s*/i, "")
     .trim();
@@ -873,12 +873,12 @@ function normalizeDisplayTitle(value: any) {
     .replace(/\s+with\s+over\s+a\s+decade\s+of\s+experience.*$/i, "")
     .replace(/\s+with\s+\d+\+?\s+years\s+of\s+experience.*$/i, "")
     .replace(/\s+at\s+(.+?)\s+at\s+\1\s*$/i, " - $1")
-    .replace(/\s+at\s+([A-Za-z0-9&.,'â€™() -]{2,60})\s+at\s+\1\s*$/i, " - $1")
-    .replace(/\s*-\s*([A-Za-z0-9&.,'â€™() ]{2,60})\s*-\s*\1\s*$/i, " - $1")
+    .replace(/\s+at\s+([A-Za-z0-9&.,'’() -]{2,60})\s+at\s+\1\s*$/i, " - $1")
+    .replace(/\s*-\s*([A-Za-z0-9&.,'’() ]{2,60})\s*-\s*\1\s*$/i, " - $1")
     .replace(/\s+/g, " ")
     .trim();
 
-  const duplicateAt = title.match(/^(.+?)\s+at\s+([A-Za-z0-9&.,'â€™() -]{2,60})\s+at\s+\2$/i);
+  const duplicateAt = title.match(/^(.+?)\s+at\s+([A-Za-z0-9&.,'’() -]{2,60})\s+at\s+\2$/i);
   if (duplicateAt) {
     title = `${duplicateAt[1].trim()} - ${duplicateAt[2].trim()}`;
   }
@@ -1234,10 +1234,10 @@ function isDateRangeLike(value: string) {
   const s = String(value || "").trim();
 
   return (
-    /\b(19|20)\d{2}\s*[-â€“â€”]\s*(19|20)\d{2}\b/.test(s) ||
-    /\b(19|20)\d{2}\.\d{1,2}\s*[-â€“â€”]\s*(19|20)\d{2}\.\d{1,2}\b/.test(s) ||
-    /\b(19|20)\d{2}\/\d{1,2}\s*[-â€“â€”]\s*(19|20)\d{2}\/\d{1,2}\b/.test(s) ||
-    /^\d{4}\.\d{1,2}\s*[-â€“â€”]\s*\d{4}\.\d{1,2}$/.test(s)
+    /\b(19|20)\d{2}\s*[-–—]\s*(19|20)\d{2}\b/.test(s) ||
+    /\b(19|20)\d{2}\.\d{1,2}\s*[-–—]\s*(19|20)\d{2}\.\d{1,2}\b/.test(s) ||
+    /\b(19|20)\d{2}\/\d{1,2}\s*[-–—]\s*(19|20)\d{2}\/\d{1,2}\b/.test(s) ||
+    /^\d{4}\.\d{1,2}\s*[-–—]\s*\d{4}\.\d{1,2}$/.test(s)
   );
 }
 
@@ -1249,8 +1249,8 @@ function isDateLikePhone(value: string) {
   return (
     /^\d{1,2}[./-]\d{1,2}[./-](19|20)\d{2}$/.test(s) ||
     /^(19|20)\d{2}[./-]\d{1,2}[./-]\d{1,2}$/.test(s) ||
-    /^\d{4}\.\d{1,2}\s*[-â€“â€”]\s*\d{4}\.\d{1,2}$/.test(s) ||
-    /^\d{4}\s*[-â€“â€”]\s*\d{4}$/.test(s) ||
+    /^\d{4}\.\d{1,2}\s*[-–—]\s*\d{4}\.\d{1,2}$/.test(s) ||
+    /^\d{4}\s*[-–—]\s*\d{4}$/.test(s) ||
     /^\d{4}\.\d{1,2}$/.test(s) ||
     /^\d{1,2}\.\d{4}$/.test(s) ||
     /^\d{6}[-\s]?\d{2}[-\s]?\d{4}$/.test(s) ||

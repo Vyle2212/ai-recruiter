@@ -1,0 +1,25 @@
+import assert from "node:assert/strict";
+import { canonicalMatchLabel, canonicalOverallMatchScore, compareCanonicalSearchResults, SEARCH_V2_RANKING_VERSION } from "../lib/searchV2Match";
+import { auditLinkedInProfileUrl } from "../lib/linkedinProfileUrl";
+import { paginateRankedCandidatesV2 } from "../lib/candidateSearchV2Engine";
+import { readFileSync } from "node:fs";
+
+assert.equal(canonicalMatchLabel(85),"Strong Match");
+assert.equal(canonicalMatchLabel(84),"Good Match");
+assert.equal(canonicalMatchLabel(70),"Good Match");
+assert.equal(canonicalMatchLabel(69),"Potential Match");
+assert.equal(canonicalOverallMatchScore({criteriaScore:80,hasCriteria:true,professionalRelevance:90,deliveryDepth:70,evidenceConfidence:75}),83,"hard-filter coverage and duplicate delivery evidence must not inflate match");
+const fake=(id:string,overallMatchScore:number,confidence=80)=>({candidateId:id,overallMatchScore,evidenceConfidencePercent:confidence,supportedProfessionalEvidenceDepth:50,profileCompletenessPercent:70,candidateName:id,score:{recencyScore:50}} as any);
+const ranked=[fake("low",63),fake("high",92),fake("mid",78)].sort(compareCanonicalSearchResults);
+assert.deepEqual(ranked.map(item=>item.candidateId),["high","mid","low"]);
+assert.deepEqual(ranked.map(item=>canonicalMatchLabel(item.overallMatchScore)),["Strong Match","Good Match","Potential Match"]);
+assert.equal(SEARCH_V2_RANKING_VERSION,"search-v2-overall-match-v2-no-duplicate-delivery");
+assert.equal(auditLinkedInProfileUrl("linkedin.com/in/supported-person?trk=profile").normalizedUrl,"https://www.linkedin.com/in/supported-person");
+for(const invalid of ["https://linkedin.com/company/openai","https://linkedin.com/jobs/view/1","https://linkedin.com/search/results/people","https://example.com/in/person","not a url"])assert.equal(auditLinkedInProfileUrl(invalid).normalizedUrl,null,invalid);
+const ordered=Array.from({length:45},(_,index)=>fake(String(index).padStart(2,"0"),100-index));
+const first=paginateRankedCandidatesV2(ordered,45,{query:"SAP FICO",page:1,pageSize:20},"committed-a");
+const second=paginateRankedCandidatesV2(ordered,45,{query:"SAP FICO",page:2,pageSize:20,cursor:first.nextCursor!},"committed-a");
+assert.equal(first.results.length,20);assert.equal(second.results.length,20);assert.equal(new Set([...first.results,...second.results].map(item=>item.candidateId)).size,40);assert.ok(first.results.at(-1)!.overallMatchScore!>=second.results[0]!.overallMatchScore!);assert.deepEqual(first.bucketCounts,{strong:16,good:15,potential:14});
+const client=readFileSync("app/recruiter/talent-search/v2/CandidateSearchV2Client.tsx","utf8"),route=readFileSync("app/api/recruiter/search-v2/route.ts","utf8");
+assert.match(client,/LinkedIn Talent Pool\{sourceCapabilities\?\.linkedin_talent_pool\.available===false\?" - unavailable"/);assert.match(client,/disabled=\{sourceCapabilities\?\.linkedin_talent_pool\.available===false\}/);assert.match(client,/target="_blank" rel="noopener noreferrer"/);assert.match(route,/reason: "SOURCE_UNAVAILABLE"/);
+console.log("Search V2 canonical match and LinkedIn profile URL tests passed");

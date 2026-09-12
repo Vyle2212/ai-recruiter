@@ -39,6 +39,38 @@ const documents:
       relevantYearsExperience:
         9,
 
+      domainEvidence: {
+        FICO: "PRIMARY",
+      },
+
+      seniorityEvidenceLevel:
+        "verified_structured_evidence",
+
+      locationEvidenceState:
+        "VERIFIED",
+
+      trustedCandidateEvidence: {
+        candidateId: "candidate-a",
+        values: [
+          {
+            value: "Senior SAP FICO Consultant",
+            sourceType: "raw_title",
+            sourceField: "candidates.current_title",
+            sourceRecordId: "candidate-a",
+            provenance: "candidate_record_raw",
+            trusted: true,
+          },
+          {
+            value: "SAP FICO implementation project",
+            sourceType: "raw_project",
+            sourceField: "candidates.projects",
+            sourceRecordId: "candidate-a",
+            provenance: "candidate_record_raw",
+            trusted: true,
+          },
+        ],
+      },
+
       skills: [
         "SAP FICO",
         "S/4HANA",
