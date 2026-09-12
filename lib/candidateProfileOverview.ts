@@ -594,13 +594,80 @@ export function buildExternalCanonicalProfileOverview(input: {
   candidateId: string;
   candidateName?: string | null;
   profileTitle?: string | null;
+  currentEmployer?: string | null;
   location?: string | null;
   country?: string | null;
+  totalExperienceYears?: number | null;
+  professionalSummary?: string | null;
+  employmentEvidence?: string[];
+  projectEvidence?: string[];
+  educationEvidence?: string[];
+  certificationEvidence?: string[];
+  skills?: string[];
+  evidenceConfidencePercent?: number | null;
+  profileCompletenessPercent?: number | null;
+  sourceTypes?: string[];
 }): CanonicalProfileOverview {
   const identity = canonicalTalentSearchIdentity(
     input.candidateId,
     input.candidateName,
   );
+  const unique = (values: Array<string | null | undefined>) =>
+    [...new Map(
+      values
+        .map((value) => clean(value))
+        .filter((value): value is string => Boolean(value))
+        .map((value) => [value.toLocaleLowerCase(), value]),
+    ).values()];
+  const employmentEvidence = unique(input.employmentEvidence || []);
+  const projectEvidence = unique(input.projectEvidence || []);
+  const educationEvidence = unique(input.educationEvidence || []);
+  const certificationEvidence = unique(input.certificationEvidence || []);
+  const skills = unique(input.skills || []);
+  const sapModuleExpression =
+    /^(?:SAP\s+)?(?:FICO|FI|CO|MM|SD|PP|PM|PS|QM|WM|EWM|TM|HCM|HR|BW|BI|BTP|ABAP|BASIS|FSCM|FICA|SAC|S\/4HANA)$/i;
+  const descriptor = {
+    evidenceStatus: "source_supported" as const,
+    verificationStatus: "not_verified" as const,
+  };
+  const sapModules = skills
+    .filter((value) => sapModuleExpression.test(value))
+    .map((value) => ({ value, state: "Supported" as const, ...descriptor }));
+  const functional = skills
+    .filter((value) => !sapModuleExpression.test(value))
+    .map((value) => ({ value, state: "Supported" as const, ...descriptor }));
+  const currentEmployment =
+    clean(input.profileTitle) && clean(input.currentEmployer)
+      ? {
+          id: `external-current:${input.candidateId}`,
+          title: clean(input.profileTitle),
+          employer: clean(input.currentEmployer),
+          start: null,
+          end: null,
+          current: true,
+          tenure: null,
+          location: clean(input.location),
+        }
+      : null;
+  const groundedCategories = [
+    "identity",
+    input.professionalSummary ? "professionalSummary" : null,
+    employmentEvidence.length || currentEmployment ? "employment" : null,
+    projectEvidence.length ? "projects" : null,
+    skills.length ? "skills" : null,
+    educationEvidence.length ? "education" : null,
+    certificationEvidence.length ? "certifications" : null,
+  ].filter((value): value is string => Boolean(value));
+  const unavailableCategories = [
+    "professionalSummary",
+    "employment",
+    "projects",
+    "skills",
+    "education",
+    "certifications",
+    "languages",
+    "workArrangement",
+  ].filter((value) => !groundedCategories.includes(value));
   return {
     version: CANONICAL_PROFILE_OVERVIEW_VERSION,
     identity: {
@@ -615,32 +682,57 @@ export function buildExternalCanonicalProfileOverview(input: {
       country: clean(input.country),
     },
     profileQuality: {
-      profileDataConfidencePercent: null,
+      profileDataConfidencePercent:
+        input.evidenceConfidencePercent == null
+          ? null
+          : Math.max(0, Math.min(100, input.evidenceConfidencePercent)),
       sourceCompletenessPercent: null,
-      profileCompletenessPercent: null,
+      profileCompletenessPercent:
+        input.profileCompletenessPercent == null
+          ? null
+          : Math.max(0, Math.min(100, input.profileCompletenessPercent)),
     },
-    professionalSummary: null,
+    professionalSummary: clean(input.professionalSummary),
     career: {
-      totalExperienceYears: null,
-      currentEmployment: null,
-      currentEmployments: [],
-      latestEmployment: null,
-      employmentCount: 0,
-      projectCount: 0,
+      totalExperienceYears:
+        input.totalExperienceYears == null
+          ? null
+          : Math.max(0, input.totalExperienceYears),
+      currentEmployment,
+      currentEmployments: currentEmployment ? [currentEmployment] : [],
+      latestEmployment: currentEmployment,
+      employmentCount: Math.max(
+        employmentEvidence.length,
+        currentEmployment ? 1 : 0,
+      ),
+      projectCount: projectEvidence.length,
       supportedGapCount: null,
     },
     skills: {
-      sapModules: [],
-      functional: [],
+      sapModules,
+      functional,
       technical: [],
       lifecycle: [],
       industries: [],
-      totalCount: 0,
+      totalCount: skills.length,
     },
     employmentHighlights: [],
     projectHighlights: [],
-    education: { count: 0, highestOrLatest: null },
-    certifications: { count: 0, items: [] },
+    education: {
+      count: educationEvidence.length,
+      highestOrLatest: educationEvidence[0]
+        ? {
+            qualification: educationEvidence[0],
+            institution: null,
+            fieldOfStudy: null,
+            completionDate: null,
+          }
+        : null,
+    },
+    certifications: {
+      count: certificationEvidence.length,
+      items: certificationEvidence.map((value) => ({ value, ...descriptor })),
+    },
     training: { count: 0, items: [] },
     languages: [],
     workArrangement: {
@@ -666,18 +758,9 @@ export function buildExternalCanonicalProfileOverview(input: {
       ) as CanonicalProfileOverview["workArrangement"]["evidence"],
     },
     provenance: {
-      sourceTypes: ["external_provider"],
-      groundedCategories: ["identity"],
-      unavailableCategories: [
-        "professionalSummary",
-        "employment",
-        "projects",
-        "skills",
-        "education",
-        "certifications",
-        "languages",
-        "workArrangement",
-      ],
+      sourceTypes: unique(input.sourceTypes?.length ? input.sourceTypes : ["external_provider"]),
+      groundedCategories,
+      unavailableCategories,
       canonicalProfileVersion: "external-profile-provider-projection",
     },
   };

@@ -23,6 +23,11 @@ import {
   type CandidateProfileTab,
 } from "@/lib/candidateProfilePresentation";
 import { canonicalCandidateSkillCollection } from "@/lib/candidateProfileSkills";
+import type { ExternalTalentAnalysisCapability } from "@/lib/externalTalentAnalysisCapability";
+import type {
+  ExternalProfileImportPreview,
+  ExternalProfileImportSourceKind,
+} from "@/lib/externalProfileImport";
 
 export type CandidateDrawerResult = {
   retrievalKind?: "identity_match" | "evaluated_match";
@@ -37,6 +42,21 @@ export type CandidateDrawerResult = {
   location: string | null;
   country: string | null;
   totalYearsExperience: number | null;
+  evidenceConfidencePercent?: number | null;
+  profileCompletenessPercent?: number | null;
+  queryRelevantSkills?: string[];
+  profileEvidence?: {
+    name?: boolean;
+    title?: boolean;
+    employer?: boolean;
+    location?: boolean;
+    experienceDuration?: boolean;
+    employmentHistory?: boolean;
+    projectHistory?: boolean;
+    education?: boolean;
+    certifications?: boolean;
+    skills?: boolean;
+  };
   score: { finalScore: number } | null;
   evidence?: Array<{ label: string; value: string; source?: string | null }>;
   integrity?: {
@@ -143,6 +163,99 @@ export function prefetchCandidateDetails(
 
 const text = (value: string | null | undefined, fallback = "Not provided") =>
   value?.trim() || fallback;
+
+type ExternalEvidenceSections = {
+  overview: string[];
+  experience: string[];
+  projects: string[];
+  education: string[];
+  certifications: string[];
+  skills: string[];
+};
+
+function uniqueExternalEvidence(values: Array<string | null | undefined>) {
+  return [
+    ...new Map(
+      values
+        .map((value) => String(value || "").replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+        .map((value) => [value.toLocaleLowerCase(), value]),
+    ).values(),
+  ];
+}
+
+function externalEvidenceSections(
+  candidate: CandidateDrawerResult,
+  imported: ExternalProfileImportPreview | null,
+): ExternalEvidenceSections {
+  const sections: ExternalEvidenceSections = {
+    overview: [],
+    experience: [],
+    projects: [],
+    education: [],
+    certifications: [],
+    skills: candidate.queryRelevantSkills || [],
+  };
+  for (const item of candidate.evidence || []) {
+    if (/employment|experience/i.test(item.label))
+      sections.experience.push(item.value);
+    else if (/project/i.test(item.label)) sections.projects.push(item.value);
+    else if (/certification|credential/i.test(item.label))
+      sections.certifications.push(item.value);
+    else if (/education|qualification|degree/i.test(item.label))
+      sections.education.push(item.value);
+    else if (/skill|module/i.test(item.label)) sections.skills.push(item.value);
+    else if (/summary|headline|profile/i.test(item.label))
+      sections.overview.push(item.value);
+  }
+  if (imported) {
+    for (const key of Object.keys(imported.sections) as Array<
+      keyof ExternalEvidenceSections
+    >)
+      sections[key].push(...imported.sections[key]);
+  }
+  return Object.fromEntries(
+    Object.entries(sections).map(([key, values]) => [
+      key,
+      uniqueExternalEvidence(values),
+    ]),
+  ) as ExternalEvidenceSections;
+}
+
+function ExternalEvidenceList({
+  title,
+  values,
+  sourceLabel,
+}: {
+  title: string;
+  values: string[];
+  sourceLabel: string;
+}) {
+  return (
+    <Panel title={title}>
+      {values.length ? (
+        <ol className="space-y-3">
+          {values.map((value, index) => (
+            <li
+              key={`${value.toLocaleLowerCase()}:${index}`}
+              className="rounded-lg border border-slate-800 bg-slate-950/40 p-4"
+            >
+              <p className="text-sm leading-6 text-slate-300">{value}</p>
+              <p className="mt-2 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                Source: {sourceLabel} · Review before use
+              </p>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="text-sm text-slate-400">
+          No grounded {title.toLocaleLowerCase()} was found in the available
+          external profile evidence.
+        </p>
+      )}
+    </Panel>
+  );
+}
 
 function ProjectSummary({ values }: { values: readonly string[] }) {
   const cleaned = cleanProjectResponsibilities(values);
@@ -265,7 +378,21 @@ export default function CandidateDetailsDrawer({
   const [error, setError] = useState("");
   const [retryRevision, setRetryRevision] = useState(0);
   const [aiAnalysis, setAiAnalysis] = useState("");
+  const [aiAnalysisError, setAiAnalysisError] = useState("");
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
+  const [aiCapability, setAiCapability] =
+    useState<ExternalTalentAnalysisCapability | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importSourceKind, setImportSourceKind] =
+    useState<ExternalProfileImportSourceKind>("candidate_cv");
+  const [importConsentConfirmed, setImportConsentConfirmed] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [importPreview, setImportPreview] =
+    useState<ExternalProfileImportPreview | null>(null);
+  const [appliedImport, setAppliedImport] =
+    useState<ExternalProfileImportPreview | null>(null);
   const drawerRef = useRef<HTMLElement | null>(null);
   const contentScrollRef = useRef<HTMLDivElement | null>(null);
   const selectedIndex = visibleCandidates.findIndex(
@@ -297,6 +424,46 @@ export default function CandidateDetailsDrawer({
       active = false;
     };
   }, [candidate.candidateId, candidate.talentPool, initialTab, retryRevision]);
+
+  useEffect(() => {
+    setAiAnalysis("");
+    setAiAnalysisError("");
+    setImportOpen(false);
+    setImportFile(null);
+    setImportError("");
+    setImportPreview(null);
+    setAppliedImport(null);
+    if (candidate.talentPool !== "linkedin_talent_pool") {
+      setAiCapability(null);
+      return;
+    }
+    let active = true;
+    fetch("/api/recruiter/search-v2/external-analysis", {
+      credentials: "same-origin",
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("AI capability is unavailable.");
+        return (await response.json()) as ExternalTalentAnalysisCapability;
+      })
+      .then((value) => {
+        if (active) setAiCapability(value);
+      })
+      .catch(() => {
+        if (active)
+          setAiCapability({
+            version: "external-talent-analysis-capability-v1",
+            enabled: false,
+            reason: "provider_not_configured",
+            message: "AI Match Analysis capability could not be verified.",
+            minimumEvidenceItems: 2,
+            minimumEvidenceCharacters: 48,
+          });
+      });
+    return () => {
+      active = false;
+    };
+  }, [candidate.candidateId, candidate.talentPool]);
 
   useLayoutEffect(() => {
     resetCandidateDetailsScroll(contentScrollRef.current);
@@ -360,6 +527,14 @@ export default function CandidateDetailsDrawer({
     candidate.candidateId,
     candidate.candidateName,
   );
+  const externalSections = externalEvidenceSections(candidate, appliedImport);
+  const externalSourceLabel = appliedImport
+    ? `external profile plus ${appliedImport.source.fileName} (candidate provided)`
+    : "external professional profile";
+  const effectiveProfileCompleteness = Math.max(
+    candidate.profileCompletenessPercent || 0,
+    appliedImport?.completenessPercent || 0,
+  );
   const overview = profile
     ? profile.canonicalOverview
     : candidate.talentPool === "linkedin_talent_pool"
@@ -367,8 +542,21 @@ export default function CandidateDetailsDrawer({
           candidateId: candidate.candidateId,
           candidateName: candidate.candidateName,
           profileTitle: candidate.currentTitle,
+          currentEmployer: candidate.currentEmployer,
           location: candidate.location,
           country: candidate.country,
+          totalExperienceYears: candidate.totalYearsExperience,
+          professionalSummary: externalSections.overview.join(" ") || null,
+          employmentEvidence: externalSections.experience,
+          projectEvidence: externalSections.projects,
+          educationEvidence: externalSections.education,
+          certificationEvidence: externalSections.certifications,
+          skills: externalSections.skills,
+          evidenceConfidencePercent: candidate.evidenceConfidencePercent,
+          profileCompletenessPercent: effectiveProfileCompleteness,
+          sourceTypes: appliedImport
+            ? ["external_provider", "candidate_provided_document"]
+            : ["external_provider"],
         })
       : null;
   const canonicalSkills = overview
@@ -441,6 +629,37 @@ export default function CandidateDetailsDrawer({
       candidate.country,
     "",
   );
+  const externalAnalysisEvidence = [
+    ...(candidate.evidence || []).map((item) => ({
+      label: item.label,
+      excerpt: item.value,
+    })),
+    ...(appliedImport
+      ? Object.entries(appliedImport.sections).flatMap(([section, values]) =>
+          values.map((value) => ({
+            label: `Candidate-provided ${section} evidence`,
+            excerpt: value,
+          })),
+        )
+      : []),
+  ].filter(
+    (item, index, all) =>
+      item.excerpt.trim() &&
+      all.findIndex(
+        (candidateEvidence) =>
+          candidateEvidence.excerpt.normalize("NFKC").trim().toLowerCase() ===
+          item.excerpt.normalize("NFKC").trim().toLowerCase(),
+      ) === index,
+  );
+  const externalAnalysisCharacters = externalAnalysisEvidence.reduce(
+    (total, value) => total + value.excerpt.length,
+    0,
+  );
+  const hasEnoughEvidenceForAnalysis = Boolean(
+    aiCapability &&
+      externalAnalysisEvidence.length >= aiCapability.minimumEvidenceItems &&
+      externalAnalysisCharacters >= aiCapability.minimumEvidenceCharacters,
+  );
   return (
     <div
       className="fixed inset-0 z-50 overflow-hidden"
@@ -463,7 +682,7 @@ export default function CandidateDetailsDrawer({
         className="absolute inset-y-0 right-0 flex h-[100dvh] w-full flex-col border-l border-slate-700 bg-slate-950 shadow-2xl sm:w-[min(48vw,880px)]"
       >
         <header className="shrink-0 border-b border-slate-800 px-5 py-4">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <h2 className="truncate text-xl font-semibold text-white">
                 {name}
@@ -491,8 +710,15 @@ export default function CandidateDetailsDrawer({
                   ? "External Talent Network"
                   : "Internal Profiles"}
               </p>
+              {candidate.talentPool === "linkedin_talent_pool" ? (
+                <p className="mt-2 text-xs text-slate-400">
+                  Evidence confidence: {diagnostic.evidenceConfidence}
+                  <span className="mx-1.5 text-slate-700">·</span>
+                  Profile completeness: {effectiveProfileCompleteness}%
+                </p>
+              ) : null}
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
               {candidate.linkedInProfileUrl ? (
                 <a
                   href={candidate.linkedInProfileUrl}
@@ -520,10 +746,36 @@ export default function CandidateDetailsDrawer({
               {candidate.talentPool === "linkedin_talent_pool" ? (
                 <button
                   type="button"
-                  disabled={aiAnalysisLoading}
+                  onClick={() => {
+                    setImportOpen((value) => !value);
+                    setImportError("");
+                  }}
+                  className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:border-cyan-700 hover:bg-cyan-950/20"
+                >
+                  Import profile
+                </button>
+              ) : null}
+              {candidate.talentPool === "linkedin_talent_pool" ? (
+                <button
+                  type="button"
+                  disabled={
+                    aiAnalysisLoading ||
+                    !aiCapability?.enabled ||
+                    !hasEnoughEvidenceForAnalysis
+                  }
+                  title={
+                    !aiCapability
+                      ? "Checking AI Match Analysis availability"
+                      : !aiCapability.enabled
+                        ? aiCapability.message
+                        : !hasEnoughEvidenceForAnalysis
+                          ? "Import more candidate-owned evidence before generating analysis."
+                          : "Generate an evidence-grounded match analysis"
+                  }
                   onClick={async () => {
                     setAiAnalysisLoading(true);
                     setAiAnalysis("");
+                    setAiAnalysisError("");
                     try {
                       const response = await fetch(
                         "/api/recruiter/search-v2/external-analysis",
@@ -535,12 +787,7 @@ export default function CandidateDetailsDrawer({
                             headline: candidate.currentTitle,
                             location: candidate.location,
                             employer: candidate.currentEmployer,
-                            evidence: (candidate.evidence || []).map(
-                              (item) => ({
-                                label: item.label,
-                                excerpt: item.value,
-                              }),
-                            ),
+                            evidence: externalAnalysisEvidence,
                           }),
                         },
                       );
@@ -554,7 +801,7 @@ export default function CandidateDetailsDrawer({
                           "Analysis completed from available evidence.",
                       );
                     } catch (error) {
-                      setAiAnalysis(
+                      setAiAnalysisError(
                         error instanceof Error
                           ? error.message
                           : "AI Match Analysis is unavailable.",
@@ -563,11 +810,17 @@ export default function CandidateDetailsDrawer({
                       setAiAnalysisLoading(false);
                     }
                   }}
-                  className="rounded-lg border border-violet-700 px-3 py-2 text-sm font-semibold text-violet-200 disabled:opacity-50"
+                  className="rounded-lg border border-violet-700 px-3 py-2 text-sm font-semibold text-violet-200 transition hover:bg-violet-950/30 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-500"
                 >
                   {aiAnalysisLoading
                     ? "Analyzing available profile evidence…"
-                    : "Generate AI Match Analysis"}
+                    : !aiCapability
+                      ? "Checking AI availability…"
+                      : !aiCapability.enabled
+                        ? "AI Match unavailable"
+                        : !hasEnoughEvidenceForAnalysis
+                          ? "Import evidence for AI Match"
+                          : "Generate AI Match Analysis"}
                 </button>
               ) : null}
               <button
@@ -691,6 +944,14 @@ export default function CandidateDetailsDrawer({
             {aiAnalysis}
           </div>
         ) : null}
+        {candidate.talentPool === "linkedin_talent_pool" && aiAnalysisError ? (
+          <div
+            role="alert"
+            className="border-b border-amber-900/60 bg-amber-950/20 px-5 py-3 text-sm text-amber-200"
+          >
+            {aiAnalysisError}
+          </div>
+        ) : null}
 
         <div
           ref={contentScrollRef}
@@ -708,6 +969,178 @@ export default function CandidateDetailsDrawer({
             >
               {error}
             </p>
+          ) : null}
+          {candidate.talentPool === "linkedin_talent_pool" && importOpen ? (
+            <section className="my-5 rounded-xl border border-cyan-900/70 bg-cyan-950/10 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="font-semibold text-white">
+                    Import candidate-provided profile
+                  </h3>
+                  <p className="mt-1 text-xs leading-5 text-slate-400">
+                    Upload a CV or a PDF the candidate provided. Data is parsed
+                    into a review preview and is not saved or used for ranking.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setImportOpen(false)}
+                  aria-label="Close profile import"
+                  className="text-slate-400 hover:text-white"
+                >
+                  &#215;
+                </button>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="text-xs font-medium text-slate-300">
+                  Source
+                  <select
+                    value={importSourceKind}
+                    onChange={(event) =>
+                      setImportSourceKind(
+                        event.target.value as ExternalProfileImportSourceKind,
+                      )
+                    }
+                    className="mt-1 block min-h-10 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 text-sm text-slate-200"
+                  >
+                    <option value="candidate_cv">Candidate CV</option>
+                    <option value="candidate_provided_linkedin_pdf">
+                      Candidate-provided LinkedIn PDF
+                    </option>
+                  </select>
+                </label>
+                <label className="text-xs font-medium text-slate-300">
+                  Profile file
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                    onChange={(event) => {
+                      setImportFile(event.target.files?.[0] || null);
+                      setImportPreview(null);
+                      setImportError("");
+                    }}
+                    className="mt-1 block min-h-10 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 file:mr-3 file:rounded file:border-0 file:bg-cyan-300 file:px-2 file:py-1 file:font-semibold file:text-slate-950"
+                  />
+                </label>
+              </div>
+              <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={importConsentConfirmed}
+                  onChange={(event) =>
+                    setImportConsentConfirmed(event.target.checked)
+                  }
+                  className="mt-1"
+                />
+                I confirm this file was supplied by the candidate or is
+                otherwise authorized for recruiting use.
+              </label>
+              {importError ? (
+                <p role="alert" className="mt-3 text-sm text-amber-300">
+                  {importError}
+                </p>
+              ) : null}
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={
+                    !importFile || !importConsentConfirmed || importLoading
+                  }
+                  onClick={async () => {
+                    if (!importFile || !importConsentConfirmed) return;
+                    setImportLoading(true);
+                    setImportError("");
+                    setImportPreview(null);
+                    try {
+                      const form = new FormData();
+                      form.set("file", importFile);
+                      form.set("candidateId", candidate.candidateId);
+                      form.set("sourceKind", importSourceKind);
+                      form.set("consentConfirmed", "true");
+                      const response = await fetch(
+                        "/api/recruiter/search-v2/external-profile-import",
+                        {
+                          method: "POST",
+                          credentials: "same-origin",
+                          body: form,
+                        },
+                      );
+                      const payload = await response.json();
+                      if (!response.ok)
+                        throw new Error(
+                          payload.error || "Profile preview is unavailable.",
+                        );
+                      setImportPreview(payload.preview);
+                    } catch (reason) {
+                      setImportError(
+                        reason instanceof Error
+                          ? reason.message
+                          : "Profile preview is unavailable.",
+                      );
+                    } finally {
+                      setImportLoading(false);
+                    }
+                  }}
+                  className="rounded-lg bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {importLoading ? "Reading profile…" : "Review extracted data"}
+                </button>
+              </div>
+              {importPreview ? (
+                <div className="mt-4 rounded-lg border border-slate-800 bg-slate-950/60 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white">
+                        Review preview
+                      </p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {importPreview.extractedSectionCount}/5 profile areas ·{" "}
+                        {importPreview.completenessPercent}% completeness
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!importPreview.extractedSectionCount}
+                      onClick={() => {
+                        setAppliedImport(importPreview);
+                        setImportOpen(false);
+                        setAiAnalysis("");
+                        setAiAnalysisError("");
+                        setTab("Overview");
+                      }}
+                      className="rounded-lg border border-emerald-700 px-3 py-2 text-sm font-semibold text-emerald-200 disabled:opacity-40"
+                    >
+                      Apply to this profile view
+                    </button>
+                  </div>
+                  <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
+                    {(
+                      Object.entries(importPreview.sections) as Array<
+                        [string, string[]]
+                      >
+                    ).map(([section, values]) => (
+                      <div
+                        key={section}
+                        className="rounded border border-slate-800 px-3 py-2"
+                      >
+                        <dt className="capitalize text-slate-500">{section}</dt>
+                        <dd className="mt-1 font-semibold text-slate-200">
+                          {values.length} evidence item
+                          {values.length === 1 ? "" : "s"}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {importPreview.warnings.length ? (
+                    <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-amber-300">
+                      {importPreview.warnings.map((warning) => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
           ) : null}
           {overview && tab === "Overview" ? (
             <>
@@ -767,7 +1200,90 @@ export default function CandidateDetailsDrawer({
                   setTab(destination);
                 }}
               />
+              {candidate.talentPool === "linkedin_talent_pool" ? (
+                <div className="mb-5 rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-xs leading-5 text-slate-400">
+                  <p className="font-semibold text-slate-200">
+                    External profile evidence
+                  </p>
+                  <p className="mt-1">
+                    Provider and imported evidence remains source-labelled and
+                    separate from verified internal profile records. Imported
+                    data in this preview does not change ranking.
+                  </p>
+                  {appliedImport ? (
+                    <p className="mt-2 text-cyan-300">
+                      Session preview applied from {appliedImport.source.fileName}.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </>
+          ) : null}
+
+          {!profile &&
+          candidate.talentPool === "linkedin_talent_pool" &&
+          tab === "Experience" ? (
+            <ExternalEvidenceList
+              title="Employment evidence"
+              values={externalSections.experience}
+              sourceLabel={externalSourceLabel}
+            />
+          ) : null}
+
+          {!profile &&
+          candidate.talentPool === "linkedin_talent_pool" &&
+          tab === "Projects" ? (
+            <ExternalEvidenceList
+              title="Project evidence"
+              values={externalSections.projects}
+              sourceLabel={externalSourceLabel}
+            />
+          ) : null}
+
+          {!profile &&
+          candidate.talentPool === "linkedin_talent_pool" &&
+          tab === "Education" ? (
+            <>
+              <ExternalEvidenceList
+                title="Education evidence"
+                values={externalSections.education}
+                sourceLabel={externalSourceLabel}
+              />
+              <ExternalEvidenceList
+                title="Certification evidence"
+                values={externalSections.certifications}
+                sourceLabel={externalSourceLabel}
+              />
+            </>
+          ) : null}
+
+          {!profile &&
+          candidate.talentPool === "linkedin_talent_pool" &&
+          tab === "Skills" ? (
+            <Panel title="Skills evidence">
+              {externalSections.skills.length ? (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    {externalSections.skills.map((skill) => (
+                      <span
+                        key={skill.toLocaleLowerCase()}
+                        className="rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-300"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                    Source: {externalSourceLabel} · Review before use
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-slate-400">
+                  No grounded skills were found in the available external
+                  profile evidence.
+                </p>
+              )}
+            </Panel>
           ) : null}
 
           {profile && tab === "Experience" ? (

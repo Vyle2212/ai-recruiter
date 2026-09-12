@@ -17,6 +17,20 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+### External Talent AI Match Analysis
+
+External AI analysis is an explicit on-demand capability. Configure both
+server-side variables to enable the action:
+
+```bash
+EXTERNAL_TALENT_CLAUDE_MODE=on_demand
+ANTHROPIC_API_KEY=your-server-side-key
+```
+
+When either value is unavailable, the recruiter UI reports the capability as
+unavailable before a request is made. Candidate-provided CV or LinkedIn PDF
+imports are review-only session previews and do not change search ranking.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

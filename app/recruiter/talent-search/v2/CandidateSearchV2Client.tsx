@@ -752,6 +752,7 @@ export function CompactCandidateCard({
     jobId,
   );
   const shortlistHref = `/recruiter/shortlist?candidateId=${encodeURIComponent(result.candidateId)}&from=search-v2`;
+  const externalProfile = result.talentPool === "linkedin_talent_pool";
   const matchLabel = diagnostic.matchLevel;
   const rankingScore = displayedRankingScore(result);
   const fitClasses =
@@ -909,18 +910,19 @@ export function CompactCandidateCard({
                     : "Profile name match"
                 : rankingScore === null
                   ? "Match unavailable"
-                  : `${rankingScore}% ${matchLabel}`}
+                  : externalProfile
+                    ? `${rankingScore}% Preliminary match`
+                    : `${rankingScore}% ${matchLabel}`}
             </span>
-            {false && !identityLookup ? (
+            {externalProfile && !identityLookup ? (
               <span
-                className="text-[10px] text-slate-600"
-                title="Confidence measures the reliability and completeness of the evidence. It is independent of Match Quality."
+                className="text-[11px] text-slate-500"
+                title="Evidence confidence and profile completeness are independent of match alignment."
               >
-                Search confidence{" "}
-                <span className="text-slate-400">
-                  {diagnostic.evidenceConfidence} ·{" "}
-                  {diagnostic.evidenceCoveragePercent}%
-                </span>
+                Evidence {diagnostic.evidenceConfidence.toLocaleLowerCase()} ·{" "}
+                {result.profileCompletenessPercent == null
+                  ? "completeness not provided"
+                  : `${result.profileCompletenessPercent}% complete`}
               </span>
             ) : null}
           </div>
