@@ -389,6 +389,10 @@ const drawerSource = require("node:fs").readFileSync(
   "utf8",
 );
 assert.match(drawerSource, /initialTab\?: CandidateProfileTab/);
-assert.match(drawerSource, /availableTabs\.includes\(initialTab\)/);
+assert.doesNotMatch(
+  drawerSource,
+  /if \(overview && availableTabs\.includes\(initialTab\)\) setTab\(initialTab\)/,
+  "rerenders must not reset a recruiter-selected profile tab",
+);
 
 console.log("Search V2 rich candidate preview regression tests passed.");

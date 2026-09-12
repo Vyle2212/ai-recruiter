@@ -28,8 +28,20 @@ ANTHROPIC_API_KEY=your-server-side-key
 ```
 
 When either value is unavailable, the recruiter UI reports the capability as
-unavailable before a request is made. Candidate-provided CV or LinkedIn PDF
-imports are review-only session previews and do not change search ranking.
+unavailable before a request is made.
+
+External people search uses segmented Broad Market Mapping. The first provider
+segment requests up to 100 profiles; recruiters can map additional deterministic
+role/location segments and the server deduplicates them by provider identity and
+profile URL. The default mapping budget is 500 unique profiles. It can be set
+from 100 to 1,000 without changing match scoring:
+
+```bash
+EXTERNAL_TALENT_MARKET_MAPPING_LIMIT=500
+```
+
+Only fields returned by the connected provider are displayed. The sourcing
+drawer does not upload candidate CVs or LinkedIn exports.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

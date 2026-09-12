@@ -1,5 +1,5 @@
 export const SEARCH_V2_RESPONSE_CONTRACT_VERSION =
-  "search-v2-response-contract-v72-project-identity-separation";
+  "search-v2-response-contract-v73-external-market-mapping";
 
 export type SearchV2ClientSummary = {
   totalDocuments: number;
@@ -366,7 +366,7 @@ export function buildExternalSearchV2ClientResponse<
     },
     source: "external_talent_network" as const,
     requestId,
-    wording: `${externalResult.evaluatedTotal} external profiles sampled; ${externalResult.eligibleEvaluatedTotal} matched current criteria`,
+    wording: `${externalResult.evaluatedTotal} unique external profiles mapped; ${externalResult.eligibleEvaluatedTotal} matched required criteria`,
   };
 }
 

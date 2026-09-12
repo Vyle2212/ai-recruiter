@@ -59,6 +59,17 @@ export type ExternalCandidateEvidence = {
   sourceField: string;
 };
 
+export type ExternalEmploymentRecord = {
+  id: string;
+  title?: string;
+  employer?: string;
+  startDate?: string;
+  endDate?: string;
+  current: boolean;
+  location?: string;
+  summary?: string;
+};
+
 export type ExternalCandidate = {
   source: "linkedin_talent_pool";
   externalCandidateId: string;
@@ -69,6 +80,7 @@ export type ExternalCandidate = {
   currentEmployer?: string;
   skills?: string[];
   experienceSummary?: string;
+  employment?: ExternalEmploymentRecord[];
   employmentText?: string[];
   projectText?: string[];
   education?: string[];

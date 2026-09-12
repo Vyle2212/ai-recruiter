@@ -5,6 +5,7 @@ import type {
   ExternalProviderSearchResponse,
   ExternalSourceCapability,
   ExternalCandidate,
+  ExternalEmploymentRecord,
 } from "@/lib/externalCandidateSourceProvider";
 import { ExternalSourceError } from "@/lib/externalCandidateSourceProvider";
 import { validateExternalProfileUrl } from "@/lib/externalProfileUrl";
@@ -49,6 +50,61 @@ const recordText = (value: unknown) => {
     )
     .join(" — ");
 };
+const cleanText = (value: unknown) =>
+  typeof value === "string" && value.trim()
+    ? value.replace(/\s+/g, " ").trim()
+    : undefined;
+const objectName = (value: unknown) => {
+  if (typeof value === "string") return cleanText(value);
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  return cleanText(record.name || record.title || record.label);
+};
+function normalizeEmploymentRecord(
+  value: unknown,
+  index: number,
+  sourceIdentity: string,
+): ExternalEmploymentRecord | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const title = cleanText(record.title || record.role || record.position);
+  const employer = objectName(
+    record.company || record.employer || record.organization,
+  );
+  const startDate = cleanText(record.startDate || record.start);
+  const endDate = cleanText(record.endDate || record.end);
+  const summary = cleanText(
+    record.description || record.summary || record.responsibilities,
+  );
+  const location = objectName(record.location);
+  if (!title && !employer && !startDate && !endDate && !summary) return null;
+  const current =
+    record.current === true ||
+    record.isCurrent === true ||
+    Boolean(endDate && /^(?:present|current|now)$/i.test(endDate));
+  return {
+    id: createHash("sha256")
+      .update(
+        [
+          sourceIdentity,
+          index,
+          title || "",
+          employer || "",
+          startDate || "",
+          endDate || "",
+        ].join("|"),
+      )
+      .digest("hex")
+      .slice(0, 20),
+    ...(title ? { title } : {}),
+    ...(employer ? { employer } : {}),
+    ...(startDate ? { startDate } : {}),
+    ...(endDate ? { endDate } : {}),
+    current,
+    ...(location ? { location } : {}),
+    ...(summary ? { summary } : {}),
+  };
+}
 function groundedYears(work: unknown[]) {
   const ranges = work.flatMap((item) => {
     if (!item || typeof item !== "object") return [];
@@ -75,9 +131,7 @@ function groundedYears(work: unknown[]) {
     }
   }
   totalMs += currentEnd - currentStart;
-  return (
-    Math.round((totalMs / (365.25 * 24 * 60 * 60 * 1000)) * 10) / 10
-  );
+  return Math.round((totalMs / (365.25 * 24 * 60 * 60 * 1000)) * 10) / 10;
 }
 export function normalizeExaPersonResult(
   result: ExaResult,
@@ -100,36 +154,49 @@ export function normalizeExaPersonResult(
   const url = validateExternalProfileUrl(result.url);
   if (!url) return null;
   const work = Array.isArray(props.workHistory) ? props.workHistory : [];
-  const current =
-    work[0] && typeof work[0] === "object"
-      ? (work[0] as Record<string, unknown>)
-      : {};
-  const company =
-    current.company && typeof current.company === "object"
-      ? (current.company as Record<string, unknown>).name
-      : undefined;
+  const providerCurrentTitle = cleanText(props.currentTitle);
+  const providerCurrentEmployer = cleanText(props.currentEmployer);
+  const normalizedEmployment = work
+    .map((item, workIndex) =>
+      normalizeEmploymentRecord(item, workIndex, `${requestId}:${url.url}`),
+    )
+    .filter((item): item is ExternalEmploymentRecord => Boolean(item));
+  const hasExplicitCurrentEmployment = normalizedEmployment.some(
+    (item) => item.current,
+  );
+  const employment = normalizedEmployment.map((item) => ({
+    ...item,
+    current:
+      item.current ||
+      (!hasExplicitCurrentEmployment &&
+        Boolean(providerCurrentTitle) &&
+        Boolean(providerCurrentEmployer) &&
+        item.title?.toLocaleLowerCase() ===
+          providerCurrentTitle?.toLocaleLowerCase() &&
+        item.employer?.toLocaleLowerCase() ===
+          providerCurrentEmployer?.toLocaleLowerCase()),
+  }));
+  const current = employment.find((item) => item.current) || null;
   const excerpts = Array.isArray(result.highlights)
     ? result.highlights
         .filter((x): x is string => typeof x === "string")
         .slice(0, 12)
     : [];
   const employmentText = work.map(recordText).filter(Boolean);
-  const currentTitle =
-    typeof props.currentTitle === "string"
-      ? props.currentTitle
-      : typeof props.headline === "string"
-        ? props.headline
-        : typeof current.title === "string"
-      ? current.title
-      : typeof result.title === "string"
-        ? result.title
-        : undefined;
-  const currentEmployer =
-    typeof props.currentEmployer === "string"
-      ? props.currentEmployer
-      : typeof company === "string"
-        ? company
-        : undefined;
+  const currentTitle = providerCurrentTitle
+    ? providerCurrentTitle
+    : typeof props.headline === "string"
+      ? props.headline
+      : current?.title
+        ? current.title
+        : typeof result.title === "string"
+          ? result.title
+          : undefined;
+  const currentEmployer = providerCurrentEmployer
+    ? providerCurrentEmployer
+    : current?.employer
+      ? current.employer
+      : undefined;
   return {
     source: "linkedin_talent_pool",
     externalCandidateId: String(
@@ -150,6 +217,7 @@ export function normalizeExaPersonResult(
     skills: textValues(props.skills),
     experienceSummary:
       typeof props.summary === "string" ? props.summary : excerpts[0],
+    employment,
     employmentText,
     projectText: textValues(props.projects),
     education: textValues(props.education),
@@ -184,7 +252,7 @@ export class ExaPeopleSearchProvider implements ExternalCandidateSourceProvider 
         authentication: "not_configured",
         supportedFilters: [],
         supportsCandidateDetails: false,
-        supportsImport: true,
+        supportsImport: false,
         pagination: "none",
         sandboxAvailable: false,
       };
@@ -200,7 +268,7 @@ export class ExaPeopleSearchProvider implements ExternalCandidateSourceProvider 
         authentication: "not_configured",
         supportedFilters: [],
         supportsCandidateDetails: false,
-        supportsImport: true,
+        supportsImport: false,
         pagination: "none",
         sandboxAvailable: false,
       };
@@ -229,7 +297,7 @@ export class ExaPeopleSearchProvider implements ExternalCandidateSourceProvider 
         "deliveryExperience",
       ],
       supportsCandidateDetails: false,
-      supportsImport: true,
+      supportsImport: false,
       pagination: "none",
       sandboxAvailable: false,
     };
@@ -257,7 +325,7 @@ export class ExaPeopleSearchProvider implements ExternalCandidateSourceProvider 
         query: request.query,
         category: "people",
         type: "auto",
-        numResults: Math.min(100, Math.max(request.pageSize, 50)),
+        numResults: Math.min(100, Math.max(request.pageSize, 1)),
         contents: { highlights: true },
       }),
     });

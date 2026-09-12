@@ -24,6 +24,7 @@ import {
 } from "@/lib/candidateProfilePresentation";
 import { canonicalCandidateSkillCollection } from "@/lib/candidateProfileSkills";
 import type { ExternalTalentAnalysisCapability } from "@/lib/externalTalentAnalysisCapability";
+import type { CandidateSearchV2ProfilePreview } from "@/lib/candidateSearchV2Types";
 
 export type CandidateDrawerResult = {
   retrievalKind?: "identity_match" | "evaluated_match";
@@ -32,6 +33,7 @@ export type CandidateDrawerResult = {
   candidateId: string;
   talentPool?: "internal_profiles" | "linkedin_talent_pool";
   linkedInProfileUrl?: string | null;
+  profilePreview?: CandidateSearchV2ProfilePreview;
   candidateName: string | null;
   currentTitle: string | null;
   currentEmployer: string | null;
@@ -173,7 +175,11 @@ function uniqueExternalEvidence(values: Array<string | null | undefined>) {
   return [
     ...new Map(
       values
-        .map((value) => String(value || "").replace(/\s+/g, " ").trim())
+        .map((value) =>
+          String(value || "")
+            .replace(/\s+/g, " ")
+            .trim(),
+        )
         .filter(Boolean)
         .map((value) => [value.toLocaleLowerCase(), value]),
     ).values(),
@@ -214,11 +220,9 @@ function externalEvidenceSections(
 function ExternalEvidenceList({
   title,
   values,
-  sourceLabel,
 }: {
   title: string;
   values: string[];
-  sourceLabel: string;
 }) {
   return (
     <Panel title={title}>
@@ -230,9 +234,6 @@ function ExternalEvidenceList({
               className="rounded-lg border border-slate-800 bg-slate-950/40 p-4"
             >
               <p className="text-sm leading-6 text-slate-300">{value}</p>
-              <p className="mt-2 text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                Source: {sourceLabel} · Review before use
-              </p>
             </li>
           ))}
         </ol>
@@ -242,6 +243,51 @@ function ExternalEvidenceList({
           external profile evidence.
         </p>
       )}
+    </Panel>
+  );
+}
+
+function ExternalEmploymentList({
+  records,
+  fallback,
+}: {
+  records: CandidateSearchV2ProfilePreview["employment"];
+  fallback: string[];
+}) {
+  if (!records.length)
+    return (
+      <ExternalEvidenceList title="Employment evidence" values={fallback} />
+    );
+  return (
+    <Panel title="Employment history">
+      <ol className="space-y-4">
+        {records.map((record) => (
+          <li
+            key={record.id}
+            className="rounded-lg border border-slate-800 bg-slate-950/40 p-4"
+          >
+            <h4 className="font-semibold text-white">
+              {record.title || "Role not provided"}
+            </h4>
+            <p className="mt-1 text-sm text-slate-300">
+              {record.employer || "Employer not provided"}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              {formatCandidateProfilePeriod(
+                record.start,
+                record.end,
+                record.current,
+              )}
+              {record.location ? ` · ${record.location}` : ""}
+            </p>
+            {record.summary ? (
+              <p className="mt-3 text-sm leading-6 text-slate-300">
+                {record.summary}
+              </p>
+            ) : null}
+          </li>
+        ))}
+      </ol>
     </Panel>
   );
 }
@@ -501,7 +547,7 @@ export default function CandidateDetailsDrawer({
     candidate.candidateName,
   );
   const externalSections = externalEvidenceSections(candidate);
-  const externalSourceLabel = "external professional profile";
+  const externalEmployment = candidate.profilePreview?.employment || [];
   const effectiveProfileCompleteness =
     candidate.profileCompletenessPercent || 0;
   const overview = profile
@@ -516,6 +562,7 @@ export default function CandidateDetailsDrawer({
           country: candidate.country,
           totalExperienceYears: candidate.totalYearsExperience,
           professionalSummary: externalSections.overview.join(" ") || null,
+          employmentRecords: externalEmployment,
           employmentEvidence: externalSections.experience,
           projectEvidence: externalSections.projects,
           educationEvidence: externalSections.education,
@@ -613,8 +660,8 @@ export default function CandidateDetailsDrawer({
   );
   const hasEnoughEvidenceForAnalysis = Boolean(
     aiCapability &&
-      externalAnalysisEvidence.length >= aiCapability.minimumEvidenceItems &&
-      externalAnalysisCharacters >= aiCapability.minimumEvidenceCharacters,
+    externalAnalysisEvidence.length >= aiCapability.minimumEvidenceItems &&
+    externalAnalysisCharacters >= aiCapability.minimumEvidenceCharacters,
   );
   return (
     <div
@@ -973,15 +1020,8 @@ export default function CandidateDetailsDrawer({
                 }}
               />
               {candidate.talentPool === "linkedin_talent_pool" ? (
-                <div className="mb-5 rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-xs leading-5 text-slate-400">
-                  <p className="font-semibold text-slate-200">
-                    External profile evidence
-                  </p>
-                  <p className="mt-1">
-                    Provider evidence remains source-labelled and separate from
-                    verified internal profile records. Only information returned
-                    by the connected external source is shown here.
-                  </p>
+                <div className="mb-5 inline-flex rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-400">
+                  External source · Not independently verified
                 </div>
               ) : null}
             </>
@@ -990,10 +1030,9 @@ export default function CandidateDetailsDrawer({
           {!profile &&
           candidate.talentPool === "linkedin_talent_pool" &&
           tab === "Experience" ? (
-            <ExternalEvidenceList
-              title="Employment evidence"
-              values={externalSections.experience}
-              sourceLabel={externalSourceLabel}
+            <ExternalEmploymentList
+              records={externalEmployment}
+              fallback={externalSections.experience}
             />
           ) : null}
 
@@ -1003,7 +1042,6 @@ export default function CandidateDetailsDrawer({
             <ExternalEvidenceList
               title="Project evidence"
               values={externalSections.projects}
-              sourceLabel={externalSourceLabel}
             />
           ) : null}
 
@@ -1014,12 +1052,10 @@ export default function CandidateDetailsDrawer({
               <ExternalEvidenceList
                 title="Education evidence"
                 values={externalSections.education}
-                sourceLabel={externalSourceLabel}
               />
               <ExternalEvidenceList
                 title="Certification evidence"
                 values={externalSections.certifications}
-                sourceLabel={externalSourceLabel}
               />
             </>
           ) : null}
@@ -1029,21 +1065,16 @@ export default function CandidateDetailsDrawer({
           tab === "Skills" ? (
             <Panel title="Skills evidence">
               {externalSections.skills.length ? (
-                <>
-                  <div className="flex flex-wrap gap-2">
-                    {externalSections.skills.map((skill) => (
-                      <span
-                        key={skill.toLocaleLowerCase()}
-                        className="rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-300"
-                      >
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                    Source: {externalSourceLabel} · Review before use
-                  </p>
-                </>
+                <div className="flex flex-wrap gap-2">
+                  {externalSections.skills.map((skill) => (
+                    <span
+                      key={skill.toLocaleLowerCase()}
+                      className="rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-300"
+                    >
+                      {skill}
+                    </span>
+                  ))}
+                </div>
               ) : (
                 <p className="text-sm text-slate-400">
                   No grounded skills were found in the available external

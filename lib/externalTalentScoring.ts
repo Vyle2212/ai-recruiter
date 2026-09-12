@@ -16,7 +16,7 @@ import {
   canonicalMatchLabel,
   canonicalOverallMatchScore,
 } from "@/lib/searchV2Match";
-export const EXTERNAL_RANKING_VERSION = "external-match-v2";
+export const EXTERNAL_RANKING_VERSION = "external-match-v3-market-mapping";
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 const normalized = (value: unknown) =>
   String(value || "")
@@ -90,7 +90,11 @@ const uniqueRecords = (
         .split(/\s+(?:\u2014|\u00e2\u20ac\u201d)\s+/)
         .map(
           (value) =>
-            ({ field: "employmentText", text: value, kind: "experience" }) as const,
+            ({
+              field: "employmentText",
+              text: value,
+              kind: "experience",
+            }) as const,
         ),
     ),
     ...(input.projectText || []).map(
@@ -337,7 +341,8 @@ export function evaluateExternalCandidate(
         /\b(one|two|three|four|five|six|seven|eight|nine|ten|\d{1,2})\b(?:\s+\w+){0,4}\s+(?:full\s+)?(?:sap\s+)?(?:life[ -]?cycle\s+)?implementations?\b/i,
       );
       if (!match) return maximum;
-      const parsed = Number(match[1]) || numberWords[match[1].toLowerCase()] || 0;
+      const parsed =
+        Number(match[1]) || numberWords[match[1].toLowerCase()] || 0;
       return Math.max(maximum, parsed);
     },
     0,
@@ -372,40 +377,64 @@ export function evaluateExternalCandidate(
             match.target.conceptId === requirement.conceptId && match.exact,
         )?.record || null;
     } else if (requirement.kind === "professional_role") {
-      record = findText(requirement.alternatives || [requirement.label],
-        requirement.titleScope === "current" ? ["title"] : ["title", "experience", "project", "provider"]);
+      record = findText(
+        requirement.alternatives || [requirement.label],
+        requirement.titleScope === "current"
+          ? ["title"]
+          : ["title", "experience", "project", "provider"],
+      );
     } else if (requirement.kind === "location") {
       const alternatives = requirement.alternatives || [];
       record =
-        input.location && alternatives.some((term) => bounded(input.location!, term))
+        input.location &&
+        alternatives.some((term) => bounded(input.location!, term))
           ? { field: "location", text: input.location, kind: "location" }
           : null;
       conflicting =
-        !plan.includeRelocationRemote &&
-        Boolean(input.location) &&
-        !record;
+        !plan.includeRelocationRemote && Boolean(input.location) && !record;
     } else if (requirement.kind === "experience") {
       const years = input.totalYearsExperience;
       const known = years !== null && years !== undefined;
       const supported =
         known &&
-        (requirement.minimum === null || requirement.minimum === undefined || years >= requirement.minimum) &&
-        (requirement.maximum === null || requirement.maximum === undefined || years <= requirement.maximum);
+        (requirement.minimum === null ||
+          requirement.minimum === undefined ||
+          years >= requirement.minimum) &&
+        (requirement.maximum === null ||
+          requirement.maximum === undefined ||
+          years <= requirement.maximum);
       record = supported
-        ? { field: "totalYearsExperience", text: `${years} grounded years experience`, kind: "experience" }
+        ? {
+            field: "totalYearsExperience",
+            text: `${years} grounded years experience`,
+            kind: "experience",
+          }
         : null;
       conflicting = known && !supported;
     } else if (requirement.kind === "lifecycle") {
       record = implementationRecord;
     } else if (requirement.kind === "company") {
       const value = requirement.value || requirement.label;
-      record = findText([value], requirement.scope === "current" ? ["provider"] : undefined);
+      record = findText(
+        [value],
+        requirement.scope === "current" ? ["provider"] : undefined,
+      );
       if (input.currentEmployer && bounded(input.currentEmployer, value))
-        record = { field: "currentEmployer", text: input.currentEmployer, kind: "provider" };
+        record = {
+          field: "currentEmployer",
+          text: input.currentEmployer,
+          kind: "provider",
+        };
     } else if (requirement.kind === "exclusion") {
       const found = findText([requirement.value || requirement.label]);
       conflicting = Boolean(found);
-      record = found ? null : { field: "providerEvidence", text: `No candidate-owned evidence matched ${requirement.value || requirement.label}`, kind: "provider" };
+      record = found
+        ? null
+        : {
+            field: "providerEvidence",
+            text: `No candidate-owned evidence matched ${requirement.value || requirement.label}`,
+            kind: "provider",
+          };
     } else {
       const value = requirement.value || requirement.label;
       const kinds: SourceRecord["kind"][] | undefined =
@@ -487,7 +516,10 @@ export function evaluateExternalCandidate(
   ).size;
   const keywordScore = targetConcepts.length
     ? clamp((exactTargetCount / targetConcepts.length) * 100)
-    : clamp((supportedRequirements / Math.max(1, committedRequirements.length)) * 100);
+    : clamp(
+        (supportedRequirements / Math.max(1, committedRequirements.length)) *
+          100,
+      );
   const semanticScore = bestTarget?.exact
     ? clamp(75 + bestTarget.strength * 0.25)
     : bestTarget?.strength || 0;
@@ -575,7 +607,10 @@ export function evaluateExternalCandidate(
     clamp(
       20 +
         Math.min(45, providerEvidence.length * 8) +
-        Math.min(20, committedRequirements.length ? requirementCoverage * 0.2 : 0) +
+        Math.min(
+          20,
+          committedRequirements.length ? requirementCoverage * 0.2 : 0,
+        ) +
         Math.min(15, implementationEvidenceCount * 5),
     ),
   );

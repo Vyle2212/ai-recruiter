@@ -1,3 +1,5 @@
+import type { ExternalEmploymentRecord } from "./externalCandidateSourceProvider";
+
 export type ExternalTalentSource = "external_talent_network";
 export type ExternalTalentErrorCode =
   | "SOURCE_NOT_CONFIGURED"
@@ -140,6 +142,7 @@ export type ExternalTalentCandidate = {
   currentEmployer?: string;
   skills: string[];
   experienceSummary?: string;
+  employment?: ExternalEmploymentRecord[];
   employmentText?: string[];
   projectText?: string[];
   education?: string[];
@@ -205,6 +208,13 @@ export type ExternalTalentSearchResponse = {
   warnings: string[];
   unsupportedRequirements: string[];
   rejectionSummary: ExternalRejectionSummary;
+  marketMapping: {
+    version: string;
+    segmentsCompleted: number;
+    segmentsPlanned: number;
+    profileLimit: number;
+    requestSize: number;
+  };
 };
 export type ExternalRejectionSummary = {
   evaluated: number;

@@ -98,7 +98,10 @@ const overview = buildExternalCanonicalProfileOverview({
   evidenceConfidencePercent: 68,
   profileCompletenessPercent: preview.completenessPercent,
 });
-assert.equal(overview.career.currentEmployment?.employer, "Verified Consulting Sdn Bhd");
+assert.equal(
+  overview.career.currentEmployment?.employer,
+  "Verified Consulting Sdn Bhd",
+);
 assert.equal(overview.career.employmentCount, 3);
 assert.equal(overview.career.projectCount, 1);
 assert.equal(overview.education.count, 1);
@@ -122,8 +125,10 @@ const drawer = fs.readFileSync(
 assert.doesNotMatch(drawer, /Import candidate-provided profile/);
 assert.doesNotMatch(drawer, />\s*Import profile\s*</);
 assert.match(drawer, /AI Match unavailable/);
-assert.match(drawer, /Only information returned/);
+assert.match(drawer, /External source · Not independently verified/);
 assert.match(drawer, /ExternalEvidenceList/);
+assert.match(drawer, /ExternalEmploymentList/);
+assert.doesNotMatch(drawer, /Source: \{externalSourceLabel\}/);
 assert.doesNotMatch(
   drawer,
   /if \(overview && availableTabs\.includes\(initialTab\)\) setTab\(initialTab\)/,
@@ -136,7 +141,8 @@ const results = fs.readFileSync(
 );
 assert.match(results, /Preliminary match/);
 assert.match(results, /Profile completeness/);
-assert.match(results, /external profiles sampled/);
-assert.match(results, /not an exhaustive list/);
+assert.match(results, /unique external profiles mapped/);
+assert.match(results, /not an exhaustive LinkedIn market list/);
+assert.match(results, /Recent experience/);
 
 console.log("Search V2 external profile enrichment tests passed");

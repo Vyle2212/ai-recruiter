@@ -316,6 +316,13 @@ type SearchResponse = NormalizedSearchV2Response<SearchResult> & {
   rankingVersion?: string;
   requestId?: string;
   rejectionSummary?: import("@/lib/externalTalentTypes").ExternalRejectionSummary;
+  marketMapping?: {
+    version: string;
+    segmentsCompleted: number;
+    segmentsPlanned: number;
+    profileLimit: number;
+    requestSize: number;
+  };
   evaluationMode?:
     "identity_only" | "named_candidate_evaluation" | "requirements_ranking";
 };
@@ -847,6 +854,27 @@ export function CompactCandidateCard({
                 </span>
               ) : null}
             </p>
+          ) : null}
+          {externalProfile && preview?.employment.length ? (
+            <div className="mt-2 space-y-1 border-t border-slate-800/80 pt-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Recent experience
+              </p>
+              {preview.employment.slice(0, 2).map((record) => (
+                <p
+                  key={record.id}
+                  className="line-clamp-1 text-xs text-slate-400"
+                >
+                  <span className="text-slate-300">
+                    {record.title || "Role not provided"}
+                  </span>
+                  {record.employer ? ` · ${record.employer}` : ""}
+                  {record.start || record.end
+                    ? ` · ${formatCandidateProfilePeriod(record.start, record.end, record.current)}`
+                    : ""}
+                </p>
+              ))}
+            </div>
           ) : null}
           {integrity?.broadeningApplied && locationRequirement ? (
             <p className="mt-1 text-xs font-medium text-amber-300">
@@ -1809,7 +1837,7 @@ export default function CandidateSearchV2Client({
       committedSnapshot?.committedRequirements.talentPool ===
       "linkedin_talent_pool"
     )
-      return `${(response.loadedExternalTotal ?? response.summary.totalDocuments).toLocaleString()} external profiles sampled · ${response.summary.visibleTotal.toLocaleString()} matched current criteria`;
+      return `${(response.loadedExternalTotal ?? response.summary.totalDocuments).toLocaleString()} unique external profiles mapped${response.marketMapping ? ` across ${response.marketMapping.segmentsCompleted}/${response.marketMapping.segmentsPlanned} market segments` : ""} · ${response.summary.visibleTotal.toLocaleString()} matched required criteria`;
     if (
       ["candidate_name_lookup", "identity_token_lookup"].includes(
         response.searchIntent?.type || "",
@@ -3536,13 +3564,17 @@ export default function CandidateSearchV2Client({
                   className="min-h-10 rounded-lg border border-cyan-700 bg-cyan-950/30 px-4 text-sm font-semibold text-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {loadingExternalBatch
-                    ? "Loading 50 more candidates..."
-                    : "Load 50 more candidates"}
+                    ? "Mapping the next market segment..."
+                    : `Map next market segment (up to ${response.marketMapping?.requestSize || 100} profiles)`}
                 </button>
               ) : response.providerExhausted ? (
                 <p className="text-sm text-slate-400">
-                  End of this provider sample. This is not an exhaustive list
-                  of professionals in the selected market.
+                  Broad market mapping completed for the configured provider
+                  budget
+                  {response.marketMapping
+                    ? ` (up to ${response.marketMapping.profileLimit.toLocaleString()} profiles across ${response.marketMapping.segmentsPlanned} segments)`
+                    : ""}
+                  . This is not an exhaustive LinkedIn market list.
                 </p>
               ) : null}
             </div>

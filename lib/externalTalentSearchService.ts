@@ -7,6 +7,7 @@ import {
   type ExternalProviderSearchRequest,
 } from "@/lib/externalCandidateSourceProvider";
 import { deterministicExternalSearchPlan } from "@/lib/externalTalentSearchPlan";
+import { buildExternalMarketMapping } from "@/lib/externalMarketMapping";
 import { externalTalentProvider } from "@/lib/externalTalentProviderRegistry";
 import { validateExternalProfileUrl } from "@/lib/externalProfileUrl";
 import {
@@ -26,6 +27,8 @@ type ExternalSnapshot = {
   windowId: string;
   plan: ReturnType<typeof deterministicExternalSearchPlan>;
   providerFilters: ExternalProviderSearchRequest["filters"];
+  providerPagination: "cursor" | "page" | "none";
+  providerRequestSize: number;
   providerCursor: string | null;
   loadMoreToken: string | null;
   providerExhausted: boolean;
@@ -33,6 +36,8 @@ type ExternalSnapshot = {
   seenProviderCursors: Set<string>;
   seenCandidateKeys: Set<string>;
   loadedExternalTotal: number;
+  marketMapping: ReturnType<typeof buildExternalMarketMapping>;
+  marketQueryIndex: number;
   minimumScore: number;
   rejectionSummary: ExternalTalentSearchResponse["rejectionSummary"];
 };
@@ -83,6 +88,11 @@ function normalizeExternalBatch(
   const accepted: ExternalTalentCandidate[] = [];
   let uniqueLoaded = 0;
   for (const candidate of raw.candidates) {
+    if (
+      snapshot.loadedExternalTotal + uniqueLoaded >=
+      snapshot.marketMapping.profileLimit
+    )
+      break;
     const checkedUrl = validateExternalProfileUrl(candidate.profileUrl);
     if (!checkedUrl) continue;
     const keys = candidateKeys({
@@ -112,6 +122,7 @@ function normalizeExternalBatch(
         currentEmployer: candidate.currentEmployer,
         skills: candidate.skills || [],
         experienceSummary: candidate.experienceSummary,
+        employment: candidate.employment || [],
         employmentText: candidate.employmentText || [],
         projectText: candidate.projectText || [],
         education: candidate.education || [],
@@ -135,7 +146,8 @@ function normalizeExternalBatch(
       );
       if (!aggregate) continue;
       if (requirement.state === "conflicting") aggregate.contradictedCount += 1;
-      else if (requirement.state === "unverified") aggregate.unverifiedCount += 1;
+      else if (requirement.state === "unverified")
+        aggregate.unverifiedCount += 1;
       else aggregate.supportedCount += 1;
     }
     if (
@@ -153,11 +165,21 @@ function normalizeExternalBatch(
     typeof raw.nextCursor === "string" && raw.nextCursor.trim()
       ? raw.nextCursor
       : null;
+  const profileLimitReached =
+    snapshot.loadedExternalTotal >= snapshot.marketMapping.profileLimit;
+  const hasNextMarketSegment =
+    snapshot.providerPagination === "none" &&
+    snapshot.marketQueryIndex + 1 < snapshot.marketMapping.queries.length;
   snapshot.providerExhausted =
-    raw.candidates.length === 0 ||
-    !next ||
-    snapshot.seenProviderCursors.has(next);
-  snapshot.providerCursor = snapshot.providerExhausted ? null : next;
+    snapshot.providerPagination === "none"
+      ? profileLimitReached || !hasNextMarketSegment
+      : raw.candidates.length === 0 ||
+        !next ||
+        snapshot.seenProviderCursors.has(next);
+  snapshot.providerCursor =
+    snapshot.providerPagination === "none" || snapshot.providerExhausted
+      ? null
+      : next;
   if (next) snapshot.seenProviderCursors.add(next);
   snapshot.loadMoreToken = snapshot.providerExhausted ? null : randomUUID();
 }
@@ -206,14 +228,16 @@ export async function executeExternalTalentSearch(
       warnings.push(
         `Provider retrieval does not natively filter ${mappedRequest.unsupportedRequiredFilters.join(", ")}; grounded eligibility evaluation was applied locally.`,
       );
+    const marketMapping = buildExternalMarketMapping({ plan });
     const providerStart = performance.now();
     const raw = await provider.search(
       {
         source: "linkedin_talent_pool",
         committedSearchId,
-        query: plan.semanticQuery,
+        query: marketMapping.queries[0],
         filters: mappedRequest.filters,
-        pageSize: 50,
+        pageSize:
+          capability.pagination === "none" ? marketMapping.requestSize : 50,
       },
       signal,
     );
@@ -226,6 +250,9 @@ export async function executeExternalTalentSearch(
       windowId: "",
       plan,
       providerFilters: mappedRequest.filters,
+      providerPagination: capability.pagination,
+      providerRequestSize:
+        capability.pagination === "none" ? marketMapping.requestSize : 50,
       providerCursor: null,
       loadMoreToken: null,
       providerExhausted: false,
@@ -233,6 +260,8 @@ export async function executeExternalTalentSearch(
       seenProviderCursors: new Set(),
       seenCandidateKeys: new Set(),
       loadedExternalTotal: 0,
+      marketMapping,
+      marketQueryIndex: 0,
       minimumScore: Math.max(0, Number(request.minimumScore) || 0),
       rejectionSummary: {
         evaluated: 0,
@@ -257,7 +286,11 @@ export async function executeExternalTalentSearch(
   if (request.externalBatchCursor) {
     if (
       snapshot.providerExhausted ||
-      !snapshot.providerCursor ||
+      (!snapshot.providerCursor &&
+        !(
+          snapshot.providerPagination === "none" &&
+          snapshot.marketQueryIndex + 1 < snapshot.marketMapping.queries.length
+        )) ||
       request.externalBatchCursor !== snapshot.loadMoreToken
     )
       throw new ExternalSourceError(
@@ -271,6 +304,9 @@ export async function executeExternalTalentSearch(
       );
     snapshot.loadingBatch = true;
     const providerCursor = snapshot.providerCursor;
+    const nextMarketQueryIndex = providerCursor
+      ? snapshot.marketQueryIndex
+      : snapshot.marketQueryIndex + 1;
     try {
       const provider = externalTalentProvider();
       const providerStart = performance.now();
@@ -278,15 +314,18 @@ export async function executeExternalTalentSearch(
         {
           source: "linkedin_talent_pool",
           committedSearchId,
-          query: snapshot.plan.semanticQuery,
+          query:
+            snapshot.marketMapping.queries[nextMarketQueryIndex] ||
+            snapshot.plan.semanticQuery,
           filters: snapshot.providerFilters,
-          pageSize: 50,
-          providerCursor,
+          pageSize: snapshot.providerRequestSize,
+          ...(providerCursor ? { providerCursor } : {}),
         },
         signal,
       );
       providerMs = performance.now() - providerStart;
       const normalizeStart = performance.now();
+      snapshot.marketQueryIndex = nextMarketQueryIndex;
       normalizeExternalBatch(raw, snapshot);
       normalizationMs = performance.now() - normalizeStart;
     } finally {
@@ -375,10 +414,19 @@ export async function executeExternalTalentSearch(
     warnings: [
       ...warnings,
       snapshot.providerExhausted
-        ? "The connected provider returned no continuation cursor. Results are a provider sample, not an exhaustive market list."
-        : `${snapshot.loadedExternalTotal} external profiles sampled and evaluated.`,
+        ? snapshot.providerPagination === "none"
+          ? `Broad market mapping completed across ${snapshot.marketQueryIndex + 1} provider query segments. Results are evidence-grounded provider data, not an exhaustive LinkedIn market list.`
+          : "The connected provider returned no continuation cursor. Results are a provider sample, not an exhaustive market list."
+        : `${snapshot.loadedExternalTotal} unique external profiles mapped; more market segments are available.`,
     ],
     unsupportedRequirements: snapshot.plan.unsupportedRequirements,
     rejectionSummary: snapshot.rejectionSummary,
+    marketMapping: {
+      version: snapshot.marketMapping.version,
+      segmentsCompleted: snapshot.marketQueryIndex + 1,
+      segmentsPlanned: snapshot.marketMapping.queries.length,
+      profileLimit: snapshot.marketMapping.profileLimit,
+      requestSize: snapshot.providerRequestSize,
+    },
   };
 }

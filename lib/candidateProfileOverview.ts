@@ -8,7 +8,7 @@ import { normalizedDisplayTitle } from "./candidateSearchV2Projection";
 import { buildCandidateEducationPresentation } from "./candidateProfilePresentation";
 
 export const CANONICAL_PROFILE_OVERVIEW_VERSION =
-  "canonical-profile-overview-v12-exact-project-identity";
+  "canonical-profile-overview-v13-external-structured-employment";
 
 export type CanonicalOverviewEvidenceState =
   "Verified" | "Supported" | "Not verified";
@@ -599,6 +599,15 @@ export function buildExternalCanonicalProfileOverview(input: {
   country?: string | null;
   totalExperienceYears?: number | null;
   professionalSummary?: string | null;
+  employmentRecords?: Array<{
+    id: string;
+    title: string | null;
+    employer: string | null;
+    start: string | null;
+    end: string | null;
+    current: boolean;
+    location?: string | null;
+  }>;
   employmentEvidence?: string[];
   projectEvidence?: string[];
   educationEvidence?: string[];
@@ -612,18 +621,31 @@ export function buildExternalCanonicalProfileOverview(input: {
     input.candidateId,
     input.candidateName,
   );
-  const unique = (values: Array<string | null | undefined>) =>
-    [...new Map(
+  const unique = (values: Array<string | null | undefined>) => [
+    ...new Map(
       values
         .map((value) => clean(value))
         .filter((value): value is string => Boolean(value))
         .map((value) => [value.toLocaleLowerCase(), value]),
-    ).values()];
+    ).values(),
+  ];
   const employmentEvidence = unique(input.employmentEvidence || []);
   const projectEvidence = unique(input.projectEvidence || []);
   const educationEvidence = unique(input.educationEvidence || []);
   const certificationEvidence = unique(input.certificationEvidence || []);
   const skills = unique(input.skills || []);
+  const structuredEmployment = (input.employmentRecords || []).map(
+    (record) => ({
+      id: record.id,
+      title: clean(record.title),
+      employer: clean(record.employer),
+      start: clean(record.start),
+      end: record.current ? "Present" : clean(record.end),
+      current: record.current,
+      tenure: null,
+      location: clean(record.location),
+    }),
+  );
   const sapModuleExpression =
     /^(?:SAP\s+)?(?:FICO|FI|CO|MM|SD|PP|PM|PS|QM|WM|EWM|TM|HCM|HR|BW|BI|BTP|ABAP|BASIS|FSCM|FICA|SAC|S\/4HANA)$/i;
   const descriptor = {
@@ -637,7 +659,8 @@ export function buildExternalCanonicalProfileOverview(input: {
     .filter((value) => !sapModuleExpression.test(value))
     .map((value) => ({ value, state: "Supported" as const, ...descriptor }));
   const currentEmployment =
-    clean(input.profileTitle) && clean(input.currentEmployer)
+    structuredEmployment.find((record) => record.current) ||
+    (clean(input.profileTitle) && clean(input.currentEmployer)
       ? {
           id: `external-current:${input.candidateId}`,
           title: clean(input.profileTitle),
@@ -648,11 +671,16 @@ export function buildExternalCanonicalProfileOverview(input: {
           tenure: null,
           location: clean(input.location),
         }
-      : null;
+      : null);
+  const latestEmployment = structuredEmployment[0] || currentEmployment;
   const groundedCategories = [
     "identity",
     input.professionalSummary ? "professionalSummary" : null,
-    employmentEvidence.length || currentEmployment ? "employment" : null,
+    employmentEvidence.length ||
+    structuredEmployment.length ||
+    currentEmployment
+      ? "employment"
+      : null,
     projectEvidence.length ? "projects" : null,
     skills.length ? "skills" : null,
     educationEvidence.length ? "education" : null,
@@ -699,9 +727,16 @@ export function buildExternalCanonicalProfileOverview(input: {
           ? null
           : Math.max(0, input.totalExperienceYears),
       currentEmployment,
-      currentEmployments: currentEmployment ? [currentEmployment] : [],
-      latestEmployment: currentEmployment,
+      currentEmployments: structuredEmployment.filter(
+        (record) => record.current,
+      ).length
+        ? structuredEmployment.filter((record) => record.current)
+        : currentEmployment
+          ? [currentEmployment]
+          : [],
+      latestEmployment,
       employmentCount: Math.max(
+        structuredEmployment.length,
         employmentEvidence.length,
         currentEmployment ? 1 : 0,
       ),
@@ -716,7 +751,7 @@ export function buildExternalCanonicalProfileOverview(input: {
       industries: [],
       totalCount: skills.length,
     },
-    employmentHighlights: [],
+    employmentHighlights: structuredEmployment.slice(0, 3),
     projectHighlights: [],
     education: {
       count: educationEvidence.length,
@@ -758,7 +793,9 @@ export function buildExternalCanonicalProfileOverview(input: {
       ) as CanonicalProfileOverview["workArrangement"]["evidence"],
     },
     provenance: {
-      sourceTypes: unique(input.sourceTypes?.length ? input.sourceTypes : ["external_provider"]),
+      sourceTypes: unique(
+        input.sourceTypes?.length ? input.sourceTypes : ["external_provider"],
+      ),
       groundedCategories,
       unavailableCategories,
       canonicalProfileVersion: "external-profile-provider-projection",

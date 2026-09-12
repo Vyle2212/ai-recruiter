@@ -60,6 +60,8 @@ import { externalTalentProvider } from "@/lib/externalTalentProviderRegistry";
 import { executeExternalTalentSearch } from "@/lib/externalTalentSearchService";
 import { buildExternalSearchV2ClientResponse } from "@/lib/searchV2ResponseContract";
 import { externalCanonicalResultProjection } from "@/lib/externalTalentProjection";
+import type { ExternalTalentCandidate } from "@/lib/externalTalentTypes";
+import { cleanCandidatePresentationText } from "@/lib/candidatePresentationText";
 import { authorizeRecruiterJobsRead } from "@/lib/recruiterJobsAuthorization";
 import { sanitizeSearchV2RecruiterResponse } from "@/lib/searchV2RecruiterResponse";
 import {
@@ -256,6 +258,60 @@ function externalCapabilityResponse(
     supportedFilters: capability.supportedFilters,
     supportsCandidateDetails: capability.supportsCandidateDetails,
     supportsImport: capability.supportsImport,
+  };
+}
+
+function externalProfilePreview(item: ExternalTalentCandidate) {
+  const employment = (item.employment || []).map((record) => ({
+    id: record.id,
+    title: record.title || null,
+    employer: record.employer || null,
+    start: record.startDate || null,
+    end: record.current ? "Present" : record.endDate || null,
+    current: record.current,
+    location: record.location || null,
+    summary: record.summary
+      ? cleanCandidatePresentationText(record.summary).slice(0, 500) || null
+      : null,
+  }));
+  const explicitCurrent = employment.find((record) => record.current) || null;
+  const contextualCurrent =
+    !explicitCurrent && item.currentTitle && item.currentEmployer
+      ? {
+          id: `external-current:${item.externalCandidateId}`,
+          title: item.currentTitle,
+          employer: item.currentEmployer,
+          start: null,
+          end: null,
+          current: true,
+          location: item.location || null,
+          summary: null,
+        }
+      : null;
+  const visibleEmployment = contextualCurrent
+    ? [contextualCurrent, ...employment]
+    : employment;
+  return {
+    employmentCount: visibleEmployment.length,
+    projectCount: item.projectText?.length || 0,
+    educationCount: item.education?.length || 0,
+    certificationCount: item.certifications?.length || 0,
+    trainingCount: 0,
+    skillCount: item.skills.length,
+    currentEmployment: explicitCurrent || contextualCurrent,
+    latestEmployment: visibleEmployment[0] || null,
+    employment: visibleEmployment.slice(0, 12),
+    projects: [],
+    education: item.education?.[0]
+      ? {
+          qualification: item.education[0],
+          fieldOfStudy: null,
+          institution: null,
+        }
+      : null,
+    certifications: item.certifications || [],
+    training: [],
+    skills: item.skills,
   };
 }
 
@@ -535,6 +591,7 @@ export async function POST(request: NextRequest) {
               ? [item.targetEvidence.target]
               : [],
           queryRelevantSkills: item.skills,
+          profilePreview: externalProfilePreview(item),
           ...externalCanonicalResultProjection(
             item,
             externalCommittedRequirements.version,

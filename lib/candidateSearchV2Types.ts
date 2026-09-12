@@ -114,6 +114,8 @@ export type CandidateSearchV2ProfilePreview = Readonly<{
     start: string | null;
     end: string | null;
     current: boolean;
+    location?: string | null;
+    summary?: string | null;
   } | null;
   latestEmployment: {
     id: string;
@@ -122,6 +124,8 @@ export type CandidateSearchV2ProfilePreview = Readonly<{
     start: string | null;
     end: string | null;
     current: boolean;
+    location?: string | null;
+    summary?: string | null;
   } | null;
   employment: Array<{
     id: string;
@@ -130,6 +134,8 @@ export type CandidateSearchV2ProfilePreview = Readonly<{
     start: string | null;
     end: string | null;
     current: boolean;
+    location?: string | null;
+    summary?: string | null;
   }>;
   projects: Array<{
     id: string;
