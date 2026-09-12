@@ -44,7 +44,7 @@ const ConfidenceBar = memo(function ConfidenceBar({ value }: { value: number }) 
 const KpiRow = memo(function KpiRow({ metric }: { metric: Metric }) {
   const available = metric.score !== null;
   const calculation = calculationFor(metric);
-  const conclusionConfidence = available ? Math.min(metric.confidence, metric.evidence.length >= 3 ? 75 : metric.evidence.length ? 65 : 40) : 0;
+  const conclusionConfidence = available ? Math.min(metric.confidence ?? 0, metric.evidence.length >= 3 ? 75 : metric.evidence.length ? 65 : 40) : 0;
   return <article className="border-t border-slate-800 py-4 first:border-t-0 first:pt-0 last:pb-0" aria-label={`${metric.label}: ${available ? `${metric.score} out of 100` : "Limited evidence"}`}>
     <div className="flex items-start justify-between gap-3"><div><h4 className="text-sm font-semibold text-slate-100">{metric.label}</h4><p className="mt-1 text-[11px] text-slate-400">{rating(metric.score)}</p></div>{available ? <p className="whitespace-nowrap text-xl font-semibold tabular-nums text-white">{metric.score}<span className="ml-1 text-[10px] font-normal text-slate-500">/100</span></p> : <p className="max-w-28 text-right text-xs font-medium leading-5 text-slate-300">Limited evidence</p>}</div>
     <div className="mt-3">{available ? <ConfidenceBar value={conclusionConfidence}/> : <div className="flex justify-between text-[10px] uppercase tracking-wide text-slate-500"><span>Conclusion confidence</span><span>Evidence unavailable</span></div>}</div>
@@ -70,5 +70,4 @@ export default memo(function CandidateIntelligencePanel({ intelligence }: { inte
   ], [intelligence]);
   return <section aria-labelledby="enterprise-intelligence-title" className="rounded-2xl border border-slate-800/90 bg-[#0B0F16] p-5 md:p-6"><div className="flex flex-wrap items-end justify-between gap-3"><div><h2 id="enterprise-intelligence-title" className="text-lg font-semibold tracking-tight text-white">Enterprise intelligence</h2><p className="mt-1 text-sm text-slate-400">Five evidence-backed intelligence domains replace the isolated score-card matrix.</p></div></div><div className="mt-5 grid items-start gap-4 xl:grid-cols-2">{domains.map((domain, index) => <div key={domain.title} className={index === domains.length - 1 ? "xl:col-span-2" : ""}><IntelligenceDomain {...domain}/></div>)}</div><div className="mt-5 grid gap-4 border-t border-slate-800 pt-5 sm:grid-cols-2"><InsightList title="Best-fit roles" items={intelligence.insights.idealRoles}/><InsightList title="Priority risks" items={intelligence.insights.topRisks}/></div></section>;
 });
-
 
