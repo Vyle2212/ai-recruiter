@@ -93,7 +93,7 @@ export function normalizeExaPersonResult(
       : undefined;
   const url = validateExternalPersonProfileUrl(
     result.url,
-    Boolean(person || structuredDisplayName || groundedTitleName),
+    Boolean(structuredDisplayName || groundedTitleName),
   );
   if (!url) return null;
   const displayName = structuredDisplayName || groundedTitleName;
@@ -167,7 +167,9 @@ export function normalizeExaPersonResult(
         ? "properties.displayName"
         : clean(props.name)
           ? "properties.name"
-          : null,
+          : groundedTitleName
+            ? "result.title"
+            : null,
       profileTitleField: explicitProfileTitle
         ? "properties.headline"
         : currentTitle

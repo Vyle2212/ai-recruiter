@@ -36,6 +36,12 @@ export function validateExternalPersonProfileUrl(
     if (!/^\/in\/[A-Za-z0-9_%.-]+\/?$/i.test(url.pathname)) return null;
     return validated;
   }
+  if (
+    /\/(?:jobs?|job-description|compan(?:y|ies)|articles?|learning|search|directory|resources?|hiring)(?:\/|$)/i.test(
+      url.pathname,
+    )
+  )
+    return null;
   return hasGroundedPersonIdentity ? validated : null;
 }
 

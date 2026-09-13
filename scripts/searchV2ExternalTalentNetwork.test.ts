@@ -170,6 +170,24 @@ async function main() {
     validateExternalPersonProfileUrl(linkedInHiringGuide, true),
     null,
   );
+  for (const path of [
+    "jobs/sap-consultant",
+    "company/example",
+    "article/sap-careers",
+    "learning/sap-fico",
+    "search/people",
+    "directory/consultants",
+    "resources/hiring",
+  ]) {
+    assert.equal(
+      validateExternalPersonProfileUrl(
+        `https://profiles.example.com/${path}`,
+        true,
+      ),
+      null,
+      `${path} must not be admitted as a person profile`,
+    );
+  }
   assert.equal(
     normalizeExaPersonResult(
       {
