@@ -9,7 +9,7 @@ import {
 import { deterministicExternalSearchPlan } from "@/lib/externalTalentSearchPlan";
 import { buildExternalMarketMapping } from "@/lib/externalMarketMapping";
 import { externalTalentProvider } from "@/lib/externalTalentProviderRegistry";
-import { validateExternalProfileUrl } from "@/lib/externalProfileUrl";
+import { validateExternalPersonProfileUrl } from "@/lib/externalProfileUrl";
 import {
   EXTERNAL_RANKING_VERSION,
   evaluateExternalCandidate,
@@ -132,7 +132,10 @@ function normalizeExternalBatch(
       snapshot.marketMapping.profileLimit
     )
       break;
-    const checkedUrl = validateExternalProfileUrl(candidate.profileUrl);
+    const checkedUrl = validateExternalPersonProfileUrl(
+      candidate.profileUrl,
+      Boolean(candidate.displayName),
+    );
     if (!checkedUrl) {
       invalidRecords += 1;
       continue;

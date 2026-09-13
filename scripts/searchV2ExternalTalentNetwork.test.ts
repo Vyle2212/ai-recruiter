@@ -3,6 +3,7 @@ import fs from "node:fs";
 import { createElement, type ReactNode } from "react";
 import {
   validateExternalProfileUrl,
+  validateExternalPersonProfileUrl,
   externalProfileActionLabel,
 } from "../lib/externalProfileUrl";
 import {
@@ -163,6 +164,36 @@ async function main() {
 
   assert.equal(validateExternalProfileUrl("javascript:alert(1)"), null);
   assert.equal(validateExternalProfileUrl("http://127.0.0.1/person"), null);
+  const linkedInHiringGuide =
+    "https://business.linkedin.com/talent-solutions/resources/how-to-hire-guides/sap-consultant-job-description";
+  assert.equal(
+    validateExternalPersonProfileUrl(linkedInHiringGuide, true),
+    null,
+  );
+  assert.equal(
+    normalizeExaPersonResult(
+      {
+        id: "non-person-guide",
+        title: "SAP consultant job description",
+        url: linkedInHiringGuide,
+        entities: [
+          {
+            type: "person",
+            properties: { displayName: "Candidate #IPTION" },
+          },
+        ],
+      },
+      0,
+      "non-person-guide",
+    ),
+    null,
+  );
+  assert.ok(
+    validateExternalPersonProfileUrl(
+      "https://www.linkedin.com/in/exact-provider-profile",
+      false,
+    ),
+  );
   assert.equal(
     externalProfileActionLabel(
       "https://www.linkedin.com/in/exact-provider-profile",

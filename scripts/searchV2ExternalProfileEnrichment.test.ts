@@ -67,10 +67,8 @@ const results = fs.readFileSync(
 );
 assert.match(results, /Needs verification/);
 assert.match(results, /result\.talentPool !== "linkedin_talent_pool"/);
-assert.match(
-  results,
-  /result\.talentPool !== "linkedin_talent_pool" &&\s+preview\.employment\.length/,
-);
+assert.match(results, /preview\.employment\.slice\(0, 2\)/);
+assert.doesNotMatch(results, /View all experience/);
 assert.match(results, /Map next market segment/);
 
 console.log("Search V2 external profile enrichment tests passed");

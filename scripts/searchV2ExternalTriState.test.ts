@@ -340,9 +340,11 @@ async function main() {
       onToggle: () => undefined,
     }),
   );
-  assert.match(potentialMarkup, /% Potential Match · Needs verification/);
+  assert.match(potentialMarkup, /% Potential · Needs verification/);
   assert.match(potentialMarkup, /Needs verification: Experience: 8[+] years/);
-  assert.match(potentialMarkup, /Confirmed requirement coverage/);
+  assert.match(potentialMarkup, /3 of 4 confirmed/);
+  assert.match(potentialMarkup, /1 to verify/);
+  assert.doesNotMatch(potentialMarkup, /Confirmed requirement coverage/);
   assert.doesNotMatch(potentialMarkup, /Met: Experience: 8[+] years/);
 
   const population = [

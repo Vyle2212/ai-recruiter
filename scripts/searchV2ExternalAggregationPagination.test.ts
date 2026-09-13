@@ -318,7 +318,7 @@ async function main() {
   assert.match(client, /Mapping audit/);
   assert.match(
     readFileSync("lib/externalTalentScoring.ts", "utf8"),
-    /external-match-v7-candidate-specific-projection/,
+    /external-match-v8-person-profile-boundary/,
   );
   assert.match(client, /disabled=\{loading \|\| loadingExternalBatch\}/);
   console.log(

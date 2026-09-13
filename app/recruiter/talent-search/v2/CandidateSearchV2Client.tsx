@@ -535,6 +535,13 @@ export function displayedRankingScore(
     ? Math.round(value)
     : null;
 }
+export function searchLoadingSourceLabel(
+  talentPool: "internal_profiles" | "linkedin_talent_pool",
+) {
+  return talentPool === "linkedin_talent_pool"
+    ? "External Talent Network"
+    : "SAP Talent Hub";
+}
 type RecentSearch = {
   id: string;
   query: string;
@@ -857,6 +864,10 @@ export function CompactCandidateCard({
   const locationRequirement = integrity?.requirements.find(
     (requirement) => requirement.kind === "location",
   );
+  const priorityExternalRequirement = integrity?.requirements.find(
+    (requirement) =>
+      requirement.state !== "verified" && requirement.state !== "supported",
+  );
   const stateLabel = (state: string) =>
     state === "verified" || state === "supported"
       ? "Met"
@@ -892,25 +903,40 @@ export function CompactCandidateCard({
               {companyLabel}: {employer}
             </p>
           ) : null}
-          {location ||
-          result.totalYearsExperience != null ||
-          result.experienceCalculationStatus === "unavailable" ? (
-            <p className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-slate-500">
-              {location ? <span>{location}</span> : null}
-              {result.totalYearsExperience != null ? (
-                <span>
-                  Total professional experience:{" "}
-                  {formatTotalCareerExperience(result.totalYearsExperience)}
-                  {result.experienceCalculationStatus === "partial"
-                    ? " (partial from dated source records)"
-                    : ""}
-                </span>
-              ) : result.talentPool === "linkedin_talent_pool" ? (
-                <span>
-                  Total professional experience: Not established from source
-                </span>
-              ) : null}
+          {location ? (
+            <p className="mt-1 text-sm text-slate-400">
+              <span className="text-slate-500">Location:</span> {location}
             </p>
+          ) : null}
+          {result.totalYearsExperience != null ? (
+            <p className="mt-1 text-sm text-slate-400">
+              <span className="text-slate-500">Total experience:</span>{" "}
+              {formatTotalCareerExperience(result.totalYearsExperience)}
+              {result.experienceCalculationStatus === "partial"
+                ? " (partial from dated source records)"
+                : ""}
+            </p>
+          ) : result.talentPool === "linkedin_talent_pool" ? (
+            <p className="mt-1 text-sm text-slate-400">
+              <span className="text-slate-500">Total experience:</span> Not
+              established from source
+            </p>
+          ) : null}
+          {result.talentPool === "linkedin_talent_pool" &&
+          preview?.employment.length ? (
+            <ol
+              aria-label="Recent experience"
+              className="mt-2 space-y-1 text-sm text-slate-400"
+            >
+              {preview.employment.slice(0, 2).map((item) => (
+                <li key={item.id} className="truncate">
+                  <span className="font-medium text-slate-200">
+                    {item.title || "Role not provided"}
+                  </span>
+                  {item.employer ? ` · ${item.employer}` : ""}
+                </li>
+              ))}
+            </ol>
           ) : null}
           {integrity?.broadeningApplied && locationRequirement ? (
             <p className="mt-1 text-xs font-medium text-amber-300">
@@ -976,7 +1002,11 @@ export function CompactCandidateCard({
                   ? externalNeedsVerification
                     ? "Match unavailable · Needs verification"
                     : "Match unavailable"
-                  : `${rankingScore}% ${matchLabel}${externalNeedsVerification ? " · Needs verification" : ""}`}
+                  : `${rankingScore}% ${
+                      result.talentPool === "linkedin_talent_pool"
+                        ? matchLabel.replace(/\s+Match$/, "")
+                        : matchLabel
+                    }${externalNeedsVerification ? " · Needs verification" : ""}`}
             </span>
             {false && !identityLookup ? (
               <span
@@ -995,58 +1025,14 @@ export function CompactCandidateCard({
           result.talentPool === "linkedin_talent_pool" &&
           integrity ? (
             <p className="mt-2 text-sm font-medium text-slate-300">
-              {integrity.supported} confirmed {" · "}
-              {result.unresolvedRequirementCount || 0} verify {" · "}
-              {result.confirmedContradictionCount || 0} contradictions
+              {integrity.supported} of {integrity.requirements.length} confirmed
+              {" · "}
+              {result.unresolvedRequirementCount || 0} to verify
+              {result.confirmedContradictionCount
+                ? ` · ${result.confirmedContradictionCount} contradicted`
+                : ""}
             </p>
           ) : null}
-          <dl
-            className={
-              result.talentPool === "linkedin_talent_pool"
-                ? "mt-2 space-y-1.5 text-sm text-slate-400"
-                : "hidden"
-            }
-            aria-label="Candidate match dimensions"
-          >
-            {!identityLookup ? (
-              <>
-                <div>
-                  <dt className="inline">Confirmed requirement coverage</dt>
-                  <dd className="ml-1 inline text-slate-300">
-                    {diagnostic.requirementCoveragePercent == null
-                      ? "Not applicable"
-                      : `${diagnostic.requirementCoveragePercent}%`}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="inline">Ranking score</dt>
-                  <dd className="ml-1 inline text-slate-300">
-                    {rankingScore === null
-                      ? "Not available"
-                      : `${rankingScore}%`}
-                  </dd>
-                </div>
-              </>
-            ) : null}
-            {!identityLookup ? (
-              <div>
-                <dt className="inline">Search-evidence confidence</dt>
-                <dd className="ml-1 inline text-slate-300">
-                  {diagnostic.evidenceConfidence}
-                </dd>
-              </div>
-            ) : null}
-            {!identityLookup ? (
-              <div>
-                <dt className="inline">Profile completeness</dt>
-                <dd className="ml-1 inline text-slate-300">
-                  {result.profileCompletenessPercent == null
-                    ? "Not provided"
-                    : `${result.profileCompletenessPercent}%`}
-                </dd>
-              </div>
-            ) : null}
-          </dl>
           {!identityLookup &&
           result.talentPool !== "linkedin_talent_pool" &&
           matchSummary.length ? (
@@ -1094,9 +1080,14 @@ export function CompactCandidateCard({
           result.talentPool === "linkedin_talent_pool" &&
           integrity?.requirements.length ? (
             <>
-              <p className="mt-2 line-clamp-2 text-sm leading-5 text-slate-300">
-                {queryStatements.gaps[0] || queryStatements.supported[0]}
-              </p>
+              {priorityExternalRequirement ? (
+                <p className="mt-2 text-sm leading-5 text-amber-100">
+                  {priorityExternalRequirement.state === "conflicting"
+                    ? "Contradicted"
+                    : "Needs verification"}
+                  : {priorityExternalRequirement.label}
+                </p>
+              ) : null}
               <details
                 data-testid="external-candidate-evidence"
                 className="mt-1.5 text-sm text-slate-300"
@@ -1104,17 +1095,37 @@ export function CompactCandidateCard({
                 <summary className="cursor-pointer font-medium text-cyan-300">
                   View evidence ({integrity.requirements.length})
                 </summary>
-                <ul className="mt-2 space-y-1.5">
-                  {queryStatements.supported.map((item) => (
-                    <li key={item} className="text-emerald-200">
-                      {item}
-                    </li>
-                  ))}
-                  {queryStatements.gaps.map((item) => (
-                    <li key={item} className="text-amber-100">
-                      {item}
-                    </li>
-                  ))}
+                <ul className="mt-2 space-y-2">
+                  {integrity.requirements.map((requirement) => {
+                    const confirmed =
+                      requirement.state === "verified" ||
+                      requirement.state === "supported";
+                    const contradicted = requirement.state === "conflicting";
+                    return (
+                      <li
+                        key={requirement.id}
+                        className={
+                          confirmed
+                            ? "text-emerald-200"
+                            : contradicted
+                              ? "text-rose-200"
+                              : "text-amber-100"
+                        }
+                      >
+                        <span className="font-semibold">
+                          {confirmed
+                            ? "Confirmed"
+                            : contradicted
+                              ? "Contradicted"
+                              : "Needs verification"}
+                          : {requirement.label}
+                        </span>
+                        <span className="mt-0.5 block text-slate-400">
+                          {requirement.reason}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </details>
             </>
@@ -1173,7 +1184,8 @@ export function CompactCandidateCard({
           </button>
         </div>
       </div>
-      {preview &&
+      {result.talentPool !== "linkedin_talent_pool" &&
+      preview &&
       (preview.employment.length ||
         preview.projects.length ||
         preview.education) ? (
@@ -1181,48 +1193,31 @@ export function CompactCandidateCard({
           {preview.employment.length ? (
             <section className="min-w-0" aria-label="Recent experience">
               <h3 className="text-xs font-semibold text-slate-300">
-                {result.talentPool === "linkedin_talent_pool"
-                  ? "Recent experience"
-                  : `Recent experience (${preview.employmentCount})`}
+                Recent experience ({preview.employmentCount})
               </h3>
               <ol className="mt-2 space-y-1.5">
-                {preview.employment
-                  .slice(
-                    0,
-                    result.talentPool === "linkedin_talent_pool" ? 2 : 3,
-                  )
-                  .map((item) => (
-                    <li key={item.id} className="text-sm text-slate-400">
-                      <p className="truncate font-medium text-slate-200">
-                        {item.title || "Role not provided"}
-                      </p>
-                      <p className="truncate">
-                        {[
-                          item.employer,
-                          item.start
-                            ? formatCandidateProfilePeriod(
-                                item.start,
-                                item.end,
-                                item.current,
-                              )
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
-                    </li>
-                  ))}
+                {preview.employment.slice(0, 3).map((item) => (
+                  <li key={item.id} className="text-sm text-slate-400">
+                    <p className="truncate font-medium text-slate-200">
+                      {item.title || "Role not provided"}
+                    </p>
+                    <p className="truncate">
+                      {[
+                        item.employer,
+                        item.start
+                          ? formatCandidateProfilePeriod(
+                              item.start,
+                              item.end,
+                              item.current,
+                            )
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </li>
+                ))}
               </ol>
-              {preview.employmentCount >
-              (result.talentPool === "linkedin_talent_pool" ? 2 : 3) ? (
-                <button
-                  type="button"
-                  onClick={() => onOpenTab?.("Experience")}
-                  className="mt-1 text-[11px] font-medium text-cyan-300 hover:text-cyan-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300"
-                >
-                  View all experience
-                </button>
-              ) : null}
             </section>
           ) : null}
           {preview.projects.length ? (
@@ -3361,7 +3356,12 @@ export default function CandidateSearchV2Client({
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-white">
-                  Searching SAP Talent Hub…
+                  Searching{" "}
+                  {searchLoadingSourceLabel(
+                    committedSnapshot?.committedRequirements.talentPool ||
+                      talentPool,
+                  )}
+                  …
                 </h2>
                 <p className="mt-2 text-sm text-cyan-100">
                   Finding candidates for your search.
@@ -3460,7 +3460,7 @@ export default function CandidateSearchV2Client({
                 <p className="mt-1 text-xs text-cyan-200">
                   {externalAggregation.lastBatch.replayed
                     ? "This segment was already mapped; no duplicate provider request was made."
-                    : `${externalAggregation.lastBatch.newUniqueProfiles} new unique profiles mapped | ${externalAggregation.lastBatch.eligibleProfilesAdded} eligible added | ${externalAggregation.lastBatch.duplicateRecords} duplicates | ${externalAggregation.lastBatch.confirmedExclusions} excluded | ${externalAggregation.lastBatch.invalidRecords} invalid | ${externalAggregation.lastBatch.providerRecordsFetched} fetched in this segment`}
+                    : `${externalAggregation.lastBatch.newUniqueProfiles} new unique profiles mapped | ${externalAggregation.lastBatch.eligibleProfilesAdded} eligible added | ${externalAggregation.lastBatch.duplicateRecords} duplicates | ${externalAggregation.lastBatch.confirmedExclusions} excluded | ${externalAggregation.lastBatch.invalidRecords} invalid/non-person | ${externalAggregation.lastBatch.providerRecordsFetched} fetched in this segment`}
                 </p>
               ) : null}
               {externalRejectionPresentation.noFullyVerifiedMatches ? (
@@ -3505,6 +3505,9 @@ export default function CandidateSearchV2Client({
                     {externalAggregation.providerRecordsFetched} fetched {" | "}
                     {externalAggregation.recordsNormalized} normalized {" | "}
                     {externalAggregation.uniqueProfiles} unique {" | "}
+                    {externalAggregation.duplicateRecords} duplicates {" | "}
+                    {externalAggregation.invalidRecords} invalid/non-person
+                    {" | "}
                     {externalAggregation.currentlyRenderedResults} shown {" | "}
                     {externalAggregation.remainingLoadedResults} ready to view
                   </p>

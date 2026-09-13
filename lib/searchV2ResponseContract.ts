@@ -1,5 +1,5 @@
 export const SEARCH_V2_RESPONSE_CONTRACT_VERSION =
-  "search-v2-response-contract-v75-external-pagination";
+  "search-v2-response-contract-v76-person-profile-boundary";
 
 export type SearchV2ClientSummary = {
   totalDocuments: number;

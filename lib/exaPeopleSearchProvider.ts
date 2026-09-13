@@ -7,7 +7,7 @@ import type {
   ExternalCandidate,
 } from "@/lib/externalCandidateSourceProvider";
 import { ExternalSourceError } from "@/lib/externalCandidateSourceProvider";
-import { validateExternalProfileUrl } from "@/lib/externalProfileUrl";
+import { validateExternalPersonProfileUrl } from "@/lib/externalProfileUrl";
 import {
   calculateCanonicalExternalExperience,
   confirmedExternalCurrentEmployment,
@@ -78,11 +78,25 @@ export function normalizeExaPersonResult(
     person && person.properties && typeof person.properties === "object"
       ? (person.properties as Record<string, unknown>)
       : {};
-  const url = validateExternalProfileUrl(result.url);
-  if (!url) return null;
   const work = Array.isArray(props.workHistory) ? props.workHistory : [];
-  const displayName =
+  const structuredDisplayName =
     clean(props.displayName) || clean(props.name) || undefined;
+  const titleName = clean(result.title)
+    ?.replace(/\s*[|·-]\s*LinkedIn.*$/i, "")
+    .trim();
+  const groundedTitleName =
+    titleName &&
+    !/\b(?:job description|hiring guide|jobs?|company|learning|article)\b/i.test(
+      titleName,
+    )
+      ? titleName
+      : undefined;
+  const url = validateExternalPersonProfileUrl(
+    result.url,
+    Boolean(person || structuredDisplayName || groundedTitleName),
+  );
+  if (!url) return null;
+  const displayName = structuredDisplayName || groundedTitleName;
   const employmentRecords = sortExternalEmploymentRecords(
     normalizeExternalEmploymentRecords(work, displayName),
   );

@@ -5,6 +5,7 @@ import React, { type ReactNode } from "react";
 import {
   CompactCandidateCard,
   displayedRankingScore,
+  searchLoadingSourceLabel,
 } from "../app/recruiter/talent-search/v2/CandidateSearchV2Client";
 import { normalizeExaPersonResult } from "../lib/exaPeopleSearchProvider";
 import { externalCanonicalResultProjection } from "../lib/externalTalentProjection";
@@ -19,6 +20,11 @@ import { deterministicExternalSearchPlan } from "../lib/externalTalentSearchPlan
 const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup(node: ReactNode): string;
 };
+assert.equal(
+  searchLoadingSourceLabel("linkedin_talent_pool"),
+  "External Talent Network",
+);
+assert.equal(searchLoadingSourceLabel("internal_profiles"), "SAP Talent Hub");
 
 const person = (
   name: string,
@@ -158,45 +164,44 @@ assert.equal(nazrilPresentation.experienceCalculation.status, "unavailable");
 assert.equal(nazrilPresentation.currentEmployment, null);
 assert.equal(nazrilPresentation.latestEmployment, null);
 
+const externalCardBase = {
+  candidateId: "nazril",
+  talentPool: "linkedin_talent_pool",
+  candidateName: "Nazril Nordin",
+  currentTitle: null,
+  currentEmployer: null,
+  location: "Malaysia",
+  country: null,
+  totalYearsExperience: null,
+  experienceCalculationStatus: "unavailable",
+  score: null,
+  explanation: null,
+  verifiedSkills: [],
+  verifiedSapModules: [],
+  implementationEvidenceCount: 0,
+  implementationEvidenceLevel: "unverified",
+  seniorityEvidenceLevel: "unverified",
+  externalProfile: nazrilPresentation,
+  profilePreview: {
+    employmentCount: 9,
+    projectCount: 0,
+    educationCount: 0,
+    certificationCount: 0,
+    trainingCount: 0,
+    skillCount: 0,
+    currentEmployment: null,
+    latestEmployment: null,
+    employment: nazrilPresentation.employmentRecords.slice(0, 2),
+    projects: [],
+    education: null,
+    certifications: [],
+    training: [],
+    skills: [],
+  },
+};
 const markup = renderToStaticMarkup(
   <CompactCandidateCard
-    result={
-      {
-        candidateId: "nazril",
-        talentPool: "linkedin_talent_pool",
-        candidateName: "Nazril Nordin",
-        currentTitle: null,
-        currentEmployer: null,
-        location: "Malaysia",
-        country: null,
-        totalYearsExperience: null,
-        experienceCalculationStatus: "unavailable",
-        score: null,
-        explanation: null,
-        verifiedSkills: [],
-        verifiedSapModules: [],
-        implementationEvidenceCount: 0,
-        implementationEvidenceLevel: "unverified",
-        seniorityEvidenceLevel: "unverified",
-        externalProfile: nazrilPresentation,
-        profilePreview: {
-          employmentCount: 9,
-          projectCount: 0,
-          educationCount: 0,
-          certificationCount: 0,
-          trainingCount: 0,
-          skillCount: 0,
-          currentEmployment: null,
-          latestEmployment: null,
-          employment: nazrilPresentation.employmentRecords.slice(0, 2),
-          projects: [],
-          education: null,
-          certifications: [],
-          training: [],
-          skills: [],
-        },
-      } as never
-    }
+    result={externalCardBase as never}
     rank={1}
     searchContextId="named-profile-regression"
     intent={{} as never}
@@ -223,10 +228,44 @@ assert.doesNotMatch(markup, /Recent experience \(9\)/);
 assert.match(markup, /External role 1/);
 assert.match(markup, /External role 2/);
 assert.doesNotMatch(markup, /External role 3/);
-assert.match(
-  markup,
-  /Total professional experience: Not established from source/,
-);
+assert.match(markup, /Total experience:<\/span> Not established from source/);
+assert.match(markup, /Location:<\/span> Malaysia/);
+assert.doesNotMatch(markup, /MalaysiaTotal/);
+
+for (const fields of [
+  { currentTitle: null, currentEmployer: null, location: null },
+  { currentTitle: "SAP Consultant", currentEmployer: null, location: null },
+  { currentTitle: null, currentEmployer: "Grounded Employer", location: null },
+  { currentTitle: null, currentEmployer: null, location: "Malaysia" },
+]) {
+  const combinationMarkup = renderToStaticMarkup(
+    <CompactCandidateCard
+      result={{ ...externalCardBase, ...fields } as never}
+      rank={1}
+      searchContextId="missing-field-combinations"
+      intent={{} as never}
+      expanded={false}
+      diagnostic={
+        {
+          matchLevel: "Potential Match",
+          evidenceConfidence: "Limited",
+          evidenceCoveragePercent: 0,
+          requirements: [],
+          criteria: [],
+        } as never
+      }
+      onToggle={() => {}}
+      identityLookup
+    />,
+  );
+  assert.doesNotMatch(combinationMarkup, /MalaysiaTotal/);
+  assert.doesNotMatch(combinationMarkup, /ConsultantTotal/);
+  assert.doesNotMatch(combinationMarkup, /EmployerTotal/);
+  assert.match(
+    combinationMarkup,
+    /Total experience:<\/span> Not established from source/,
+  );
+}
 
 const now = new Date("2025-07-15T00:00:00.000Z");
 const overlap = normalizeExternalEmploymentRecords(
@@ -264,10 +303,14 @@ const clientSource = readFileSync(
   "utf8",
 );
 assert.doesNotMatch(clientSource, /function inferEmployerFromTitle/);
+assert.match(clientSource, /preview\.employment\.slice\(0, 2\)/);
+assert.match(clientSource, /"External Talent Network"/);
+assert.match(clientSource, /"SAP Talent Hub"/);
 assert.match(
   clientSource,
-  /result\.talentPool === "linkedin_talent_pool" \? 2 : 3/,
+  /result\.talentPool !== "linkedin_talent_pool" &&\s+preview/,
 );
+assert.doesNotMatch(clientSource, /View all experience/);
 const drawerSource = readFileSync(
   "app/recruiter/talent-search/v2/CandidateDetailsDrawer.tsx",
   "utf8",
