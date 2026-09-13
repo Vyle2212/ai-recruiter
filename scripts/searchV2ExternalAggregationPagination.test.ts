@@ -18,6 +18,7 @@ const request = {
   query,
   talentPool: "linkedin_talent_pool" as const,
   matchQuality: "relevant" as const,
+  minimumScore: 50,
   filters: {
     locations: ["Malaysia"],
     minimumTotalYearsExperience: 8,

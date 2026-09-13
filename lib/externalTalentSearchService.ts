@@ -50,6 +50,7 @@ type ExternalSnapshot = {
   rejectionSummary: ExternalTalentSearchResponse["rejectionSummary"];
 };
 const snapshots = new Map<string, ExternalSnapshot>();
+const DEFAULT_EXTERNAL_POTENTIAL_MAXIMUM_THRESHOLD = 50;
 const identity = (
   request: CandidateSearchV2Request,
   authorizationScopeHash: string,
@@ -213,10 +214,15 @@ function normalizeExternalBatch(
         aggregate.confirmedPassCount += 1;
       }
     }
-    // Eligibility and match quality are independent gates. Missing provider
-    // evidence may keep a candidate eligible for review, but it must never
-    // bypass the recruiter-selected score threshold.
+    // Potential candidates remain visible in ordinary external sourcing even
+    // when missing provider evidence keeps their numeric score below the
+    // selected quality threshold. Their score is not increased, and strict
+    // verified-only mode still excludes them through evaluated.eligible.
     const passesScoreThreshold =
+      (evaluated.candidate.eligibilityState ===
+        "potential_needs_verification" &&
+        snapshot.minimumScore <=
+          DEFAULT_EXTERNAL_POTENTIAL_MAXIMUM_THRESHOLD) ||
       evaluated.candidate.overallMatchScore >= snapshot.minimumScore;
     if (evaluated.eligible && passesScoreThreshold)
       accepted.push(evaluated.candidate);
