@@ -16,7 +16,8 @@ import {
   canonicalMatchLabel,
   canonicalOverallMatchScore,
 } from "@/lib/searchV2Match";
-export const EXTERNAL_RANKING_VERSION = "external-match-v3-market-mapping";
+export const EXTERNAL_RANKING_VERSION =
+  "external-match-v4-canonical-profile-evidence";
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 const normalized = (value: unknown) =>
   String(value || "")
@@ -39,6 +40,8 @@ type SourceRecord = {
   field: string;
   text: string;
   kind:
+    | "current_title"
+    | "profile_title"
     | "title"
     | "skill"
     | "location"
@@ -69,37 +72,43 @@ const uniqueRecords = (
     | "profileCompleteness"
     | "requirementEvaluations"
     | "targetEvidence"
+    | "eligibilityState"
+    | "unresolvedRequirementCount"
+    | "confirmedContradictionCount"
   >,
 ): SourceRecord[] => {
   const values: SourceRecord[] = [
     {
-      field: "headline",
-      text: input.currentTitle || input.headline || "",
-      kind: "title",
+      field: "currentTitle",
+      text: input.currentTitle || "",
+      kind: "current_title",
+    },
+    {
+      field: "profileTitle",
+      text: input.profileTitle || input.headline || "",
+      kind: "profile_title",
     },
     ...(input.skills || []).map(
       (text) => ({ field: "skills", text, kind: "skill" }) as const,
+    ),
+    ...(input.employmentText || []).flatMap((text) =>
+      text.split(/\s+(?:\u2014|\u00e2\u20ac\u201d)\s+/).map(
+        (value) =>
+          ({
+            field: "employmentText",
+            text: value,
+            kind: "experience",
+          }) as const,
+      ),
+    ),
+    ...(input.projectText || []).map(
+      (text) => ({ field: "projectText", text, kind: "project" }) as const,
     ),
     {
       field: "experienceSummary",
       text: input.experienceSummary || "",
       kind: "experience",
     },
-    ...(input.employmentText || []).flatMap((text) =>
-      text
-        .split(/\s+(?:\u2014|\u00e2\u20ac\u201d)\s+/)
-        .map(
-          (value) =>
-            ({
-              field: "employmentText",
-              text: value,
-              kind: "experience",
-            }) as const,
-        ),
-    ),
-    ...(input.projectText || []).map(
-      (text) => ({ field: "projectText", text, kind: "project" }) as const,
-    ),
     ...(input.education || []).map(
       (text) => ({ field: "education", text, kind: "education" }) as const,
     ),
@@ -125,29 +134,33 @@ const uniqueRecords = (
   });
 };
 const evidenceType = (record: SourceRecord) =>
-  record.kind === "title"
+  record.kind === "current_title"
     ? ("raw_title" as const)
-    : record.kind === "skill"
-      ? ("direct_skill" as const)
-      : record.kind === "project"
-        ? ("raw_project" as const)
-        : record.kind === "certification"
-          ? ("raw_certification" as const)
-          : record.kind === "experience"
-            ? ("raw_experience" as const)
-            : ("raw_professional_text" as const);
+    : record.kind === "profile_title"
+      ? ("raw_professional_text" as const)
+      : record.kind === "skill"
+        ? ("direct_skill" as const)
+        : record.kind === "project"
+          ? ("raw_project" as const)
+          : record.kind === "certification"
+            ? ("raw_certification" as const)
+            : record.kind === "experience"
+              ? ("raw_experience" as const)
+              : ("raw_professional_text" as const);
 const contextType = (record: SourceRecord) =>
-  record.kind === "title"
+  record.kind === "current_title"
     ? ("title" as const)
-    : record.kind === "skill"
-      ? ("direct_skill" as const)
-      : record.kind === "project"
-        ? ("project" as const)
-        : record.kind === "certification"
-          ? ("certification" as const)
-          : record.kind === "experience"
-            ? ("experience" as const)
-            : ("sentence" as const);
+    : record.kind === "profile_title"
+      ? ("sentence" as const)
+      : record.kind === "skill"
+        ? ("direct_skill" as const)
+        : record.kind === "project"
+          ? ("project" as const)
+          : record.kind === "certification"
+            ? ("certification" as const)
+            : record.kind === "experience"
+              ? ("experience" as const)
+              : ("sentence" as const);
 const supportingEvidence = (
   requirementId: string,
   label: string,
@@ -186,9 +199,16 @@ export function evaluateExternalCandidate(
     | "profileCompleteness"
     | "requirementEvaluations"
     | "targetEvidence"
+    | "eligibilityState"
+    | "unresolvedRequirementCount"
+    | "confirmedContradictionCount"
   >,
   plan: ExternalTalentSearchPlan,
-): { candidate: ExternalTalentCandidate; eligible: boolean } {
+): {
+  candidate: ExternalTalentCandidate;
+  eligible: boolean;
+  fullySupported: boolean;
+} {
   const records = uniqueRecords(input),
     url = input.profileUrl || "",
     targetConcepts = plan.targetConcepts.length
@@ -226,13 +246,15 @@ export function evaluateExternalCandidate(
             record.text,
           );
           const strength = exact
-            ? record.kind === "title"
-              ? 96
-              : record.kind === "skill"
-                ? 92
-                : semantic.directExact
-                  ? 88
-                  : 80
+            ? record.kind === "current_title"
+              ? 100
+              : record.kind === "profile_title"
+                ? 86
+                : record.kind === "skill"
+                  ? 92
+                  : semantic.directExact
+                    ? 88
+                    : 80
             : bestRelation
               ? Math.round(
                   searchConceptRelationStrength(bestRelation.relation) * 65,
@@ -281,6 +303,14 @@ export function evaluateExternalCandidate(
         professionalContextType: bestTarget.exact
           ? contextType(bestTarget.record)
           : ("related" as const),
+        temporalContext:
+          bestTarget.record.kind === "current_title"
+            ? ("current" as const)
+            : bestTarget.record.kind === "profile_title"
+              ? ("profile" as const)
+              : bestTarget.record.kind === "experience"
+                ? ("historical" as const)
+                : ("unknown" as const),
       }
     : {
         target: targetConcepts[0]?.label || "",
@@ -294,6 +324,7 @@ export function evaluateExternalCandidate(
         reasonCode: "no_candidate_target_evidence" as const,
         relatedConcepts: [],
         professionalContextType: "none" as const,
+        temporalContext: "unknown" as const,
       };
   const lifecyclePattern =
     /\b(?:implement(?:ation|ations|ed|ing)?|roll[- ]?out|migration|greenfield|brownfield|go[- ]?live|cutover|deployment)\b/i;
@@ -304,8 +335,9 @@ export function evaluateExternalCandidate(
   const implementationCandidates = records.filter(
     (record) =>
       (record.kind === "project" ||
-        record.kind === "experience" ||
-        record.kind === "provider") &&
+        (record.kind === "experience" && record.field === "employmentText") ||
+        (record.kind === "provider" &&
+          /(?:project|assignment|engagement)/i.test(record.field))) &&
       lifecyclePattern.test(record.text) &&
       targetConcepts.some((target) =>
         recordSupportsConcept(record, target.conceptId),
@@ -376,13 +408,45 @@ export function evaluateExternalCandidate(
           (match) =>
             match.target.conceptId === requirement.conceptId && match.exact,
         )?.record || null;
+      const explicitCandidateConcepts = records
+        .filter((candidateRecord) =>
+          [
+            "current_title",
+            "profile_title",
+            "title",
+            "skill",
+            "experience",
+            "project",
+          ].includes(candidateRecord.kind),
+        )
+        .flatMap((candidateRecord) => conceptsInText(candidateRecord.text));
+      conflicting =
+        !record &&
+        explicitCandidateConcepts.length > 0 &&
+        explicitCandidateConcepts.every(
+          (conceptId) =>
+            searchConceptRelationStrength(
+              searchConceptRelation(requirement.conceptId || "", conceptId),
+            ) === 0,
+        );
     } else if (requirement.kind === "professional_role") {
       record = findText(
         requirement.alternatives || [requirement.label],
         requirement.titleScope === "current"
-          ? ["title"]
-          : ["title", "experience", "project", "provider"],
+          ? ["current_title"]
+          : [
+              "current_title",
+              "profile_title",
+              "title",
+              "experience",
+              "project",
+              "provider",
+            ],
       );
+      conflicting =
+        requirement.titleScope === "current" &&
+        Boolean(input.currentTitle || input.headline) &&
+        !record;
     } else if (requirement.kind === "location") {
       const alternatives = requirement.alternatives || [];
       record =
@@ -425,6 +489,10 @@ export function evaluateExternalCandidate(
           text: input.currentEmployer,
           kind: "provider",
         };
+      conflicting =
+        requirement.scope === "current" &&
+        Boolean(input.currentEmployer) &&
+        !record;
     } else if (requirement.kind === "exclusion") {
       const found = findText([requirement.value || requirement.label]);
       conflicting = Boolean(found);
@@ -448,10 +516,25 @@ export function evaluateExternalCandidate(
       record = findText([value], kinds);
     }
     const state = record
-      ? ("supported" as const)
+      ? ("confirmed_pass" as const)
       : conflicting
-        ? ("conflicting" as const)
-        : ("unverified" as const);
+        ? ("confirmed_fail" as const)
+        : ("needs_verification" as const);
+    const explanation = record
+      ? "Confirmed by " + record.field + "."
+      : conflicting
+        ? requirement.kind === "location"
+          ? "The available location explicitly contradicts this requirement."
+          : requirement.kind === "experience"
+            ? "The documented experience total is outside the required range."
+            : "Available candidate evidence explicitly contradicts this requirement."
+        : requirement.kind === "experience"
+          ? "Employment dates or a grounded total-experience value were not provided."
+          : requirement.kind === "lifecycle"
+            ? "No assignment-level implementation evidence was returned."
+            : requirement.kind === "location"
+              ? "A candidate location was not provided."
+              : "The connected source did not return enough evidence to decide.";
     return {
       id: requirement.id,
       label: requirement.label,
@@ -460,11 +543,23 @@ export function evaluateExternalCandidate(
       evidence: record
         ? supportingEvidence(requirement.id, requirement.label, record, url)
         : null,
+      explanation,
     };
   });
-  const eligible = requirementEvaluations.every(
-    (requirement) => requirement.state === "supported",
-  );
+  const unresolvedRequirementCount = requirementEvaluations.filter(
+    (requirement) => requirement.state === "needs_verification",
+  ).length;
+  const confirmedContradictionCount = requirementEvaluations.filter(
+    (requirement) => requirement.state === "confirmed_fail",
+  ).length;
+  const fullySupported =
+    requirementEvaluations.length > 0 &&
+    requirementEvaluations.every(
+      (requirement) => requirement.state === "confirmed_pass",
+    );
+  const eligible =
+    confirmedContradictionCount === 0 &&
+    (!plan.strictVerifiedOnly || unresolvedRequirementCount === 0);
   const groundedRequirementEvidence = requirementEvaluations.flatMap(
     (requirement) => (requirement.evidence ? [requirement.evidence] : []),
   );
@@ -482,19 +577,23 @@ export function evaluateExternalCandidate(
     return true;
   });
   const supportedRequirements = requirementEvaluations.filter(
-    (requirement) => requirement.state === "supported",
+    (requirement) => requirement.state === "confirmed_pass",
   ).length;
   const requirementCoverage = committedRequirements.length
     ? clamp((supportedRequirements / committedRequirements.length) * 100)
     : 0;
   const titleScore =
-    bestTarget?.record.kind === "title"
+    bestTarget?.record.kind === "current_title"
       ? bestTarget.strength
-      : plan.normalizedRoles.some(
-            (role) => input.headline && bounded(input.headline, role),
-          )
-        ? 80
-        : 0;
+      : bestTarget?.record.kind === "profile_title"
+        ? Math.min(86, bestTarget.strength)
+        : bestTarget?.record.kind === "experience"
+          ? Math.min(68, bestTarget.strength)
+          : plan.normalizedRoles.some(
+                (role) => input.headline && bounded(input.headline, role),
+              )
+            ? 80
+            : 0;
   const skillTargetCount = new Set(
     targetMatches
       .filter((match) => match.exact && match.record.kind === "skill")
@@ -528,7 +627,7 @@ export function evaluateExternalCandidate(
     : requirementEvaluations.some(
           (requirement) =>
             requirement.kind === "location" &&
-            requirement.state === "supported",
+            requirement.state === "confirmed_pass",
         )
       ? 100
       : 0;
@@ -578,7 +677,13 @@ export function evaluateExternalCandidate(
       : directRecords.length
         ? Math.max(
             ...directRecords.map((record) =>
-              record.kind === "title" ? 95 : record.kind === "skill" ? 85 : 75,
+              record.kind === "current_title"
+                ? 95
+                : record.kind === "profile_title"
+                  ? 82
+                  : record.kind === "skill"
+                    ? 85
+                    : 75,
             ),
           )
         : 0;
@@ -611,7 +716,8 @@ export function evaluateExternalCandidate(
           20,
           committedRequirements.length ? requirementCoverage * 0.2 : 0,
         ) +
-        Math.min(15, implementationEvidenceCount * 5),
+        Math.min(15, implementationEvidenceCount * 5) -
+        Math.min(30, unresolvedRequirementCount * 8),
     ),
   );
   const overallMatchScore = canonicalOverallMatchScore({
@@ -625,6 +731,7 @@ export function evaluateExternalCandidate(
   const profileCompleteness = clamp(
     ([
       input.displayName,
+      input.profileTitle,
       input.headline,
       input.location,
       input.currentEmployer,
@@ -663,10 +770,19 @@ export function evaluateExternalCandidate(
     implementationEvidenceCount,
     evidenceConfidence,
     profileCompleteness,
+    eligibilityState: confirmedContradictionCount
+      ? "confirmed_exclusion"
+      : unresolvedRequirementCount
+        ? "potential_needs_verification"
+        : "evidence_supported",
+    unresolvedRequirementCount,
+    confirmedContradictionCount,
     overallMatchScore,
-    matchTier: externalMatchTier(overallMatchScore),
+    matchTier: unresolvedRequirementCount
+      ? "Potential Match"
+      : externalMatchTier(overallMatchScore),
   };
-  return { candidate, eligible };
+  return { candidate, eligible, fullySupported };
 }
 export function scoreExternalCandidate(
   input: Parameters<typeof evaluateExternalCandidate>[0],
@@ -676,8 +792,15 @@ export function scoreExternalCandidate(
   return evaluated.eligible ? evaluated.candidate : null;
 }
 export function sortExternalCandidates(items: ExternalTalentCandidate[]) {
+  const eligibilityOrder = {
+    evidence_supported: 0,
+    potential_needs_verification: 1,
+    confirmed_exclusion: 2,
+  } as const;
   return [...items].sort(
     (a, b) =>
+      eligibilityOrder[a.eligibilityState] -
+        eligibilityOrder[b.eligibilityState] ||
       b.overallMatchScore - a.overallMatchScore ||
       b.evidenceConfidence - a.evidenceConfidence ||
       b.providerEvidence.length - a.providerEvidence.length ||

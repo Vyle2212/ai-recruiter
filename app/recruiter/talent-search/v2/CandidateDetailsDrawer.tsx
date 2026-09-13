@@ -23,8 +23,7 @@ import {
   type CandidateProfileTab,
 } from "@/lib/candidateProfilePresentation";
 import { canonicalCandidateSkillCollection } from "@/lib/candidateProfileSkills";
-import type { ExternalTalentAnalysisCapability } from "@/lib/externalTalentAnalysisCapability";
-import type { CandidateSearchV2ProfilePreview } from "@/lib/candidateSearchV2Types";
+import type { ExternalTalentProfilePresentation } from "@/lib/externalTalentProfile";
 
 export type CandidateDrawerResult = {
   retrievalKind?: "identity_match" | "evaluated_match";
@@ -33,28 +32,15 @@ export type CandidateDrawerResult = {
   candidateId: string;
   talentPool?: "internal_profiles" | "linkedin_talent_pool";
   linkedInProfileUrl?: string | null;
-  profilePreview?: CandidateSearchV2ProfilePreview;
   candidateName: string | null;
+  profileTitle?: string | null;
   currentTitle: string | null;
   currentEmployer: string | null;
   location: string | null;
   country: string | null;
   totalYearsExperience: number | null;
-  evidenceConfidencePercent?: number | null;
-  profileCompletenessPercent?: number | null;
-  queryRelevantSkills?: string[];
-  profileEvidence?: {
-    name?: boolean;
-    title?: boolean;
-    employer?: boolean;
-    location?: boolean;
-    experienceDuration?: boolean;
-    employmentHistory?: boolean;
-    projectHistory?: boolean;
-    education?: boolean;
-    certifications?: boolean;
-    skills?: boolean;
-  };
+  experienceCalculationStatus?: "established" | "partial" | "unavailable";
+  externalProfile?: ExternalTalentProfilePresentation;
   score: { finalScore: number } | null;
   evidence?: Array<{ label: string; value: string; source?: string | null }>;
   integrity?: {
@@ -161,136 +147,6 @@ export function prefetchCandidateDetails(
 
 const text = (value: string | null | undefined, fallback = "Not provided") =>
   value?.trim() || fallback;
-
-type ExternalEvidenceSections = {
-  overview: string[];
-  experience: string[];
-  projects: string[];
-  education: string[];
-  certifications: string[];
-  skills: string[];
-};
-
-function uniqueExternalEvidence(values: Array<string | null | undefined>) {
-  return [
-    ...new Map(
-      values
-        .map((value) =>
-          String(value || "")
-            .replace(/\s+/g, " ")
-            .trim(),
-        )
-        .filter(Boolean)
-        .map((value) => [value.toLocaleLowerCase(), value]),
-    ).values(),
-  ];
-}
-
-function externalEvidenceSections(
-  candidate: CandidateDrawerResult,
-): ExternalEvidenceSections {
-  const sections: ExternalEvidenceSections = {
-    overview: [],
-    experience: [],
-    projects: [],
-    education: [],
-    certifications: [],
-    skills: candidate.queryRelevantSkills || [],
-  };
-  for (const item of candidate.evidence || []) {
-    if (/employment|experience/i.test(item.label))
-      sections.experience.push(item.value);
-    else if (/project/i.test(item.label)) sections.projects.push(item.value);
-    else if (/certification|credential/i.test(item.label))
-      sections.certifications.push(item.value);
-    else if (/education|qualification|degree/i.test(item.label))
-      sections.education.push(item.value);
-    else if (/skill|module/i.test(item.label)) sections.skills.push(item.value);
-    else if (/summary|headline|profile/i.test(item.label))
-      sections.overview.push(item.value);
-  }
-  return Object.fromEntries(
-    Object.entries(sections).map(([key, values]) => [
-      key,
-      uniqueExternalEvidence(values),
-    ]),
-  ) as ExternalEvidenceSections;
-}
-
-function ExternalEvidenceList({
-  title,
-  values,
-}: {
-  title: string;
-  values: string[];
-}) {
-  return (
-    <Panel title={title}>
-      {values.length ? (
-        <ol className="space-y-3">
-          {values.map((value, index) => (
-            <li
-              key={`${value.toLocaleLowerCase()}:${index}`}
-              className="rounded-lg border border-slate-800 bg-slate-950/40 p-4"
-            >
-              <p className="text-sm leading-6 text-slate-300">{value}</p>
-            </li>
-          ))}
-        </ol>
-      ) : (
-        <p className="text-sm text-slate-400">
-          No grounded {title.toLocaleLowerCase()} was found in the available
-          external profile evidence.
-        </p>
-      )}
-    </Panel>
-  );
-}
-
-function ExternalEmploymentList({
-  records,
-  fallback,
-}: {
-  records: CandidateSearchV2ProfilePreview["employment"];
-  fallback: string[];
-}) {
-  if (!records.length)
-    return (
-      <ExternalEvidenceList title="Employment evidence" values={fallback} />
-    );
-  return (
-    <Panel title="Employment history">
-      <ol className="space-y-4">
-        {records.map((record) => (
-          <li
-            key={record.id}
-            className="rounded-lg border border-slate-800 bg-slate-950/40 p-4"
-          >
-            <h4 className="font-semibold text-white">
-              {record.title || "Role not provided"}
-            </h4>
-            <p className="mt-1 text-sm text-slate-300">
-              {record.employer || "Employer not provided"}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              {formatCandidateProfilePeriod(
-                record.start,
-                record.end,
-                record.current,
-              )}
-              {record.location ? ` · ${record.location}` : ""}
-            </p>
-            {record.summary ? (
-              <p className="mt-3 text-sm leading-6 text-slate-300">
-                {record.summary}
-              </p>
-            ) : null}
-          </li>
-        ))}
-      </ol>
-    </Panel>
-  );
-}
 
 function ProjectSummary({ values }: { values: readonly string[] }) {
   const cleaned = cleanProjectResponsibilities(values);
@@ -405,7 +261,7 @@ export default function CandidateDetailsDrawer({
   identityLookup?: boolean;
   initialTab?: CandidateProfileTab;
 }) {
-  const [tab, setTab] = useState<Tab>("Overview");
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [educationFocus, setEducationFocus] =
     useState<ProfileDetailFocus | null>(null);
   const [profile, setProfile] =
@@ -413,10 +269,7 @@ export default function CandidateDetailsDrawer({
   const [error, setError] = useState("");
   const [retryRevision, setRetryRevision] = useState(0);
   const [aiAnalysis, setAiAnalysis] = useState("");
-  const [aiAnalysisError, setAiAnalysisError] = useState("");
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
-  const [aiCapability, setAiCapability] =
-    useState<ExternalTalentAnalysisCapability | null>(null);
   const drawerRef = useRef<HTMLElement | null>(null);
   const contentScrollRef = useRef<HTMLDivElement | null>(null);
   const selectedIndex = visibleCandidates.findIndex(
@@ -448,41 +301,6 @@ export default function CandidateDetailsDrawer({
       active = false;
     };
   }, [candidate.candidateId, candidate.talentPool, initialTab, retryRevision]);
-
-  useEffect(() => {
-    setAiAnalysis("");
-    setAiAnalysisError("");
-    if (candidate.talentPool !== "linkedin_talent_pool") {
-      setAiCapability(null);
-      return;
-    }
-    let active = true;
-    fetch("/api/recruiter/search-v2/external-analysis", {
-      credentials: "same-origin",
-      cache: "no-store",
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("AI capability is unavailable.");
-        return (await response.json()) as ExternalTalentAnalysisCapability;
-      })
-      .then((value) => {
-        if (active) setAiCapability(value);
-      })
-      .catch(() => {
-        if (active)
-          setAiCapability({
-            version: "external-talent-analysis-capability-v1",
-            enabled: false,
-            reason: "provider_not_configured",
-            message: "AI Match Analysis capability could not be verified.",
-            minimumEvidenceItems: 2,
-            minimumEvidenceCharacters: 48,
-          });
-      });
-    return () => {
-      active = false;
-    };
-  }, [candidate.candidateId, candidate.talentPool]);
 
   useLayoutEffect(() => {
     resetCandidateDetailsScroll(contentScrollRef.current);
@@ -536,6 +354,7 @@ export default function CandidateDetailsDrawer({
 
   const enterprise = profile?.enterpriseProfile;
   const employment = enterprise?.employmentTimeline || [];
+  const externalEmployment = candidate.externalProfile?.employmentRecords || [];
   const projects = enterprise?.projects || [];
   const canonicalAssignmentEvidence = diagnostic.criteria.find(
     (item) => item.assignmentEvidence,
@@ -546,31 +365,16 @@ export default function CandidateDetailsDrawer({
     candidate.candidateId,
     candidate.candidateName,
   );
-  const externalSections = externalEvidenceSections(candidate);
-  const externalEmployment = candidate.profilePreview?.employment || [];
-  const effectiveProfileCompleteness =
-    candidate.profileCompletenessPercent || 0;
   const overview = profile
     ? profile.canonicalOverview
     : candidate.talentPool === "linkedin_talent_pool"
       ? buildExternalCanonicalProfileOverview({
           candidateId: candidate.candidateId,
           candidateName: candidate.candidateName,
-          profileTitle: candidate.currentTitle,
-          currentEmployer: candidate.currentEmployer,
+          profileTitle: candidate.profileTitle || candidate.currentTitle,
           location: candidate.location,
           country: candidate.country,
-          totalExperienceYears: candidate.totalYearsExperience,
-          professionalSummary: externalSections.overview.join(" ") || null,
-          employmentRecords: externalEmployment,
-          employmentEvidence: externalSections.experience,
-          projectEvidence: externalSections.projects,
-          educationEvidence: externalSections.education,
-          certificationEvidence: externalSections.certifications,
-          skills: externalSections.skills,
-          evidenceConfidencePercent: candidate.evidenceConfidencePercent,
-          profileCompletenessPercent: effectiveProfileCompleteness,
-          sourceTypes: ["external_provider"],
+          externalProfile: candidate.externalProfile,
         })
       : null;
   const canonicalSkills = overview
@@ -640,29 +444,6 @@ export default function CandidateDetailsDrawer({
       candidate.country,
     "",
   );
-  const externalAnalysisEvidence = [
-    ...(candidate.evidence || []).map((item) => ({
-      label: item.label,
-      excerpt: item.value,
-    })),
-  ].filter(
-    (item, index, all) =>
-      item.excerpt.trim() &&
-      all.findIndex(
-        (candidateEvidence) =>
-          candidateEvidence.excerpt.normalize("NFKC").trim().toLowerCase() ===
-          item.excerpt.normalize("NFKC").trim().toLowerCase(),
-      ) === index,
-  );
-  const externalAnalysisCharacters = externalAnalysisEvidence.reduce(
-    (total, value) => total + value.excerpt.length,
-    0,
-  );
-  const hasEnoughEvidenceForAnalysis = Boolean(
-    aiCapability &&
-    externalAnalysisEvidence.length >= aiCapability.minimumEvidenceItems &&
-    externalAnalysisCharacters >= aiCapability.minimumEvidenceCharacters,
-  );
   return (
     <div
       className="fixed inset-0 z-50 overflow-hidden"
@@ -685,7 +466,7 @@ export default function CandidateDetailsDrawer({
         className="absolute inset-y-0 right-0 flex h-[100dvh] w-full flex-col border-l border-slate-700 bg-slate-950 shadow-2xl sm:w-[min(48vw,880px)]"
       >
         <header className="shrink-0 border-b border-slate-800 px-5 py-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <h2 className="truncate text-xl font-semibold text-white">
                 {name}
@@ -713,15 +494,8 @@ export default function CandidateDetailsDrawer({
                   ? "External Talent Network"
                   : "Internal Profiles"}
               </p>
-              {candidate.talentPool === "linkedin_talent_pool" ? (
-                <p className="mt-2 text-xs text-slate-400">
-                  Evidence confidence: {diagnostic.evidenceConfidence}
-                  <span className="mx-1.5 text-slate-700">·</span>
-                  Profile completeness: {effectiveProfileCompleteness}%
-                </p>
-              ) : null}
             </div>
-            <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               {candidate.linkedInProfileUrl ? (
                 <a
                   href={candidate.linkedInProfileUrl}
@@ -749,24 +523,10 @@ export default function CandidateDetailsDrawer({
               {candidate.talentPool === "linkedin_talent_pool" ? (
                 <button
                   type="button"
-                  disabled={
-                    aiAnalysisLoading ||
-                    !aiCapability?.enabled ||
-                    !hasEnoughEvidenceForAnalysis
-                  }
-                  title={
-                    !aiCapability
-                      ? "Checking AI Match Analysis availability"
-                      : !aiCapability.enabled
-                        ? aiCapability.message
-                        : !hasEnoughEvidenceForAnalysis
-                          ? "Not enough grounded profile evidence is available for analysis."
-                          : "Generate an evidence-grounded match analysis"
-                  }
+                  disabled={aiAnalysisLoading}
                   onClick={async () => {
                     setAiAnalysisLoading(true);
                     setAiAnalysis("");
-                    setAiAnalysisError("");
                     try {
                       const response = await fetch(
                         "/api/recruiter/search-v2/external-analysis",
@@ -778,40 +538,39 @@ export default function CandidateDetailsDrawer({
                             headline: candidate.currentTitle,
                             location: candidate.location,
                             employer: candidate.currentEmployer,
-                            evidence: externalAnalysisEvidence,
+                            evidence: (candidate.evidence || []).map(
+                              (item) => ({
+                                label: item.label,
+                                excerpt: item.value,
+                              }),
+                            ),
                           }),
                         },
                       );
                       const payload = await response.json();
                       if (!response.ok)
                         throw new Error(
-                          payload.error || "AI Match Analysis is unavailable.",
+                          "Optional AI narrative unavailable. Preliminary deterministic match remains available.",
                         );
                       setAiAnalysis(
                         payload.analysis?.summary ||
                           "Analysis completed from available evidence.",
                       );
                     } catch (error) {
-                      setAiAnalysisError(
+                      setAiAnalysis(
                         error instanceof Error
                           ? error.message
-                          : "AI Match Analysis is unavailable.",
+                          : "Optional AI narrative unavailable. Preliminary deterministic match remains available.",
                       );
                     } finally {
                       setAiAnalysisLoading(false);
                     }
                   }}
-                  className="rounded-lg border border-violet-700 px-3 py-2 text-sm font-semibold text-violet-200 transition hover:bg-violet-950/30 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-500"
+                  className="rounded-lg border border-violet-700 px-3 py-2 text-sm font-semibold text-violet-200 disabled:opacity-50"
                 >
                   {aiAnalysisLoading
                     ? "Analyzing available profile evidence…"
-                    : !aiCapability
-                      ? "Checking AI availability…"
-                      : !aiCapability.enabled
-                        ? "AI Match unavailable"
-                        : !hasEnoughEvidenceForAnalysis
-                          ? "AI Match needs more evidence"
-                          : "Generate AI Match Analysis"}
+                    : "Generate AI Match Analysis"}
                 </button>
               ) : null}
               <button
@@ -935,14 +694,6 @@ export default function CandidateDetailsDrawer({
             {aiAnalysis}
           </div>
         ) : null}
-        {candidate.talentPool === "linkedin_talent_pool" && aiAnalysisError ? (
-          <div
-            role="alert"
-            className="border-b border-amber-900/60 bg-amber-950/20 px-5 py-3 text-sm text-amber-200"
-          >
-            {aiAnalysisError}
-          </div>
-        ) : null}
 
         <div
           ref={contentScrollRef}
@@ -1019,69 +770,7 @@ export default function CandidateDetailsDrawer({
                   setTab(destination);
                 }}
               />
-              {candidate.talentPool === "linkedin_talent_pool" ? (
-                <div className="mb-5 inline-flex rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-400">
-                  External source · Not independently verified
-                </div>
-              ) : null}
             </>
-          ) : null}
-
-          {!profile &&
-          candidate.talentPool === "linkedin_talent_pool" &&
-          tab === "Experience" ? (
-            <ExternalEmploymentList
-              records={externalEmployment}
-              fallback={externalSections.experience}
-            />
-          ) : null}
-
-          {!profile &&
-          candidate.talentPool === "linkedin_talent_pool" &&
-          tab === "Projects" ? (
-            <ExternalEvidenceList
-              title="Project evidence"
-              values={externalSections.projects}
-            />
-          ) : null}
-
-          {!profile &&
-          candidate.talentPool === "linkedin_talent_pool" &&
-          tab === "Education" ? (
-            <>
-              <ExternalEvidenceList
-                title="Education evidence"
-                values={externalSections.education}
-              />
-              <ExternalEvidenceList
-                title="Certification evidence"
-                values={externalSections.certifications}
-              />
-            </>
-          ) : null}
-
-          {!profile &&
-          candidate.talentPool === "linkedin_talent_pool" &&
-          tab === "Skills" ? (
-            <Panel title="Skills evidence">
-              {externalSections.skills.length ? (
-                <div className="flex flex-wrap gap-2">
-                  {externalSections.skills.map((skill) => (
-                    <span
-                      key={skill.toLocaleLowerCase()}
-                      className="rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-300"
-                    >
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-slate-400">
-                  No grounded skills were found in the available external
-                  profile evidence.
-                </p>
-              )}
-            </Panel>
           ) : null}
 
           {profile && tab === "Experience" ? (
@@ -1161,6 +850,140 @@ export default function CandidateDetailsDrawer({
                     </button>
                   ) : null}
                 </div>
+              )}
+            </Panel>
+          ) : null}
+
+          {candidate.talentPool === "linkedin_talent_pool" &&
+          tab === "Experience" ? (
+            <Panel title="Employment history">
+              {externalEmployment.length ? (
+                <ol className="space-y-5">
+                  {externalEmployment.map((item) => (
+                    <li
+                      key={item.id}
+                      className="border-l border-slate-700 pl-4"
+                    >
+                      <h4 className="font-semibold text-white">
+                        {text(item.title, "Role not provided")}
+                      </h4>
+                      <p className="mt-1 text-sm text-slate-300">
+                        {text(item.employer, "Company not provided")}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {item.start || item.end
+                          ? formatCandidateProfilePeriod(
+                              item.start,
+                              item.end,
+                              item.current,
+                            )
+                          : "Dates not provided"}
+                      </p>
+                      {item.description ? (
+                        <p className="mt-2 text-sm text-slate-300">
+                          {item.description}
+                        </p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="text-sm text-slate-400">
+                  No employment records were returned by the connected external
+                  source.
+                </p>
+              )}
+            </Panel>
+          ) : null}
+
+          {candidate.talentPool === "linkedin_talent_pool" &&
+          tab === "Projects" ? (
+            <Panel
+              title={`Project evidence (${candidate.externalProfile?.projectRecords.length || 0})`}
+            >
+              {candidate.externalProfile?.projectRecords.length ? (
+                <ul className="list-disc space-y-2 pl-5 text-sm text-slate-300">
+                  {candidate.externalProfile.projectRecords.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-slate-400">
+                  No project records were returned by the connected external
+                  source.
+                </p>
+              )}
+            </Panel>
+          ) : null}
+
+          {candidate.talentPool === "linkedin_talent_pool" &&
+          tab === "Education" ? (
+            <Panel title="Education and credentials">
+              <section>
+                <h4 className="font-semibold text-white">
+                  Education (
+                  {candidate.externalProfile?.educationRecords.length || 0})
+                </h4>
+                {candidate.externalProfile?.educationRecords.length ? (
+                  <ul className="mt-3 space-y-2">
+                    {candidate.externalProfile.educationRecords.map((item) => (
+                      <li
+                        key={item}
+                        className="rounded-lg border border-slate-800 p-3 text-sm text-slate-300"
+                      >
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-400">
+                    Education was not provided by the connected external source.
+                  </p>
+                )}
+              </section>
+              <section className="mt-6 border-t border-slate-800 pt-5">
+                <h4 className="font-semibold text-white">
+                  Certifications (
+                  {candidate.externalProfile?.certificationRecords.length || 0})
+                </h4>
+                {candidate.externalProfile?.certificationRecords.length ? (
+                  <ul className="mt-3 space-y-2">
+                    {candidate.externalProfile.certificationRecords.map(
+                      (item) => (
+                        <li
+                          key={item}
+                          className="rounded-lg border border-slate-800 p-3 text-sm text-slate-300"
+                        >
+                          {item}
+                        </li>
+                      ),
+                    )}
+                  </ul>
+                ) : null}
+              </section>
+            </Panel>
+          ) : null}
+
+          {candidate.talentPool === "linkedin_talent_pool" &&
+          tab === "Skills" ? (
+            <Panel
+              title={`Skills (${candidate.externalProfile?.skillRecords.length || 0})`}
+            >
+              {candidate.externalProfile?.skillRecords.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {candidate.externalProfile.skillRecords.map((item) => (
+                    <span
+                      key={item}
+                      className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-300"
+                    >
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400">
+                  Skills were not provided by the connected external source.
+                </p>
               )}
             </Panel>
           ) : null}

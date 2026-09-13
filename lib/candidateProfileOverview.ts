@@ -6,9 +6,10 @@ import type {
 import { canonicalTalentSearchIdentity } from "./talentSearchDisplay";
 import { normalizedDisplayTitle } from "./candidateSearchV2Projection";
 import { buildCandidateEducationPresentation } from "./candidateProfilePresentation";
+import type { ExternalTalentProfilePresentation } from "./externalTalentProfile";
 
 export const CANONICAL_PROFILE_OVERVIEW_VERSION =
-  "canonical-profile-overview-v13-external-structured-employment";
+  "canonical-profile-overview-v12-exact-project-identity";
 
 export type CanonicalOverviewEvidenceState =
   "Verified" | "Supported" | "Not verified";
@@ -69,6 +70,10 @@ export type CanonicalProfileOverview = Readonly<{
     employmentCount: number;
     projectCount: number;
     supportedGapCount: number | null;
+    experienceCalculationStatus?: "established" | "partial" | "unavailable";
+    datedEmploymentCount?: number;
+    confirmedCurrentEmploymentCount?: number;
+    independentlyVerifiedEmploymentCount?: number;
   };
   skills: {
     sapModules: Array<
@@ -594,108 +599,34 @@ export function buildExternalCanonicalProfileOverview(input: {
   candidateId: string;
   candidateName?: string | null;
   profileTitle?: string | null;
-  currentEmployer?: string | null;
   location?: string | null;
   country?: string | null;
-  totalExperienceYears?: number | null;
-  professionalSummary?: string | null;
-  employmentRecords?: Array<{
-    id: string;
-    title: string | null;
-    employer: string | null;
-    start: string | null;
-    end: string | null;
-    current: boolean;
-    location?: string | null;
-  }>;
-  employmentEvidence?: string[];
-  projectEvidence?: string[];
-  educationEvidence?: string[];
-  certificationEvidence?: string[];
-  skills?: string[];
-  evidenceConfidencePercent?: number | null;
-  profileCompletenessPercent?: number | null;
-  sourceTypes?: string[];
+  externalProfile?: ExternalTalentProfilePresentation | null;
 }): CanonicalProfileOverview {
   const identity = canonicalTalentSearchIdentity(
     input.candidateId,
     input.candidateName,
   );
-  const unique = (values: Array<string | null | undefined>) => [
-    ...new Map(
-      values
-        .map((value) => clean(value))
-        .filter((value): value is string => Boolean(value))
-        .map((value) => [value.toLocaleLowerCase(), value]),
-    ).values(),
-  ];
-  const employmentEvidence = unique(input.employmentEvidence || []);
-  const projectEvidence = unique(input.projectEvidence || []);
-  const educationEvidence = unique(input.educationEvidence || []);
-  const certificationEvidence = unique(input.certificationEvidence || []);
-  const skills = unique(input.skills || []);
-  const structuredEmployment = (input.employmentRecords || []).map(
-    (record) => ({
-      id: record.id,
-      title: clean(record.title),
-      employer: clean(record.employer),
-      start: clean(record.start),
-      end: record.current ? "Present" : clean(record.end),
-      current: record.current,
-      tenure: null,
-      location: clean(record.location),
-    }),
-  );
-  const sapModuleExpression =
-    /^(?:SAP\s+)?(?:FICO|FI|CO|MM|SD|PP|PM|PS|QM|WM|EWM|TM|HCM|HR|BW|BI|BTP|ABAP|BASIS|FSCM|FICA|SAC|S\/4HANA)$/i;
-  const descriptor = {
-    evidenceStatus: "source_supported" as const,
-    verificationStatus: "not_verified" as const,
-  };
-  const sapModules = skills
-    .filter((value) => sapModuleExpression.test(value))
-    .map((value) => ({ value, state: "Supported" as const, ...descriptor }));
-  const functional = skills
-    .filter((value) => !sapModuleExpression.test(value))
-    .map((value) => ({ value, state: "Supported" as const, ...descriptor }));
-  const currentEmployment =
-    structuredEmployment.find((record) => record.current) ||
-    (clean(input.profileTitle) && clean(input.currentEmployer)
-      ? {
-          id: `external-current:${input.candidateId}`,
-          title: clean(input.profileTitle),
-          employer: clean(input.currentEmployer),
-          start: null,
-          end: null,
-          current: true,
-          tenure: null,
-          location: clean(input.location),
-        }
-      : null);
-  const latestEmployment = structuredEmployment[0] || currentEmployment;
-  const groundedCategories = [
-    "identity",
-    input.professionalSummary ? "professionalSummary" : null,
-    employmentEvidence.length ||
-    structuredEmployment.length ||
-    currentEmployment
-      ? "employment"
-      : null,
-    projectEvidence.length ? "projects" : null,
-    skills.length ? "skills" : null,
-    educationEvidence.length ? "education" : null,
-    certificationEvidence.length ? "certifications" : null,
-  ].filter((value): value is string => Boolean(value));
-  const unavailableCategories = [
-    "professionalSummary",
-    "employment",
-    "projects",
-    "skills",
-    "education",
-    "certifications",
-    "languages",
-    "workArrangement",
-  ].filter((value) => !groundedCategories.includes(value));
+  const external = input.externalProfile;
+  const employment = external?.employmentRecords || [];
+  const asOverviewEmployment = (
+    record: ExternalTalentProfilePresentation["employmentRecords"][number],
+  ): CanonicalOverviewEmployment => ({
+    id: record.id,
+    title: record.title,
+    employer: record.employer,
+    start: record.start,
+    end: record.end,
+    current: record.current,
+    tenure: null,
+    location: null,
+  });
+  const current = external?.currentEmployment
+    ? asOverviewEmployment(external.currentEmployment)
+    : null;
+  const latest = external?.latestEmployment
+    ? asOverviewEmployment(external.latestEmployment)
+    : null;
   return {
     version: CANONICAL_PROFILE_OVERVIEW_VERSION,
     identity: {
@@ -710,63 +641,52 @@ export function buildExternalCanonicalProfileOverview(input: {
       country: clean(input.country),
     },
     profileQuality: {
-      profileDataConfidencePercent:
-        input.evidenceConfidencePercent == null
-          ? null
-          : Math.max(0, Math.min(100, input.evidenceConfidencePercent)),
+      profileDataConfidencePercent: null,
       sourceCompletenessPercent: null,
-      profileCompletenessPercent:
-        input.profileCompletenessPercent == null
-          ? null
-          : Math.max(0, Math.min(100, input.profileCompletenessPercent)),
+      profileCompletenessPercent: null,
     },
-    professionalSummary: clean(input.professionalSummary),
+    professionalSummary: external?.professionalSummary || null,
     career: {
-      totalExperienceYears:
-        input.totalExperienceYears == null
-          ? null
-          : Math.max(0, input.totalExperienceYears),
-      currentEmployment,
-      currentEmployments: structuredEmployment.filter(
-        (record) => record.current,
-      ).length
-        ? structuredEmployment.filter((record) => record.current)
-        : currentEmployment
-          ? [currentEmployment]
-          : [],
-      latestEmployment,
-      employmentCount: Math.max(
-        structuredEmployment.length,
-        employmentEvidence.length,
-        currentEmployment ? 1 : 0,
-      ),
-      projectCount: projectEvidence.length,
+      totalExperienceYears: external?.experienceCalculation.totalYears ?? null,
+      currentEmployment: current,
+      currentEmployments: current ? [current] : [],
+      latestEmployment: latest,
+      employmentCount: employment.length,
+      projectCount: external?.projectRecords.length || 0,
       supportedGapCount: null,
+      experienceCalculationStatus:
+        external?.experienceCalculation.status || "unavailable",
+      datedEmploymentCount: external?.experienceCalculation.datedRecords || 0,
+      confirmedCurrentEmploymentCount: current ? 1 : 0,
+      independentlyVerifiedEmploymentCount:
+        external?.independentlyVerifiedEmploymentRecords || 0,
     },
     skills: {
-      sapModules,
-      functional,
+      sapModules: [],
+      functional: (external?.skillRecords || []).map((value) => ({
+        value,
+        state: "Supported" as const,
+        evidenceStatus: "source_supported" as const,
+        verificationStatus: "not_verified" as const,
+      })),
       technical: [],
       lifecycle: [],
       industries: [],
-      totalCount: skills.length,
+      totalCount: external?.skillRecords.length || 0,
     },
-    employmentHighlights: structuredEmployment.slice(0, 3),
+    employmentHighlights: employment.slice(0, 3).map(asOverviewEmployment),
     projectHighlights: [],
     education: {
-      count: educationEvidence.length,
-      highestOrLatest: educationEvidence[0]
-        ? {
-            qualification: educationEvidence[0],
-            institution: null,
-            fieldOfStudy: null,
-            completionDate: null,
-          }
-        : null,
+      count: external?.educationRecords.length || 0,
+      highestOrLatest: null,
     },
     certifications: {
-      count: certificationEvidence.length,
-      items: certificationEvidence.map((value) => ({ value, ...descriptor })),
+      count: external?.certificationRecords.length || 0,
+      items: (external?.certificationRecords || []).map((value) => ({
+        value,
+        evidenceStatus: "source_supported" as const,
+        verificationStatus: "not_verified" as const,
+      })),
     },
     training: { count: 0, items: [] },
     languages: [],
@@ -793,11 +713,23 @@ export function buildExternalCanonicalProfileOverview(input: {
       ) as CanonicalProfileOverview["workArrangement"]["evidence"],
     },
     provenance: {
-      sourceTypes: unique(
-        input.sourceTypes?.length ? input.sourceTypes : ["external_provider"],
-      ),
-      groundedCategories,
-      unavailableCategories,
+      sourceTypes: ["external_provider"],
+      groundedCategories: [
+        "identity",
+        ...(employment.length ? ["employment"] : []),
+        ...(external?.projectRecords.length ? ["projects"] : []),
+        ...(external?.skillRecords.length ? ["skills"] : []),
+      ],
+      unavailableCategories: [
+        ...(!external?.professionalSummary ? ["professionalSummary"] : []),
+        ...(!employment.length ? ["employment"] : []),
+        ...(!external?.projectRecords.length ? ["projects"] : []),
+        ...(!external?.skillRecords.length ? ["skills"] : []),
+        "education",
+        "certifications",
+        "languages",
+        "workArrangement",
+      ],
       canonicalProfileVersion: "external-profile-provider-projection",
     },
   };

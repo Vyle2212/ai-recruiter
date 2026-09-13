@@ -13,6 +13,7 @@ export type SearchHistorySuggestion = {
   };
   matchQuality: "any" | "relevant" | "strong";
   minimumScore: number;
+  externalVerifiedOnly?: boolean;
   timestamp: string;
   source: "manual" | "guided" | "posted_job_jd" | "uploaded_jd";
   committedSnapshot?: import("./searchV2CommittedRequirements").CommittedSearchRequirements;

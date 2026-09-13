@@ -8,39 +8,81 @@ export function externalRejectionSummaryPresentation(
 ) {
   const plural = (count: number) => (count === 1 ? "profile" : "profiles");
   return {
-    headline: `${summary.evaluated} profiles evaluated; ${summary.eligible} met all ${summary.requirements.length} required filters`,
+    headline:
+      summary.evaluated +
+      " profiles mapped · " +
+      summary.evidenceSupported +
+      " evidence-supported · " +
+      summary.needsVerification +
+      " need verification · " +
+      summary.confirmedExcluded +
+      " confirmed exclusions",
+    noFullyVerifiedMatches:
+      summary.evidenceSupported === 0 && summary.needsVerification > 0,
     requirements: summary.requirements
       .map((requirement) => ({
         ...requirement,
         failureCount:
-          requirement.contradictedCount + requirement.unverifiedCount,
+          requirement.confirmedFailCount + requirement.needsVerificationCount,
         text:
-          requirement.contradictedCount && requirement.unverifiedCount
-            ? `${requirement.label} — contradicted for ${requirement.contradictedCount} ${plural(requirement.contradictedCount)}; unverified for ${requirement.unverifiedCount} ${plural(requirement.unverifiedCount)}.`
-            : requirement.contradictedCount
-              ? `${requirement.label} — contradicted for ${requirement.contradictedCount} ${plural(requirement.contradictedCount)}.`
-              : requirement.unverifiedCount
-                ? `${requirement.label} — unverified for ${requirement.unverifiedCount} ${plural(requirement.unverifiedCount)}.`
-                : `${requirement.label} — supported for ${requirement.supportedCount} ${plural(requirement.supportedCount)}.`,
+          requirement.confirmedFailCount && requirement.needsVerificationCount
+            ? requirement.label +
+              " — confirmed failure for " +
+              requirement.confirmedFailCount +
+              " " +
+              plural(requirement.confirmedFailCount) +
+              "; needs verification for " +
+              requirement.needsVerificationCount +
+              " " +
+              plural(requirement.needsVerificationCount) +
+              "."
+            : requirement.confirmedFailCount
+              ? requirement.label +
+                " — confirmed failure for " +
+                requirement.confirmedFailCount +
+                " " +
+                plural(requirement.confirmedFailCount) +
+                "."
+              : requirement.needsVerificationCount
+                ? requirement.label +
+                  " — needs verification for " +
+                  requirement.needsVerificationCount +
+                  " " +
+                  plural(requirement.needsVerificationCount) +
+                  "."
+                : requirement.label +
+                  " — confirmed for " +
+                  requirement.confirmedPassCount +
+                  " " +
+                  plural(requirement.confirmedPassCount) +
+                  ".",
       }))
       .filter((requirement) => requirement.failureCount > 0)
       .sort(
         (left, right) =>
           right.failureCount - left.failureCount ||
-          right.contradictedCount - left.contradictedCount ||
+          right.confirmedFailCount - left.confirmedFailCount ||
           left.requirementId.localeCompare(right.requirementId),
       ),
     supportedRequirements: summary.requirements
       .filter(
         (requirement) =>
-          requirement.supportedCount > 0 &&
-          requirement.contradictedCount + requirement.unverifiedCount === 0,
+          requirement.confirmedPassCount > 0 &&
+          requirement.confirmedFailCount +
+            requirement.needsVerificationCount ===
+            0,
       )
       .map((requirement) => ({
         requirementId: requirement.requirementId,
         label: requirement.label,
-        supportedCount: requirement.supportedCount,
-        text: `${requirement.label} — supported for ${requirement.supportedCount} ${plural(requirement.supportedCount)}.`,
+        supportedCount: requirement.confirmedPassCount,
+        text:
+          requirement.label +
+          " — confirmed for " +
+          requirement.confirmedPassCount +
+          " " +
+          plural(requirement.confirmedPassCount) +
+          ".",
       })),
   };
 }
@@ -52,17 +94,16 @@ export function externalCanonicalResultProjection(
   return {
     integrity: {
       version: requirementsVersion,
-      eligible: true,
+      eligible: item.eligibilityState !== "confirmed_exclusion",
       broadeningApplied: false,
-      verified: item.requirementEvaluations.filter(
-        (requirement) => requirement.state === "verified",
-      ).length,
+      verified: 0,
       supported: item.requirementEvaluations.filter(
-        (requirement) => requirement.state === "supported",
+        (requirement) => requirement.state === "confirmed_pass",
       ).length,
-      attention: item.requirementEvaluations.filter(
-        (requirement) => !["verified", "supported"].includes(requirement.state),
-      ).length,
+      attention: item.unresolvedRequirementCount,
+      eligibilityState: item.eligibilityState,
+      unresolvedRequirementCount: item.unresolvedRequirementCount,
+      confirmedContradictionCount: item.confirmedContradictionCount,
       requirements: item.requirementEvaluations.map((requirement) => ({
         id: requirement.id,
         criterionId: requirement.id,
@@ -70,18 +111,25 @@ export function externalCanonicalResultProjection(
         kind: requirement.kind,
         required: true,
         state:
-          requirement.state === "unverified"
+          requirement.state === "needs_verification"
             ? ("not_verified" as const)
-            : requirement.state,
+            : requirement.state === "confirmed_fail"
+              ? ("conflicting" as const)
+              : ("supported" as const),
         reason: requirement.evidence
           ? requirement.kind === "target" &&
-            item.targetEvidence.tier === "exact_supported" &&
-            item.targetEvidence.professionalContextType === "title"
-            ? `${item.targetEvidence.target} confirmed in current title.`
-            : `Supported by ${requirement.evidence.sourceField}.`
-          : requirement.state === "conflicting"
-            ? "Candidate-owned evidence contradicts this required filter."
-            : "Not verified from candidate-owned provider evidence.",
+            item.targetEvidence.tier === "exact_supported"
+            ? item.targetEvidence.temporalContext === "current"
+              ? item.targetEvidence.target + " confirmed in current title."
+              : item.targetEvidence.temporalContext === "historical"
+                ? item.targetEvidence.target +
+                  " appears in historical employment evidence."
+                : item.targetEvidence.temporalContext === "profile"
+                  ? item.targetEvidence.target +
+                    " is supported by the profile title; current employment is not confirmed."
+                  : "Supported by " + requirement.evidence.sourceField + "."
+            : "Supported by " + requirement.evidence.sourceField + "."
+          : requirement.explanation,
         provenance: requirement.evidence
           ? {
               candidateId: item.externalCandidateId,
@@ -100,13 +148,18 @@ export function externalCanonicalResultProjection(
         id: criterion.id,
         label: criterion.label,
         importance: criterion.importance,
-        state: criterion.score > 0
-          ? ("supported" as const)
-          : ("not_verified" as const),
+        state:
+          criterion.score > 0
+            ? ("supported" as const)
+            : ("not_verified" as const),
         score: criterion.score,
         reason:
           criterion.score > 0
-            ? `Supported by ${criterion.evidenceCount} deduplicated candidate-owned evidence signal${criterion.evidenceCount === 1 ? "" : "s"}.`
+            ? "Supported by " +
+              criterion.evidenceCount +
+              " deduplicated candidate-owned evidence signal" +
+              (criterion.evidenceCount === 1 ? "" : "s") +
+              "."
             : "Not verified from candidate-owned provider evidence.",
         provenance: null,
       })),

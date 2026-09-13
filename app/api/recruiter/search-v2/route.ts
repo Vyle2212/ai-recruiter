@@ -60,8 +60,6 @@ import { externalTalentProvider } from "@/lib/externalTalentProviderRegistry";
 import { executeExternalTalentSearch } from "@/lib/externalTalentSearchService";
 import { buildExternalSearchV2ClientResponse } from "@/lib/searchV2ResponseContract";
 import { externalCanonicalResultProjection } from "@/lib/externalTalentProjection";
-import type { ExternalTalentCandidate } from "@/lib/externalTalentTypes";
-import { cleanCandidatePresentationText } from "@/lib/candidatePresentationText";
 import { authorizeRecruiterJobsRead } from "@/lib/recruiterJobsAuthorization";
 import { sanitizeSearchV2RecruiterResponse } from "@/lib/searchV2RecruiterResponse";
 import {
@@ -71,6 +69,7 @@ import {
   identityOnlyCandidateProjection,
 } from "@/lib/searchV2UnifiedIntent";
 import { normalizeSearchV2Query } from "@/lib/searchV2QueryNormalization";
+import { buildExternalTalentProfilePresentation } from "@/lib/externalTalentProfile";
 
 export const runtime = "nodejs";
 
@@ -261,60 +260,6 @@ function externalCapabilityResponse(
   };
 }
 
-function externalProfilePreview(item: ExternalTalentCandidate) {
-  const employment = (item.employment || []).map((record) => ({
-    id: record.id,
-    title: record.title || null,
-    employer: record.employer || null,
-    start: record.startDate || null,
-    end: record.current ? "Present" : record.endDate || null,
-    current: record.current,
-    location: record.location || null,
-    summary: record.summary
-      ? cleanCandidatePresentationText(record.summary).slice(0, 500) || null
-      : null,
-  }));
-  const explicitCurrent = employment.find((record) => record.current) || null;
-  const contextualCurrent =
-    !explicitCurrent && item.currentTitle && item.currentEmployer
-      ? {
-          id: `external-current:${item.externalCandidateId}`,
-          title: item.currentTitle,
-          employer: item.currentEmployer,
-          start: null,
-          end: null,
-          current: true,
-          location: item.location || null,
-          summary: null,
-        }
-      : null;
-  const visibleEmployment = contextualCurrent
-    ? [contextualCurrent, ...employment]
-    : employment;
-  return {
-    employmentCount: visibleEmployment.length,
-    projectCount: item.projectText?.length || 0,
-    educationCount: item.education?.length || 0,
-    certificationCount: item.certifications?.length || 0,
-    trainingCount: 0,
-    skillCount: item.skills.length,
-    currentEmployment: explicitCurrent || contextualCurrent,
-    latestEmployment: visibleEmployment[0] || null,
-    employment: visibleEmployment.slice(0, 12),
-    projects: [],
-    education: item.education?.[0]
-      ? {
-          qualification: item.education[0],
-          fieldOfStudy: null,
-          institution: null,
-        }
-      : null,
-    certifications: item.certifications || [],
-    training: [],
-    skills: item.skills,
-  };
-}
-
 export async function GET(request: NextRequest) {
   if (request.nextUrl.searchParams.get("source") === "linkedin_talent_pool") {
     const capability = await externalTalentProvider().capability();
@@ -443,164 +388,192 @@ export async function POST(request: NextRequest) {
             committedRequirements: externalCommittedRequirements,
           },
         );
-        const results = externalResult.items.map((item) => ({
-          candidateId: item.externalCandidateId,
-          canonicalCandidateId: item.externalCandidateId,
-          sourceCandidateIds: [item.externalCandidateId],
-          talentPool: "linkedin_talent_pool",
-          candidateName: item.displayName || null,
-          currentTitle: item.currentTitle || item.headline || null,
-          currentEmployer: item.currentEmployer || null,
-          location: item.location || null,
-          country: null,
-          totalYearsExperience: item.totalYearsExperience,
-          implementationEvidenceCount: item.implementationEvidenceCount,
-          implementationEvidenceLevel: item.implementationEvidenceCount
-            ? "source_text_evidence"
-            : "unverified",
-          seniorityEvidenceLevel: item.requirementEvaluations.some(
-            (requirement) =>
-              requirement.kind === "seniority" &&
-              (requirement.state === "verified" ||
-                requirement.state === "supported"),
-          )
-            ? "source_text_evidence"
-            : "unverified",
-          primaryRoleFit:
-            item.targetEvidence.tier === "exact_verified" ||
-            item.targetEvidence.tier === "exact_supported"
-              ? "exact"
-              : item.targetEvidence.tier === "related"
-                ? "adjacent"
-                : "unknown",
-          implementationFit: item.implementationEvidenceCount
-            ? "supported_domain_implementation"
-            : "not_verified",
-          seniorityFit: "unverified",
-          locationFit: item.locationScore
-            ? "supported"
-            : item.requirementEvaluations.some(
-                  (requirement) => requirement.kind === "location",
-                )
-              ? "not_verified"
-              : "not_verified",
-          specializationEvidenceLevel:
-            item.targetEvidence.tier === "none"
-              ? "unverified"
-              : "source_text_evidence",
-          targetEvidence: {
-            ...item.targetEvidence,
-            sourceRecordId: item.externalCandidateId,
-            sourceValueProvenance: item.targetEvidence.trusted
-              ? "candidate_record_raw"
-              : null,
-          },
-          score: {
-            keywordScore: item.keywordScore,
-            semanticScore: item.semanticScore,
-            skillScore: item.skillScore,
-            titleScore: item.titleScore,
-            employerScore: item.employerScore,
-            locationScore: item.locationScore,
-            industryScore: 0,
-            qualityScore: item.evidenceConfidence,
-            confidenceScore: item.evidenceConfidence,
-            recencyScore: 0,
-            finalScore: item.overallMatchScore,
-          },
-          explanation: {
-            matchedTerms: item.requirementEvaluations
-              .filter(
-                (requirement) =>
-                  requirement.state === "verified" ||
-                  requirement.state === "supported",
-              )
-              .map((requirement) => requirement.label),
-            matchedSkills: item.skills,
-            matchedSapModules:
+        const results = externalResult.items.map((item) => {
+          const externalProfile = buildExternalTalentProfilePresentation(item);
+          const previewEmployment = externalProfile.employmentRecords.slice(
+            0,
+            2,
+          );
+          return {
+            candidateId: item.externalCandidateId,
+            canonicalCandidateId: item.externalCandidateId,
+            sourceCandidateIds: [item.externalCandidateId],
+            talentPool: "linkedin_talent_pool",
+            candidateName: item.displayName || null,
+            profileTitle: item.profileTitle || null,
+            currentTitle: item.currentTitle || null,
+            currentEmployer: item.currentEmployer || null,
+            location: item.location || null,
+            country: null,
+            totalYearsExperience: item.totalYearsExperience,
+            experienceCalculationStatus:
+              externalProfile.experienceCalculation.status,
+            externalProfile,
+            profilePreview: {
+              employmentCount: externalProfile.employmentRecords.length,
+              projectCount: externalProfile.projectRecords.length,
+              educationCount: externalProfile.educationRecords.length,
+              certificationCount: externalProfile.certificationRecords.length,
+              trainingCount: 0,
+              skillCount: externalProfile.skillRecords.length,
+              currentEmployment: externalProfile.currentEmployment,
+              latestEmployment: externalProfile.latestEmployment,
+              employment: previewEmployment,
+              projects: [],
+              education: null,
+              certifications: externalProfile.certificationRecords.slice(0, 2),
+              training: [],
+              skills: externalProfile.skillRecords,
+            },
+            implementationEvidenceCount: item.implementationEvidenceCount,
+            implementationEvidenceLevel: item.implementationEvidenceCount
+              ? "source_text_evidence"
+              : "unverified",
+            seniorityEvidenceLevel: item.requirementEvaluations.some(
+              (requirement) =>
+                requirement.kind === "seniority" &&
+                requirement.state === "confirmed_pass",
+            )
+              ? "source_text_evidence"
+              : "unverified",
+            primaryRoleFit:
               item.targetEvidence.tier === "exact_verified" ||
               item.targetEvidence.tier === "exact_supported"
+                ? "exact"
+                : item.targetEvidence.tier === "related"
+                  ? "adjacent"
+                  : "unknown",
+            implementationFit: item.implementationEvidenceCount
+              ? "supported_domain_implementation"
+              : "not_verified",
+            seniorityFit: "unverified",
+            locationFit: item.locationScore
+              ? "supported"
+              : item.requirementEvaluations.some(
+                    (requirement) =>
+                      requirement.kind === "location" &&
+                      requirement.state === "confirmed_fail",
+                  )
+                ? "conflicting"
+                : "not_verified",
+            specializationEvidenceLevel:
+              item.targetEvidence.tier === "none"
+                ? "unverified"
+                : "source_text_evidence",
+            targetEvidence: {
+              ...item.targetEvidence,
+              sourceRecordId: item.externalCandidateId,
+              sourceValueProvenance: item.targetEvidence.trusted
+                ? "candidate_record_raw"
+                : null,
+            },
+            score: {
+              keywordScore: item.keywordScore,
+              semanticScore: item.semanticScore,
+              skillScore: item.skillScore,
+              titleScore: item.titleScore,
+              employerScore: item.employerScore,
+              locationScore: item.locationScore,
+              industryScore: 0,
+              qualityScore: item.evidenceConfidence,
+              confidenceScore: item.evidenceConfidence,
+              recencyScore: 0,
+              finalScore: item.overallMatchScore,
+            },
+            explanation: {
+              matchedTerms: item.requirementEvaluations
+                .filter((requirement) => requirement.state === "confirmed_pass")
+                .map((requirement) => requirement.label),
+              matchedSkills: item.skills,
+              matchedSapModules:
+                item.targetEvidence.tier === "exact_verified" ||
+                item.targetEvidence.tier === "exact_supported"
+                  ? [item.targetEvidence.target]
+                  : [],
+              matchedIndustries: [],
+              missingSkills: item.requirementEvaluations
+                .filter(
+                  (requirement) =>
+                    requirement.kind === "skill" &&
+                    requirement.state === "needs_verification",
+                )
+                .map((requirement) => requirement.label),
+              reasons: item.providerEvidence.map(
+                (evidence) => evidence.excerpt,
+              ),
+              warnings: [],
+              confidenceLevel:
+                item.evidenceConfidence >= 80
+                  ? "high"
+                  : item.evidenceConfidence >= 55
+                    ? "medium"
+                    : "low",
+            },
+            evidence: [
+              ...item.providerEvidence.map((evidence) => ({
+                label: evidence.label,
+                value: evidence.excerpt,
+                source: "Exa public professional profile",
+              })),
+              ...(item.employmentText || []).map((value) => ({
+                label: "Employment evidence",
+                value,
+                source: "Exa public professional profile",
+              })),
+              ...(item.projectText || []).map((value) => ({
+                label: "Project evidence",
+                value,
+                source: "Exa public professional profile",
+              })),
+              ...(item.education || []).map((value) => ({
+                label: "Education evidence",
+                value,
+                source: "Exa public professional profile",
+              })),
+              ...(item.certifications || []).map((value) => ({
+                label: "Certification evidence",
+                value,
+                source: "Exa public professional profile",
+              })),
+            ].filter(
+              (evidence, index, all) =>
+                all.findIndex(
+                  (candidate) =>
+                    candidate.value.normalize("NFKC").trim().toLowerCase() ===
+                    evidence.value.normalize("NFKC").trim().toLowerCase(),
+                ) === index,
+            ),
+            profileEvidence: {
+              name: Boolean(item.displayName),
+              title: Boolean(item.profileTitle || item.currentTitle),
+              employer: Boolean(item.currentEmployer),
+              location: Boolean(item.location),
+              experienceDuration: item.totalYearsExperience !== null,
+              employmentHistory: Boolean(item.employmentText?.length),
+              projectHistory: Boolean(item.projectText?.length),
+              education: Boolean(item.education?.length),
+              certifications: Boolean(item.certifications?.length),
+              skills: Boolean(item.skills.length),
+            },
+            verifiedSkills: [],
+            verifiedSapModules:
+              item.targetEvidence.tier === "exact_verified"
                 ? [item.targetEvidence.target]
                 : [],
-            matchedIndustries: [],
-            missingSkills: item.requirementEvaluations
-              .filter(
-                (requirement) =>
-                  requirement.kind === "skill" &&
-                  requirement.state === "unverified",
-              )
-              .map((requirement) => requirement.label),
-            reasons: item.providerEvidence.map((evidence) => evidence.excerpt),
-            warnings: [],
-            confidenceLevel:
-              item.evidenceConfidence >= 80
-                ? "high"
-                : item.evidenceConfidence >= 55
-                  ? "medium"
-                  : "low",
-          },
-          evidence: [
-            ...item.providerEvidence.map((evidence) => ({
-              label: evidence.label,
-              value: evidence.excerpt,
-              source: "Exa public professional profile",
-            })),
-            ...(item.employmentText || []).map((value) => ({
-              label: "Employment evidence",
-              value,
-              source: "Exa public professional profile",
-            })),
-            ...(item.projectText || []).map((value) => ({
-              label: "Project evidence",
-              value,
-              source: "Exa public professional profile",
-            })),
-            ...(item.education || []).map((value) => ({
-              label: "Education evidence",
-              value,
-              source: "Exa public professional profile",
-            })),
-            ...(item.certifications || []).map((value) => ({
-              label: "Certification evidence",
-              value,
-              source: "Exa public professional profile",
-            })),
-          ].filter(
-            (evidence, index, all) =>
-              all.findIndex(
-                (candidate) =>
-                  candidate.value.normalize("NFKC").trim().toLowerCase() ===
-                  evidence.value.normalize("NFKC").trim().toLowerCase(),
-              ) === index,
-          ),
-          profileEvidence: {
-            name: Boolean(item.displayName),
-            title: Boolean(item.currentTitle || item.headline),
-            employer: Boolean(item.currentEmployer),
-            location: Boolean(item.location),
-            experienceDuration: item.totalYearsExperience !== null,
-            employmentHistory: Boolean(item.employmentText?.length),
-            projectHistory: Boolean(item.projectText?.length),
-            education: Boolean(item.education?.length),
-            certifications: Boolean(item.certifications?.length),
-            skills: Boolean(item.skills.length),
-          },
-          verifiedSkills: [],
-          verifiedSapModules:
-            item.targetEvidence.tier === "exact_verified"
-              ? [item.targetEvidence.target]
-              : [],
-          queryRelevantSkills: item.skills,
-          profilePreview: externalProfilePreview(item),
-          ...externalCanonicalResultProjection(
-            item,
-            externalCommittedRequirements.version,
-          ),
-          requiredCoveragePercent: item.requirementCoverage,
-          evidenceConfidencePercent: item.evidenceConfidence,
-          profileCompletenessPercent: item.profileCompleteness,
-          linkedInProfileUrl: item.profileUrl || null,
-        }));
+            queryRelevantSkills: item.skills,
+            externalEligibilityState: item.eligibilityState,
+            unresolvedRequirementCount: item.unresolvedRequirementCount,
+            confirmedContradictionCount: item.confirmedContradictionCount,
+            ...externalCanonicalResultProjection(
+              item,
+              externalCommittedRequirements.version,
+            ),
+            requiredCoveragePercent: item.requirementCoverage,
+            evidenceConfidencePercent: item.evidenceConfidence,
+            profileCompletenessPercent: item.profileCompleteness,
+            linkedInProfileUrl: item.profileUrl || null,
+          };
+        });
         const page = Math.max(1, Number(body.page) || 1);
         const pageSize = 20;
         const appliedMinimumScore = Math.max(0, Number(body.minimumScore) || 0);

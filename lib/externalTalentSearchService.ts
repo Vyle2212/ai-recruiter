@@ -54,6 +54,7 @@ const identity = (
         criteria: request.criteria,
         minimumScore: Math.max(0, Number(request.minimumScore) || 0),
         includeRelocationRemote: request.includeRelocationRemote,
+        externalVerifiedOnly: request.externalVerifiedOnly === true,
         authorizationScopeHash,
         version: EXTERNAL_RANKING_VERSION,
       }),
@@ -116,18 +117,21 @@ function normalizeExternalBatch(
         provider: "exa",
         externalCandidateId: candidate.externalCandidateId,
         displayName: candidate.displayName,
+        profileTitle: candidate.profileTitle,
         headline: candidate.headline,
         currentTitle: candidate.currentTitle,
         location: candidate.location,
         currentEmployer: candidate.currentEmployer,
         skills: candidate.skills || [],
         experienceSummary: candidate.experienceSummary,
-        employment: candidate.employment || [],
         employmentText: candidate.employmentText || [],
         projectText: candidate.projectText || [],
         education: candidate.education || [],
         certifications: candidate.certifications || [],
         totalYearsExperience: candidate.totalYearsExperience ?? null,
+        employmentRecords: candidate.employmentRecords || [],
+        experienceCalculation: candidate.experienceCalculation,
+        profileProvenance: candidate.profileProvenance,
         profileUrl: checkedUrl.url,
         profileUrlDomain: checkedUrl.domain,
         providerEvidence: evidence,
@@ -140,20 +144,33 @@ function normalizeExternalBatch(
     );
     snapshot.rejectionSummary.evaluated += 1;
     if (evaluated.eligible) snapshot.rejectionSummary.eligible += 1;
+    if (evaluated.candidate.eligibilityState === "evidence_supported")
+      snapshot.rejectionSummary.evidenceSupported += 1;
+    else if (
+      evaluated.candidate.eligibilityState === "potential_needs_verification"
+    )
+      snapshot.rejectionSummary.needsVerification += 1;
+    else snapshot.rejectionSummary.confirmedExcluded += 1;
     for (const requirement of evaluated.candidate.requirementEvaluations) {
       const aggregate = snapshot.rejectionSummary.requirements.find(
         (item) => item.requirementId === requirement.id,
       );
       if (!aggregate) continue;
-      if (requirement.state === "conflicting") aggregate.contradictedCount += 1;
-      else if (requirement.state === "unverified")
+      if (requirement.state === "confirmed_fail") {
+        aggregate.contradictedCount += 1;
+        aggregate.confirmedFailCount += 1;
+      } else if (requirement.state === "needs_verification") {
         aggregate.unverifiedCount += 1;
-      else aggregate.supportedCount += 1;
+        aggregate.needsVerificationCount += 1;
+      } else {
+        aggregate.supportedCount += 1;
+        aggregate.confirmedPassCount += 1;
+      }
     }
-    if (
-      evaluated.eligible &&
-      evaluated.candidate.overallMatchScore >= snapshot.minimumScore
-    )
+    const passesScoreThreshold =
+      evaluated.candidate.eligibilityState === "potential_needs_verification" ||
+      evaluated.candidate.overallMatchScore >= snapshot.minimumScore;
+    if (evaluated.eligible && passesScoreThreshold)
       accepted.push(evaluated.candidate);
   }
   snapshot.loadedExternalTotal += uniqueLoaded;
@@ -266,12 +283,19 @@ export async function executeExternalTalentSearch(
       rejectionSummary: {
         evaluated: 0,
         eligible: 0,
+        evidenceSupported: 0,
+        needsVerification: 0,
+        confirmedExcluded: 0,
         requirements: plan.requirements.map((requirement) => ({
           requirementId: requirement.id,
           label: requirement.label,
           contradictedCount: 0,
           unverifiedCount: 0,
           supportedCount: 0,
+          confirmedPassCount: 0,
+          needsVerificationCount: 0,
+          confirmedFailCount: 0,
+          providerCapability: requirement.providerCapability,
         })),
       },
     };
@@ -420,6 +444,13 @@ export async function executeExternalTalentSearch(
         : `${snapshot.loadedExternalTotal} unique external profiles mapped; more market segments are available.`,
     ],
     unsupportedRequirements: snapshot.plan.unsupportedRequirements,
+    providerCapabilityWarnings: snapshot.plan.providerCapabilityWarnings,
+    strictVerifiedOnly: snapshot.plan.strictVerifiedOnly,
+    poolCounts: {
+      evidenceSupported: snapshot.rejectionSummary.evidenceSupported,
+      needsVerification: snapshot.rejectionSummary.needsVerification,
+      confirmedExcluded: snapshot.rejectionSummary.confirmedExcluded,
+    },
     rejectionSummary: snapshot.rejectionSummary,
     marketMapping: {
       version: snapshot.marketMapping.version,

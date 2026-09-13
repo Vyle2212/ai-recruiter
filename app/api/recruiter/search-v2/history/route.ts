@@ -32,6 +32,7 @@ type Item = {
   };
   matchQuality: "any" | "relevant" | "strong";
   minimumScore: number;
+  externalVerifiedOnly?: boolean;
   timestamp: string;
   source: "manual" | "guided" | "posted_job_jd" | "uploaded_jd";
   jobId?: string;
@@ -103,6 +104,7 @@ export async function POST(request: NextRequest) {
     filters,
     matchQuality: row.matchQuality!,
     minimumScore: Number(row.minimumScore) || 0,
+    externalVerifiedOnly: row.externalVerifiedOnly === true,
     committedIdentity:
       row.committedSnapshot?.version === COMMITTED_SEARCH_REQUIREMENTS_VERSION
         ? row.committedSnapshot.semanticIdentity
@@ -135,6 +137,7 @@ export async function POST(request: NextRequest) {
     filters,
     matchQuality: row.matchQuality!,
     minimumScore: Number(row.minimumScore) || 0,
+    externalVerifiedOnly: row.externalVerifiedOnly === true,
     timestamp: new Date().toISOString(),
     source: row.source!,
     ...(row.jobId ? { jobId: String(row.jobId).slice(0, 100) } : {}),

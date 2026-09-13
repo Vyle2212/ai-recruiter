@@ -1,6 +1,6 @@
 "use client";
 
-import {
+import React, {
   FormEvent,
   useEffect,
   useMemo,
@@ -104,6 +104,7 @@ import {
 } from "@/lib/guidedSearchIdentity";
 import { canonicalMatchLabel } from "@/lib/searchV2Match";
 import { externalProfileActionLabel } from "@/lib/externalProfileUrl";
+import type { ExternalTalentProfilePresentation } from "@/lib/externalTalentProfile";
 import {
   loadSearchV2SourceReadiness,
   resolveSearchV2SourceReadiness,
@@ -168,11 +169,14 @@ type SearchResult = {
   candidateId: string;
   talentPool?: "internal_profiles" | "linkedin_talent_pool";
   candidateName: string | null;
+  profileTitle?: string | null;
   currentTitle: string | null;
   currentEmployer: string | null;
   location: string | null;
   country: string | null;
   totalYearsExperience: number | null;
+  experienceCalculationStatus?: "established" | "partial" | "unavailable";
+  externalProfile?: ExternalTalentProfilePresentation;
   score: SearchScore | null;
   explanation: SearchExplanation | null;
   evidence?: Array<{
@@ -285,6 +289,10 @@ type SearchResult = {
   rankingScore?: number;
   matchLabel?: "Strong Match" | "Good Match" | "Potential Match" | null;
   profileCompletenessPercent?: number;
+  externalEligibilityState?:
+    "evidence_supported" | "potential_needs_verification";
+  unresolvedRequirementCount?: number;
+  confirmedContradictionCount?: number;
   linkedInProfileUrl?: string | null;
   profilePreview?: CandidateSearchV2ProfilePreview;
 };
@@ -316,6 +324,13 @@ type SearchResponse = NormalizedSearchV2Response<SearchResult> & {
   rankingVersion?: string;
   requestId?: string;
   rejectionSummary?: import("@/lib/externalTalentTypes").ExternalRejectionSummary;
+  poolCounts?: {
+    evidenceSupported: number;
+    needsVerification: number;
+    confirmedExcluded: number;
+  };
+  providerCapabilityWarnings?: string[];
+  strictVerifiedOnly?: boolean;
   marketMapping?: {
     version: string;
     segmentsCompleted: number;
@@ -531,6 +546,7 @@ type RecentSearch = {
   };
   matchQuality: "any" | "relevant" | "strong";
   minimumScore: number;
+  externalVerifiedOnly?: boolean;
   timestamp: string;
   source: "manual" | "guided" | "posted_job_jd" | "uploaded_jd";
   guidedPlanSnapshot?: GuidedSearchSnapshot;
@@ -594,6 +610,7 @@ type SearchSnapshot = Readonly<{
   committedRequirements: CommittedSearchRequirements;
   matchQuality: "any" | "relevant" | "strong";
   minimumScore: number;
+  externalVerifiedOnly: boolean;
   talentPool?: "internal_profiles" | "linkedin_talent_pool";
   integrityPlan: GuidedSearchHandoff["integrityPlan"] | null;
   provenance: GuidedSearchHandoff["provenance"] | null;
@@ -630,14 +647,6 @@ function candidateShortId(candidateId: string | null | undefined) {
   return canonicalTalentSearchIdentity(candidateId).identityToken.slice(1);
 }
 
-function inferEmployerFromTitle(title: string | null | undefined) {
-  const normalizedTitle = normalizeDisplayValue(title);
-
-  const match = normalizedTitle.match(/\s+at\s+(.+)$/i);
-
-  return normalizeDisplayValue(match?.[1]);
-}
-
 function cleanCurrentTitle(title: string | null | undefined) {
   return normalizeDisplayValue(title)
     .replace(/^\d+\)\s*(?:position\s*:\s*)?/i, "")
@@ -651,15 +660,11 @@ function cleanCurrentTitle(title: string | null | undefined) {
 }
 
 function resolvedEmployer(result: SearchResult) {
-  return (
-    normalizeDisplayValue(result.currentEmployer) ||
-    inferEmployerFromTitle(result.currentTitle)
-  );
+  return normalizeDisplayValue(result.currentEmployer);
 }
 
 function uniqueLocationParts(result: SearchResult) {
   const values = [
-    resolvedEmployer(result),
     normalizeDisplayValue(result.location),
     normalizeDisplayValue(result.country),
   ].filter(Boolean);
@@ -713,7 +718,9 @@ export function CompactCandidateCard({
   const evaluatedResult = evaluatedSearchResult(result) ? result : null;
   const candidateName = cleanCandidateName(result);
   const candidateTitle = cleanCurrentTitle(
-    result.integrity?.currentEmployment?.title || result.currentTitle,
+    result.integrity?.currentEmployment?.title ||
+      result.currentTitle ||
+      result.profileTitle,
   );
   const anonymousCandidate = candidateName === "Name unavailable";
   const identityToken = `#${candidateShortId(result.candidateId)}`;
@@ -759,9 +766,10 @@ export function CompactCandidateCard({
     jobId,
   );
   const shortlistHref = `/recruiter/shortlist?candidateId=${encodeURIComponent(result.candidateId)}&from=search-v2`;
-  const externalProfile = result.talentPool === "linkedin_talent_pool";
   const matchLabel = diagnostic.matchLevel;
   const rankingScore = displayedRankingScore(result);
+  const externalNeedsVerification =
+    result.externalEligibilityState === "potential_needs_verification";
   const fitClasses =
     matchLabel === "Strong Match"
       ? "border-emerald-800/70 bg-emerald-950/25 text-emerald-300"
@@ -795,17 +803,54 @@ export function CompactCandidateCard({
     : "";
   const languageRequirements: NonNullable<typeof integrity>["requirements"] =
     [];
-  const queryStatements = {
-    supported: matchSummary
-      .filter((item) => item.state === "met")
-      .map((item) => `Met: ${item.label} — ${item.explanation}`),
-    gaps: matchSummary
-      .filter((item) => item.state !== "met")
-      .map(
-        (item) =>
-          `${item.state === "partly_supported" ? "Partly supported" : "Not found in profile"}: ${item.label} — ${item.explanation}`,
-      ),
-  };
+  const queryStatements =
+    result.talentPool === "linkedin_talent_pool"
+      ? {
+          supported: (integrity?.requirements || [])
+            .filter(
+              (requirement) =>
+                requirement.state === "verified" ||
+                requirement.state === "supported",
+            )
+            .map(
+              (requirement) =>
+                "Met: " + requirement.label + " — " + requirement.reason,
+            ),
+          gaps: (integrity?.requirements || [])
+            .filter(
+              (requirement) =>
+                requirement.state !== "verified" &&
+                requirement.state !== "supported",
+            )
+            .map((requirement) =>
+              requirement.state === "conflicting"
+                ? "Confirmed contradiction: " +
+                  requirement.label +
+                  " — " +
+                  requirement.reason
+                : "Needs verification: " +
+                  requirement.label +
+                  " — " +
+                  requirement.reason,
+            ),
+        }
+      : {
+          supported: matchSummary
+            .filter((item) => item.state === "met")
+            .map((item) => "Met: " + item.label + " — " + item.explanation),
+          gaps: matchSummary
+            .filter((item) => item.state !== "met")
+            .map(
+              (item) =>
+                (item.state === "partly_supported"
+                  ? "Partly supported"
+                  : "Not found in profile") +
+                ": " +
+                item.label +
+                " — " +
+                item.explanation,
+            ),
+        };
   const criticalGap = "";
   const locationRequirement = integrity?.requirements.find(
     (requirement) => requirement.kind === "location",
@@ -845,36 +890,25 @@ export function CompactCandidateCard({
               {companyLabel}: {employer}
             </p>
           ) : null}
-          {location || result.totalYearsExperience != null ? (
+          {location ||
+          result.totalYearsExperience != null ||
+          result.experienceCalculationStatus === "unavailable" ? (
             <p className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-slate-500">
               {location ? <span>{location}</span> : null}
               {result.totalYearsExperience != null ? (
                 <span>
+                  Total professional experience:{" "}
                   {formatTotalCareerExperience(result.totalYearsExperience)}
+                  {result.experienceCalculationStatus === "partial"
+                    ? " (partial from dated source records)"
+                    : ""}
+                </span>
+              ) : result.talentPool === "linkedin_talent_pool" ? (
+                <span>
+                  Total professional experience: Not established from source
                 </span>
               ) : null}
             </p>
-          ) : null}
-          {externalProfile && preview?.employment.length ? (
-            <div className="mt-2 space-y-1 border-t border-slate-800/80 pt-2">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Recent experience
-              </p>
-              {preview.employment.slice(0, 2).map((record) => (
-                <p
-                  key={record.id}
-                  className="line-clamp-1 text-xs text-slate-400"
-                >
-                  <span className="text-slate-300">
-                    {record.title || "Role not provided"}
-                  </span>
-                  {record.employer ? ` · ${record.employer}` : ""}
-                  {record.start || record.end
-                    ? ` · ${formatCandidateProfilePeriod(record.start, record.end, record.current)}`
-                    : ""}
-                </p>
-              ))}
-            </div>
           ) : null}
           {integrity?.broadeningApplied && locationRequirement ? (
             <p className="mt-1 text-xs font-medium text-amber-300">
@@ -930,41 +964,65 @@ export function CompactCandidateCard({
               className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${fitClasses}`}
               title="Match Quality measures alignment with the requested role dimensions."
             >
-              {identityLookup
-                ? result.identityMatchKind === "exact"
-                  ? "Exact profile match"
-                  : result.identityMatchKind === "fuzzy"
-                    ? "Possible profile match"
-                    : "Profile name match"
-                : rankingScore === null
-                  ? "Match unavailable"
-                  : externalProfile
-                    ? `${rankingScore}% Preliminary match`
+              {externalNeedsVerification
+                ? "Potential · Needs verification"
+                : identityLookup
+                  ? result.identityMatchKind === "exact"
+                    ? "Exact profile match"
+                    : result.identityMatchKind === "fuzzy"
+                      ? "Possible profile match"
+                      : "Profile name match"
+                  : rankingScore === null
+                    ? "Match unavailable"
                     : `${rankingScore}% ${matchLabel}`}
             </span>
-            {externalProfile && !identityLookup ? (
+            {false && !identityLookup ? (
               <span
-                className="text-[11px] text-slate-500"
-                title="Evidence confidence and profile completeness are independent of match alignment."
+                className="text-[10px] text-slate-600"
+                title="Confidence measures the reliability and completeness of the evidence. It is independent of Match Quality."
               >
-                Evidence {diagnostic.evidenceConfidence.toLocaleLowerCase()} ·{" "}
-                {result.profileCompletenessPercent == null
-                  ? "completeness not provided"
-                  : `${result.profileCompletenessPercent}% complete`}
+                Search confidence{" "}
+                <span className="text-slate-400">
+                  {diagnostic.evidenceConfidence} ·{" "}
+                  {diagnostic.evidenceCoveragePercent}%
+                </span>
               </span>
             ) : null}
           </div>
-          <dl className="hidden" aria-label="Candidate match dimensions">
+          <dl
+            className={
+              result.talentPool === "linkedin_talent_pool"
+                ? "mt-2 space-y-1 text-xs text-slate-400"
+                : "hidden"
+            }
+            aria-label="Candidate match dimensions"
+          >
             {!identityLookup ? (
               <>
                 <div>
-                  <dt className="inline">Requirement coverage</dt>
+                  <dt className="inline">Confirmed requirement coverage</dt>
                   <dd className="ml-1 inline text-slate-300">
                     {diagnostic.requirementCoveragePercent == null
                       ? "Not applicable"
                       : `${diagnostic.requirementCoveragePercent}%`}
                   </dd>
                 </div>
+                {result.talentPool === "linkedin_talent_pool" ? (
+                  <>
+                    <div>
+                      <dt className="inline">Unresolved requirements</dt>
+                      <dd className="ml-1 inline text-amber-200">
+                        {result.unresolvedRequirementCount || 0}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="inline">Confirmed contradictions</dt>
+                      <dd className="ml-1 inline text-slate-300">
+                        {result.confirmedContradictionCount || 0}
+                      </dd>
+                    </div>
+                  </>
+                ) : null}
                 <div>
                   <dt className="inline">Ranking score</dt>
                   <dd className="ml-1 inline text-slate-300">
@@ -1100,29 +1158,35 @@ export function CompactCandidateCard({
                 Recent experience ({preview.employmentCount})
               </h3>
               <ol className="mt-2 space-y-1.5">
-                {preview.employment.slice(0, 3).map((item) => (
-                  <li key={item.id} className="text-xs text-slate-400">
-                    <p className="truncate font-medium text-slate-200">
-                      {item.title || "Role not provided"}
-                    </p>
-                    <p className="truncate">
-                      {[
-                        item.employer,
-                        item.start
-                          ? formatCandidateProfilePeriod(
-                              item.start,
-                              item.end,
-                              item.current,
-                            )
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                  </li>
-                ))}
+                {preview.employment
+                  .slice(
+                    0,
+                    result.talentPool === "linkedin_talent_pool" ? 2 : 3,
+                  )
+                  .map((item) => (
+                    <li key={item.id} className="text-xs text-slate-400">
+                      <p className="truncate font-medium text-slate-200">
+                        {item.title || "Role not provided"}
+                      </p>
+                      <p className="truncate">
+                        {[
+                          item.employer,
+                          item.start
+                            ? formatCandidateProfilePeriod(
+                                item.start,
+                                item.end,
+                                item.current,
+                              )
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </li>
+                  ))}
               </ol>
-              {preview.employmentCount > preview.employment.length ? (
+              {preview.employmentCount >
+              (result.talentPool === "linkedin_talent_pool" ? 2 : 3) ? (
                 <button
                   type="button"
                   onClick={() => onOpenTab?.("Experience")}
@@ -1376,6 +1440,7 @@ export default function CandidateSearchV2Client({
       ? "External Talent Network — Not configured"
       : "External Talent Network";
   const [includeRelocationRemote, setIncludeRelocationRemote] = useState(false);
+  const [externalVerifiedOnly, setExternalVerifiedOnly] = useState(false);
 
   const [matchQuality, setMatchQuality] = useState<
     "any" | "relevant" | "strong"
@@ -1746,6 +1811,7 @@ export default function CandidateSearchV2Client({
     setSapModules(item.filters.sapModules.join(", "));
     setLanguages((item.filters.languages || []).join(", "));
     setMatchQuality(item.matchQuality);
+    setExternalVerifiedOnly(item.externalVerifiedOnly === true);
     if (
       item.committedSnapshot?.query === item.query &&
       item.committedSnapshot.semanticIdentity
@@ -1837,7 +1903,7 @@ export default function CandidateSearchV2Client({
       committedSnapshot?.committedRequirements.talentPool ===
       "linkedin_talent_pool"
     )
-      return `${(response.loadedExternalTotal ?? response.summary.totalDocuments).toLocaleString()} unique external profiles mapped${response.marketMapping ? ` across ${response.marketMapping.segmentsCompleted}/${response.marketMapping.segmentsPlanned} market segments` : ""} · ${response.summary.visibleTotal.toLocaleString()} matched required criteria`;
+      return `${(response.loadedExternalTotal ?? response.summary.totalDocuments).toLocaleString()} external profiles loaded and evaluated`;
     if (
       ["candidate_name_lookup", "identity_token_lookup"].includes(
         response.searchIntent?.type || "",
@@ -1956,6 +2022,7 @@ export default function CandidateSearchV2Client({
       });
       activeSearchKeyRef.current = restoredSearchKey;
       setSearchEditorOpen(false);
+      setExternalVerifiedOnly(restoredResponse.strictVerifiedOnly === true);
       setCommittedSnapshot({
         query: restoredQuery,
         intent: parseRecruiterSearchIntent(restoredQuery),
@@ -1982,6 +2049,7 @@ export default function CandidateSearchV2Client({
         ),
         matchQuality: restoredMatchQuality,
         minimumScore: restoredMinimumScore,
+        externalVerifiedOnly: restoredResponse.strictVerifiedOnly === true,
         integrityPlan: null,
         provenance: null,
         searchKey: restoredSearchKey,
@@ -2244,6 +2312,10 @@ export default function CandidateSearchV2Client({
       paginationNavigation && committedSnapshot
         ? committedSnapshot.committedRequirements.talentPool
         : talentPool;
+    const requestExternalVerifiedOnly =
+      paginationNavigation && committedSnapshot
+        ? committedSnapshot.externalVerifiedOnly
+        : externalVerifiedOnly;
     const requestUnifiedIntent = detectSearchV2UnifiedIntent(requestQuery);
     const lightweightIdentityTokenLookup =
       requestTalentPool === "internal_profiles" &&
@@ -2339,6 +2411,7 @@ export default function CandidateSearchV2Client({
       minimumScore: requestMinimumScore,
       talentPool: requestTalentPool,
       committedRequirements: requestCommittedRequirements.semanticIdentity,
+      externalVerifiedOnly: requestExternalVerifiedOnly,
       integrityPlan: requestIntegrityPlan,
     });
     const changingPage = Boolean(
@@ -2355,6 +2428,7 @@ export default function CandidateSearchV2Client({
       filters: requestFilters,
       matchQuality: requestMatchQuality,
       minimumScore: requestMinimumScore,
+      externalVerifiedOnly: requestExternalVerifiedOnly,
       integrityPlan: requestIntegrityPlan,
       provenance: requestProvenance,
       searchKey: semanticSearchKey,
@@ -2497,6 +2571,7 @@ export default function CandidateSearchV2Client({
             : {}),
           includeRelocationRemote:
             requestCommittedRequirements.includeRelocationRemote,
+          externalVerifiedOnly: requestExternalVerifiedOnly,
         }),
       });
       const payload: unknown = await fetchResponse.json();
@@ -2554,6 +2629,7 @@ export default function CandidateSearchV2Client({
             },
             matchQuality: requestMatchQuality,
             minimumScore: requestMinimumScore,
+            externalVerifiedOnly: requestExternalVerifiedOnly,
             source: searchSourceRef.current,
             committedSnapshot: requestCommittedRequirements,
             preparationSnapshot: preparation,
@@ -2943,6 +3019,19 @@ export default function CandidateSearchV2Client({
               />
               Include relocation/remote candidates
             </label>
+            {talentPool === "linkedin_talent_pool" ? (
+              <label className="flex min-h-12 items-center gap-2 rounded-xl border border-amber-800/70 bg-amber-950/20 px-3 text-xs text-amber-100">
+                <input
+                  type="checkbox"
+                  checked={externalVerifiedOnly}
+                  onChange={(event) => {
+                    setExternalVerifiedOnly(event.target.checked);
+                    setReviewCommitted(false);
+                  }}
+                />
+                Show only candidates with evidence for every required criterion
+              </label>
+            ) : null}
             <button
               type="button"
               aria-expanded={filtersOpen}
@@ -3311,6 +3400,82 @@ export default function CandidateSearchV2Client({
             ) : null}
           </div>
 
+          {response &&
+          committedSnapshot?.committedRequirements.talentPool ===
+            "linkedin_talent_pool" &&
+          externalRejectionPresentation ? (
+            <section className="mt-4 rounded-xl border border-slate-800 bg-slate-900/35 p-4">
+              <p className="text-sm font-semibold text-slate-200">
+                {externalRejectionPresentation.headline}
+              </p>
+              <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+                <div className="rounded-lg border border-emerald-900/70 bg-emerald-950/20 p-3">
+                  <dt className="text-xs text-emerald-200">
+                    Evidence-supported matches
+                  </dt>
+                  <dd className="mt-1 text-lg font-semibold text-white">
+                    {response.poolCounts?.evidenceSupported || 0}
+                  </dd>
+                </div>
+                <div className="rounded-lg border border-amber-900/70 bg-amber-950/20 p-3">
+                  <dt className="text-xs text-amber-200">
+                    Potential matches needing verification
+                  </dt>
+                  <dd className="mt-1 text-lg font-semibold text-white">
+                    {response.poolCounts?.needsVerification || 0}
+                  </dd>
+                </div>
+                <div className="rounded-lg border border-slate-700 bg-slate-950/30 p-3">
+                  <dt className="text-xs text-slate-300">
+                    Confirmed exclusions
+                  </dt>
+                  <dd className="mt-1 text-lg font-semibold text-white">
+                    {response.poolCounts?.confirmedExcluded || 0}
+                  </dd>
+                </div>
+              </dl>
+              {externalRejectionPresentation.noFullyVerifiedMatches ? (
+                <>
+                  <p className="mt-2 font-semibold text-amber-200">
+                    No fully verified matches yet
+                  </p>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Potential profiles are still shown because the connected
+                    source did not provide enough evidence to confirm every
+                    active requirement.
+                  </p>
+                </>
+              ) : null}
+              {response.providerCapabilityWarnings?.length ? (
+                <ul className="mt-3 space-y-1 text-xs text-amber-100">
+                  {response.providerCapabilityWarnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {response.nextProviderBatchCursor &&
+              response.providerExhausted !== true ? (
+                <button
+                  type="button"
+                  disabled={loading || loadingExternalBatch}
+                  onClick={() =>
+                    void runSearch(
+                      response.summary.page,
+                      true,
+                      false,
+                      response.nextProviderBatchCursor || undefined,
+                    )
+                  }
+                  className="mt-3 min-h-10 rounded-lg border border-cyan-700 bg-cyan-950/30 px-4 text-sm font-semibold text-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {loadingExternalBatch
+                    ? "Mapping the next market segment..."
+                    : `Map next market segment (up to ${response.marketMapping?.requestSize || 100} profiles)`}
+                </button>
+              ) : null}
+            </section>
+          ) : null}
+
           {error ? (
             <div className="mt-5 rounded-xl border border-red-900 bg-red-950/30 p-4 text-sm text-red-200">
               <p>{error}</p>
@@ -3331,10 +3496,15 @@ export default function CandidateSearchV2Client({
           {!loading && response && results.length === 0 ? (
             <div className="mt-5 rounded-2xl border border-dashed border-slate-700 bg-slate-900/30 p-12 text-center">
               <p className="text-lg font-semibold text-slate-300">
-                {committedSnapshot?.integrityPlan ||
-                committedSnapshot?.filters.effectiveLocations.length
-                  ? "No candidates meet all required criteria."
-                  : "No matching candidates"}
+                {committedSnapshot?.committedRequirements.talentPool ===
+                "linkedin_talent_pool"
+                  ? response.strictVerifiedOnly
+                    ? "No profiles have evidence for every required criterion."
+                    : "No candidates remain after confirmed contradictions."
+                  : committedSnapshot?.integrityPlan ||
+                      committedSnapshot?.filters.effectiveLocations.length
+                    ? "No candidates meet all required criteria."
+                    : "No matching candidates"}
               </p>
 
               {externalRejectionPresentation ? (
@@ -3343,8 +3513,9 @@ export default function CandidateSearchV2Client({
                     {externalRejectionPresentation.headline}
                   </p>
                   <p className="mt-1 text-sm text-slate-500">
-                    Actual candidate-evidence exclusions are shown below. No
-                    requirements were broadened automatically.
+                    Requirement evidence status is shown below. Missing evidence
+                    is not treated as a contradiction, and no requirement was
+                    broadened automatically.
                   </p>
                   <ol className="mx-auto mt-3 max-w-2xl space-y-2 text-left text-sm text-slate-400">
                     {externalRejectionPresentation.requirements.map((item) => (
@@ -3542,41 +3713,12 @@ export default function CandidateSearchV2Client({
               </button>
             </nav>
           ) : null}
-          {response &&
-          committedSnapshot?.committedRequirements.talentPool ===
-            "linkedin_talent_pool" &&
-          response.summary.page * response.summary.pageSize >=
-            response.summary.totalMatched ? (
+          {response && response.providerExhausted ? (
             <div className="mt-5 border-t border-slate-800 pt-4 text-center">
-              {response.nextProviderBatchCursor &&
-              response.providerExhausted !== true ? (
-                <button
-                  type="button"
-                  disabled={loading || loadingExternalBatch}
-                  onClick={() =>
-                    void runSearch(
-                      response.summary.page,
-                      true,
-                      false,
-                      response.nextProviderBatchCursor || undefined,
-                    )
-                  }
-                  className="min-h-10 rounded-lg border border-cyan-700 bg-cyan-950/30 px-4 text-sm font-semibold text-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {loadingExternalBatch
-                    ? "Mapping the next market segment..."
-                    : `Map next market segment (up to ${response.marketMapping?.requestSize || 100} profiles)`}
-                </button>
-              ) : response.providerExhausted ? (
-                <p className="text-sm text-slate-400">
-                  Broad market mapping completed for the configured provider
-                  budget
-                  {response.marketMapping
-                    ? ` (up to ${response.marketMapping.profileLimit.toLocaleString()} profiles across ${response.marketMapping.segmentsPlanned} segments)`
-                    : ""}
-                  . This is not an exhaustive LinkedIn market list.
-                </p>
-              ) : null}
+              <p className="text-sm text-slate-400">
+                All available external profiles for this search have been
+                loaded.
+              </p>
             </div>
           ) : null}
         </section>

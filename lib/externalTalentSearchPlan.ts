@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 import type { CandidateSearchV2Request } from "@/lib/candidateSearchV2Types";
-import type { ExternalTalentSearchPlan } from "@/lib/externalTalentTypes";
+import type {
+  ExternalPlanRequirement,
+  ExternalRequirementProviderCapability,
+  ExternalTalentSearchPlan,
+} from "@/lib/externalTalentTypes";
 import {
   buildCommittedSearchRequirements,
   type CommittedSearchRequirements,
@@ -24,6 +28,60 @@ const stable = (values: string[]) =>
       values.map((value) => value.normalize("NFKC").trim()).filter(Boolean),
     ),
   ].sort((a, b) => a.localeCompare(b));
+
+export function externalRequirementProviderCapability(
+  kind: ExternalPlanRequirement["kind"],
+): ExternalRequirementProviderCapability {
+  if (
+    [
+      "location",
+      "professional_role",
+      "company",
+      "skill",
+      "sap_module",
+      "target",
+    ].includes(kind)
+  )
+    return "provider_filterable";
+  if (["language", "industry", "exclusion"].includes(kind))
+    return "locally_verifiable";
+  if (
+    [
+      "experience",
+      "lifecycle",
+      "seniority",
+      "education",
+      "certification",
+    ].includes(kind)
+  )
+    return "partially_verifiable";
+  return "not_verifiable";
+}
+
+function providerVerificationWarning(requirement: ExternalPlanRequirement) {
+  if (
+    requirement.providerCapability === "provider_filterable" ||
+    requirement.providerCapability === "locally_verifiable"
+  )
+    return "";
+  if (requirement.kind === "experience")
+    return (
+      "The connected external source cannot verify " +
+      requirement.label +
+      " for profiles without grounded employment dates. This requirement will be shown as Needs verification rather than treated as a confirmed failure."
+    );
+  if (requirement.kind === "lifecycle")
+    return (
+      "The connected external source may not return assignment-level evidence for " +
+      requirement.label +
+      ". Missing lifecycle evidence will be shown as Needs verification."
+    );
+  return (
+    "The connected external source may not provide enough evidence to verify " +
+    requirement.label +
+    ". Missing evidence will be shown as Needs verification."
+  );
+}
 export function deterministicExternalSearchPlan(
   r: CandidateSearchV2Request,
   committed: CommittedSearchRequirements = buildCommittedSearchRequirements(r),
@@ -58,6 +116,54 @@ export function deterministicExternalSearchPlan(
     label: c.label,
     importance: c.importance,
   }));
+  const requirements: ExternalPlanRequirement[] = committed.requirements.map(
+    (requirement) => ({
+      id: requirement.id,
+      label: requirement.label,
+      kind: requirement.kind,
+      providerCapability: externalRequirementProviderCapability(
+        requirement.kind,
+      ),
+      ...(requirement.kind === "target"
+        ? { conceptId: requirement.conceptId }
+        : requirement.kind === "professional_role"
+          ? {
+              alternatives: [...requirement.alternatives],
+              titleScope: requirement.titleScope,
+            }
+          : requirement.kind === "location"
+            ? {
+                alternatives: requirement.alternatives
+                  .flatMap((value) => [
+                    value.label,
+                    value.city || "",
+                    value.country,
+                  ])
+                  .filter(Boolean),
+              }
+            : requirement.kind === "experience"
+              ? { minimum: requirement.minimum, maximum: requirement.maximum }
+              : requirement.kind === "lifecycle"
+                ? {
+                    value: requirement.value,
+                    values: [...requirement.values],
+                    operator: requirement.operator,
+                    conceptId: requirement.conceptId,
+                    contextConceptIds: [...requirement.contextConceptIds],
+                  }
+                : requirement.kind === "company"
+                  ? { value: requirement.value, scope: requirement.scope }
+                  : requirement.kind === "seniority"
+                    ? { value: requirement.value }
+                    : {
+                        value: requirement.value,
+                        conceptId: requirement.conceptId,
+                      }),
+    }),
+  );
+  const providerCapabilityWarnings = [
+    ...new Set(requirements.map(providerVerificationWarning).filter(Boolean)),
+  ];
   const retrievalTargets = targetConcepts.length
     ? targetConcepts.map((target) => target.label)
     : [r.query.normalize("NFKC").trim()];
@@ -78,45 +184,8 @@ export function deterministicExternalSearchPlan(
     exclusions.length ? "exclude " + exclusions.join("; ") : "",
   ].filter(Boolean);
   return {
-    version: "exa-people-plan-v1",
-    requirements: committed.requirements.map((requirement) => ({
-      id: requirement.id,
-      label: requirement.label,
-      kind: requirement.kind,
-      ...(requirement.kind === "target"
-        ? { conceptId: requirement.conceptId }
-        : requirement.kind === "professional_role"
-          ? {
-              alternatives: [...requirement.alternatives],
-              titleScope: requirement.titleScope,
-            }
-          : requirement.kind === "location"
-            ? {
-                alternatives: requirement.alternatives.flatMap((value) => [
-                  value.label,
-                  value.city || "",
-                  value.country,
-                ]).filter(Boolean),
-              }
-            : requirement.kind === "experience"
-              ? {
-                  minimum: requirement.minimum,
-                  maximum: requirement.maximum,
-                }
-              : requirement.kind === "lifecycle"
-                ? {
-                    value: requirement.value,
-                    values: [...requirement.values],
-                    operator: requirement.operator,
-                    conceptId: requirement.conceptId,
-                    contextConceptIds: [...requirement.contextConceptIds],
-                  }
-                : requirement.kind === "company"
-                  ? { value: requirement.value, scope: requirement.scope }
-                  : requirement.kind === "seniority"
-                    ? { value: requirement.value }
-                    : { value: requirement.value, conceptId: requirement.conceptId }),
-    })),
+    version: "exa-people-plan-v2-tri-state",
+    requirements,
     targetConcepts,
     normalizedRoles: roles,
     requiredSkills,
@@ -136,6 +205,8 @@ export function deterministicExternalSearchPlan(
     semanticQuery: [...new Set(segments)].join(" | "),
     unsupportedRequirements: [],
     assumptions: [],
+    strictVerifiedOnly: r.externalVerifiedOnly === true,
+    providerCapabilityWarnings,
   };
 }
 export function validateExternalSearchPlan(
@@ -148,7 +219,7 @@ export function validateExternalSearchPlan(
     );
   const x = v as Record<string, unknown>;
   const plan: ExternalTalentSearchPlan = {
-    version: "exa-people-plan-v1",
+    version: "exa-people-plan-v2-tri-state",
     requirements: [],
     targetConcepts: Array.isArray(x.targetConcepts)
       ? x.targetConcepts
@@ -203,6 +274,8 @@ export function validateExternalSearchPlan(
     semanticQuery: String(x.semanticQuery || ""),
     unsupportedRequirements: strings(x.unsupportedRequirements),
     assumptions: strings(x.assumptions),
+    strictVerifiedOnly: false,
+    providerCapabilityWarnings: [],
   };
   if (!plan.semanticQuery)
     throw new ExternalSourceError(

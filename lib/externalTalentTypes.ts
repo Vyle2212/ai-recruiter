@@ -1,6 +1,8 @@
-import type { ExternalEmploymentRecord } from "./externalCandidateSourceProvider";
-
 export type ExternalTalentSource = "external_talent_network";
+import type {
+  ExternalEmploymentRecord,
+  ExternalExperienceCalculation,
+} from "./externalTalentProfile";
 export type ExternalTalentErrorCode =
   | "SOURCE_NOT_CONFIGURED"
   | "SOURCE_NOT_CONNECTED"
@@ -15,7 +17,7 @@ export type ExternalTalentErrorCode =
   | "INVALID_PROVIDER_RESPONSE"
   | "INVALID_PROFILE_URL";
 export type ExternalTalentSearchPlan = {
-  version: "exa-people-plan-v1";
+  version: "exa-people-plan-v2-tri-state";
   requirements: ExternalPlanRequirement[];
   targetConcepts: Array<{ conceptId: string; label: string }>;
   normalizedRoles: string[];
@@ -40,7 +42,16 @@ export type ExternalTalentSearchPlan = {
   semanticQuery: string;
   unsupportedRequirements: string[];
   assumptions: string[];
+  strictVerifiedOnly: boolean;
+  providerCapabilityWarnings: string[];
 };
+export type ExternalRequirementEligibilityState =
+  "confirmed_pass" | "confirmed_fail" | "needs_verification";
+export type ExternalRequirementProviderCapability =
+  | "provider_filterable"
+  | "locally_verifiable"
+  | "partially_verifiable"
+  | "not_verifiable";
 export type ExternalPlanRequirement = {
   id: string;
   label: string;
@@ -69,6 +80,7 @@ export type ExternalPlanRequirement = {
   minimum?: number | null;
   maximum?: number | null;
   scope?: "current" | "any";
+  providerCapability: ExternalRequirementProviderCapability;
 };
 export type ExternalTalentEvidence = {
   requirementId: string;
@@ -109,6 +121,7 @@ export type ExternalTargetEvidence = {
     | "sentence"
     | "related"
     | "none";
+  temporalContext: "current" | "profile" | "historical" | "unknown";
 };
 export type ExternalRequirementEvaluation = {
   id: string;
@@ -128,26 +141,35 @@ export type ExternalRequirementEvaluation = {
     | "education"
     | "certification"
     | "exclusion";
-  state: "verified" | "supported" | "unverified" | "conflicting";
+  state: ExternalRequirementEligibilityState;
   evidence: ExternalTalentEvidence | null;
+  explanation: string;
 };
 export type ExternalTalentCandidate = {
   source: ExternalTalentSource;
   provider: "exa";
   externalCandidateId: string;
   displayName?: string;
+  profileTitle?: string;
   headline?: string;
   currentTitle?: string;
   location?: string;
   currentEmployer?: string;
   skills: string[];
   experienceSummary?: string;
-  employment?: ExternalEmploymentRecord[];
   employmentText?: string[];
   projectText?: string[];
   education?: string[];
   certifications?: string[];
   totalYearsExperience?: number | null;
+  employmentRecords?: ExternalEmploymentRecord[];
+  experienceCalculation?: ExternalExperienceCalculation;
+  profileProvenance?: {
+    displayNameField: string | null;
+    profileTitleField: string | null;
+    currentTitleField: string | null;
+    currentEmployerField: string | null;
+  };
   profileUrl?: string;
   profileUrlDomain?: string;
   providerEvidence: ExternalTalentEvidence[];
@@ -179,6 +201,12 @@ export type ExternalTalentCandidate = {
   profileCompleteness: number;
   explanationStatus: "grounded" | "pending" | "unavailable";
   duplicateReviewStatus: "not_reviewed" | "possible_match" | "clear";
+  eligibilityState:
+    | "evidence_supported"
+    | "potential_needs_verification"
+    | "confirmed_exclusion";
+  unresolvedRequirementCount: number;
+  confirmedContradictionCount: number;
 };
 export type ExternalTalentSearchResponse = {
   items: ExternalTalentCandidate[];
@@ -207,6 +235,13 @@ export type ExternalTalentSearchResponse = {
   };
   warnings: string[];
   unsupportedRequirements: string[];
+  providerCapabilityWarnings: string[];
+  strictVerifiedOnly: boolean;
+  poolCounts: {
+    evidenceSupported: number;
+    needsVerification: number;
+    confirmedExcluded: number;
+  };
   rejectionSummary: ExternalRejectionSummary;
   marketMapping: {
     version: string;
@@ -219,11 +254,18 @@ export type ExternalTalentSearchResponse = {
 export type ExternalRejectionSummary = {
   evaluated: number;
   eligible: number;
+  evidenceSupported: number;
+  needsVerification: number;
+  confirmedExcluded: number;
   requirements: Array<{
     requirementId: string;
     label: string;
     contradictedCount: number;
     unverifiedCount: number;
     supportedCount: number;
+    confirmedPassCount: number;
+    needsVerificationCount: number;
+    confirmedFailCount: number;
+    providerCapability: ExternalRequirementProviderCapability;
   }>;
 };

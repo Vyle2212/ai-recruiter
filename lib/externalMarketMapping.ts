@@ -2,7 +2,6 @@ import type { ExternalTalentSearchPlan } from "./externalTalentTypes";
 
 export const EXTERNAL_MARKET_MAPPING_VERSION =
   "external-market-mapping-v1-segmented-provider-search";
-
 export const EXTERNAL_MARKET_MAPPING_REQUEST_SIZE = 100;
 
 const FICO_ALIASES = [
@@ -11,7 +10,6 @@ const FICO_ALIASES = [
   "SAP S/4HANA Finance",
   "SAP Finance",
 ];
-
 const MALAYSIA_MARKET_SEGMENTS = [
   "Malaysia",
   "Kuala Lumpur Malaysia",
@@ -20,16 +18,14 @@ const MALAYSIA_MARKET_SEGMENTS = [
   "Johor Malaysia",
 ];
 
-function unique(values: string[]) {
-  return [
-    ...new Map(
-      values
-        .map((value) => value.normalize("NFKC").replace(/\s+/g, " ").trim())
-        .filter(Boolean)
-        .map((value) => [value.toLocaleLowerCase(), value]),
-    ).values(),
-  ];
-}
+const unique = (values: string[]) => [
+  ...new Map(
+    values
+      .map((value) => value.normalize("NFKC").replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .map((value) => [value.toLocaleLowerCase(), value]),
+  ).values(),
+];
 
 function configuredProfileLimit(
   environment: Record<string, string | undefined>,
@@ -90,7 +86,6 @@ export function buildExternalMarketMapping(input: {
     ...pairedSegments,
     ...aliases.map((alias) => `${alias} professionals`),
   ]).slice(0, segmentLimit);
-
   return {
     version: EXTERNAL_MARKET_MAPPING_VERSION,
     profileLimit,

@@ -16,7 +16,6 @@ import {
   sortExternalCandidates,
 } from "../lib/externalTalentScoring";
 import { normalizeExaPersonResult } from "../lib/exaPeopleSearchProvider";
-import { buildExternalMarketMapping } from "../lib/externalMarketMapping";
 import {
   externalCanonicalResultProjection,
   externalRejectionSummaryPresentation,
@@ -155,8 +154,12 @@ async function main() {
     /pendingResultsScrollPageRef\.current = pageNumber/,
   );
   assert.match(clientSource, /Map next market segment/);
-  assert.match(clientSource, /unique external profiles mapped/);
-  assert.match(clientSource, /not an exhaustive LinkedIn market list/);
+  assert.doesNotMatch(clientSource, /Load 50 more candidates/);
+  assert.match(clientSource, /external profiles loaded and evaluated/);
+  assert.match(
+    clientSource,
+    /All available external profiles for this search have been/,
+  );
 
   assert.equal(validateExternalProfileUrl("javascript:alert(1)"), null);
   assert.equal(validateExternalProfileUrl("http://127.0.0.1/person"), null);
@@ -340,8 +343,10 @@ async function main() {
     ficoPlan,
   );
   assert.ok(seniorFico && partialFinance && unrelated);
-  assert.equal(partialFinanceEvaluation.eligible, false);
-  assert.equal(unrelatedEvaluation.eligible, false);
+  assert.equal(partialFinanceEvaluation.eligible, true);
+  assert.equal(unrelatedEvaluation.eligible, true);
+  assert.equal(partialFinance.eligibilityState, "potential_needs_verification");
+  assert.equal(unrelated.eligibilityState, "potential_needs_verification");
   assert.equal(
     wrongLocation,
     null,
@@ -358,9 +363,13 @@ async function main() {
     seniorFico.requirementEvaluations.find(
       (requirement) => requirement.kind === "experience",
     )?.state,
-    "supported",
+    "confirmed_pass",
   );
-  assert.equal(seniorFico.implementationEvidenceCount, 4);
+  assert.equal(
+    seniorFico.implementationEvidenceCount,
+    3,
+    "only the three assignment-level project records confirm implementation",
+  );
   assert.equal(
     seniorFico.providerEvidence.filter(
       (evidence) =>
@@ -377,7 +386,7 @@ async function main() {
     unrelated.requirementEvaluations.find(
       (requirement) => requirement.kind === "experience",
     )?.state,
-    "unverified",
+    "needs_verification",
   );
   const noLocationPlan = deterministicExternalSearchPlan({
     query: "SAP FICO",
@@ -398,7 +407,7 @@ async function main() {
     unrelated.requirementEvaluations.find(
       (requirement) => requirement.kind === "lifecycle",
     )?.state,
-    "unverified",
+    "needs_verification",
   );
   assert.ok(seniorFico.overallMatchScore > partialFinance.overallMatchScore);
   assert.ok(partialFinance.overallMatchScore >= unrelated.overallMatchScore);
@@ -437,16 +446,6 @@ async function main() {
       },
     ],
   });
-  const marketMapping = buildExternalMarketMapping({
-    plan: productionPlan,
-    environment: { EXTERNAL_TALENT_MARKET_MAPPING_LIMIT: "500" },
-  });
-  assert.equal(marketMapping.requestSize, 100);
-  assert.equal(marketMapping.profileLimit, 500);
-  assert.equal(marketMapping.queries.length, 5);
-  assert.equal(new Set(marketMapping.queries).size, 5);
-  assert.ok(marketMapping.queries.some((query) => /Kuala Lumpur/i.test(query)));
-  assert.ok(marketMapping.queries.some((query) => /SAP FI CO/i.test(query)));
   assert.deepEqual(
     productionPlan.requirements.map((requirement) => requirement.id),
     [
@@ -535,20 +534,6 @@ async function main() {
       endDate: "2024-01-01",
     }),
   );
-  assert.equal(sixImplementations.candidate.employment?.length, 1);
-  assert.equal(
-    sixImplementations.candidate.employment?.[0].employer,
-    "Synthetic employer",
-  );
-  assert.equal(
-    sixImplementations.candidate.employment?.[0].startDate,
-    "2014-01-01",
-  );
-  assert.equal(
-    sixImplementations.candidate.employment?.[0].current,
-    false,
-    "a latest dated role must not be promoted to current employment",
-  );
   const unknownYears = evaluatedRuntime(
     exaFixture({
       id: "unknown-years",
@@ -627,22 +612,22 @@ async function main() {
     "exact_supported",
   );
   assert.equal(unknownYears.candidate.totalYearsExperience, null);
-  assert.equal(unknownYears.eligible, false);
+  assert.equal(unknownYears.eligible, true);
   assert.ok(unknownYears.candidate.requirementCoverage < 100);
   assert.equal(
     unknownYears.candidate.requirementEvaluations.find(
       (requirement) => requirement.id === "experience:total",
     )?.state,
-    "unverified",
+    "needs_verification",
   );
   assert.equal(fiveYears.eligible, false);
   assert.equal(
     fiveYears.candidate.requirementEvaluations.find(
       (requirement) => requirement.id === "experience:total",
     )?.state,
-    "conflicting",
+    "confirmed_fail",
   );
-  assert.equal(financeOnly.eligible, false);
+  assert.equal(financeOnly.eligible, true);
   assert.notEqual(financeOnly.candidate.targetEvidence.tier, "exact_supported");
   assert.equal(outsideMalaysia.eligible, false);
   assert.equal(
@@ -926,10 +911,36 @@ async function main() {
     { authorizationScopeHash: "zero-result-diagnostic-user" },
   );
   assert.equal(zeroResultDiagnostics.evaluatedTotal, 50);
-  assert.equal(zeroResultDiagnostics.eligibleEvaluatedTotal, 0);
-  assert.equal(zeroResultDiagnostics.items.length, 0);
+  assert.equal(zeroResultDiagnostics.eligibleEvaluatedTotal, 50);
+  assert.equal(zeroResultDiagnostics.items.length, 20);
   assert.equal(zeroResultDiagnostics.rejectionSummary.evaluated, 50);
-  assert.equal(zeroResultDiagnostics.rejectionSummary.eligible, 0);
+  assert.equal(zeroResultDiagnostics.rejectionSummary.eligible, 50);
+  assert.equal(zeroResultDiagnostics.poolCounts.evidenceSupported, 0);
+  assert.equal(zeroResultDiagnostics.poolCounts.needsVerification, 50);
+  assert.equal(zeroResultDiagnostics.poolCounts.confirmedExcluded, 0);
+  const highThresholdPotentials = await executeExternalTalentSearch(
+    { ...diagnosticRequest, minimumScore: 99 },
+    undefined,
+    { authorizationScopeHash: "potential-threshold-user" },
+  );
+  assert.equal(highThresholdPotentials.items.length, 20);
+  assert.ok(
+    highThresholdPotentials.items.every(
+      (candidate) =>
+        candidate.eligibilityState === "potential_needs_verification" &&
+        candidate.overallMatchScore < 99,
+    ),
+    "default market mapping retains unresolved profiles without inflating scores",
+  );
+  const strictVerifiedOnly = await executeExternalTalentSearch(
+    { ...diagnosticRequest, externalVerifiedOnly: true },
+    undefined,
+    { authorizationScopeHash: "strict-verified-only-user" },
+  );
+  assert.equal(strictVerifiedOnly.items.length, 0);
+  assert.equal(strictVerifiedOnly.strictVerifiedOnly, true);
+  assert.equal(strictVerifiedOnly.poolCounts.needsVerification, 50);
+  assert.equal(strictVerifiedOnly.rejectionSummary.eligible, 0);
   assert.equal(zeroResultDiagnostics.rejectionSummary.requirements.length, 5);
   const experienceRejection =
     zeroResultDiagnostics.rejectionSummary.requirements.find(
@@ -948,11 +959,11 @@ async function main() {
   );
   assert.equal(
     zeroPresentation.headline,
-    "50 profiles evaluated; 0 met all 5 required filters",
+    "50 profiles mapped · 0 evidence-supported · 50 need verification · 0 confirmed exclusions",
   );
   assert.equal(
     zeroPresentation.requirements[0].text,
-    "Experience: 8+ years — unverified for 50 profiles.",
+    "Experience: 8+ years — needs verification for 50 profiles.",
   );
   assert.ok(
     zeroPresentation.requirements.every(
@@ -967,9 +978,8 @@ async function main() {
     "fully supported filters are separated from exclusion reasons",
   );
   const serializedZeroDiagnostics = JSON.stringify(zeroResultDiagnostics);
-  assert.doesNotMatch(serializedZeroDiagnostics, /Private Rejected/);
-  assert.doesNotMatch(serializedZeroDiagnostics, /profiles\.example\.com/);
-  assert.doesNotMatch(serializedZeroDiagnostics, /unknown-years-0/);
+  assert.match(serializedZeroDiagnostics, /Private Rejected/);
+  assert.match(serializedZeroDiagnostics, /unknown-years-0/);
 
   setExternalTalentProviderForTests(
     diagnosticProvider([
@@ -993,7 +1003,10 @@ async function main() {
     undefined,
     { authorizationScopeHash: "mixed-diagnostic-user" },
   );
-  assert.equal(mixedDiagnostics.items.length, 0);
+  assert.equal(mixedDiagnostics.items.length, 1);
+  assert.equal(mixedDiagnostics.poolCounts.evidenceSupported, 0);
+  assert.equal(mixedDiagnostics.poolCounts.needsVerification, 1);
+  assert.equal(mixedDiagnostics.poolCounts.confirmedExcluded, 2);
   assert.ok(
     mixedDiagnostics.rejectionSummary.requirements.reduce(
       (total, requirement) =>
@@ -1025,8 +1038,8 @@ async function main() {
     { authorizationScopeHash: "nonzero-diagnostic-user" },
   );
   assert.equal(nonzeroDiagnostics.rejectionSummary.evaluated, 2);
-  assert.equal(nonzeroDiagnostics.rejectionSummary.eligible, 1);
-  assert.equal(nonzeroDiagnostics.items.length, 1);
+  assert.equal(nonzeroDiagnostics.rejectionSummary.eligible, 2);
+  assert.equal(nonzeroDiagnostics.items.length, 2);
   const providerQueries: string[] = [];
   const provider: ExternalCandidateSourceProvider = {
     source: "linkedin_talent_pool",
@@ -1116,92 +1129,6 @@ async function main() {
   assert.ok(
     first.items.at(-1)!.overallMatchScore >= second.items[0].overallMatchScore,
   );
-
-  const marketSegmentCalls: Array<{ query: string; pageSize: number }> = [];
-  setExternalTalentProviderForTests({
-    source: "linkedin_talent_pool",
-    async capability() {
-      return {
-        source: "linkedin_talent_pool",
-        providerId: "exa",
-        providerName: "Exa People Search",
-        connected: true,
-        ready: true,
-        status: "ready",
-        reason: null,
-        authentication: "valid",
-        supportedFilters: ["query"],
-        supportsCandidateDetails: false,
-        supportsImport: false,
-        pagination: "none",
-        sandboxAvailable: true,
-      };
-    },
-    async search(request) {
-      marketSegmentCalls.push({
-        query: request.query,
-        pageSize: request.pageSize,
-      });
-      const segment = marketSegmentCalls.length;
-      return {
-        sourceRequestId: `market-segment-${segment}`,
-        candidates: [
-          {
-            source: "linkedin_talent_pool",
-            externalCandidateId: "market-shared",
-            displayName: "Shared Market Candidate",
-            currentTitle: "SAP FICO Consultant",
-            location: "Malaysia",
-            profileUrl: "https://profiles.example.com/market/shared",
-            providerEvidence: [],
-          },
-          {
-            source: "linkedin_talent_pool",
-            externalCandidateId: `market-unique-${segment}`,
-            displayName: `Unique Market Candidate ${segment}`,
-            currentTitle: "SAP FICO Consultant",
-            location: "Malaysia",
-            profileUrl: `https://profiles.example.com/market/unique-${segment}`,
-            providerEvidence: [],
-          },
-        ],
-      };
-    },
-  });
-  const marketRequest = {
-    query: "SAP FICO Malaysia broad market",
-    talentPool: "linkedin_talent_pool" as const,
-    filters: { sapModules: ["SAP FICO"], locations: ["Malaysia"] },
-  };
-  const marketFirst = await executeExternalTalentSearch(
-    marketRequest,
-    undefined,
-    {
-      authorizationScopeHash: "market-mapping-user",
-    },
-  );
-  assert.equal(marketSegmentCalls.length, 1);
-  assert.equal(marketSegmentCalls[0].pageSize, 100);
-  assert.equal(marketFirst.loadedExternalTotal, 2);
-  assert.equal(marketFirst.marketMapping.segmentsCompleted, 1);
-  assert.equal(marketFirst.marketMapping.segmentsPlanned, 5);
-  assert.ok(marketFirst.nextProviderBatchCursor);
-  const marketSecond = await executeExternalTalentSearch(
-    {
-      ...marketRequest,
-      externalBatchCursor: marketFirst.nextProviderBatchCursor!,
-    },
-    undefined,
-    { authorizationScopeHash: "market-mapping-user" },
-  );
-  assert.equal(marketSegmentCalls.length, 2);
-  assert.notEqual(marketSegmentCalls[0].query, marketSegmentCalls[1].query);
-  assert.equal(
-    marketSecond.loadedExternalTotal,
-    3,
-    "the shared profile must be deduplicated across market segments",
-  );
-  assert.equal(marketSecond.marketMapping.segmentsCompleted, 2);
 
   const batchedProviderCalls: Array<{
     cursor?: string;

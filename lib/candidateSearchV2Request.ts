@@ -19,6 +19,7 @@ export type NormalizedCandidateSearchV2Request = {
 
   minimumScore: number;
   includeRelocationRemote: boolean;
+  externalVerifiedOnly: boolean;
   talentPool: NonNullable<CandidateSearchV2Request["talentPool"]>;
   criteria: NonNullable<CandidateSearchV2Request["criteria"]>;
   clarificationAnswers: NonNullable<
@@ -115,6 +116,7 @@ export function normalizeCandidateSearchV2Request(
     page,
     pageSize,
     includeRelocationRemote: request.includeRelocationRemote === true,
+    externalVerifiedOnly: request.externalVerifiedOnly === true,
     talentPool:
       request.talentPool === "linkedin_talent_pool"
         ? "linkedin_talent_pool"
