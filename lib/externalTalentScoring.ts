@@ -17,7 +17,7 @@ import {
   canonicalOverallMatchScore,
 } from "@/lib/searchV2Match";
 export const EXTERNAL_RANKING_VERSION =
-  "external-match-v6-independent-threshold-assignment-evidence";
+  "external-match-v7-candidate-specific-projection";
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 const normalized = (value: unknown) =>
   String(value || "")

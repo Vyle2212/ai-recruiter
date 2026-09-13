@@ -1,5 +1,5 @@
 export const SEARCH_V2_RESPONSE_CONTRACT_VERSION =
-  "search-v2-response-contract-v74-external-aggregation";
+  "search-v2-response-contract-v75-external-pagination";
 
 export type SearchV2ClientSummary = {
   totalDocuments: number;

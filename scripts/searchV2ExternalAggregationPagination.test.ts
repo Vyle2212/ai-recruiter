@@ -309,7 +309,17 @@ async function main() {
   assert.match(client, /data-testid="external-result-status"/);
   assert.match(client, /data-testid="external-aggregation-progress"/);
   assert.match(client, /data-testid="external-candidate-evidence"/);
-  assert.match(client, /Show next/);
+  assert.equal(
+    (client.match(/aria-label="Search result pages"/g) || []).length,
+    1,
+  );
+  assert.doesNotMatch(client, /Show next/);
+  assert.match(client, /Showing \$\{/);
+  assert.match(client, /Mapping audit/);
+  assert.match(
+    readFileSync("lib/externalTalentScoring.ts", "utf8"),
+    /external-match-v7-candidate-specific-projection/,
+  );
   assert.match(client, /disabled=\{loading \|\| loadingExternalBatch\}/);
   console.log(
     JSON.stringify(

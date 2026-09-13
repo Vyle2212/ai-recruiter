@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import React, { type ReactNode } from "react";
 
-import { CompactCandidateCard } from "../app/recruiter/talent-search/v2/CandidateSearchV2Client";
+import {
+  CompactCandidateCard,
+  displayedRankingScore,
+} from "../app/recruiter/talent-search/v2/CandidateSearchV2Client";
 import { normalizeExaPersonResult } from "../lib/exaPeopleSearchProvider";
+import { externalCanonicalResultProjection } from "../lib/externalTalentProjection";
 import {
   buildExternalTalentProfilePresentation,
   calculateCanonicalExternalExperience,
@@ -127,6 +131,20 @@ assert.ok(
   "direct current FICO must rank above historical internship evidence",
 );
 assert.ok(srinivasScore.overallMatchScore > leeScore.overallMatchScore);
+const srinivasProjection = externalCanonicalResultProjection(
+  srinivasScore,
+  "srinivas-runtime-projection-v1",
+);
+assert.equal(srinivasProjection.rankingScore, srinivasScore.rankingScore);
+assert.equal(srinivasProjection.overallMatchScore, srinivasScore.rankingScore);
+assert.equal(
+  displayedRankingScore({
+    ...srinivasProjection,
+    score: { finalScore: 0 } as never,
+  }),
+  srinivasScore.rankingScore,
+  "the recruiter card must prefer the candidate-specific projected score over any fallback",
+);
 
 const nazril = person("Nazril Nordin", {
   workHistory: Array.from({ length: 9 }, (_, index) => ({

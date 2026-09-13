@@ -866,8 +866,8 @@ export function CompactCandidateCard({
 
   return (
     <article className="rounded-xl border border-slate-800/90 bg-slate-950/55 px-4 py-3 transition hover:border-slate-700 hover:bg-slate-900/35">
-      <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(16rem,1.2fr)_minmax(10rem,.65fr)_minmax(14rem,.8fr)_auto] xl:items-start">
-        <div className="min-w-0">
+      <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,.68fr)_auto] xl:items-start">
+        <div className="min-w-0 xl:col-start-1 xl:row-start-1">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-medium tabular-nums text-slate-600">
               #{rank}
@@ -922,7 +922,7 @@ export function CompactCandidateCard({
             </p>
           ) : null}
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 xl:col-start-1 xl:row-start-2">
           {primarySpecialization ? (
             <p className="text-sm font-semibold text-slate-200">
               {primarySpecialization}
@@ -960,7 +960,7 @@ export function CompactCandidateCard({
             </div>
           ) : null}
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 xl:col-start-2 xl:row-span-2 xl:row-start-1">
           <div className="flex flex-wrap items-center gap-2">
             <span
               className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${fitClasses}`}
@@ -991,10 +991,19 @@ export function CompactCandidateCard({
               </span>
             ) : null}
           </div>
+          {!identityLookup &&
+          result.talentPool === "linkedin_talent_pool" &&
+          integrity ? (
+            <p className="mt-2 text-sm font-medium text-slate-300">
+              {integrity.supported} confirmed {" · "}
+              {result.unresolvedRequirementCount || 0} verify {" · "}
+              {result.confirmedContradictionCount || 0} contradictions
+            </p>
+          ) : null}
           <dl
             className={
               result.talentPool === "linkedin_talent_pool"
-                ? "mt-2 space-y-1 text-xs text-slate-400"
+                ? "mt-2 space-y-1.5 text-sm text-slate-400"
                 : "hidden"
             }
             aria-label="Candidate match dimensions"
@@ -1009,22 +1018,6 @@ export function CompactCandidateCard({
                       : `${diagnostic.requirementCoveragePercent}%`}
                   </dd>
                 </div>
-                {result.talentPool === "linkedin_talent_pool" ? (
-                  <>
-                    <div>
-                      <dt className="inline">Unresolved requirements</dt>
-                      <dd className="ml-1 inline text-amber-200">
-                        {result.unresolvedRequirementCount || 0}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="inline">Confirmed contradictions</dt>
-                      <dd className="ml-1 inline text-slate-300">
-                        {result.confirmedContradictionCount || 0}
-                      </dd>
-                    </div>
-                  </>
-                ) : null}
                 <div>
                   <dt className="inline">Ranking score</dt>
                   <dd className="ml-1 inline text-slate-300">
@@ -1101,12 +1094,12 @@ export function CompactCandidateCard({
           result.talentPool === "linkedin_talent_pool" &&
           integrity?.requirements.length ? (
             <>
-              <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-300">
+              <p className="mt-2 line-clamp-2 text-sm leading-5 text-slate-300">
                 {queryStatements.gaps[0] || queryStatements.supported[0]}
               </p>
               <details
                 data-testid="external-candidate-evidence"
-                className="mt-1.5 text-xs text-slate-300"
+                className="mt-1.5 text-sm text-slate-300"
               >
                 <summary className="cursor-pointer font-medium text-cyan-300">
                   View evidence ({integrity.requirements.length})
@@ -1133,7 +1126,7 @@ export function CompactCandidateCard({
             </p>
           ) : null}
         </div>
-        <div className="flex flex-wrap gap-2 md:justify-end">
+        <div className="flex flex-wrap gap-2 md:justify-end xl:col-start-3 xl:row-start-1">
           {result.linkedInProfileUrl ? (
             <a
               href={result.linkedInProfileUrl}
@@ -1184,7 +1177,7 @@ export function CompactCandidateCard({
       (preview.employment.length ||
         preview.projects.length ||
         preview.education) ? (
-        <div className="mt-3 grid gap-3 border-t border-slate-800 pt-3 md:grid-cols-3">
+        <div className="mt-3 max-w-3xl border-t border-slate-800 pt-3">
           {preview.employment.length ? (
             <section className="min-w-0" aria-label="Recent experience">
               <h3 className="text-xs font-semibold text-slate-300">
@@ -1199,7 +1192,7 @@ export function CompactCandidateCard({
                     result.talentPool === "linkedin_talent_pool" ? 2 : 3,
                   )
                   .map((item) => (
-                    <li key={item.id} className="text-xs text-slate-400">
+                    <li key={item.id} className="text-sm text-slate-400">
                       <p className="truncate font-medium text-slate-200">
                         {item.title || "Role not provided"}
                       </p>
@@ -3450,20 +3443,18 @@ export default function CandidateSearchV2Client({
               className="mt-4 rounded-xl border border-slate-800 bg-slate-900/35 px-4 py-3"
             >
               <p className="text-sm font-semibold text-slate-200">
-                {externalRejectionPresentation.headline}
+                {externalAggregation?.uniqueProfiles ??
+                  response.summary.totalDocuments}{" "}
+                mapped {" · "}
+                {externalAggregation?.evidenceSupported ?? 0} supported {" · "}
+                {externalAggregation?.needsVerification ?? 0} Potential {" · "}
+                {externalAggregation?.confirmedExclusions ?? 0} excluded
               </p>
-              {externalAggregation ? (
-                <p
-                  data-testid="external-aggregation-progress"
-                  className="mt-2 text-xs text-slate-400"
-                >
-                  {externalAggregation.providerRecordsFetched} fetched {" | "}
-                  {externalAggregation.recordsNormalized} normalized {" | "}
-                  {externalAggregation.uniqueProfiles} unique {" | "}
-                  {externalAggregation.currentlyRenderedResults} shown {" | "}
-                  {externalAggregation.remainingLoadedResults} ready to view
-                </p>
-              ) : null}
+              <p className="mt-1 text-sm text-slate-400">
+                {response.summary.returned
+                  ? `Showing ${(response.summary.page - 1) * response.summary.pageSize + 1}–${Math.min(response.summary.page * response.summary.pageSize, response.summary.visibleTotal)} of ${response.summary.visibleTotal}`
+                  : `Showing 0 of ${response.summary.visibleTotal}`}
+              </p>
               {externalAggregation &&
               externalAggregation.lastBatch.batchNumber > 1 ? (
                 <p className="mt-1 text-xs text-cyan-200">
@@ -3502,20 +3493,24 @@ export default function CandidateSearchV2Client({
                   </ul>
                 </details>
               ) : null}
+              {externalAggregation ? (
+                <details
+                  data-testid="external-aggregation-progress"
+                  className="mt-2 text-xs text-slate-400"
+                >
+                  <summary className="cursor-pointer font-medium text-slate-300">
+                    Mapping audit
+                  </summary>
+                  <p className="mt-2">
+                    {externalAggregation.providerRecordsFetched} fetched {" | "}
+                    {externalAggregation.recordsNormalized} normalized {" | "}
+                    {externalAggregation.uniqueProfiles} unique {" | "}
+                    {externalAggregation.currentlyRenderedResults} shown {" | "}
+                    {externalAggregation.remainingLoadedResults} ready to view
+                  </p>
+                </details>
+              ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
-                {externalAggregation?.remainingLoadedResults ? (
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() =>
-                      void runSearch(response.summary.page + 1, true)
-                    }
-                    className="min-h-9 rounded-lg bg-cyan-300 px-3 text-sm font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Show next{" "}
-                    {Math.min(20, externalAggregation.remainingLoadedResults)}
-                  </button>
-                ) : null}
                 {response.nextProviderBatchCursor &&
                 response.providerExhausted !== true ? (
                   <button
@@ -3726,7 +3721,14 @@ export default function CandidateSearchV2Client({
               <button
                 type="button"
                 disabled={loading || response.summary.page <= 1}
-                onClick={() => void runSearch(response.summary.page - 1, true)}
+                onClick={() =>
+                  void runSearch(response.summary.page - 1, true).then(() =>
+                    resultsSectionRef.current?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    }),
+                  )
+                }
                 className="min-h-9 rounded-lg border border-slate-700 px-3 text-sm font-medium text-slate-300 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Previous
@@ -3752,7 +3754,14 @@ export default function CandidateSearchV2Client({
                       item === response.summary.page ? "page" : undefined
                     }
                     disabled={loading || item === response.summary.page}
-                    onClick={() => void runSearch(item, true)}
+                    onClick={() =>
+                      void runSearch(item, true).then(() =>
+                        resultsSectionRef.current?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        }),
+                      )
+                    }
                     className={
                       item === response.summary.page
                         ? "min-h-9 min-w-9 rounded-lg border border-cyan-300 bg-cyan-300 px-2 text-sm font-semibold text-slate-950"
@@ -3763,23 +3772,25 @@ export default function CandidateSearchV2Client({
                   </button>
                 ),
               )}
-              {committedSnapshot?.committedRequirements.talentPool !==
-              "linkedin_talent_pool" ? (
-                <button
-                  type="button"
-                  disabled={
-                    loading ||
-                    response.summary.page * response.summary.pageSize >=
-                      response.summary.totalMatched
-                  }
-                  onClick={() =>
-                    void runSearch(response.summary.page + 1, true)
-                  }
-                  className="min-h-9 rounded-lg border border-slate-700 px-3 text-sm font-medium text-slate-300 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Show next {response.summary.pageSize}
-                </button>
-              ) : null}
+              <button
+                type="button"
+                disabled={
+                  loading ||
+                  response.summary.page * response.summary.pageSize >=
+                    response.summary.totalMatched
+                }
+                onClick={() =>
+                  void runSearch(response.summary.page + 1, true).then(() =>
+                    resultsSectionRef.current?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    }),
+                  )
+                }
+                className="min-h-9 rounded-lg border border-slate-700 px-3 text-sm font-medium text-slate-300 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
             </nav>
           ) : null}
           {response && response.providerExhausted ? (
