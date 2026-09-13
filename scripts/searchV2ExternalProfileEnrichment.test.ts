@@ -59,12 +59,18 @@ const drawer = fs.readFileSync(
 assert.match(drawer, /Optional AI narrative unavailable/);
 assert.match(drawer, /externalEmployment\.map/);
 assert.match(drawer, /Not established from source|experienceCalculationStatus/);
+assert.doesNotMatch(drawer, /Import candidate-provided profile/);
+assert.doesNotMatch(drawer, />\s*Import profile\s*</);
 const results = fs.readFileSync(
   "app/recruiter/talent-search/v2/CandidateSearchV2Client.tsx",
   "utf8",
 );
-assert.match(results, /Potential .* Needs verification/);
-assert.match(results, /Recent experience/);
+assert.match(results, /Needs verification/);
+assert.match(results, /result\.talentPool !== "linkedin_talent_pool"/);
+assert.match(
+  results,
+  /result\.talentPool !== "linkedin_talent_pool" &&\s+preview\.employment\.length/,
+);
 assert.match(results, /Map next market segment/);
 
 console.log("Search V2 external profile enrichment tests passed");

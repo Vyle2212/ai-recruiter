@@ -918,19 +918,34 @@ async function main() {
   assert.equal(zeroResultDiagnostics.poolCounts.evidenceSupported, 0);
   assert.equal(zeroResultDiagnostics.poolCounts.needsVerification, 50);
   assert.equal(zeroResultDiagnostics.poolCounts.confirmedExcluded, 0);
+  const relevantThresholdPotentials = await executeExternalTalentSearch(
+    { ...diagnosticRequest, minimumScore: 50 },
+    undefined,
+    { authorizationScopeHash: "relevant-potential-threshold-user" },
+  );
+  assert.equal(relevantThresholdPotentials.eligibleEvaluatedTotal, 50);
+  assert.equal(relevantThresholdPotentials.items.length, 20);
+  assert.ok(
+    relevantThresholdPotentials.items.every(
+      (candidate) =>
+        candidate.eligibilityState === "potential_needs_verification" &&
+        candidate.overallMatchScore >= 50,
+    ),
+    "relevant unresolved profiles remain visible when they satisfy match quality",
+  );
   const highThresholdPotentials = await executeExternalTalentSearch(
     { ...diagnosticRequest, minimumScore: 99 },
     undefined,
     { authorizationScopeHash: "potential-threshold-user" },
   );
-  assert.equal(highThresholdPotentials.items.length, 20);
-  assert.ok(
-    highThresholdPotentials.items.every(
-      (candidate) =>
-        candidate.eligibilityState === "potential_needs_verification" &&
-        candidate.overallMatchScore < 99,
-    ),
-    "default market mapping retains unresolved profiles without inflating scores",
+  assert.equal(highThresholdPotentials.items.length, 0);
+  assert.equal(highThresholdPotentials.eligibleEvaluatedTotal, 0);
+  assert.equal(highThresholdPotentials.poolCounts.needsVerification, 50);
+  assert.equal(highThresholdPotentials.rejectionSummary.eligible, 50);
+  assert.equal(
+    highThresholdPotentials.rejectionSummary.confirmedExcluded,
+    0,
+    "unresolved profiles remain tri-state eligible but cannot bypass match quality",
   );
   const strictVerifiedOnly = await executeExternalTalentSearch(
     { ...diagnosticRequest, externalVerifiedOnly: true },

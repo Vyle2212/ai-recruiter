@@ -14,6 +14,11 @@ async function main() {
   process.env.ANTHROPIC_API_KEY = "capability-only-test-key";
   const concreteExa = new ExaPeopleSearchProvider();
   assert.equal(
+    (await concreteExa.capability()).supportsImport,
+    false,
+    "Exa market mapping must not advertise LinkedIn profile or CV import",
+  );
+  assert.equal(
     (await concreteExa.capability()).pagination,
     "none",
     "the concrete adapter must not advertise a cursor absent from Exa POST /search",

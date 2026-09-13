@@ -167,8 +167,10 @@ function normalizeExternalBatch(
         aggregate.confirmedPassCount += 1;
       }
     }
+    // Eligibility and match quality are independent gates. Missing provider
+    // evidence may keep a candidate eligible for review, but it must never
+    // bypass the recruiter-selected score threshold.
     const passesScoreThreshold =
-      evaluated.candidate.eligibilityState === "potential_needs_verification" ||
       evaluated.candidate.overallMatchScore >= snapshot.minimumScore;
     if (evaluated.eligible && passesScoreThreshold)
       accepted.push(evaluated.candidate);

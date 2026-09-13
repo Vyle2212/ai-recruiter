@@ -17,7 +17,7 @@ import {
   canonicalOverallMatchScore,
 } from "@/lib/searchV2Match";
 export const EXTERNAL_RANKING_VERSION =
-  "external-match-v4-canonical-profile-evidence";
+  "external-match-v5-independent-eligibility-threshold";
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 const normalized = (value: unknown) =>
   String(value || "")
@@ -778,9 +778,9 @@ export function evaluateExternalCandidate(
     unresolvedRequirementCount,
     confirmedContradictionCount,
     overallMatchScore,
-    matchTier: unresolvedRequirementCount
-      ? "Potential Match"
-      : externalMatchTier(overallMatchScore),
+    // Match quality reflects the numeric score. Verification state remains a
+    // separate signal and must not overwrite the canonical score tier.
+    matchTier: externalMatchTier(overallMatchScore),
   };
   return { candidate, eligible, fullySupported };
 }

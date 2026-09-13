@@ -198,13 +198,11 @@ const markup = renderToStaticMarkup(
 );
 assert.equal(
   (markup.match(/aria-label="Recent experience"/g) || []).length,
-  1,
-  "result card must contain exactly one Recent Experience section",
+  0,
+  "external result cards must not repeat the employment timeline",
 );
-assert.match(markup, /Recent experience \(9\)/);
-assert.match(markup, /External role 1/);
-assert.match(markup, /External role 2/);
-assert.doesNotMatch(markup, /External role 3/);
+assert.doesNotMatch(markup, /Recent experience \(9\)/);
+assert.doesNotMatch(markup, /External role 1/);
 assert.match(
   markup,
   /Total professional experience: Not established from source/,
@@ -248,7 +246,7 @@ const clientSource = readFileSync(
 assert.doesNotMatch(clientSource, /function inferEmployerFromTitle/);
 assert.match(
   clientSource,
-  /\.slice\(\s*0,\s*result\.talentPool === "linkedin_talent_pool" \? 2 : 3/,
+  /result\.talentPool !== "linkedin_talent_pool" &&\s+preview\.employment\.length/,
 );
 const drawerSource = readFileSync(
   "app/recruiter/talent-search/v2/CandidateDetailsDrawer.tsx",
@@ -284,7 +282,7 @@ console.log(
         score: careyScore.overallMatchScore,
       },
       NazrilNordin: {
-        cardEmploymentRecords: 2,
+        cardEmploymentRecordsRendered: 0,
         drawerEmploymentRecords: nazrilPresentation.employmentRecords.length,
         totalExperienceStatus: nazrilPresentation.experienceCalculation.status,
       },

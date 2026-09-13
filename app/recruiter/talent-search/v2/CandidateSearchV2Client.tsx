@@ -400,6 +400,7 @@ function candidateMatchDiagnostic(
       ? result.matchLabel || "Potential Match"
       : canonicalMatchLabel(canonicalScore);
   const matchLevel =
+    result.talentPool !== "linkedin_talent_pool" &&
     result.integrity?.attention &&
     ["Strong Match", "Good Match"].includes(calculated)
       ? "Potential Match"
@@ -964,17 +965,17 @@ export function CompactCandidateCard({
               className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${fitClasses}`}
               title="Match Quality measures alignment with the requested role dimensions."
             >
-              {externalNeedsVerification
-                ? "Potential · Needs verification"
-                : identityLookup
-                  ? result.identityMatchKind === "exact"
-                    ? "Exact profile match"
-                    : result.identityMatchKind === "fuzzy"
-                      ? "Possible profile match"
-                      : "Profile name match"
-                  : rankingScore === null
-                    ? "Match unavailable"
-                    : `${rankingScore}% ${matchLabel}`}
+              {identityLookup
+                ? result.identityMatchKind === "exact"
+                  ? "Exact profile match"
+                  : result.identityMatchKind === "fuzzy"
+                    ? "Possible profile match"
+                    : "Profile name match"
+                : rankingScore === null
+                  ? externalNeedsVerification
+                    ? "Match unavailable · Needs verification"
+                    : "Match unavailable"
+                  : `${rankingScore}% ${matchLabel}${externalNeedsVerification ? " · Needs verification" : ""}`}
             </span>
             {false && !identityLookup ? (
               <span
@@ -1148,22 +1149,19 @@ export function CompactCandidateCard({
         </div>
       </div>
       {preview &&
-      (preview.employment.length ||
+      ((result.talentPool !== "linkedin_talent_pool" &&
+        preview.employment.length) ||
         preview.projects.length ||
         preview.education) ? (
         <div className="mt-3 grid gap-3 border-t border-slate-800 pt-3 md:grid-cols-3">
-          {preview.employment.length ? (
+          {result.talentPool !== "linkedin_talent_pool" &&
+          preview.employment.length ? (
             <section className="min-w-0" aria-label="Recent experience">
               <h3 className="text-xs font-semibold text-slate-300">
                 Recent experience ({preview.employmentCount})
               </h3>
               <ol className="mt-2 space-y-1.5">
-                {preview.employment
-                  .slice(
-                    0,
-                    result.talentPool === "linkedin_talent_pool" ? 2 : 3,
-                  )
-                  .map((item) => (
+                {preview.employment.slice(0, 3).map((item) => (
                     <li key={item.id} className="text-xs text-slate-400">
                       <p className="truncate font-medium text-slate-200">
                         {item.title || "Role not provided"}
@@ -1185,8 +1183,7 @@ export function CompactCandidateCard({
                     </li>
                   ))}
               </ol>
-              {preview.employmentCount >
-              (result.talentPool === "linkedin_talent_pool" ? 2 : 3) ? (
+              {preview.employmentCount > 3 ? (
                 <button
                   type="button"
                   onClick={() => onOpenTab?.("Experience")}

@@ -4,6 +4,7 @@ import {
   evaluateExternalCandidate,
   sortExternalCandidates,
 } from "../lib/externalTalentScoring";
+import { canonicalMatchLabel } from "../lib/searchV2Match";
 import { externalCanonicalResultProjection } from "../lib/externalTalentProjection";
 import { auditExternalTalentEligibility } from "../lib/externalTalentEligibilityAudit";
 import { parseRecruiterSearchIntent } from "../lib/recruiterSearchPresentation";
@@ -141,7 +142,10 @@ async function main() {
     "confirmed_pass",
   );
   assert.equal(missingDates.candidate.requirementCoverage, 75);
-  assert.equal(missingDates.candidate.matchTier, "Potential Match");
+  assert.equal(
+    missingDates.candidate.matchTier,
+    canonicalMatchLabel(missingDates.candidate.overallMatchScore),
+  );
   assert.ok(
     !missingDates.candidate.requirementEvaluations.some(
       (requirement) =>
@@ -336,7 +340,7 @@ async function main() {
       onToggle: () => undefined,
     }),
   );
-  assert.match(potentialMarkup, /Potential · Needs verification/);
+  assert.match(potentialMarkup, /% Potential Match · Needs verification/);
   assert.match(potentialMarkup, /Needs verification: Experience: 8[+] years/);
   assert.match(potentialMarkup, /Confirmed requirement coverage/);
   assert.doesNotMatch(potentialMarkup, /Met: Experience: 8[+] years/);

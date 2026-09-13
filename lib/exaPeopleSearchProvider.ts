@@ -182,7 +182,7 @@ export class ExaPeopleSearchProvider implements ExternalCandidateSourceProvider 
         authentication: "not_configured",
         supportedFilters: [],
         supportsCandidateDetails: false,
-        supportsImport: true,
+        supportsImport: false,
         pagination: "none",
         sandboxAvailable: false,
       };
@@ -198,7 +198,7 @@ export class ExaPeopleSearchProvider implements ExternalCandidateSourceProvider 
         authentication: "not_configured",
         supportedFilters: [],
         supportsCandidateDetails: false,
-        supportsImport: true,
+        supportsImport: false,
         pagination: "none",
         sandboxAvailable: false,
       };
@@ -227,7 +227,7 @@ export class ExaPeopleSearchProvider implements ExternalCandidateSourceProvider 
         "deliveryExperience",
       ],
       supportsCandidateDetails: false,
-      supportsImport: true,
+      supportsImport: false,
       pagination: "none",
       sandboxAvailable: false,
     };
