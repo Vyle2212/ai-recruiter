@@ -17,7 +17,7 @@ import {
   canonicalOverallMatchScore,
 } from "@/lib/searchV2Match";
 export const EXTERNAL_RANKING_VERSION =
-  "external-match-v5-independent-eligibility-threshold";
+  "external-match-v6-independent-threshold-assignment-evidence";
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 const normalized = (value: unknown) =>
   String(value || "")
@@ -46,6 +46,7 @@ type SourceRecord = {
     | "skill"
     | "location"
     | "experience"
+    | "work_assignment"
     | "project"
     | "education"
     | "certification"
@@ -101,6 +102,17 @@ const uniqueRecords = (
           }) as const,
       ),
     ),
+    ...(input.employmentRecords || []).flatMap((employment, index) =>
+      employment.description
+        ? [
+            {
+              field: `employmentRecords.${index}.description`,
+              text: employment.description,
+              kind: "work_assignment" as const,
+            },
+          ]
+        : [],
+    ),
     ...(input.projectText || []).map(
       (text) => ({ field: "projectText", text, kind: "project" }) as const,
     ),
@@ -127,7 +139,7 @@ const uniqueRecords = (
   ];
   const seen = new Set<string>();
   return values.filter((record) => {
-    const key = normalized(record.text);
+    const key = `${record.kind}:${normalized(record.text)}`;
     if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -142,11 +154,13 @@ const evidenceType = (record: SourceRecord) =>
         ? ("direct_skill" as const)
         : record.kind === "project"
           ? ("raw_project" as const)
-          : record.kind === "certification"
-            ? ("raw_certification" as const)
-            : record.kind === "experience"
-              ? ("raw_experience" as const)
-              : ("raw_professional_text" as const);
+          : record.kind === "work_assignment"
+            ? ("raw_project" as const)
+            : record.kind === "certification"
+              ? ("raw_certification" as const)
+              : record.kind === "experience"
+                ? ("raw_experience" as const)
+                : ("raw_professional_text" as const);
 const contextType = (record: SourceRecord) =>
   record.kind === "current_title"
     ? ("title" as const)
@@ -156,11 +170,13 @@ const contextType = (record: SourceRecord) =>
         ? ("direct_skill" as const)
         : record.kind === "project"
           ? ("project" as const)
-          : record.kind === "certification"
-            ? ("certification" as const)
-            : record.kind === "experience"
-              ? ("experience" as const)
-              : ("sentence" as const);
+          : record.kind === "work_assignment"
+            ? ("project" as const)
+            : record.kind === "certification"
+              ? ("certification" as const)
+              : record.kind === "experience"
+                ? ("experience" as const)
+                : ("sentence" as const);
 const supportingEvidence = (
   requirementId: string,
   label: string,
@@ -335,7 +351,7 @@ export function evaluateExternalCandidate(
   const implementationCandidates = records.filter(
     (record) =>
       (record.kind === "project" ||
-        (record.kind === "experience" && record.field === "employmentText") ||
+        record.kind === "work_assignment" ||
         (record.kind === "provider" &&
           /(?:project|assignment|engagement)/i.test(record.field))) &&
       lifecyclePattern.test(record.text) &&
@@ -546,6 +562,13 @@ export function evaluateExternalCandidate(
       explanation,
     };
   });
+  if (
+    new Set(requirementEvaluations.map((requirement) => requirement.id))
+      .size !== requirementEvaluations.length
+  )
+    throw new Error(
+      "External requirement evaluation produced duplicate tri-state results.",
+    );
   const unresolvedRequirementCount = requirementEvaluations.filter(
     (requirement) => requirement.state === "needs_verification",
   ).length;
@@ -747,7 +770,7 @@ export function evaluateExternalCandidate(
   );
   const candidate: ExternalTalentCandidate = {
     ...input,
-    currentTitle: input.currentTitle || input.headline,
+    currentTitle: input.currentTitle,
     employmentText: input.employmentText || [],
     projectText: input.projectText || [],
     education: input.education || [],

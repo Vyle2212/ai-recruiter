@@ -338,6 +338,7 @@ type SearchResponse = NormalizedSearchV2Response<SearchResult> & {
     profileLimit: number;
     requestSize: number;
   };
+  aggregation?: import("@/lib/externalTalentTypes").ExternalTalentAggregation;
   evaluationMode?:
     "identity_only" | "named_candidate_evaluation" | "requirements_ranking";
 };
@@ -865,7 +866,7 @@ export function CompactCandidateCard({
 
   return (
     <article className="rounded-xl border border-slate-800/90 bg-slate-950/55 px-4 py-3 transition hover:border-slate-700 hover:bg-slate-900/35">
-      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(300px,1.2fr)_minmax(220px,.85fr)_minmax(270px,1fr)_auto] lg:items-start">
+      <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(16rem,1.2fr)_minmax(10rem,.65fr)_minmax(14rem,.8fr)_auto] xl:items-start">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-medium tabular-nums text-slate-600">
@@ -1053,7 +1054,9 @@ export function CompactCandidateCard({
               </div>
             ) : null}
           </dl>
-          {!identityLookup && matchSummary.length ? (
+          {!identityLookup &&
+          result.talentPool !== "linkedin_talent_pool" &&
+          matchSummary.length ? (
             <>
               <p className="mt-2 text-xs font-semibold text-slate-300">
                 Match summary
@@ -1094,6 +1097,35 @@ export function CompactCandidateCard({
               </ul>
             </>
           ) : null}
+          {!identityLookup &&
+          result.talentPool === "linkedin_talent_pool" &&
+          integrity?.requirements.length ? (
+            <>
+              <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-300">
+                {queryStatements.gaps[0] || queryStatements.supported[0]}
+              </p>
+              <details
+                data-testid="external-candidate-evidence"
+                className="mt-1.5 text-xs text-slate-300"
+              >
+                <summary className="cursor-pointer font-medium text-cyan-300">
+                  View evidence ({integrity.requirements.length})
+                </summary>
+                <ul className="mt-2 space-y-1.5">
+                  {queryStatements.supported.map((item) => (
+                    <li key={item} className="text-emerald-200">
+                      {item}
+                    </li>
+                  ))}
+                  {queryStatements.gaps.map((item) => (
+                    <li key={item} className="text-amber-100">
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            </>
+          ) : null}
           {!identityLookup && criticalGap ? (
             <p className="mt-1 line-clamp-1 text-xs text-amber-300">
               <span className="mr-1">-</span>
@@ -1101,7 +1133,7 @@ export function CompactCandidateCard({
             </p>
           ) : null}
         </div>
-        <div className="flex gap-2 lg:justify-end">
+        <div className="flex flex-wrap gap-2 md:justify-end">
           {result.linkedInProfileUrl ? (
             <a
               href={result.linkedInProfileUrl}
@@ -1149,19 +1181,24 @@ export function CompactCandidateCard({
         </div>
       </div>
       {preview &&
-      ((result.talentPool !== "linkedin_talent_pool" &&
-        preview.employment.length) ||
+      (preview.employment.length ||
         preview.projects.length ||
         preview.education) ? (
         <div className="mt-3 grid gap-3 border-t border-slate-800 pt-3 md:grid-cols-3">
-          {result.talentPool !== "linkedin_talent_pool" &&
-          preview.employment.length ? (
+          {preview.employment.length ? (
             <section className="min-w-0" aria-label="Recent experience">
               <h3 className="text-xs font-semibold text-slate-300">
-                Recent experience ({preview.employmentCount})
+                {result.talentPool === "linkedin_talent_pool"
+                  ? "Recent experience"
+                  : `Recent experience (${preview.employmentCount})`}
               </h3>
               <ol className="mt-2 space-y-1.5">
-                {preview.employment.slice(0, 3).map((item) => (
+                {preview.employment
+                  .slice(
+                    0,
+                    result.talentPool === "linkedin_talent_pool" ? 2 : 3,
+                  )
+                  .map((item) => (
                     <li key={item.id} className="text-xs text-slate-400">
                       <p className="truncate font-medium text-slate-200">
                         {item.title || "Role not provided"}
@@ -1183,7 +1220,8 @@ export function CompactCandidateCard({
                     </li>
                   ))}
               </ol>
-              {preview.employmentCount > 3 ? (
+              {preview.employmentCount >
+              (result.talentPool === "linkedin_talent_pool" ? 2 : 3) ? (
                 <button
                   type="button"
                   onClick={() => onOpenTab?.("Experience")}
@@ -1544,6 +1582,7 @@ export default function CandidateSearchV2Client({
   );
 
   const results = response?.results || [];
+  const externalAggregation = response?.aggregation;
   const externalRejectionPresentation = response?.rejectionSummary
     ? externalRejectionSummaryPresentation(response.rejectionSummary)
     : null;
@@ -2828,223 +2867,228 @@ export default function CandidateSearchV2Client({
               : "rounded-2xl border border-slate-800 bg-slate-900/40 p-5"
           }
         >
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_12rem_13rem_auto_auto] lg:items-end">
-            <div ref={historyRootRef} className="relative min-w-0">
-              <label>
-                <span className="text-sm font-semibold text-slate-200">
-                  Describe who you&apos;re looking for
-                </span>
-                <textarea
-                  role="combobox"
-                  aria-autocomplete="list"
-                  aria-expanded={historyOpen}
-                  aria-controls="search-history-suggestions"
-                  value={query}
-                  onFocus={() => {
-                    setHistoryOpen(true);
-                    setHistoryIndex(-1);
-                  }}
-                  onChange={(event) => {
-                    handleQueryChange(event.target.value);
-                    setHistoryOpen(true);
-                    setHistoryIndex(-1);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Escape") {
-                      setHistoryOpen(false);
-                      return;
-                    }
-                    if (!historyOpen || !historySuggestions.length) return;
-                    if (event.key === "ArrowDown") {
-                      event.preventDefault();
-                      setHistoryIndex((current) =>
-                        Math.min(historySuggestions.length - 1, current + 1),
-                      );
-                    } else if (event.key === "ArrowUp") {
-                      event.preventDefault();
-                      setHistoryIndex((current) => Math.max(0, current - 1));
-                    } else if (event.key === "Enter" && historyIndex >= 0) {
-                      event.preventDefault();
-                      selectHistory(historySuggestions[historyIndex]);
-                    }
-                  }}
-                  required
-                  rows={2}
-                  title={query}
-                  placeholder="Senior SAP FICO consultant in Malaysia with implementation experience"
-                  className="mt-2 min-h-14 w-full resize-y rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-base text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500"
-                />
-              </label>
-              {historyOpen && historySuggestions.length ? (
-                <div
-                  id="search-history-suggestions"
-                  role="listbox"
-                  className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-xl border border-slate-700 bg-slate-950 shadow-xl"
-                >
-                  {historySuggestions.map((item, index) => (
-                    <div
-                      key={item.id}
-                      className="grid grid-cols-[1fr_auto] border-b border-slate-900"
+          <div data-testid="search-v2-form-layout" className="space-y-4">
+            <div className="grid gap-4 xl:grid-cols-[minmax(28rem,1fr)_12rem_15rem] xl:items-end">
+              <div ref={historyRootRef} className="relative min-w-0">
+                <label>
+                  <span className="text-sm font-semibold text-slate-200">
+                    Describe who you&apos;re looking for
+                  </span>
+                  <textarea
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded={historyOpen}
+                    aria-controls="search-history-suggestions"
+                    value={query}
+                    onFocus={() => {
+                      setHistoryOpen(true);
+                      setHistoryIndex(-1);
+                    }}
+                    onChange={(event) => {
+                      handleQueryChange(event.target.value);
+                      setHistoryOpen(true);
+                      setHistoryIndex(-1);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        setHistoryOpen(false);
+                        return;
+                      }
+                      if (!historyOpen || !historySuggestions.length) return;
+                      if (event.key === "ArrowDown") {
+                        event.preventDefault();
+                        setHistoryIndex((current) =>
+                          Math.min(historySuggestions.length - 1, current + 1),
+                        );
+                      } else if (event.key === "ArrowUp") {
+                        event.preventDefault();
+                        setHistoryIndex((current) => Math.max(0, current - 1));
+                      } else if (event.key === "Enter" && historyIndex >= 0) {
+                        event.preventDefault();
+                        selectHistory(historySuggestions[historyIndex]);
+                      }
+                    }}
+                    required
+                    rows={2}
+                    title={query}
+                    placeholder="Senior SAP FICO consultant in Malaysia with implementation experience"
+                    className="mt-2 min-h-16 w-full min-w-0 resize-none overflow-hidden rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-base leading-6 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500"
+                  />
+                </label>
+                {historyOpen && historySuggestions.length ? (
+                  <div
+                    id="search-history-suggestions"
+                    role="listbox"
+                    className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-xl border border-slate-700 bg-slate-950 shadow-xl"
+                  >
+                    {historySuggestions.map((item, index) => (
+                      <div
+                        key={item.id}
+                        className="grid grid-cols-[1fr_auto] border-b border-slate-900"
+                      >
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={index === historyIndex}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => selectHistory(item)}
+                          className={
+                            index === historyIndex
+                              ? "block min-w-0 bg-cyan-950 px-3 py-2 text-left text-sm text-cyan-100"
+                              : "block min-w-0 px-3 py-2 text-left text-sm text-slate-300 hover:bg-slate-900"
+                          }
+                        >
+                          <span className="block truncate">{item.query}</span>
+                          <span className="text-[11px] text-slate-500">
+                            {item.source} -{" "}
+                            {new Date(item.timestamp).toLocaleString()}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Remove saved search ${item.query}`}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => void removeSearchHistoryItem(item.id)}
+                          className="px-3 text-xs text-rose-300 hover:bg-slate-900"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="block w-full border-t border-slate-800 px-3 py-2 text-left text-xs text-slate-400"
+                      onClick={() => void clearSearchHistory()}
                     >
-                      <button
-                        type="button"
-                        role="option"
-                        aria-selected={index === historyIndex}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => selectHistory(item)}
-                        className={
-                          index === historyIndex
-                            ? "block min-w-0 bg-cyan-950 px-3 py-2 text-left text-sm text-cyan-100"
-                            : "block min-w-0 px-3 py-2 text-left text-sm text-slate-300 hover:bg-slate-900"
-                        }
-                      >
-                        <span className="block truncate">{item.query}</span>
-                        <span className="text-[11px] text-slate-500">
-                          {item.source} -{" "}
-                          {new Date(item.timestamp).toLocaleString()}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Remove saved search ${item.query}`}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => void removeSearchHistoryItem(item.id)}
-                        className="px-3 text-xs text-rose-300 hover:bg-slate-900"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
+                      Clear search history
+                    </button>
+                  </div>
+                ) : null}
+                {recentSearches.length ? (
                   <button
                     type="button"
-                    className="block w-full border-t border-slate-800 px-3 py-2 text-left text-xs text-slate-400"
                     onClick={() => void clearSearchHistory()}
+                    className="mt-1.5 text-xs font-medium text-slate-400 underline-offset-2 hover:text-slate-200 hover:underline"
                   >
-                    Clear search history
+                    Clear history
                   </button>
-                </div>
-              ) : null}
-              {recentSearches.length ? (
+                ) : null}
                 <button
                   type="button"
-                  onClick={() => void clearSearchHistory()}
-                  className="mt-1.5 text-xs font-medium text-slate-400 underline-offset-2 hover:text-slate-200 hover:underline"
+                  onClick={clearCurrentSearch}
+                  className="mt-1.5 block text-xs font-medium text-cyan-300 underline-offset-2 hover:text-cyan-200 hover:underline"
                 >
-                  Clear history
+                  Start new search
                 </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={clearCurrentSearch}
-                className="mt-1.5 block text-xs font-medium text-cyan-300 underline-offset-2 hover:text-cyan-200 hover:underline"
-              >
-                Start new search
-              </button>
-              <span className="sr-only" role="status" aria-live="polite">
-                {historyMessage}
-              </span>
-            </div>
-            <label>
-              <span className="text-sm font-semibold text-slate-300">
-                Match quality
-              </span>
-              <select
-                value={matchQuality}
-                onChange={(event) =>
-                  setMatchQuality(
-                    event.target.value as "any" | "relevant" | "strong",
-                  )
-                }
-                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-cyan-500"
-              >
-                <option value="any">Any</option>
-                <option value="relevant">Relevant</option>
-                <option value="strong">Strong</option>
-              </select>
-            </label>
-            <label>
-              <span className="text-sm font-semibold text-slate-300">
-                Talent pool
-              </span>
-              <select
-                value={talentPool}
-                onChange={(event) => {
-                  const nextTalentPool = event.target.value as
-                    "internal_profiles" | "linkedin_talent_pool";
-                  selectedTalentPoolRef.current = nextTalentPool;
-                  sourceReadinessRevisionRef.current += 1;
-                  latestRequestIdRef.current += 1;
-                  activeAbortControllerRef.current?.abort();
-                  activeAbortControllerRef.current = null;
-                  pendingSearchKeyRef.current = "";
-                  setLoading(false);
-                  setLoadingExternalBatch(false);
-                  setStillSearching(false);
-                  if (nextTalentPool === "linkedin_talent_pool")
-                    setExternalCapability(null);
-                  setTalentPool(nextTalentPool);
-                  setReviewCommitted(false);
-                }}
-                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-cyan-500"
-              >
-                <option value="internal_profiles">SAP Talent Hub</option>
-                <option
-                  value="linkedin_talent_pool"
-                  disabled={
-                    sourceCapabilities?.external_talent_network.available ===
-                    false
-                  }
-                >
-                  {externalTalentNetworkOptionLabel}
-                </option>
-              </select>
-              {talentPool === "linkedin_talent_pool" &&
-              !sourceReadiness.ready ? (
-                <span className="mt-1 block text-xs text-amber-300">
-                  {sourceReadiness.message}
+                <span className="sr-only" role="status" aria-live="polite">
+                  {historyMessage}
                 </span>
-              ) : null}
-            </label>
-            <label className="flex min-h-12 items-center gap-2 rounded-xl border border-slate-700 px-3 text-xs text-slate-300">
-              <input
-                type="checkbox"
-                checked={includeRelocationRemote}
-                onChange={(event) => {
-                  setIncludeRelocationRemote(event.target.checked);
-                  setReviewCommitted(false);
-                }}
-              />
-              Include relocation/remote candidates
-            </label>
-            {talentPool === "linkedin_talent_pool" ? (
-              <label className="flex min-h-12 items-center gap-2 rounded-xl border border-amber-800/70 bg-amber-950/20 px-3 text-xs text-amber-100">
+              </div>
+              <label>
+                <span className="text-sm font-semibold text-slate-300">
+                  Match quality
+                </span>
+                <select
+                  value={matchQuality}
+                  onChange={(event) =>
+                    setMatchQuality(
+                      event.target.value as "any" | "relevant" | "strong",
+                    )
+                  }
+                  className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-cyan-500"
+                >
+                  <option value="any">Any</option>
+                  <option value="relevant">Relevant</option>
+                  <option value="strong">Strong</option>
+                </select>
+              </label>
+              <label>
+                <span className="text-sm font-semibold text-slate-300">
+                  Talent pool
+                </span>
+                <select
+                  value={talentPool}
+                  onChange={(event) => {
+                    const nextTalentPool = event.target.value as
+                      "internal_profiles" | "linkedin_talent_pool";
+                    selectedTalentPoolRef.current = nextTalentPool;
+                    sourceReadinessRevisionRef.current += 1;
+                    latestRequestIdRef.current += 1;
+                    activeAbortControllerRef.current?.abort();
+                    activeAbortControllerRef.current = null;
+                    pendingSearchKeyRef.current = "";
+                    setLoading(false);
+                    setLoadingExternalBatch(false);
+                    setStillSearching(false);
+                    if (nextTalentPool === "linkedin_talent_pool")
+                      setExternalCapability(null);
+                    setTalentPool(nextTalentPool);
+                    setReviewCommitted(false);
+                  }}
+                  className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-cyan-500"
+                >
+                  <option value="internal_profiles">SAP Talent Hub</option>
+                  <option
+                    value="linkedin_talent_pool"
+                    disabled={
+                      sourceCapabilities?.external_talent_network.available ===
+                      false
+                    }
+                  >
+                    {externalTalentNetworkOptionLabel}
+                  </option>
+                </select>
+                {talentPool === "linkedin_talent_pool" &&
+                !sourceReadiness.ready ? (
+                  <span className="mt-1 block text-xs text-amber-300">
+                    {sourceReadiness.message}
+                  </span>
+                ) : null}
+              </label>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(13rem,1fr)_minmax(16rem,1.35fr)_auto_auto] xl:items-center">
+              <label className="flex min-h-12 items-center gap-2 rounded-xl border border-slate-700 px-3 text-xs text-slate-300">
                 <input
                   type="checkbox"
-                  checked={externalVerifiedOnly}
+                  checked={includeRelocationRemote}
                   onChange={(event) => {
-                    setExternalVerifiedOnly(event.target.checked);
+                    setIncludeRelocationRemote(event.target.checked);
                     setReviewCommitted(false);
                   }}
                 />
-                Show only candidates with evidence for every required criterion
+                Include relocation/remote candidates
               </label>
-            ) : null}
-            <button
-              type="button"
-              aria-expanded={filtersOpen}
-              aria-controls="search-filter-panel"
-              onClick={() => setFiltersOpen((value) => !value)}
-              className="min-h-12 rounded-xl border border-slate-700 px-4 text-sm font-semibold text-slate-200 hover:border-slate-500"
-            >
-              Filters ({activeFilterCount})
-            </button>
-            <button
-              type="submit"
-              disabled={!query.trim()}
-              className="min-h-12 rounded-xl bg-cyan-400 px-6 text-sm font-bold text-slate-950 outline-none transition hover:bg-cyan-300 focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Understand & review
-            </button>
+              {talentPool === "linkedin_talent_pool" ? (
+                <label className="flex min-h-12 items-center gap-2 rounded-xl border border-amber-800/70 bg-amber-950/20 px-3 text-xs text-amber-100">
+                  <input
+                    type="checkbox"
+                    checked={externalVerifiedOnly}
+                    onChange={(event) => {
+                      setExternalVerifiedOnly(event.target.checked);
+                      setReviewCommitted(false);
+                    }}
+                  />
+                  Show only candidates with evidence for every required
+                  criterion
+                </label>
+              ) : null}
+              <button
+                type="button"
+                aria-expanded={filtersOpen}
+                aria-controls="search-filter-panel"
+                onClick={() => setFiltersOpen((value) => !value)}
+                className="min-h-12 rounded-xl border border-slate-700 px-4 text-sm font-semibold text-slate-200 hover:border-slate-500"
+              >
+                Filters ({activeFilterCount})
+              </button>
+              <button
+                type="submit"
+                disabled={!query.trim()}
+                className="min-h-12 rounded-xl bg-cyan-400 px-6 text-sm font-bold text-slate-950 outline-none transition hover:bg-cyan-300 focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Understand & review
+              </button>
+            </div>
           </div>
 
           {guidedSaveHref ? (
@@ -3401,36 +3445,33 @@ export default function CandidateSearchV2Client({
           committedSnapshot?.committedRequirements.talentPool ===
             "linkedin_talent_pool" &&
           externalRejectionPresentation ? (
-            <section className="mt-4 rounded-xl border border-slate-800 bg-slate-900/35 p-4">
+            <section
+              data-testid="external-result-status"
+              className="mt-4 rounded-xl border border-slate-800 bg-slate-900/35 px-4 py-3"
+            >
               <p className="text-sm font-semibold text-slate-200">
                 {externalRejectionPresentation.headline}
               </p>
-              <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
-                <div className="rounded-lg border border-emerald-900/70 bg-emerald-950/20 p-3">
-                  <dt className="text-xs text-emerald-200">
-                    Evidence-supported matches
-                  </dt>
-                  <dd className="mt-1 text-lg font-semibold text-white">
-                    {response.poolCounts?.evidenceSupported || 0}
-                  </dd>
-                </div>
-                <div className="rounded-lg border border-amber-900/70 bg-amber-950/20 p-3">
-                  <dt className="text-xs text-amber-200">
-                    Potential matches needing verification
-                  </dt>
-                  <dd className="mt-1 text-lg font-semibold text-white">
-                    {response.poolCounts?.needsVerification || 0}
-                  </dd>
-                </div>
-                <div className="rounded-lg border border-slate-700 bg-slate-950/30 p-3">
-                  <dt className="text-xs text-slate-300">
-                    Confirmed exclusions
-                  </dt>
-                  <dd className="mt-1 text-lg font-semibold text-white">
-                    {response.poolCounts?.confirmedExcluded || 0}
-                  </dd>
-                </div>
-              </dl>
+              {externalAggregation ? (
+                <p
+                  data-testid="external-aggregation-progress"
+                  className="mt-2 text-xs text-slate-400"
+                >
+                  {externalAggregation.providerRecordsFetched} fetched {" | "}
+                  {externalAggregation.recordsNormalized} normalized {" | "}
+                  {externalAggregation.uniqueProfiles} unique {" | "}
+                  {externalAggregation.currentlyRenderedResults} shown {" | "}
+                  {externalAggregation.remainingLoadedResults} ready to view
+                </p>
+              ) : null}
+              {externalAggregation &&
+              externalAggregation.lastBatch.batchNumber > 1 ? (
+                <p className="mt-1 text-xs text-cyan-200">
+                  {externalAggregation.lastBatch.replayed
+                    ? "This segment was already mapped; no duplicate provider request was made."
+                    : `${externalAggregation.lastBatch.newUniqueProfiles} new unique profiles mapped | ${externalAggregation.lastBatch.eligibleProfilesAdded} eligible added | ${externalAggregation.lastBatch.duplicateRecords} duplicates | ${externalAggregation.lastBatch.confirmedExclusions} excluded | ${externalAggregation.lastBatch.invalidRecords} invalid | ${externalAggregation.lastBatch.providerRecordsFetched} fetched in this segment`}
+                </p>
+              ) : null}
               {externalRejectionPresentation.noFullyVerifiedMatches ? (
                 <>
                   <p className="mt-2 font-semibold text-amber-200">
@@ -3444,32 +3485,58 @@ export default function CandidateSearchV2Client({
                 </>
               ) : null}
               {response.providerCapabilityWarnings?.length ? (
-                <ul className="mt-3 space-y-1 text-xs text-amber-100">
-                  {response.providerCapabilityWarnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
-                  ))}
-                </ul>
+                <details className="mt-2 text-xs text-amber-100">
+                  <summary className="cursor-pointer font-medium">
+                    {response.providerCapabilityWarnings.length} evidence
+                    limitation
+                    {response.providerCapabilityWarnings.length === 1
+                      ? ""
+                      : "s"}
+                  </summary>
+                  <ul className="mt-2 space-y-1 pl-4">
+                    {response.providerCapabilityWarnings.map((warning) => (
+                      <li key={warning} className="list-disc">
+                        {warning}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
               ) : null}
-              {response.nextProviderBatchCursor &&
-              response.providerExhausted !== true ? (
-                <button
-                  type="button"
-                  disabled={loading || loadingExternalBatch}
-                  onClick={() =>
-                    void runSearch(
-                      response.summary.page,
-                      true,
-                      false,
-                      response.nextProviderBatchCursor || undefined,
-                    )
-                  }
-                  className="mt-3 min-h-10 rounded-lg border border-cyan-700 bg-cyan-950/30 px-4 text-sm font-semibold text-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {loadingExternalBatch
-                    ? "Mapping the next market segment..."
-                    : `Map next market segment (up to ${response.marketMapping?.requestSize || 100} profiles)`}
-                </button>
-              ) : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {externalAggregation?.remainingLoadedResults ? (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() =>
+                      void runSearch(response.summary.page + 1, true)
+                    }
+                    className="min-h-9 rounded-lg bg-cyan-300 px-3 text-sm font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Show next{" "}
+                    {Math.min(20, externalAggregation.remainingLoadedResults)}
+                  </button>
+                ) : null}
+                {response.nextProviderBatchCursor &&
+                response.providerExhausted !== true ? (
+                  <button
+                    type="button"
+                    disabled={loading || loadingExternalBatch}
+                    onClick={() =>
+                      void runSearch(
+                        response.summary.page,
+                        true,
+                        false,
+                        response.nextProviderBatchCursor || undefined,
+                      )
+                    }
+                    className="min-h-9 rounded-lg border border-cyan-700 bg-cyan-950/30 px-3 text-sm font-semibold text-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {loadingExternalBatch
+                      ? "Mapping the next market segment..."
+                      : "Map next market segment"}
+                  </button>
+                ) : null}
+              </div>
             </section>
           ) : null}
 
@@ -3696,18 +3763,23 @@ export default function CandidateSearchV2Client({
                   </button>
                 ),
               )}
-              <button
-                type="button"
-                disabled={
-                  loading ||
-                  response.summary.page * response.summary.pageSize >=
-                    response.summary.totalMatched
-                }
-                onClick={() => void runSearch(response.summary.page + 1, true)}
-                className="min-h-9 rounded-lg border border-slate-700 px-3 text-sm font-medium text-slate-300 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Show next {response.summary.pageSize}
-              </button>
+              {committedSnapshot?.committedRequirements.talentPool !==
+              "linkedin_talent_pool" ? (
+                <button
+                  type="button"
+                  disabled={
+                    loading ||
+                    response.summary.page * response.summary.pageSize >=
+                      response.summary.totalMatched
+                  }
+                  onClick={() =>
+                    void runSearch(response.summary.page + 1, true)
+                  }
+                  className="min-h-9 rounded-lg border border-slate-700 px-3 text-sm font-medium text-slate-300 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Show next {response.summary.pageSize}
+                </button>
+              ) : null}
             </nav>
           ) : null}
           {response && response.providerExhausted ? (

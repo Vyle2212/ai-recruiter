@@ -323,6 +323,10 @@ const professionalRoleAlternatives = (
         "lead",
       ]
     : role.aliases;
+const explicitGenericConsultantRequirement = (query: string) =>
+  /\b(?:title\s*:\s*consultant|exact(?:\s+job)?\s+title\s+(?:is\s+)?consultant|must\s+be\s+(?:a\s+)?consultant|require(?:d|ment)?\s*:\s*consultant)\b/i.test(
+    query,
+  );
 const hash = (v: string) => {
   let h = 2166136261;
   for (let i = 0; i < v.length; i++) {
@@ -436,7 +440,13 @@ export function buildCommittedSearchRequirements(
   )
     ? "current"
     : "any";
-  for (const role of professionalRolesInText(r.query))
+  for (const role of professionalRolesInText(r.query)) {
+    if (
+      raw.talentPool === "linkedin_talent_pool" &&
+      role.id === "consultant" &&
+      !explicitGenericConsultantRequirement(r.query)
+    )
+      continue;
     requirements.push({
       id: `professional-role:${role.id}`,
       kind: "professional_role",
@@ -446,6 +456,7 @@ export function buildCommittedSearchRequirements(
       titleScope: confirmedTitleScope,
       source,
     });
+  }
   for (const title of r.filters.currentTitles || [])
     requirements.push({
       id: `professional-role:current:${norm(title)}`,
@@ -897,16 +908,27 @@ function evaluation(
           )
           .find((e) => req.alternatives.some((a) => entryBounded(e, a))) ||
         null,
-      canonicalEntry = candidate.canonicalRoleEvidence
-        ?.filter((item) => req.titleScope !== "current" || item.current)
-        .find((item) => req.alternatives.some((alternative) => bounded(item.title, alternative))) || null,
+      canonicalEntry =
+        candidate.canonicalRoleEvidence
+          ?.filter((item) => req.titleScope !== "current" || item.current)
+          .find((item) =>
+            req.alternatives.some((alternative) =>
+              bounded(item.title, alternative),
+            ),
+          ) || null,
       entry = trustedEntry || canonicalEntry,
       literal =
-        (entry && req.alternatives.find((alternative) =>
-          "value" in entry ? entryBounded(entry, alternative) : bounded(entry.title, alternative),
-        )) || null,
+        (entry &&
+          req.alternatives.find((alternative) =>
+            "value" in entry
+              ? entryBounded(entry, alternative)
+              : bounded(entry.title, alternative),
+          )) ||
+        null,
       state: CommittedRequirementState = entry ? "verified" : "missing",
-      historical = entry?.sourceType === "raw_experience" || entry?.sourceType === "canonical_employment";
+      historical =
+        entry?.sourceType === "raw_experience" ||
+        entry?.sourceType === "canonical_employment";
     return {
       id: req.id,
       criterionId: req.id,
@@ -919,19 +941,20 @@ function evaluation(
           ? `Qualified through grounded historical role evidence: ${literal || req.label}.`
           : `Current title evidence supports ${req.label}.`
         : `Candidate-bound ${req.titleScope === "current" ? "current title" : "title or employment"} evidence does not establish ${req.label}.`,
-      provenance: entry && "value" in entry
-        ? prov(candidate.candidateId, entry, literal, state)
-        : entry
-          ? {
-              candidateId: candidate.candidateId,
-              sourceRecordId: entry.sourceRecordId,
-              sourceType: entry.sourceType,
-              sourceField: entry.sourceField,
-              matchedLiteral: literal,
-              qualificationLevel: state,
-              trusted: true,
-            }
-          : null,
+      provenance:
+        entry && "value" in entry
+          ? prov(candidate.candidateId, entry, literal, state)
+          : entry
+            ? {
+                candidateId: candidate.candidateId,
+                sourceRecordId: entry.sourceRecordId,
+                sourceType: entry.sourceType,
+                sourceField: entry.sourceField,
+                matchedLiteral: literal,
+                qualificationLevel: state,
+                trusted: true,
+              }
+            : null,
     };
   }
   if (req.kind === "experience") {
@@ -1454,9 +1477,10 @@ export function canonicalInternalDeliveryDepth(
   );
   const contextual = targetConcepts.length
     ? targetConcepts.flatMap((conceptId) =>
-        targetModuleDeliveryEvidence(candidate, conceptId).directTargetAssignments.map(
-          (assignment) => assignment.evidence,
-        ),
+        targetModuleDeliveryEvidence(
+          candidate,
+          conceptId,
+        ).directTargetAssignments.map((assignment) => assignment.evidence),
       )
     : [...(candidate.lifecycleEvidence || [])];
   const strengthByType = (lifecycleType: string) =>
@@ -1516,7 +1540,12 @@ export function applyCommittedRequirements(
         : 100,
       profileEvidenceEntries = Object.entries(doc.profileEvidence || {}),
       profileEvidenceWeight = (field: string) =>
-        ["title", "experienceDuration", "employmentHistory", "projectHistory"].includes(field)
+        [
+          "title",
+          "experienceDuration",
+          "employmentHistory",
+          "projectHistory",
+        ].includes(field)
           ? 2
           : 1,
       profileEvidenceTotalWeight = profileEvidenceEntries.reduce(
@@ -1533,7 +1562,7 @@ export function applyCommittedRequirements(
               profileEvidenceTotalWeight) *
               100,
           )
-          : 0,
+        : 0,
       normalizedQuality =
         typeof doc.profileQualityScore === "number"
           ? Math.round(
@@ -1550,7 +1579,13 @@ export function applyCommittedRequirements(
           : fallbackProfileCompleteness,
       profileCompleteness = Math.max(
         0,
-        Math.min(100, Math.round(doc.canonicalProfileCompletenessScore ?? fallbackProfileCompleteness)),
+        Math.min(
+          100,
+          Math.round(
+            doc.canonicalProfileCompletenessScore ??
+              fallbackProfileCompleteness,
+          ),
+        ),
       ),
       evidenceConfidencePercent = Math.round(
         requirementEvidenceConfidence * 0.55 +
@@ -1586,12 +1621,19 @@ export function applyCommittedRequirements(
         matchLabel: canonicalMatchLabel(overallMatchScore),
         rankingVersion: SEARCH_V2_RANKING_VERSION,
         profileCompletenessPercent: profileCompleteness,
-        sourceCompletenessPercent: doc.sourceCompletenessScore == null
-          ? undefined
-          : Math.max(0, Math.min(100, Math.round(doc.sourceCompletenessScore))),
+        sourceCompletenessPercent:
+          doc.sourceCompletenessScore == null
+            ? undefined
+            : Math.max(
+                0,
+                Math.min(100, Math.round(doc.sourceCompletenessScore)),
+              ),
         profileDataConfidencePercent: Math.max(
           0,
-          Math.min(100, Math.round(doc.dataConfidenceScore ?? normalizedQuality)),
+          Math.min(
+            100,
+            Math.round(doc.dataConfidenceScore ?? normalizedQuality),
+          ),
         ),
         supportedProfessionalEvidenceDepth,
       }),

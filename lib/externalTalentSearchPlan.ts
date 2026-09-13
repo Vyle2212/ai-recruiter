@@ -15,6 +15,7 @@ import {
   mostSpecificSearchConcepts,
   searchConcept,
 } from "@/lib/candidateSearchConcepts";
+import { professionalRolesInText } from "@/lib/searchV2RequirementOntology";
 const cache = new Map<string, ExternalTalentSearchPlan>();
 const strings = (v: unknown) =>
   Array.isArray(v)
@@ -96,6 +97,7 @@ export function deterministicExternalSearchPlan(
     label: searchConcept(conceptId)?.label || conceptId,
   }));
   const roles = stable([
+    ...professionalRolesInText(r.query).map((role) => role.label),
     ...(f.professionalRoles || []),
     ...(f.currentTitles || []),
     ...(f.anyTitles || []),

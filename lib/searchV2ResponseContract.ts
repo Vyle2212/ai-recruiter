@@ -1,5 +1,5 @@
 export const SEARCH_V2_RESPONSE_CONTRACT_VERSION =
-  "search-v2-response-contract-v73-external-market-mapping";
+  "search-v2-response-contract-v74-external-aggregation";
 
 export type SearchV2ClientSummary = {
   totalDocuments: number;
@@ -85,6 +85,10 @@ export function normalizeSearchV2Response(
   const summary = value.summary;
   const request = value.request;
   const identityOnly = value.evaluationMode === "identity_only";
+  if (value.provider === "exa" && !record(value.aggregation))
+    return { ok: false, code: "invalid_response" };
+  const externalResponse =
+    value.provider === "exa" && record(value.aggregation);
   const results = value.results.map((item) => {
     if (!record(item)) return item;
     if (identityOnly)
@@ -122,7 +126,7 @@ export function normalizeSearchV2Response(
   )
     return { ok: false, code: "invalid_response" };
 
-  if (value.source === "external_talent_network") {
+  if (externalResponse) {
     const invalidExternalScore = results.some((item) => {
       if (!record(item) || !record(item.score)) return true;
       const rankingScore = finiteNonNegative(item.rankingScore);
@@ -195,6 +199,49 @@ export function normalizeSearchV2Response(
   const remaining = Math.max(0, visibleTotal - (page - 1) * pageSize);
   if (returned > Math.min(pageSize, remaining))
     return { ok: false, code: "invalid_response" };
+  if (externalResponse && returned !== Math.min(pageSize, remaining))
+    return { ok: false, code: "invalid_response" };
+  if (externalResponse) {
+    const aggregation = value.aggregation as Record<string, unknown>;
+    const providerRecordsFetched = nonNegativeInteger(
+      aggregation.providerRecordsFetched,
+    );
+    const recordsNormalized = nonNegativeInteger(aggregation.recordsNormalized);
+    const uniqueProfiles = nonNegativeInteger(aggregation.uniqueProfiles);
+    const evidenceSupported = nonNegativeInteger(aggregation.evidenceSupported);
+    const needsVerification = nonNegativeInteger(aggregation.needsVerification);
+    const confirmedExclusions = nonNegativeInteger(
+      aggregation.confirmedExclusions,
+    );
+    const eligibleVisibleResults = nonNegativeInteger(
+      aggregation.eligibleVisibleResults,
+    );
+    const currentlyRenderedResults = nonNegativeInteger(
+      aggregation.currentlyRenderedResults,
+    );
+    const remainingLoadedResults = nonNegativeInteger(
+      aggregation.remainingLoadedResults,
+    );
+    if (
+      providerRecordsFetched === null ||
+      recordsNormalized === null ||
+      uniqueProfiles === null ||
+      evidenceSupported === null ||
+      needsVerification === null ||
+      confirmedExclusions === null ||
+      eligibleVisibleResults === null ||
+      currentlyRenderedResults === null ||
+      remainingLoadedResults === null ||
+      recordsNormalized > providerRecordsFetched ||
+      uniqueProfiles > recordsNormalized ||
+      evidenceSupported + needsVerification + confirmedExclusions !==
+        uniqueProfiles ||
+      eligibleVisibleResults !== visibleTotal ||
+      currentlyRenderedResults !== returned ||
+      remainingLoadedResults !== Math.max(0, visibleTotal - page * pageSize)
+    )
+      return { ok: false, code: "invalid_response" };
+  }
 
   const totalDocuments = finiteNonNegative(summary.totalDocuments);
   const verifiedVisible = finiteNonNegative(summary.verifiedVisible);

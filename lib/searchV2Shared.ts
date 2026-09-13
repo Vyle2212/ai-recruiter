@@ -1,5 +1,5 @@
 export const SEARCH_V2_VERSION =
-  "candidate-search-v2-canonical-detail-v73-external-market-mapping";
+  "candidate-search-v2-canonical-detail-v74-external-aggregation";
 export const SEARCH_V2_QUALIFICATION_VERSION =
   "professional-context-segment-v18";
 export const SEARCH_V2_CACHE_VERSION =

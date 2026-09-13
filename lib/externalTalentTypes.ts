@@ -250,6 +250,34 @@ export type ExternalTalentSearchResponse = {
     profileLimit: number;
     requestSize: number;
   };
+  aggregation: ExternalTalentAggregation;
+};
+export type ExternalTalentBatchProgress = {
+  batchNumber: number;
+  segmentIndex: number;
+  providerRecordsFetched: number;
+  recordsNormalized: number;
+  invalidRecords: number;
+  duplicateRecords: number;
+  newUniqueProfiles: number;
+  confirmedExclusions: number;
+  eligibleProfilesAdded: number;
+  replayed: boolean;
+};
+export type ExternalTalentAggregation = {
+  providerRecordsFetched: number;
+  recordsNormalized: number;
+  invalidRecords: number;
+  duplicateRecords: number;
+  uniqueProfiles: number;
+  evidenceSupported: number;
+  needsVerification: number;
+  confirmedExclusions: number;
+  eligibleVisibleResults: number;
+  currentlyRenderedResults: number;
+  remainingLoadedResults: number;
+  additionalProviderSegmentsAvailable: boolean;
+  lastBatch: ExternalTalentBatchProgress;
 };
 export type ExternalRejectionSummary = {
   evaluated: number;

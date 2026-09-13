@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import type { CandidateSearchV2Request } from "@/lib/candidateSearchV2Types";
 import type { CommittedSearchRequirements } from "@/lib/searchV2CommittedRequirements";
 import {
@@ -35,7 +35,15 @@ type ExternalSnapshot = {
   loadingBatch: boolean;
   seenProviderCursors: Set<string>;
   seenCandidateKeys: Set<string>;
+  completedBatchTokens: Set<string>;
   loadedExternalTotal: number;
+  providerRecordsFetched: number;
+  recordsNormalized: number;
+  invalidRecords: number;
+  duplicateRecords: number;
+  batchCount: number;
+  lastBatch: ExternalTalentSearchResponse["aggregation"]["lastBatch"];
+  committedSearchId: string;
   marketMapping: ReturnType<typeof buildExternalMarketMapping>;
   marketQueryIndex: number;
   minimumScore: number;
@@ -70,17 +78,43 @@ const windowIdentity = (items: ExternalTalentCandidate[]) =>
     )
     .digest("hex")
     .slice(0, 16);
+const continuationToken = (snapshot: ExternalSnapshot) =>
+  createHash("sha256")
+    .update(
+      [
+        snapshot.committedSearchId,
+        snapshot.marketQueryIndex + 1,
+        snapshot.providerCursor || "next-market-segment",
+        EXTERNAL_RANKING_VERSION,
+      ].join(":"),
+    )
+    .digest("base64url")
+    .slice(0, 32);
 const candidateKeys = (candidate: {
   externalCandidateId: string;
   profileUrl?: string;
-}) => [
-  `id:${candidate.externalCandidateId.normalize("NFKC").trim().toLocaleLowerCase()}`,
-  ...(candidate.profileUrl
-    ? [
-        `url:${candidate.profileUrl.normalize("NFKC").trim().toLocaleLowerCase().replace(/\/$/, "")}`,
-      ]
-    : []),
-];
+}) => {
+  let canonicalUrl = "";
+  if (candidate.profileUrl) {
+    try {
+      const url = new URL(candidate.profileUrl);
+      canonicalUrl =
+        url.hostname.toLocaleLowerCase().replace(/^www\./, "") +
+        url.pathname.normalize("NFKC").replace(/\/+$/, "").toLocaleLowerCase();
+    } catch {
+      canonicalUrl = candidate.profileUrl
+        .normalize("NFKC")
+        .trim()
+        .toLocaleLowerCase()
+        .replace(/[?#].*$/, "")
+        .replace(/\/+$/, "");
+    }
+  }
+  return [
+    `id:${candidate.externalCandidateId.normalize("NFKC").trim().toLocaleLowerCase()}`,
+    ...(canonicalUrl ? [`url:${canonicalUrl}`] : []),
+  ];
+};
 
 function normalizeExternalBatch(
   raw: Awaited<ReturnType<ReturnType<typeof externalTalentProvider>["search"]>>,
@@ -88,6 +122,9 @@ function normalizeExternalBatch(
 ) {
   const accepted: ExternalTalentCandidate[] = [];
   let uniqueLoaded = 0;
+  let invalidRecords = 0;
+  let duplicateRecords = 0;
+  let confirmedExclusions = 0;
   for (const candidate of raw.candidates) {
     if (
       snapshot.loadedExternalTotal + uniqueLoaded >=
@@ -95,12 +132,18 @@ function normalizeExternalBatch(
     )
       break;
     const checkedUrl = validateExternalProfileUrl(candidate.profileUrl);
-    if (!checkedUrl) continue;
+    if (!checkedUrl) {
+      invalidRecords += 1;
+      continue;
+    }
     const keys = candidateKeys({
       externalCandidateId: candidate.externalCandidateId,
       profileUrl: checkedUrl.url,
     });
-    if (keys.some((key) => snapshot.seenCandidateKeys.has(key))) continue;
+    if (keys.some((key) => snapshot.seenCandidateKeys.has(key))) {
+      duplicateRecords += 1;
+      continue;
+    }
     keys.forEach((key) => snapshot.seenCandidateKeys.add(key));
     uniqueLoaded += 1;
     const evidence = candidate.providerEvidence.map((item) => ({
@@ -150,7 +193,10 @@ function normalizeExternalBatch(
       evaluated.candidate.eligibilityState === "potential_needs_verification"
     )
       snapshot.rejectionSummary.needsVerification += 1;
-    else snapshot.rejectionSummary.confirmedExcluded += 1;
+    else {
+      snapshot.rejectionSummary.confirmedExcluded += 1;
+      confirmedExclusions += 1;
+    }
     for (const requirement of evaluated.candidate.requirementEvaluations) {
       const aggregate = snapshot.rejectionSummary.requirements.find(
         (item) => item.requirementId === requirement.id,
@@ -175,6 +221,15 @@ function normalizeExternalBatch(
     if (evaluated.eligible && passesScoreThreshold)
       accepted.push(evaluated.candidate);
   }
+  const providerRecordsFetched =
+    typeof raw.providerResultCount === "number" &&
+    Number.isFinite(raw.providerResultCount)
+      ? Math.max(raw.candidates.length, Math.round(raw.providerResultCount))
+      : raw.candidates.length;
+  snapshot.providerRecordsFetched += providerRecordsFetched;
+  snapshot.recordsNormalized += raw.candidates.length;
+  snapshot.invalidRecords += invalidRecords;
+  snapshot.duplicateRecords += duplicateRecords;
   snapshot.loadedExternalTotal += uniqueLoaded;
   snapshot.items = sortExternalCandidates([...snapshot.items, ...accepted]);
   snapshot.sourceRequestId = raw.sourceRequestId;
@@ -200,7 +255,22 @@ function normalizeExternalBatch(
       ? null
       : next;
   if (next) snapshot.seenProviderCursors.add(next);
-  snapshot.loadMoreToken = snapshot.providerExhausted ? null : randomUUID();
+  snapshot.loadMoreToken = snapshot.providerExhausted
+    ? null
+    : continuationToken(snapshot);
+  snapshot.batchCount += 1;
+  snapshot.lastBatch = {
+    batchNumber: snapshot.batchCount,
+    segmentIndex: snapshot.marketQueryIndex,
+    providerRecordsFetched,
+    recordsNormalized: raw.candidates.length,
+    invalidRecords,
+    duplicateRecords,
+    newUniqueProfiles: uniqueLoaded,
+    confirmedExclusions,
+    eligibleProfilesAdded: accepted.length,
+    replayed: false,
+  };
 }
 
 export async function executeExternalTalentSearch(
@@ -217,6 +287,7 @@ export async function executeExternalTalentSearch(
     context.authorizationScopeHash || "anonymous",
   );
   let snapshot = snapshots.get(committedSearchId);
+  let replayedBatch = false;
   let queryMappingMs = 0,
     providerMs = 0,
     normalizationMs = 0,
@@ -278,7 +349,26 @@ export async function executeExternalTalentSearch(
       loadingBatch: false,
       seenProviderCursors: new Set(),
       seenCandidateKeys: new Set(),
+      completedBatchTokens: new Set(),
       loadedExternalTotal: 0,
+      providerRecordsFetched: 0,
+      recordsNormalized: 0,
+      invalidRecords: 0,
+      duplicateRecords: 0,
+      batchCount: 0,
+      lastBatch: {
+        batchNumber: 0,
+        segmentIndex: 0,
+        providerRecordsFetched: 0,
+        recordsNormalized: 0,
+        invalidRecords: 0,
+        duplicateRecords: 0,
+        newUniqueProfiles: 0,
+        confirmedExclusions: 0,
+        eligibleProfilesAdded: 0,
+        replayed: false,
+      },
+      committedSearchId,
       marketMapping,
       marketQueryIndex: 0,
       minimumScore: Math.max(0, Number(request.minimumScore) || 0),
@@ -310,52 +400,59 @@ export async function executeExternalTalentSearch(
     snapshots.set(committedSearchId, snapshot);
   }
   if (request.externalBatchCursor) {
-    if (
-      snapshot.providerExhausted ||
-      (!snapshot.providerCursor &&
-        !(
-          snapshot.providerPagination === "none" &&
-          snapshot.marketQueryIndex + 1 < snapshot.marketMapping.queries.length
-        )) ||
-      request.externalBatchCursor !== snapshot.loadMoreToken
-    )
-      throw new ExternalSourceError(
-        "INVALID_PROVIDER_CURSOR",
-        "This External Talent Network batch cursor is no longer valid.",
-      );
-    if (snapshot.loadingBatch)
-      throw new ExternalSourceError(
-        "RATE_LIMITED",
-        "The next External Talent Network batch is already loading.",
-      );
-    snapshot.loadingBatch = true;
-    const providerCursor = snapshot.providerCursor;
-    const nextMarketQueryIndex = providerCursor
-      ? snapshot.marketQueryIndex
-      : snapshot.marketQueryIndex + 1;
-    try {
-      const provider = externalTalentProvider();
-      const providerStart = performance.now();
-      const raw = await provider.search(
-        {
-          source: "linkedin_talent_pool",
-          committedSearchId,
-          query:
-            snapshot.marketMapping.queries[nextMarketQueryIndex] ||
-            snapshot.plan.semanticQuery,
-          filters: snapshot.providerFilters,
-          pageSize: snapshot.providerRequestSize,
-          ...(providerCursor ? { providerCursor } : {}),
-        },
-        signal,
-      );
-      providerMs = performance.now() - providerStart;
-      const normalizeStart = performance.now();
-      snapshot.marketQueryIndex = nextMarketQueryIndex;
-      normalizeExternalBatch(raw, snapshot);
-      normalizationMs = performance.now() - normalizeStart;
-    } finally {
-      snapshot.loadingBatch = false;
+    const requestedBatchToken = request.externalBatchCursor;
+    if (snapshot.completedBatchTokens.has(requestedBatchToken)) {
+      replayedBatch = true;
+    } else {
+      if (
+        snapshot.providerExhausted ||
+        (!snapshot.providerCursor &&
+          !(
+            snapshot.providerPagination === "none" &&
+            snapshot.marketQueryIndex + 1 <
+              snapshot.marketMapping.queries.length
+          )) ||
+        requestedBatchToken !== snapshot.loadMoreToken
+      )
+        throw new ExternalSourceError(
+          "INVALID_PROVIDER_CURSOR",
+          "This External Talent Network batch cursor is no longer valid.",
+        );
+      if (snapshot.loadingBatch)
+        throw new ExternalSourceError(
+          "RATE_LIMITED",
+          "The next External Talent Network batch is already loading.",
+        );
+      snapshot.loadingBatch = true;
+      const providerCursor = snapshot.providerCursor;
+      const nextMarketQueryIndex = providerCursor
+        ? snapshot.marketQueryIndex
+        : snapshot.marketQueryIndex + 1;
+      try {
+        const provider = externalTalentProvider();
+        const providerStart = performance.now();
+        const raw = await provider.search(
+          {
+            source: "linkedin_talent_pool",
+            committedSearchId,
+            query:
+              snapshot.marketMapping.queries[nextMarketQueryIndex] ||
+              snapshot.plan.semanticQuery,
+            filters: snapshot.providerFilters,
+            pageSize: snapshot.providerRequestSize,
+            ...(providerCursor ? { providerCursor } : {}),
+          },
+          signal,
+        );
+        providerMs = performance.now() - providerStart;
+        const normalizeStart = performance.now();
+        snapshot.marketQueryIndex = nextMarketQueryIndex;
+        normalizeExternalBatch(raw, snapshot);
+        normalizationMs = performance.now() - normalizeStart;
+        snapshot.completedBatchTokens.add(requestedBatchToken);
+      } finally {
+        snapshot.loadingBatch = false;
+      }
     }
   }
   const requestedPage = Math.max(1, Number(request.page) || 1);
@@ -404,6 +501,19 @@ export async function executeExternalTalentSearch(
           "utf8",
         ).toString("base64url")
       : null;
+  const classifiedTotal =
+    snapshot.rejectionSummary.evidenceSupported +
+    snapshot.rejectionSummary.needsVerification +
+    snapshot.rejectionSummary.confirmedExcluded;
+  if (classifiedTotal !== snapshot.loadedExternalTotal)
+    throw new ExternalSourceError(
+      "INVALID_PROVIDER_RESPONSE",
+      "External Talent Network aggregation counts did not reconcile.",
+    );
+  const remainingLoadedResults = Math.max(
+    0,
+    snapshot.items.length - (offset + items.length),
+  );
   return {
     items,
     evaluatedTotal: snapshot.loadedExternalTotal,
@@ -460,6 +570,24 @@ export async function executeExternalTalentSearch(
       segmentsPlanned: snapshot.marketMapping.queries.length,
       profileLimit: snapshot.marketMapping.profileLimit,
       requestSize: snapshot.providerRequestSize,
+    },
+    aggregation: {
+      providerRecordsFetched: snapshot.providerRecordsFetched,
+      recordsNormalized: snapshot.recordsNormalized,
+      invalidRecords: snapshot.invalidRecords,
+      duplicateRecords: snapshot.duplicateRecords,
+      uniqueProfiles: snapshot.loadedExternalTotal,
+      evidenceSupported: snapshot.rejectionSummary.evidenceSupported,
+      needsVerification: snapshot.rejectionSummary.needsVerification,
+      confirmedExclusions: snapshot.rejectionSummary.confirmedExcluded,
+      eligibleVisibleResults: snapshot.items.length,
+      currentlyRenderedResults: items.length,
+      remainingLoadedResults,
+      additionalProviderSegmentsAvailable: Boolean(snapshot.loadMoreToken),
+      lastBatch: {
+        ...snapshot.lastBatch,
+        replayed: replayedBatch,
+      },
     },
   };
 }

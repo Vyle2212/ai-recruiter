@@ -96,6 +96,11 @@ export function sanitizeSearchV2RecruiterResponse<T>(payload: T): T {
     source: _source,
     executionProfile: _executionProfile,
     eligibilityDiagnostic: _eligibilityDiagnostic,
+    externalItems: _externalItems,
+    sourceRequestId: _sourceRequestId,
+    committedSearchId: _committedSearchId,
+    rankingVersion: _rankingVersion,
+    evaluatedWindowId: _evaluatedWindowId,
     ...visible
   } = payload;
   const results = Array.isArray(payload.results)

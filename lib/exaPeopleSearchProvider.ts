@@ -35,6 +35,21 @@ const textValues = (value: unknown) =>
     : typeof value === "string"
       ? [value]
       : [];
+const assignmentTextValues = (value: unknown) =>
+  Array.isArray(value)
+    ? value.flatMap((item) => {
+        if (typeof item === "string") return [item];
+        if (!item || typeof item !== "object") return [];
+        const text = Object.values(item as Record<string, unknown>)
+          .filter((entry): entry is string => typeof entry === "string")
+          .map((entry) => entry.normalize("NFKC").replace(/\s+/g, " ").trim())
+          .filter(Boolean)
+          .join(" â€” ");
+        return text ? [text] : [];
+      })
+    : typeof value === "string"
+      ? [value]
+      : [];
 const clean = (value: unknown) =>
   typeof value === "string"
     ? value.normalize("NFKC").replace(/\s+/g, " ").trim() || undefined
@@ -126,7 +141,7 @@ export function normalizeExaPersonResult(
       typeof props.summary === "string" ? props.summary : excerpts[0],
     employmentText,
     employmentRecords,
-    projectText: textValues(props.projects),
+    projectText: assignmentTextValues(props.projects),
     education: textValues(props.education),
     certifications: textValues(props.certifications),
     // Provider aggregates and seniority labels are not grounded duration.

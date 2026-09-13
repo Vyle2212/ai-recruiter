@@ -450,12 +450,11 @@ async function main() {
     productionPlan.requirements.map((requirement) => requirement.id),
     [
       "target:FICO",
-      "professional-role:consultant",
       "location:required",
       "experience:total",
       "lifecycle:implementation",
     ],
-    "all five committed requirements must survive the External plan boundary",
+    "the four recruiter requirements must survive while generic Consultant remains retrieval context",
   );
   const exaFixture = (input: {
     id: string;
@@ -600,7 +599,7 @@ async function main() {
   ])
     assert.equal(
       evaluated.candidate.requirementEvaluations.length,
-      5,
+      4,
       "every committed requirement must receive an explicit evaluation",
     );
   assert.equal(sixImplementations.eligible, true);
@@ -956,7 +955,7 @@ async function main() {
   assert.equal(strictVerifiedOnly.strictVerifiedOnly, true);
   assert.equal(strictVerifiedOnly.poolCounts.needsVerification, 50);
   assert.equal(strictVerifiedOnly.rejectionSummary.eligible, 0);
-  assert.equal(zeroResultDiagnostics.rejectionSummary.requirements.length, 5);
+  assert.equal(zeroResultDiagnostics.rejectionSummary.requirements.length, 4);
   const experienceRejection =
     zeroResultDiagnostics.rejectionSummary.requirements.find(
       (requirement) => requirement.requirementId === "experience:total",
