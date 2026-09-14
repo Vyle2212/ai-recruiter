@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authorizeRecruiterJobsRead } from "@/lib/recruiterJobsAuthorization";
+import {
+  recruiterSearchAuthorizationDenied,
+  requireRecruiterSearchAuthorization,
+} from "@/lib/recruiterSearchAuthorization";
 import {
   validGuidedSearchSnapshot,
   type GuidedSearchSnapshot,
@@ -46,24 +49,27 @@ const root = globalThis as typeof globalThis & {
   __searchV2RecentByRecruiter?: Map<string, Item[]>;
 };
 const store = (root.__searchV2RecentByRecruiter ??= new Map<string, Item[]>());
-async function actor() {
-  const auth = await authorizeRecruiterJobsRead();
+async function actor(
+  permission: "search-history:read" | "search-history:write",
+) {
+  const auth = await requireRecruiterSearchAuthorization({
+    permission,
+    route: "/api/recruiter/search-v2/history",
+  });
   if (!auth.allowed) return auth;
-  return { ...auth, key: auth.actor.id || "local-preview" };
+  return { ...auth, key: auth.scope.cacheKey };
 }
 export async function GET() {
-  const auth = await actor();
-  if (!auth.allowed)
-    return NextResponse.json({ error: auth.code }, { status: auth.status });
+  const auth = await actor("search-history:read");
+  if (!auth.allowed) return recruiterSearchAuthorizationDenied(auth);
   return NextResponse.json(
     { items: store.get(auth.key) || [] },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
 export async function POST(request: NextRequest) {
-  const auth = await actor();
-  if (!auth.allowed)
-    return NextResponse.json({ error: auth.code }, { status: auth.status });
+  const auth = await actor("search-history:write");
+  if (!auth.allowed) return recruiterSearchAuthorizationDenied(auth);
   let body: unknown;
   try {
     body = await request.json();
@@ -162,9 +168,8 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ ok: true, item }, { status: 201 });
 }
 export async function DELETE(request: NextRequest) {
-  const auth = await actor();
-  if (!auth.allowed)
-    return NextResponse.json({ error: auth.code }, { status: auth.status });
+  const auth = await actor("search-history:write");
+  if (!auth.allowed) return recruiterSearchAuthorizationDenied(auth);
   const id = new URL(request.url).searchParams.get("id");
   if (id)
     store.set(

@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { authorizeRecruiterJobsRead } from "@/lib/recruiterJobsAuthorization";
+import {
+  logRecruiterSearchSecurityEvent,
+  recruiterSearchAuthorizationDenied,
+  requireRecruiterSearchAuthorization,
+} from "@/lib/recruiterSearchAuthorization";
 import {
   EXTERNAL_PROFILE_IMPORT_MAX_BYTES,
   parseExternalProfileImport,
@@ -36,10 +40,11 @@ async function extractText(file: File) {
       "application/octet-stream",
     ].includes(file.type)
   ) {
-    if (bytes[0] !== 0x50 || bytes[1] !== 0x4b)
-      throw new Error("invalid_docx");
+    if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) throw new Error("invalid_docx");
     const mammoth = await import("mammoth");
-    return String((await mammoth.extractRawText({ buffer: bytes })).value || "");
+    return String(
+      (await mammoth.extractRawText({ buffer: bytes })).value || "",
+    );
   }
 
   if (
@@ -54,12 +59,18 @@ async function extractText(file: File) {
 }
 
 export async function POST(request: Request) {
-  const authorization = await authorizeRecruiterJobsRead();
-  if (!authorization.allowed)
-    return NextResponse.json(
-      { error: authorization.code },
-      { status: authorization.status, headers },
-    );
+  const authorization = await requireRecruiterSearchAuthorization({
+    permission: "external-profile:import",
+    route: "/api/recruiter/search-v2/external-profile-import",
+  });
+  if (!authorization.allowed) {
+    logRecruiterSearchSecurityEvent("unauthorized_external_provider_action", {
+      route: "/api/recruiter/search-v2/external-profile-import",
+      permission: "external-profile:import",
+      reason: authorization.code,
+    });
+    return recruiterSearchAuthorizationDenied(authorization);
+  }
 
   try {
     const form = await request.formData();

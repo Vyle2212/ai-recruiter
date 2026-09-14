@@ -60,7 +60,11 @@ import { externalTalentProvider } from "@/lib/externalTalentProviderRegistry";
 import { executeExternalTalentSearch } from "@/lib/externalTalentSearchService";
 import { buildExternalSearchV2ClientResponse } from "@/lib/searchV2ResponseContract";
 import { externalCanonicalResultProjection } from "@/lib/externalTalentProjection";
-import { authorizeRecruiterJobsRead } from "@/lib/recruiterJobsAuthorization";
+import {
+  logRecruiterSearchSecurityEvent,
+  recruiterSearchAuthorizationDenied,
+  requireRecruiterSearchAuthorization,
+} from "@/lib/recruiterSearchAuthorization";
 import { sanitizeSearchV2RecruiterResponse } from "@/lib/searchV2RecruiterResponse";
 import {
   canonicalLookupMatches,
@@ -70,6 +74,7 @@ import {
 } from "@/lib/searchV2UnifiedIntent";
 import { normalizeSearchV2Query } from "@/lib/searchV2QueryNormalization";
 import { buildExternalTalentProfilePresentation } from "@/lib/externalTalentProfile";
+import { searchV2RequestDatasetAllowed } from "@/lib/searchV2RequestDatasetBoundary";
 
 export const runtime = "nodejs";
 
@@ -91,38 +96,47 @@ type CanonicalDatasetProjection = ReturnType<
   typeof dedupeCandidateSearchV2Documents
 >;
 const globalCanonicalDataset = globalThis as typeof globalThis & {
-  __searchV2CanonicalDatasetV1?: {
-    version: string;
-    datasetRevision: string;
-    projection: CanonicalDatasetProjection;
-  };
+  __searchV2CanonicalDatasetV2?: Map<
+    string,
+    {
+      version: string;
+      datasetRevision: string;
+      projection: CanonicalDatasetProjection;
+    }
+  >;
 };
 function canonicalDatasetProjection(
   documents: CandidateSearchV2Document[],
   datasetRevision: string,
+  authorizationScope: string,
 ) {
-  const cached = globalCanonicalDataset.__searchV2CanonicalDatasetV1;
+  const scoped =
+    globalCanonicalDataset.__searchV2CanonicalDatasetV2 ||
+    (globalCanonicalDataset.__searchV2CanonicalDatasetV2 = new Map());
+  const cached = scoped.get(authorizationScope);
   if (
     cached?.version === SEARCH_RANKING_CACHE_VERSION &&
     cached.datasetRevision === datasetRevision
   )
     return { projection: cached.projection, cacheHit: true };
   const projection = dedupeCandidateSearchV2Documents(documents);
-  globalCanonicalDataset.__searchV2CanonicalDatasetV1 = {
+  scoped.set(authorizationScope, {
     version: SEARCH_RANKING_CACHE_VERSION,
     datasetRevision,
     projection,
-  };
+  });
   return { projection, cacheHit: false };
 }
-let engineReadinessPromise: Promise<void> | null = null;
-function ensureSearchV2EngineReady() {
-  if (engineReadinessPromise) return engineReadinessPromise;
-  engineReadinessPromise = fetchCandidateSource()
+const engineReadinessByAuthorizationScope = new Map<string, Promise<void>>();
+function ensureSearchV2EngineReady(authorizationScope: string) {
+  const existing = engineReadinessByAuthorizationScope.get(authorizationScope);
+  if (existing) return existing;
+  const readiness = fetchCandidateSource()
     .then((dataset) => {
       const canonical = canonicalDatasetProjection(
         dataset.documents,
         dataset.revision,
+        authorizationScope,
       ).projection.documents;
       rankCandidatesV2(
         canonical,
@@ -155,10 +169,11 @@ function ensureSearchV2EngineReady() {
       );
     })
     .catch((error) => {
-      engineReadinessPromise = null;
+      engineReadinessByAuthorizationScope.delete(authorizationScope);
       throw error;
     });
-  return engineReadinessPromise;
+  engineReadinessByAuthorizationScope.set(authorizationScope, readiness);
+  return readiness;
 }
 type RankedSearchCacheEntry = {
   createdAt: number;
@@ -191,18 +206,6 @@ function normalizedCacheList(value: unknown) {
 
 function hashCacheValue(value: string) {
   return searchV2ServerHash(value);
-}
-
-function authorizationScopeHash(request: NextRequest) {
-  const scope = [
-    request.headers.get("authorization"),
-    request.headers.get("cookie"),
-    request.headers.get("x-tenant-id"),
-    request.headers.get("x-user-id"),
-  ]
-    .filter(Boolean)
-    .join("|");
-  return hashCacheValue(scope || "anonymous");
 }
 
 function searchCacheKey(profile: SearchExecutionProfile) {
@@ -261,7 +264,26 @@ function externalCapabilityResponse(
 }
 
 export async function GET(request: NextRequest) {
+  const authorization = await requireRecruiterSearchAuthorization({
+    permission: "search:read",
+    route: "/api/recruiter/search-v2",
+  });
+  if (!authorization.allowed)
+    return recruiterSearchAuthorizationDenied(authorization);
+
   if (request.nextUrl.searchParams.get("source") === "linkedin_talent_pool") {
+    const externalAuthorization = await requireRecruiterSearchAuthorization({
+      permission: "external-search:read",
+      route: "/api/recruiter/search-v2",
+    });
+    if (!externalAuthorization.allowed) {
+      logRecruiterSearchSecurityEvent("unauthorized_external_provider_action", {
+        route: "/api/recruiter/search-v2",
+        permission: "external-search:read",
+        reason: externalAuthorization.code,
+      });
+      return recruiterSearchAuthorizationDenied(externalAuthorization);
+    }
     const capability = await externalTalentProvider().capability();
     return NextResponse.json(
       {
@@ -299,7 +321,9 @@ export async function GET(request: NextRequest) {
     // Recruiter-visible readiness follows the valid dataset. Ranking prewarm is
     // intentionally detached so an exact identity request cannot queue behind
     // a synchronous full-population scoring pass in this request.
-    void ensureSearchV2EngineReady().catch(() => undefined);
+    void ensureSearchV2EngineReady(authorization.scope.cacheKey).catch(
+      () => undefined,
+    );
   }
   const readyDataset =
     readiness.status === "ready"
@@ -341,6 +365,13 @@ export async function GET(request: NextRequest) {
   );
 }
 export async function POST(request: NextRequest) {
+  const authorization = await requireRecruiterSearchAuthorization({
+    permission: "search:read",
+    route: "/api/recruiter/search-v2",
+  });
+  if (!authorization.allowed)
+    return recruiterSearchAuthorizationDenied(authorization);
+
   try {
     const startedAt = performance.now();
     const requestCorrelationId =
@@ -355,7 +386,39 @@ export async function POST(request: NextRequest) {
       rawQuery: queryNormalization.rawQuery,
       query: queryNormalization.normalizedQuery,
     };
+    if (
+      (Array.isArray(body.documents) || Array.isArray(body.candidates)) &&
+      !searchV2RequestDatasetAllowed({
+        nodeEnv: process.env.NODE_ENV,
+        enabled: process.env.SEARCH_V2_TEST_PAYLOADS_ENABLED === "true",
+        authoritativeRole: authorization.scope.role,
+      })
+    )
+      return NextResponse.json(
+        {
+          error: {
+            code: "request_dataset_not_allowed",
+            message: "Request-supplied candidate datasets are not permitted.",
+          },
+        },
+        { status: 403, headers: { "Cache-Control": "private, no-store" } },
+      );
     if (body.talentPool === "linkedin_talent_pool") {
+      const externalAuthorization = await requireRecruiterSearchAuthorization({
+        permission: "external-search:read",
+        route: "/api/recruiter/search-v2",
+      });
+      if (!externalAuthorization.allowed) {
+        logRecruiterSearchSecurityEvent(
+          "unauthorized_external_provider_action",
+          {
+            route: "/api/recruiter/search-v2",
+            permission: "external-search:read",
+            reason: externalAuthorization.code,
+          },
+        );
+        return recruiterSearchAuthorizationDenied(externalAuthorization);
+      }
       const externalCommittedRequirements = buildCommittedSearchRequirements(
         body,
         body.integrityPlan ? "guided" : "query",
@@ -384,7 +447,7 @@ export async function POST(request: NextRequest) {
           body,
           request.signal,
           {
-            authorizationScopeHash: authorizationScopeHash(request),
+            authorizationScopeHash: externalAuthorization.scope.cacheKey,
             committedRequirements: externalCommittedRequirements,
           },
         );
@@ -611,6 +674,12 @@ export async function POST(request: NextRequest) {
                 "PROVIDER_ERROR",
                 "External Talent Network could not complete this search.",
               );
+        if (failure.code === "INVALID_PROVIDER_CURSOR")
+          logRecruiterSearchSecurityEvent("cross_scope_continuation_attempt", {
+            route: "/api/recruiter/search-v2",
+            permission: "external-search:read",
+            reason: "invalid_or_cross_scope_external_cursor",
+          });
         return NextResponse.json(
           {
             error: failure.message,
@@ -621,7 +690,8 @@ export async function POST(request: NextRequest) {
           {
             status: failure.code === "RATE_LIMITED" ? 429 : 502,
             headers: {
-              "Cache-Control": "no-store",
+              "Cache-Control": "private, no-store",
+              Vary: "Cookie, Authorization",
               "X-Search-Request-Id": requestCorrelationId,
             },
           },
@@ -671,17 +741,6 @@ export async function POST(request: NextRequest) {
     const queryParsingMs = performance.now() - parseStartedAt;
     const lightweightIdentityLookup =
       unifiedIntent.type === "identity_token_lookup";
-    if (lightweightIdentityLookup) {
-      const authorization = await authorizeRecruiterJobsRead();
-      if (!authorization.allowed)
-        return NextResponse.json(
-          { error: authorization.code },
-          {
-            status: authorization.status,
-            headers: { "Cache-Control": "no-store" },
-          },
-        );
-    }
     const cacheable =
       !Array.isArray(body.documents) && !Array.isArray(body.candidates);
     let retrievalMs = 0,
@@ -740,7 +799,7 @@ export async function POST(request: NextRequest) {
     ].includes(unifiedIntent.type);
     const profile = buildSearchExecutionProfile(browserRequest, {
       datasetRevision,
-      authorizationScopeHash: authorizationScopeHash(request),
+      authorizationScopeHash: authorization.scope.cacheKey,
     });
     const profileHash = searchV2ExecutionProfileHash(profile);
     const searchRequest = executionProfileRequest(
@@ -834,7 +893,11 @@ export async function POST(request: NextRequest) {
     const dedupeStartedAt = performance.now();
     const canonicalDataset =
       cacheable && !lightweightIdentityLookup
-        ? canonicalDatasetProjection(documents, datasetRevision)
+        ? canonicalDatasetProjection(
+            documents,
+            datasetRevision,
+            authorization.scope.cacheKey,
+          )
         : {
             projection: dedupeCandidateSearchV2Documents(documents),
             cacheHit: false,
@@ -1169,10 +1232,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to perform Candidate Search V2.",
+        error: "Unable to perform Candidate Search V2.",
 
         safety: {
           readOnly: true,

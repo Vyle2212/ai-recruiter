@@ -3,9 +3,10 @@ import type { Candidate360Profile } from "./candidate360Types";
 import { loadCandidate360Profile } from "./candidate360Data";
 import { CANDIDATE_DETAIL_PROJECTION_VERSION } from "./candidate360SchemaNormalize";
 import type { SearchV2CandidateDetailScope } from "./searchV2CandidateDetailContract";
+import { recruiterSearchScopedCacheKey } from "./recruiterSearchAuthorizationCore";
 
 export const SEARCH_V2_CANDIDATE_DETAIL_CACHE_VERSION =
-  "search-v2-candidate-detail-cache-v11-canonical-education-presentation";
+  "search-v2-candidate-detail-cache-v12-authorization-scope";
 
 type Entry = { createdAt: number; value: Candidate360Profile | null };
 const globalState = globalThis as typeof globalThis & {
@@ -30,14 +31,36 @@ export async function loadSearchV2CandidateDetail(
     | ((
         candidateId: string,
       ) => Promise<Candidate360Profile | null>) = "recruiter",
-  scopedLoader: (
+  authorizationScopeOrLoader:
+    | string
+    | ((
+        candidateId: string,
+      ) => Promise<Candidate360Profile | null>) = "test-local",
+  explicitLoader: (
     candidateId: string,
   ) => Promise<Candidate360Profile | null> = loadCandidate360Profile,
 ) {
   const scope = typeof scopeOrLoader === "string" ? scopeOrLoader : "recruiter";
   const loader =
-    typeof scopeOrLoader === "function" ? scopeOrLoader : scopedLoader;
-  const key = `${SEARCH_V2_CANDIDATE_DETAIL_CACHE_VERSION}:${scope}:${CANDIDATE_DETAIL_PROJECTION_VERSION}:${candidateId}`;
+    typeof scopeOrLoader === "function"
+      ? scopeOrLoader
+      : typeof authorizationScopeOrLoader === "function"
+        ? authorizationScopeOrLoader
+        : explicitLoader;
+  const authorizationScope =
+    typeof authorizationScopeOrLoader === "string"
+      ? authorizationScopeOrLoader
+      : "test-local";
+  if (
+    process.env.NODE_ENV === "production" &&
+    authorizationScope === "test-local"
+  )
+    throw new Error("Candidate detail authorization scope is required.");
+  const key = recruiterSearchScopedCacheKey(
+    SEARCH_V2_CANDIDATE_DETAIL_CACHE_VERSION,
+    authorizationScope,
+    `${scope}:${CANDIDATE_DETAIL_PROJECTION_VERSION}:${candidateId}`,
+  );
   const existing = cache.get(key);
   if (existing && Date.now() - existing.createdAt < TTL_MS)
     return { profile: existing.value, cacheHit: true } as const;

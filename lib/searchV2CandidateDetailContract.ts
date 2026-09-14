@@ -9,7 +9,7 @@ import {
 import { buildCandidateEducationPresentation } from "./candidateProfilePresentation";
 
 export const SEARCH_V2_CANDIDATE_DETAIL_RESPONSE_VERSION =
-  "search-v2-candidate-detail-response-v28-canonical-education-presentation";
+  "search-v2-candidate-detail-response-v29-authorization-scope";
 
 export type SearchV2CandidateDetailScope = "recruiter" | "technical_debug";
 

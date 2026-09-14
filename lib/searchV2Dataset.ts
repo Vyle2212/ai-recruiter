@@ -1,3 +1,5 @@
+import "server-only";
+
 import { createCandidateSupabaseAdminClient } from "./candidateSupabase";
 import {
   candidateSearchV2ProjectionDocument,

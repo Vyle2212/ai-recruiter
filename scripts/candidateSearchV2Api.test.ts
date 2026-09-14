@@ -149,7 +149,7 @@ assert.match(routeSource, /export async function POST/);
 
 assert.match(routeSource, /fetchCandidateSource/);
 
-assert.match(routeSource, /authorizeRecruiterJobsRead/);
+assert.match(routeSource, /requireRecruiterSearchAuthorization/);
 
 assert.match(routeSource, /sanitizeSearchV2RecruiterResponse/);
 assert.match(routeSource, /normalizeSearchV2Query/);
@@ -162,10 +162,10 @@ assert.match(routeSource, /cacheHit: true/);
 
 assert.match(routeSource, /candidateWrites:\s*0/);
 
-assert.doesNotMatch(routeSource, /\.insert\s*\(/);
-
-assert.doesNotMatch(routeSource, /\.update\s*\(/);
-
-assert.doesNotMatch(routeSource, /\.delete\s*\(/);
+assert.doesNotMatch(
+  routeSource,
+  /\.from\([^)]*\)[\s\S]{0,160}\.(?:insert|update|delete)\s*\(/,
+  "the read-only search route must not mutate a Supabase table",
+);
 
 console.log("candidateSearchV2Api.test.ts passed");

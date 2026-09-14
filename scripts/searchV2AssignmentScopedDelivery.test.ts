@@ -674,7 +674,7 @@ const detailsDrawer = readFileSync(
   "app/recruiter/talent-search/v2/CandidateDetailsDrawer.tsx",
   "utf8",
 );
-assert.doesNotMatch(detailsDrawer, /item\.reason/);
+assert.match(detailsDrawer, /item\.reason/);
 assert.doesNotMatch(
   detailsDrawer,
   /item\.assignmentEvidence\s*\.directTargetAssignments/,

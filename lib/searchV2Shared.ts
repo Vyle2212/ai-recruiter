@@ -1,9 +1,9 @@
 export const SEARCH_V2_VERSION =
-  "candidate-search-v2-canonical-detail-v77-enterprise-external-trust";
+  "candidate-search-v2-canonical-detail-v78-authorization-scope";
 export const SEARCH_V2_QUALIFICATION_VERSION =
   "professional-context-segment-v18";
 export const SEARCH_V2_CACHE_VERSION =
-  "recruiter-search-cache-2026-09-13-profile-v77";
+  "recruiter-search-cache-2026-09-14-profile-v78-authorization-scope";
 
 export function serializeSearchV2Canonical(value: unknown) {
   return JSON.stringify(value);

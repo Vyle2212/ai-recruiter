@@ -4,6 +4,7 @@ import type {
   ExternalCandidate,
   ExternalCandidateSourceProvider,
 } from "../lib/externalCandidateSourceProvider";
+import { ExternalSourceError } from "../lib/externalCandidateSourceProvider";
 import { setExternalTalentProviderForTests } from "../lib/externalTalentProviderRegistry";
 import { executeExternalTalentSearch } from "../lib/externalTalentSearchService";
 import { evaluateExternalCandidate } from "../lib/externalTalentScoring";
@@ -111,6 +112,27 @@ async function main() {
   assert.equal(first.aggregation.uniqueProfiles, 100);
   assert.equal(first.aggregation.currentlyRenderedResults, 20);
   assert.equal(first.aggregation.remainingLoadedResults, 75);
+  const callsBeforeCrossScopeReplay = calls.length;
+  await assert.rejects(
+    () =>
+      executeExternalTalentSearch(
+        {
+          ...request,
+          externalBatchCursor: first.nextProviderBatchCursor || undefined,
+        },
+        undefined,
+        { authorizationScopeHash: "different-recruiter-scope" },
+      ),
+    (error: unknown) =>
+      error instanceof ExternalSourceError &&
+      error.code === "INVALID_PROVIDER_CURSOR",
+    "external continuation tokens must not cross authorization scopes",
+  );
+  assert.equal(
+    calls.length,
+    callsBeforeCrossScopeReplay,
+    "cross-scope continuation denial must occur before a provider call",
+  );
   const result = {
     candidateId: first.items[0].externalCandidateId,
     rankingScore: first.items[0].rankingScore,

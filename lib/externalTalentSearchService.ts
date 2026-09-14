@@ -324,6 +324,14 @@ export async function executeExternalTalentSearch(
     committedRequirements?: CommittedSearchRequirements;
   } = {},
 ): Promise<ExternalTalentSearchResponse> {
+  if (
+    process.env.NODE_ENV === "production" &&
+    !context.authorizationScopeHash?.trim()
+  )
+    throw new ExternalSourceError(
+      "INVALID_PROVIDER_CURSOR",
+      "An authorized External Talent Network scope is required.",
+    );
   const started = performance.now();
   const committedSearchId = identity(
     request,

@@ -5,7 +5,11 @@ import {
   externalTalentAnalysisCapability,
   hasSufficientExternalTalentEvidence,
 } from "@/lib/externalTalentAnalysisCapability";
-import { authorizeRecruiterJobsRead } from "@/lib/recruiterJobsAuthorization";
+import {
+  logRecruiterSearchSecurityEvent,
+  recruiterSearchAuthorizationDenied,
+  requireRecruiterSearchAuthorization,
+} from "@/lib/recruiterSearchAuthorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,12 +20,17 @@ const privateNoStoreHeaders = {
 };
 
 async function authorize() {
-  const authorization = await authorizeRecruiterJobsRead();
+  const authorization = await requireRecruiterSearchAuthorization({
+    permission: "external-analysis:generate",
+    route: "/api/recruiter/search-v2/external-analysis",
+  });
   if (authorization.allowed) return null;
-  return NextResponse.json(
-    { error: authorization.code },
-    { status: authorization.status, headers: privateNoStoreHeaders },
-  );
+  logRecruiterSearchSecurityEvent("unauthorized_external_provider_action", {
+    route: "/api/recruiter/search-v2/external-analysis",
+    permission: "external-analysis:generate",
+    reason: authorization.code,
+  });
+  return recruiterSearchAuthorizationDenied(authorization);
 }
 
 export async function GET() {

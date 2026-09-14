@@ -31,21 +31,31 @@ async function main() {
   const recruiterCold = await loadSearchV2CandidateDetail(
     profile.candidateId,
     "recruiter",
+    "authorization-scope-a",
     loader,
   );
   const recruiterWarm = await loadSearchV2CandidateDetail(
     profile.candidateId,
     "recruiter",
+    "authorization-scope-a",
     loader,
   );
   const debugCold = await loadSearchV2CandidateDetail(
     profile.candidateId,
     "technical_debug",
+    "authorization-scope-a",
     loader,
   );
   const debugWarm = await loadSearchV2CandidateDetail(
     profile.candidateId,
     "technical_debug",
+    "authorization-scope-a",
+    loader,
+  );
+  const anotherRecruiterScope = await loadSearchV2CandidateDetail(
+    profile.candidateId,
+    "recruiter",
+    "authorization-scope-b",
     loader,
   );
 
@@ -53,12 +63,13 @@ async function main() {
   assert.equal(recruiterWarm.cacheHit, true);
   assert.equal(debugCold.cacheHit, false);
   assert.equal(debugWarm.cacheHit, true);
+  assert.equal(anotherRecruiterScope.cacheHit, false);
   assert.equal(
     loads,
-    2,
-    "recruiter and debug scopes use isolated cache entries",
+    3,
+    "permission and authoritative recruiter scopes use isolated cache entries",
   );
-  assert.match(SEARCH_V2_CANDIDATE_DETAIL_CACHE_VERSION, /v11/);
+  assert.match(SEARCH_V2_CANDIDATE_DETAIL_CACHE_VERSION, /v12/);
 
   console.log(
     "Search V2 candidate-detail permission-scoped cache tests passed.",
