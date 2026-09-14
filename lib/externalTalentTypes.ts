@@ -157,6 +157,10 @@ export type ExternalTalentCandidate = {
   currentEmployer?: string;
   skills: string[];
   experienceSummary?: string;
+  internalSourceAudit?: {
+    professionalSummaryRaw: string | null;
+    professionalSummaryField: string | null;
+  };
   employmentText?: string[];
   projectText?: string[];
   education?: string[];
@@ -258,6 +262,8 @@ export type ExternalTalentBatchProgress = {
   providerRecordsFetched: number;
   recordsNormalized: number;
   invalidRecords: number;
+  normalizationFailures: number;
+  otherPreNormalizationRejections: number;
   duplicateRecords: number;
   newUniqueProfiles: number;
   confirmedExclusions: number;
@@ -268,6 +274,8 @@ export type ExternalTalentAggregation = {
   providerRecordsFetched: number;
   recordsNormalized: number;
   invalidRecords: number;
+  normalizationFailures: number;
+  otherPreNormalizationRejections: number;
   duplicateRecords: number;
   uniqueProfiles: number;
   evidenceSupported: number;

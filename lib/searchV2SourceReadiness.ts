@@ -6,6 +6,8 @@ export type ExternalSearchCapability = {
   reason: string | null;
   status?: string;
   providerName?: string | null;
+  supportsCandidateDetails?: boolean;
+  supportsImport?: boolean;
 };
 
 export type SearchV2SourceReadiness = {

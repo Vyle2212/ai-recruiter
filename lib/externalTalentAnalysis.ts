@@ -1,11 +1,94 @@
 import { ExternalSourceError } from "@/lib/externalCandidateSourceProvider";
 import { externalTalentAnalysisCapability } from "@/lib/externalTalentAnalysisCapability";
 
-export async function generateExternalTalentAnalysis(input:{candidateId:string;headline?:string|null;location?:string|null;employer?:string|null;evidence:Array<{label:string;excerpt:string}>},signal?:AbortSignal){
-  const capability=externalTalentAnalysisCapability();
-  if(!capability.enabled)throw new ExternalSourceError(capability.reason==="provider_not_configured"?"SOURCE_NOT_CONFIGURED":"SOURCE_UNAVAILABLE",capability.message);
-  const key=process.env.ANTHROPIC_API_KEY!;
-  const response=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal,headers:{"content-type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:process.env.ANTHROPIC_MODEL||"claude-sonnet-4-5",max_tokens:500,tools:[{name:"report_match_analysis",description:"Summarize only supplied candidate evidence and identify missing information.",strict:true,input_schema:{type:"object",additionalProperties:false,properties:{summary:{type:"string"},supportedStrengths:{type:"array",items:{type:"string"}},missingInformation:{type:"array",items:{type:"string"}},followUpQuestions:{type:"array",items:{type:"string"}}},required:["summary","supportedStrengths","missingInformation","followUpQuestions"]}}],tool_choice:{type:"tool",name:"report_match_analysis",disable_parallel_tool_use:true},messages:[{role:"user",content:JSON.stringify(input)}]})});
-  if(!response.ok)throw new ExternalSourceError(response.status===401?"AUTHENTICATION_FAILED":response.status===429?"RATE_LIMITED":"PROVIDER_ERROR","AI Match Analysis is temporarily unavailable.");
-  const data=await response.json() as {content?:Array<{type?:string;name?:string;input?:unknown}>};const block=data.content?.find(item=>item.type==="tool_use"&&item.name==="report_match_analysis");if(!block?.input||typeof block.input!=="object")throw new ExternalSourceError("INVALID_PROVIDER_RESPONSE","Claude returned an invalid analysis.");return block.input;
+export async function generateExternalTalentAnalysis(
+  input: {
+    candidateId: string;
+    headline?: string | null;
+    location?: string | null;
+    employer?: string | null;
+    evidence: Array<{ label: string; excerpt: string }>;
+    requirementStates: Array<{
+      label: string;
+      state: "confirmed_pass" | "confirmed_fail" | "needs_verification";
+      supportingFields: string[];
+    }>;
+  },
+  signal?: AbortSignal,
+) {
+  const capability = externalTalentAnalysisCapability();
+  if (!capability.enabled)
+    throw new ExternalSourceError(
+      capability.reason === "provider_not_configured"
+        ? "SOURCE_NOT_CONFIGURED"
+        : "SOURCE_UNAVAILABLE",
+      capability.message,
+    );
+  const key = process.env.ANTHROPIC_API_KEY!;
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    signal,
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5",
+      max_tokens: 500,
+      system:
+        "Use only the supplied grounded evidence. Cite supporting field labels. Treat requirementStates as authoritative: never change a state or infer missing dates, employers, implementation delivery, or total experience. List every needs_verification requirement as unresolved.",
+      tools: [
+        {
+          name: "report_match_analysis",
+          description:
+            "Summarize only supplied grounded candidate evidence and identify unresolved information without overriding deterministic requirement states.",
+          strict: true,
+          input_schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              summary: { type: "string" },
+              supportedStrengths: { type: "array", items: { type: "string" } },
+              missingInformation: { type: "array", items: { type: "string" } },
+              followUpQuestions: { type: "array", items: { type: "string" } },
+            },
+            required: [
+              "summary",
+              "supportedStrengths",
+              "missingInformation",
+              "followUpQuestions",
+            ],
+          },
+        },
+      ],
+      tool_choice: {
+        type: "tool",
+        name: "report_match_analysis",
+        disable_parallel_tool_use: true,
+      },
+      messages: [{ role: "user", content: JSON.stringify(input) }],
+    }),
+  });
+  if (!response.ok)
+    throw new ExternalSourceError(
+      response.status === 401
+        ? "AUTHENTICATION_FAILED"
+        : response.status === 429
+          ? "RATE_LIMITED"
+          : "PROVIDER_ERROR",
+      "AI Match Analysis is temporarily unavailable.",
+    );
+  const data = (await response.json()) as {
+    content?: Array<{ type?: string; name?: string; input?: unknown }>;
+  };
+  const block = data.content?.find(
+    (item) => item.type === "tool_use" && item.name === "report_match_analysis",
+  );
+  if (!block?.input || typeof block.input !== "object")
+    throw new ExternalSourceError(
+      "INVALID_PROVIDER_RESPONSE",
+      "Claude returned an invalid analysis.",
+    );
+  return block.input;
 }

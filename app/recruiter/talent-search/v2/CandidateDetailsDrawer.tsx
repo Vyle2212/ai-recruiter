@@ -104,6 +104,10 @@ const TABS = [
   "Skills",
 ] as const;
 type Tab = (typeof TABS)[number] & CandidateProfileTab;
+type ExternalTab =
+  "Overview" | "Experience" | "Match evidence" | "Data gaps" | "Data quality";
+type DrawerTab = Tab | ExternalTab;
+const tabId = (value: DrawerTab) => value.toLowerCase().replace(/\s+/g, "-");
 
 const detailCache = new Map<string, SearchV2RecruiterCandidateDetail>();
 const detailRequests = new Map<
@@ -261,7 +265,7 @@ export default function CandidateDetailsDrawer({
   identityLookup?: boolean;
   initialTab?: CandidateProfileTab;
 }) {
-  const [tab, setTab] = useState<Tab>(initialTab);
+  const [tab, setTab] = useState<DrawerTab>(initialTab);
   const [educationFocus, setEducationFocus] =
     useState<ProfileDetailFocus | null>(null);
   const [profile, setProfile] =
@@ -416,7 +420,7 @@ export default function CandidateDetailsDrawer({
     label: group.group,
     values: group.values,
   }));
-  const tabState = overview
+  const internalTabState = overview
     ? candidateProfileTabState(overview)
     : TABS.map((item) => ({
         tab: item,
@@ -426,7 +430,33 @@ export default function CandidateDetailsDrawer({
         unavailableReason:
           item === "Overview" ? null : "No information available",
       }));
-  const availableTabs = tabState.map((item) => item.tab);
+  const externalGaps = (candidate.integrity?.requirements || []).filter(
+    (item) => item.state !== "verified" && item.state !== "supported",
+  );
+  const aiEvidenceItems = (candidate.evidence || []).filter(
+    (item) => item.value.trim().length >= 12,
+  );
+  const aiEvidenceSufficient =
+    aiEvidenceItems.length >= 2 &&
+    aiEvidenceItems.reduce((total, item) => total + item.value.length, 0) >= 48;
+  const externalTabs: ExternalTab[] = [
+    "Overview",
+    "Experience",
+    "Match evidence",
+    ...(externalGaps.length ? (["Data gaps"] as const) : []),
+    "Data quality",
+  ];
+  const externalTabState = externalTabs.map((item) => ({
+    tab: item,
+    count: item === "Experience" ? externalEmployment.length : null,
+    hasRecords: true,
+    unavailableReason: null,
+  }));
+  const tabState =
+    candidate.talentPool === "linkedin_talent_pool"
+      ? externalTabState
+      : internalTabState;
+  const availableTabs = tabState.map((item) => item.tab as DrawerTab);
   const educationRecords =
     profile?.educationPresentation.educationRecords || [];
   const certificationRecords =
@@ -523,7 +553,7 @@ export default function CandidateDetailsDrawer({
               {candidate.talentPool === "linkedin_talent_pool" ? (
                 <button
                   type="button"
-                  disabled={aiAnalysisLoading}
+                  disabled={aiAnalysisLoading || !aiEvidenceSufficient}
                   onClick={async () => {
                     setAiAnalysisLoading(true);
                     setAiAnalysis("");
@@ -538,12 +568,23 @@ export default function CandidateDetailsDrawer({
                             headline: candidate.currentTitle,
                             location: candidate.location,
                             employer: candidate.currentEmployer,
-                            evidence: (candidate.evidence || []).map(
-                              (item) => ({
-                                label: item.label,
-                                excerpt: item.value,
-                              }),
-                            ),
+                            evidence: aiEvidenceItems.map((item) => ({
+                              label: item.label,
+                              excerpt: item.value,
+                            })),
+                            requirementStates: (
+                              candidate.integrity?.requirements || []
+                            ).map((item) => ({
+                              label: item.label,
+                              state:
+                                item.state === "verified" ||
+                                item.state === "supported"
+                                  ? "confirmed_pass"
+                                  : item.state === "conflicting"
+                                    ? "confirmed_fail"
+                                    : "needs_verification",
+                              supportingFields: [],
+                            })),
                           }),
                         },
                       );
@@ -553,8 +594,11 @@ export default function CandidateDetailsDrawer({
                           "Optional AI narrative unavailable. Preliminary deterministic match remains available.",
                         );
                       setAiAnalysis(
-                        payload.analysis?.summary ||
-                          "Analysis completed from available evidence.",
+                        `${payload.analysis?.summary || "Assessment completed from grounded evidence."}${
+                          externalGaps.length
+                            ? ` Unresolved: ${externalGaps.map((item) => item.label).join(", ")}.`
+                            : ""
+                        }`,
                       );
                     } catch (error) {
                       setAiAnalysis(
@@ -569,8 +613,10 @@ export default function CandidateDetailsDrawer({
                   className="rounded-lg border border-violet-700 px-3 py-2 text-sm font-semibold text-violet-200 disabled:opacity-50"
                 >
                   {aiAnalysisLoading
-                    ? "Analyzing available profile evidence…"
-                    : "Generate AI Match Analysis"}
+                    ? "Analyzing grounded profile evidence…"
+                    : aiEvidenceSufficient
+                      ? "Generate grounded AI assessment"
+                      : "AI assessment needs more evidence"}
                 </button>
               ) : null}
               <button
@@ -619,8 +665,8 @@ export default function CandidateDetailsDrawer({
                   key={item}
                   type="button"
                   role="tab"
-                  id={`candidate-detail-${item.toLowerCase()}-tab`}
-                  aria-controls={`candidate-detail-${item.toLowerCase()}-panel`}
+                  id={`candidate-detail-${tabId(item as DrawerTab)}-tab`}
+                  aria-controls={`candidate-detail-${tabId(item as DrawerTab)}-panel`}
                   {...candidateProfileTabAccessibility(tab === item)}
                   aria-label={
                     hasRecords === false
@@ -644,27 +690,29 @@ export default function CandidateDetailsDrawer({
                     if (event.detail > 0) event.currentTarget.blur();
                   }}
                   onKeyDown={(event) => {
-                    const currentIndex = TABS.indexOf(item);
+                    const orderedTabs = availableTabs;
+                    const currentIndex = orderedTabs.indexOf(item as DrawerTab);
                     const targetIndex =
                       event.key === "Home"
                         ? 0
                         : event.key === "End"
-                          ? TABS.length - 1
+                          ? orderedTabs.length - 1
                           : event.key === "ArrowRight" ||
                               event.key === "ArrowDown"
-                            ? (currentIndex + 1) % TABS.length
+                            ? (currentIndex + 1) % orderedTabs.length
                             : event.key === "ArrowLeft" ||
                                 event.key === "ArrowUp"
-                              ? (currentIndex - 1 + TABS.length) % TABS.length
+                              ? (currentIndex - 1 + orderedTabs.length) %
+                                orderedTabs.length
                               : -1;
                     if (targetIndex < 0) return;
                     event.preventDefault();
-                    const nextTab = TABS[targetIndex];
+                    const nextTab = orderedTabs[targetIndex];
                     setEducationFocus(null);
                     setTab(nextTab);
                     event.currentTarget.parentElement
                       ?.querySelector<HTMLButtonElement>(
-                        `#candidate-detail-${nextTab.toLowerCase()}-tab`,
+                        `#candidate-detail-${tabId(nextTab)}-tab`,
                       )
                       ?.focus();
                   }}
@@ -673,7 +721,13 @@ export default function CandidateDetailsDrawer({
                     hasRecords !== false,
                   )}
                 >
-                  {candidateProfileTabLabel(item, count, hasRecords)}
+                  {candidate.talentPool === "linkedin_talent_pool"
+                    ? `${item}${count == null ? "" : ` (${count})`}`
+                    : candidateProfileTabLabel(
+                        item as CandidateProfileTab,
+                        count,
+                        hasRecords,
+                      )}
                   {tab === item ? (
                     <span
                       aria-hidden="true"
@@ -697,9 +751,9 @@ export default function CandidateDetailsDrawer({
 
         <div
           ref={contentScrollRef}
-          id={`candidate-detail-${tab.toLowerCase()}-panel`}
+          id={`candidate-detail-${tabId(tab)}-panel`}
           role="tabpanel"
-          aria-labelledby={`candidate-detail-${tab.toLowerCase()}-tab`}
+          aria-labelledby={`candidate-detail-${tabId(tab)}-tab`}
           data-testid="candidate-detail-scroll-container"
           className="min-h-0 flex-1 overflow-y-auto px-6"
         >
@@ -763,6 +817,22 @@ export default function CandidateDetailsDrawer({
                   </details>
                 </Panel>
               )}
+              {candidate.talentPool === "linkedin_talent_pool" &&
+              candidate.externalProfile?.profileReportedTenure &&
+              candidate.externalProfile.experienceCalculation.status ===
+                "unavailable" ? (
+                <Panel title="Experience context">
+                  <p className="text-sm text-slate-200">
+                    Profile-reported tenure:{" "}
+                    {candidate.externalProfile.profileReportedTenure.label}
+                    {" · "}Not independently verified
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    This narrative tenure is not used to calculate canonical
+                    employment duration or confirm the experience requirement.
+                  </p>
+                </Panel>
+              ) : null}
               <CanonicalProfileOverview
                 overview={overview}
                 onNavigate={(destination, focus) => {
@@ -893,6 +963,122 @@ export default function CandidateDetailsDrawer({
                   source.
                 </p>
               )}
+            </Panel>
+          ) : null}
+
+          {candidate.talentPool === "linkedin_talent_pool" &&
+          tab === "Match evidence" ? (
+            <Panel title="Match evidence">
+              <ul className="space-y-3">
+                {(candidate.integrity?.requirements || []).map((item) => {
+                  const confirmed =
+                    item.state === "verified" || item.state === "supported";
+                  const contradicted = item.state === "conflicting";
+                  return (
+                    <li
+                      key={item.id}
+                      className="rounded-lg border border-slate-800 p-3"
+                    >
+                      <p className="text-sm font-semibold text-slate-200">
+                        {confirmed
+                          ? "Confirmed"
+                          : contradicted
+                            ? "Contradicted"
+                            : "Needs verification"}
+                        : {item.label}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-400">
+                        {item.reason}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="mt-3 text-xs text-slate-500">
+                Deterministic requirement states are authoritative. Optional AI
+                assessment cannot change them.
+              </p>
+            </Panel>
+          ) : null}
+
+          {candidate.talentPool === "linkedin_talent_pool" &&
+          tab === "Data gaps" ? (
+            <Panel title="Data gaps">
+              <ul className="space-y-3">
+                {externalGaps.map((item) => (
+                  <li
+                    key={item.id}
+                    className="rounded-lg border border-amber-900/60 p-3"
+                  >
+                    <p className="text-sm font-semibold text-amber-100">
+                      {item.state === "conflicting"
+                        ? "Contradicted"
+                        : "Needs verification"}
+                      : {item.label}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-400">{item.reason}</p>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                disabled
+                title="The connected provider does not support public-profile enrichment."
+                className="mt-4 rounded-lg border border-violet-800 px-3 py-2 text-sm font-semibold text-violet-200 opacity-45"
+              >
+                Verify missing details
+              </button>
+              <p className="mt-2 text-xs text-slate-500">
+                Provider enrichment is unavailable. Missing fields remain
+                unresolved.
+              </p>
+            </Panel>
+          ) : null}
+
+          {candidate.talentPool === "linkedin_talent_pool" &&
+          tab === "Data quality" ? (
+            <Panel title="Data quality">
+              <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                <div>
+                  <dt className="text-slate-500">
+                    External employment records
+                  </dt>
+                  <dd className="mt-1 text-slate-200">
+                    {externalEmployment.length}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500">Dated employment records</dt>
+                  <dd className="mt-1 text-slate-200">
+                    {candidate.externalProfile?.experienceCalculation
+                      .datedRecords || 0}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500">
+                    Independently verified records
+                  </dt>
+                  <dd className="mt-1 text-slate-200">
+                    {candidate.externalProfile
+                      ?.independentlyVerifiedEmploymentRecords || 0}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500">Experience calculation</dt>
+                  <dd className="mt-1 text-slate-200">
+                    {candidate.externalProfile?.experienceCalculation.status ||
+                      "unavailable"}
+                  </dd>
+                </div>
+              </dl>
+              {candidate.externalProfile?.profileReportedTenure &&
+              !candidate.externalProfile.experienceCalculation.totalYears ? (
+                <p className="mt-4 rounded-lg border border-amber-900/60 p-3 text-sm text-amber-100">
+                  Profile-reported tenure:{" "}
+                  {candidate.externalProfile.profileReportedTenure.label}
+                  {" · "}Not independently verified
+                </p>
+              ) : null}
             </Panel>
           ) : null}
 

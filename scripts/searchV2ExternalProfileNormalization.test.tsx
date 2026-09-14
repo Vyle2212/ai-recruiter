@@ -5,6 +5,7 @@ import React, { type ReactNode } from "react";
 import {
   CompactCandidateCard,
   displayedRankingScore,
+  externalRequirementCountSummary,
   searchLoadingSourceLabel,
 } from "../app/recruiter/talent-search/v2/CandidateSearchV2Client";
 import { normalizeExaPersonResult } from "../lib/exaPeopleSearchProvider";
@@ -12,7 +13,9 @@ import { externalCanonicalResultProjection } from "../lib/externalTalentProjecti
 import {
   buildExternalTalentProfilePresentation,
   calculateCanonicalExternalExperience,
+  externalProfileReportedTenure,
   normalizeExternalEmploymentRecords,
+  sanitizeExternalProfessionalSummary,
 } from "../lib/externalTalentProfile";
 import { evaluateExternalCandidate } from "../lib/externalTalentScoring";
 import { deterministicExternalSearchPlan } from "../lib/externalTalentSearchPlan";
@@ -25,6 +28,13 @@ assert.equal(
   "External Talent Network",
 );
 assert.equal(searchLoadingSourceLabel("internal_profiles"), "SAP Talent Hub");
+
+for (let confirmed = 0; confirmed <= 4; confirmed += 1) {
+  assert.equal(
+    externalRequirementCountSummary(confirmed, 4, 4 - confirmed, 0),
+    `${confirmed} of 4 confirmed · ${4 - confirmed} to verify`,
+  );
+}
 
 const person = (
   name: string,
@@ -220,15 +230,15 @@ const markup = renderToStaticMarkup(
   />,
 );
 assert.equal(
-  (markup.match(/aria-label="Recent experience"/g) || []).length,
+  (markup.match(/aria-label="Previous experience"/g) || []).length,
   1,
-  "external result cards must render exactly one compact Recent Experience section",
+  "external result cards must render exactly one integrated previous-experience list",
 );
 assert.doesNotMatch(markup, /Recent experience \(9\)/);
 assert.match(markup, /External role 1/);
-assert.match(markup, /External role 2/);
+assert.doesNotMatch(markup, /External role 2/);
 assert.doesNotMatch(markup, /External role 3/);
-assert.match(markup, /Total experience:<\/span> Not established from source/);
+assert.match(markup, /Experience:<\/span> Not verified/);
 assert.match(markup, /Location:<\/span> Malaysia/);
 assert.doesNotMatch(markup, /MalaysiaTotal/);
 
@@ -261,11 +271,58 @@ for (const fields of [
   assert.doesNotMatch(combinationMarkup, /MalaysiaTotal/);
   assert.doesNotMatch(combinationMarkup, /ConsultantTotal/);
   assert.doesNotMatch(combinationMarkup, /EmployerTotal/);
-  assert.match(
-    combinationMarkup,
-    /Total experience:<\/span> Not established from source/,
-  );
+  assert.match(combinationMarkup, /Experience:<\/span> Not verified/);
 }
+
+const cleonyRecords = normalizeExternalEmploymentRecords(
+  [
+    {
+      title: "Senior SAP FICO Consultant",
+      company: { name: "Grounded Employer" },
+      dateRange: "2009 – Present",
+    },
+  ],
+  "Cleony Tan",
+  new Date("2026-09-13T00:00:00.000Z"),
+);
+assert.equal(cleonyRecords.length, 1);
+assert.equal(cleonyRecords[0].start, "2009");
+assert.equal(cleonyRecords[0].end, "Present");
+assert.equal(cleonyRecords[0].current, true);
+assert.equal(cleonyRecords[0].provenance.startField, "dateRange");
+assert.equal(cleonyRecords[0].provenance.endField, "dateRange");
+assert.equal(
+  calculateCanonicalExternalExperience(
+    cleonyRecords,
+    new Date("2026-09-13T00:00:00.000Z"),
+  ).status,
+  "partial",
+);
+assert.deepEqual(externalProfileReportedTenure("17 years and 4 months"), {
+  years: 17.3,
+  label: "17+ years",
+  independentlyVerified: false,
+});
+assert.equal(
+  normalizeExternalEmploymentRecords(
+    [{ description: "17 years and 4 months of consulting experience" }],
+    "Cleony Tan",
+  ).length,
+  1,
+  "a narrative tenure claim may remain on an undated source record but must not become dated employment",
+);
+assert.equal(
+  normalizeExternalEmploymentRecords(
+    [{ description: "17 years and 4 months of consulting experience" }],
+    "Cleony Tan",
+  )[0].dateStatus,
+  "undated",
+);
+const cleanedSummary = sanitizeExternalProfessionalSummary(
+  "### Cleony Tan\nhttps://linkedin.com/in/cleony\nSenior SAP FICO Consultant. Senior SAP FICO Consultant. Kuala Lumpur, Malaysia\nHome\nDelivers grounded SAP finance outcomes.",
+  ["Cleony Tan", "Kuala Lumpur, Malaysia", "Senior SAP FICO Consultant"],
+);
+assert.equal(cleanedSummary, "Delivers grounded SAP finance outcomes.");
 
 const now = new Date("2025-07-15T00:00:00.000Z");
 const overlap = normalizeExternalEmploymentRecords(
@@ -303,7 +360,7 @@ const clientSource = readFileSync(
   "utf8",
 );
 assert.doesNotMatch(clientSource, /function inferEmployerFromTitle/);
-assert.match(clientSource, /preview\.employment\.slice\(0, 2\)/);
+assert.match(clientSource, /previousExternalEmployment/);
 assert.match(clientSource, /"External Talent Network"/);
 assert.match(clientSource, /"SAP Talent Hub"/);
 assert.match(

@@ -703,6 +703,48 @@ async function main() {
     ),
     productionOrdered.map((candidate) => candidate.externalCandidateId),
   );
+  const equalScoreHistorical = {
+    ...duplicateImplementation.candidate,
+    externalCandidateId: "equal-score-operation-engineer",
+    currentTitle: "Operation Engineer",
+    profileTitle: "Operation Engineer",
+    targetEvidence: {
+      ...duplicateImplementation.candidate.targetEvidence,
+      temporalContext: "historical" as const,
+      strength: 60,
+    },
+    overallMatchScore: 42,
+    rankingScore: 42,
+  };
+  const equalScoreCurrent = {
+    ...duplicateImplementation.candidate,
+    externalCandidateId: "equal-score-current-fico",
+    currentTitle: "Senior SAP FICO Consultant",
+    profileTitle: "Senior SAP FICO Consultant",
+    targetEvidence: {
+      ...duplicateImplementation.candidate.targetEvidence,
+      temporalContext: "current" as const,
+      strength: 100,
+    },
+    overallMatchScore: 42,
+    rankingScore: 42,
+  };
+  assert.deepEqual(
+    sortExternalCandidates([equalScoreHistorical, equalScoreCurrent]).map(
+      (candidate) => candidate.externalCandidateId,
+    ),
+    ["equal-score-current-fico", "equal-score-operation-engineer"],
+    "Best available evidence must break equal numeric scores with current direct FICO evidence",
+  );
+  assert.deepEqual(
+    sortExternalCandidates(
+      [equalScoreHistorical, equalScoreCurrent],
+      "most_relevant",
+    ).map((candidate) => candidate.externalCandidateId),
+    ["equal-score-current-fico", "equal-score-operation-engineer"],
+  );
+  assert.equal(equalScoreCurrent.overallMatchScore, 42);
+  assert.equal(equalScoreHistorical.overallMatchScore, 42);
   const canonicalProjection = externalCanonicalResultProjection(
     sixImplementations.candidate,
     "synthetic-requirements-v1",

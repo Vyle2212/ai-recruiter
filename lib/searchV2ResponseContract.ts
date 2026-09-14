@@ -1,5 +1,5 @@
 export const SEARCH_V2_RESPONSE_CONTRACT_VERSION =
-  "search-v2-response-contract-v76-person-profile-boundary";
+  "search-v2-response-contract-v77-enterprise-external-trust";
 
 export type SearchV2ClientSummary = {
   totalDocuments: number;
@@ -207,6 +207,14 @@ export function normalizeSearchV2Response(
       aggregation.providerRecordsFetched,
     );
     const recordsNormalized = nonNegativeInteger(aggregation.recordsNormalized);
+    const invalidRecords = nonNegativeInteger(aggregation.invalidRecords);
+    const normalizationFailures = nonNegativeInteger(
+      aggregation.normalizationFailures,
+    );
+    const otherPreNormalizationRejections = nonNegativeInteger(
+      aggregation.otherPreNormalizationRejections,
+    );
+    const duplicateRecords = nonNegativeInteger(aggregation.duplicateRecords);
     const uniqueProfiles = nonNegativeInteger(aggregation.uniqueProfiles);
     const evidenceSupported = nonNegativeInteger(aggregation.evidenceSupported);
     const needsVerification = nonNegativeInteger(aggregation.needsVerification);
@@ -225,6 +233,10 @@ export function normalizeSearchV2Response(
     if (
       providerRecordsFetched === null ||
       recordsNormalized === null ||
+      invalidRecords === null ||
+      normalizationFailures === null ||
+      otherPreNormalizationRejections === null ||
+      duplicateRecords === null ||
       uniqueProfiles === null ||
       evidenceSupported === null ||
       needsVerification === null ||
@@ -233,6 +245,12 @@ export function normalizeSearchV2Response(
       currentlyRenderedResults === null ||
       remainingLoadedResults === null ||
       recordsNormalized > providerRecordsFetched ||
+      providerRecordsFetched !==
+        recordsNormalized +
+          invalidRecords +
+          normalizationFailures +
+          otherPreNormalizationRejections ||
+      uniqueProfiles !== recordsNormalized - duplicateRecords ||
       uniqueProfiles > recordsNormalized ||
       evidenceSupported + needsVerification + confirmedExclusions !==
         uniqueProfiles ||

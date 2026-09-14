@@ -17,7 +17,9 @@ import {
   canonicalOverallMatchScore,
 } from "@/lib/searchV2Match";
 export const EXTERNAL_RANKING_VERSION =
-  "external-match-v8-person-profile-boundary";
+  "external-match-v9-enterprise-evidence-order";
+export type ExternalCandidateSort =
+  "best_available_evidence" | "most_relevant" | "most_complete";
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 const normalized = (value: unknown) =>
   String(value || "")
@@ -814,20 +816,48 @@ export function scoreExternalCandidate(
   const evaluated = evaluateExternalCandidate(input, plan);
   return evaluated.eligible ? evaluated.candidate : null;
 }
-export function sortExternalCandidates(items: ExternalTalentCandidate[]) {
+export function sortExternalCandidates(
+  items: ExternalTalentCandidate[],
+  sort: ExternalCandidateSort = "best_available_evidence",
+) {
   const eligibilityOrder = {
     evidence_supported: 0,
     potential_needs_verification: 1,
     confirmed_exclusion: 2,
   } as const;
+  const seniority = (candidate: ExternalTalentCandidate) =>
+    /\b(?:lead|principal|senior|manager|architect|director|head)\b/i.test(
+      candidate.currentTitle || candidate.profileTitle || "",
+    )
+      ? 1
+      : 0;
+  const currentTarget = (candidate: ExternalTalentCandidate) =>
+    candidate.targetEvidence.temporalContext === "current" ? 1 : 0;
+  const datedEmployment = (candidate: ExternalTalentCandidate) =>
+    candidate.experienceCalculation?.datedRecords || 0;
+  const locationSpecificity = (candidate: ExternalTalentCandidate) =>
+    (candidate.location || "").split(/[,/]/).filter(Boolean).length;
+  const secondary = (a: ExternalTalentCandidate, b: ExternalTalentCandidate) =>
+    sort === "most_complete"
+      ? b.profileCompleteness - a.profileCompleteness ||
+        datedEmployment(b) - datedEmployment(a) ||
+        b.providerEvidence.length - a.providerEvidence.length
+      : sort === "most_relevant"
+        ? b.targetEvidence.strength - a.targetEvidence.strength ||
+          currentTarget(b) - currentTarget(a) ||
+          b.titleScore - a.titleScore
+        : currentTarget(b) - currentTarget(a) ||
+          b.targetEvidence.strength - a.targetEvidence.strength ||
+          seniority(b) - seniority(a) ||
+          b.profileCompleteness - a.profileCompleteness ||
+          datedEmployment(b) - datedEmployment(a) ||
+          locationSpecificity(b) - locationSpecificity(a);
   return [...items].sort(
     (a, b) =>
       eligibilityOrder[a.eligibilityState] -
         eligibilityOrder[b.eligibilityState] ||
       b.overallMatchScore - a.overallMatchScore ||
-      b.evidenceConfidence - a.evidenceConfidence ||
-      b.providerEvidence.length - a.providerEvidence.length ||
-      b.profileCompleteness - a.profileCompleteness ||
+      secondary(a, b) ||
       a.externalCandidateId.localeCompare(b.externalCandidateId),
   );
 }

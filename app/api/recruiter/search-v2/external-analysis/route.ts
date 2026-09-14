@@ -78,6 +78,29 @@ export async function POST(request: NextRequest) {
         };
       })
       .filter((item: { excerpt: string }) => item.excerpt);
+    const requirementStates = Array.isArray(body.requirementStates)
+      ? body.requirementStates.slice(0, 20).map((item: unknown) => {
+          const value =
+            item && typeof item === "object"
+              ? (item as Record<string, unknown>)
+              : {};
+          const state = [
+            "confirmed_pass",
+            "confirmed_fail",
+            "needs_verification",
+          ].includes(String(value.state))
+            ? (String(value.state) as
+                "confirmed_pass" | "confirmed_fail" | "needs_verification")
+            : "needs_verification";
+          return {
+            label: String(value.label || "Requirement").slice(0, 160),
+            state,
+            supportingFields: Array.isArray(value.supportingFields)
+              ? value.supportingFields.map(String).slice(0, 8)
+              : [],
+          };
+        })
+      : [];
 
     if (!hasSufficientExternalTalentEvidence(evidence, capability))
       return NextResponse.json(
@@ -97,6 +120,7 @@ export async function POST(request: NextRequest) {
         location: body.location,
         employer: body.employer,
         evidence,
+        requirementStates,
       },
       request.signal,
     );

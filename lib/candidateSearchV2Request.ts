@@ -20,6 +20,7 @@ export type NormalizedCandidateSearchV2Request = {
   minimumScore: number;
   includeRelocationRemote: boolean;
   externalVerifiedOnly: boolean;
+  externalSort: "best_available_evidence" | "most_relevant" | "most_complete";
   talentPool: NonNullable<CandidateSearchV2Request["talentPool"]>;
   criteria: NonNullable<CandidateSearchV2Request["criteria"]>;
   clarificationAnswers: NonNullable<
@@ -117,6 +118,11 @@ export function normalizeCandidateSearchV2Request(
     pageSize,
     includeRelocationRemote: request.includeRelocationRemote === true,
     externalVerifiedOnly: request.externalVerifiedOnly === true,
+    externalSort: ["most_relevant", "most_complete"].includes(
+      String(request.externalSort),
+    )
+      ? (request.externalSort as "most_relevant" | "most_complete")
+      : "best_available_evidence",
     talentPool:
       request.talentPool === "linkedin_talent_pool"
         ? "linkedin_talent_pool"

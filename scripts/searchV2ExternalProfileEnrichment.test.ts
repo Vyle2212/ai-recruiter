@@ -67,7 +67,7 @@ const results = fs.readFileSync(
 );
 assert.match(results, /Needs verification/);
 assert.match(results, /result\.talentPool !== "linkedin_talent_pool"/);
-assert.match(results, /preview\.employment\.slice\(0, 2\)/);
+assert.match(results, /previousExternalEmployment/);
 assert.doesNotMatch(results, /View all experience/);
 assert.match(results, /Map next market segment/);
 

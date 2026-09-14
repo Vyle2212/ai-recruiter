@@ -542,6 +542,23 @@ export function searchLoadingSourceLabel(
     ? "External Talent Network"
     : "SAP Talent Hub";
 }
+export function externalRequirementCountSummary(
+  confirmed: number,
+  total: number,
+  unresolved: number,
+  contradictions = 0,
+) {
+  return `${confirmed} of ${total} confirmed · ${unresolved} to verify${
+    contradictions ? ` · ${contradictions} contradicted` : ""
+  }`;
+}
+
+function compactExternalRequirementLabel(label: string) {
+  if (/implementation/i.test(label)) return "Implementation";
+  if (/experience|years?/i.test(label))
+    return label.replace(/^Experience:\s*/i, "");
+  return label.replace(/^Location:\s*/i, "");
+}
 type RecentSearch = {
   id: string;
   query: string;
@@ -620,6 +637,7 @@ type SearchSnapshot = Readonly<{
   matchQuality: "any" | "relevant" | "strong";
   minimumScore: number;
   externalVerifiedOnly: boolean;
+  externalSort: "best_available_evidence" | "most_relevant" | "most_complete";
   talentPool?: "internal_profiles" | "linkedin_talent_pool";
   integrityPlan: GuidedSearchHandoff["integrityPlan"] | null;
   provenance: GuidedSearchHandoff["provenance"] | null;
@@ -712,6 +730,11 @@ export function CompactCandidateCard({
   onOpenTab,
   jobId,
   identityLookup = false,
+  selected = false,
+  reviewed = false,
+  onSelectedChange,
+  onReviewedChange,
+  canEnrich = false,
 }: {
   result: SearchResult;
   rank: number;
@@ -723,6 +746,11 @@ export function CompactCandidateCard({
   onOpenTab?: (tab: "Experience" | "Projects" | "Education" | "Skills") => void;
   jobId?: string;
   identityLookup?: boolean;
+  selected?: boolean;
+  reviewed?: boolean;
+  onSelectedChange?: (selected: boolean) => void;
+  onReviewedChange?: (reviewed: boolean) => void;
+  canEnrich?: boolean;
 }) {
   const evaluatedResult = evaluatedSearchResult(result) ? result : null;
   const candidateName = cleanCandidateName(result);
@@ -864,10 +892,18 @@ export function CompactCandidateCard({
   const locationRequirement = integrity?.requirements.find(
     (requirement) => requirement.kind === "location",
   );
-  const priorityExternalRequirement = integrity?.requirements.find(
-    (requirement) =>
-      requirement.state !== "verified" && requirement.state !== "supported",
+  const cardExperienceRequirement = integrity?.requirements.find(
+    (requirement) => requirement.kind === "experience",
   );
+  const previousExternalEmployment =
+    result.talentPool === "linkedin_talent_pool"
+      ? (preview?.employment || [])
+          .filter(
+            (item) =>
+              item.title !== displayedRole || item.employer !== employer,
+          )
+          .slice(0, 1)
+      : [];
   const stateLabel = (state: string) =>
     state === "verified" || state === "supported"
       ? "Met"
@@ -880,6 +916,18 @@ export function CompactCandidateCard({
       <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,.68fr)_auto] xl:items-start">
         <div className="min-w-0 xl:col-start-1 xl:row-start-1">
           <div className="flex items-center gap-2">
+            {result.talentPool === "linkedin_talent_pool" &&
+            onSelectedChange ? (
+              <input
+                type="checkbox"
+                checked={selected}
+                onChange={(event) =>
+                  onSelectedChange(event.currentTarget.checked)
+                }
+                aria-label={`Select ${identityHeading}`}
+                className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-300"
+              />
+            ) : null}
             <span className="text-[11px] font-medium tabular-nums text-slate-600">
               #{rank}
             </span>
@@ -918,17 +966,24 @@ export function CompactCandidateCard({
             </p>
           ) : result.talentPool === "linkedin_talent_pool" ? (
             <p className="mt-1 text-sm text-slate-400">
-              <span className="text-slate-500">Total experience:</span> Not
-              established from source
+              <span className="text-slate-500">
+                {cardExperienceRequirement
+                  ? compactExternalRequirementLabel(
+                      cardExperienceRequirement.label,
+                    )
+                  : "Experience"}
+                :
+              </span>{" "}
+              Not verified
             </p>
           ) : null}
           {result.talentPool === "linkedin_talent_pool" &&
-          preview?.employment.length ? (
+          previousExternalEmployment.length ? (
             <ol
-              aria-label="Recent experience"
+              aria-label="Previous experience"
               className="mt-2 space-y-1 text-sm text-slate-400"
             >
-              {preview.employment.slice(0, 2).map((item) => (
+              {previousExternalEmployment.map((item) => (
                 <li key={item.id} className="truncate">
                   <span className="font-medium text-slate-200">
                     {item.title || "Role not provided"}
@@ -1025,12 +1080,12 @@ export function CompactCandidateCard({
           result.talentPool === "linkedin_talent_pool" &&
           integrity ? (
             <p className="mt-2 text-sm font-medium text-slate-300">
-              {integrity.supported} of {integrity.requirements.length} confirmed
-              {" · "}
-              {result.unresolvedRequirementCount || 0} to verify
-              {result.confirmedContradictionCount
-                ? ` · ${result.confirmedContradictionCount} contradicted`
-                : ""}
+              {externalRequirementCountSummary(
+                integrity.supported,
+                integrity.requirements.length,
+                result.unresolvedRequirementCount || 0,
+                result.confirmedContradictionCount || 0,
+              )}
             </p>
           ) : null}
           {!identityLookup &&
@@ -1080,14 +1135,36 @@ export function CompactCandidateCard({
           result.talentPool === "linkedin_talent_pool" &&
           integrity?.requirements.length ? (
             <>
-              {priorityExternalRequirement ? (
-                <p className="mt-2 text-sm leading-5 text-amber-100">
-                  {priorityExternalRequirement.state === "conflicting"
-                    ? "Contradicted"
-                    : "Needs verification"}
-                  : {priorityExternalRequirement.label}
-                </p>
-              ) : null}
+              <ul
+                aria-label="Requirement status"
+                className="mt-2 flex flex-wrap gap-1.5 text-xs"
+              >
+                {integrity.requirements.map((requirement) => {
+                  const confirmed =
+                    requirement.state === "verified" ||
+                    requirement.state === "supported";
+                  const contradicted = requirement.state === "conflicting";
+                  return (
+                    <li
+                      key={requirement.id}
+                      className={`rounded-full border px-2 py-1 ${
+                        confirmed
+                          ? "border-emerald-800 text-emerald-200"
+                          : contradicted
+                            ? "border-rose-800 text-rose-200"
+                            : "border-amber-800 text-amber-100"
+                      }`}
+                    >
+                      {confirmed
+                        ? "Confirmed"
+                        : contradicted
+                          ? "Contradicted"
+                          : "Verify"}
+                      : {compactExternalRequirementLabel(requirement.label)}
+                    </li>
+                  );
+                })}
+              </ul>
               <details
                 data-testid="external-candidate-evidence"
                 className="mt-1.5 text-sm text-slate-300"
@@ -1138,6 +1215,30 @@ export function CompactCandidateCard({
           ) : null}
         </div>
         <div className="flex flex-wrap gap-2 md:justify-end xl:col-start-3 xl:row-start-1">
+          {result.talentPool === "linkedin_talent_pool" && onReviewedChange ? (
+            <button
+              type="button"
+              aria-pressed={reviewed}
+              onClick={() => onReviewedChange(!reviewed)}
+              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-200"
+            >
+              {reviewed ? "Reviewed" : "Mark reviewed"}
+            </button>
+          ) : null}
+          {result.talentPool === "linkedin_talent_pool" ? (
+            <button
+              type="button"
+              disabled={!canEnrich}
+              title={
+                canEnrich
+                  ? "Verify missing details with the configured provider"
+                  : "The connected provider does not support profile enrichment."
+              }
+              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-violet-800 px-3 text-sm font-semibold text-violet-200 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              Verify missing details
+            </button>
+          ) : null}
           {result.linkedInProfileUrl ? (
             <a
               href={result.linkedInProfileUrl}
@@ -1464,6 +1565,15 @@ export default function CandidateSearchV2Client({
       : "External Talent Network";
   const [includeRelocationRemote, setIncludeRelocationRemote] = useState(false);
   const [externalVerifiedOnly, setExternalVerifiedOnly] = useState(false);
+  const [externalSort, setExternalSort] = useState<
+    "best_available_evidence" | "most_relevant" | "most_complete"
+  >("best_available_evidence");
+  const externalSortRef = useRef(externalSort);
+  const [selectedExternalCandidateIds, setSelectedExternalCandidateIds] =
+    useState<Set<string>>(() => new Set());
+  const [reviewedExternalCandidateIds, setReviewedExternalCandidateIds] =
+    useState<Set<string>>(() => new Set());
+  const [externalWorkflowMessage, setExternalWorkflowMessage] = useState("");
 
   const [matchQuality, setMatchQuality] = useState<
     "any" | "relevant" | "strong"
@@ -2074,6 +2184,7 @@ export default function CandidateSearchV2Client({
         matchQuality: restoredMatchQuality,
         minimumScore: restoredMinimumScore,
         externalVerifiedOnly: restoredResponse.strictVerifiedOnly === true,
+        externalSort: "best_available_evidence",
         integrityPlan: null,
         provenance: null,
         searchKey: restoredSearchKey,
@@ -2340,6 +2451,7 @@ export default function CandidateSearchV2Client({
       paginationNavigation && committedSnapshot
         ? committedSnapshot.externalVerifiedOnly
         : externalVerifiedOnly;
+    const requestExternalSort = externalSortRef.current;
     const requestUnifiedIntent = detectSearchV2UnifiedIntent(requestQuery);
     const lightweightIdentityTokenLookup =
       requestTalentPool === "internal_profiles" &&
@@ -2412,6 +2524,7 @@ export default function CandidateSearchV2Client({
       talentPool: requestTalentPool,
       criteria: requestCriteria,
       clarificationAnswers: requestClarificationAnswers,
+      externalSort: requestExternalSort,
     });
     const requestCommittedRequirements = buildCommittedSearchRequirements(
       {
@@ -2436,6 +2549,7 @@ export default function CandidateSearchV2Client({
       talentPool: requestTalentPool,
       committedRequirements: requestCommittedRequirements.semanticIdentity,
       externalVerifiedOnly: requestExternalVerifiedOnly,
+      externalSort: requestExternalSort,
       integrityPlan: requestIntegrityPlan,
     });
     const changingPage = Boolean(
@@ -2453,6 +2567,7 @@ export default function CandidateSearchV2Client({
       matchQuality: requestMatchQuality,
       minimumScore: requestMinimumScore,
       externalVerifiedOnly: requestExternalVerifiedOnly,
+      externalSort: requestExternalSort,
       integrityPlan: requestIntegrityPlan,
       provenance: requestProvenance,
       searchKey: semanticSearchKey,
@@ -3455,6 +3570,29 @@ export default function CandidateSearchV2Client({
                   ? `Showing ${(response.summary.page - 1) * response.summary.pageSize + 1}–${Math.min(response.summary.page * response.summary.pageSize, response.summary.visibleTotal)} of ${response.summary.visibleTotal}`
                   : `Showing 0 of ${response.summary.visibleTotal}`}
               </p>
+              <label className="mt-3 flex max-w-sm items-center gap-2 text-sm text-slate-300">
+                <span className="shrink-0">Sort:</span>
+                <select
+                  aria-label="Sort external candidates"
+                  value={externalSort}
+                  onChange={(event) => {
+                    const value = event.currentTarget.value as
+                      | "best_available_evidence"
+                      | "most_relevant"
+                      | "most_complete";
+                    externalSortRef.current = value;
+                    setExternalSort(value);
+                    void runSearch(1, false, true);
+                  }}
+                  className="min-h-9 rounded-lg border border-slate-700 bg-slate-950 px-3 text-sm text-slate-200"
+                >
+                  <option value="best_available_evidence">
+                    Best available evidence
+                  </option>
+                  <option value="most_relevant">Most relevant</option>
+                  <option value="most_complete">Most complete</option>
+                </select>
+              </label>
               {externalAggregation &&
               externalAggregation.lastBatch.batchNumber > 1 ? (
                 <p className="mt-1 text-xs text-cyan-200">
@@ -3508,6 +3646,10 @@ export default function CandidateSearchV2Client({
                     {externalAggregation.duplicateRecords} duplicates {" | "}
                     {externalAggregation.invalidRecords} invalid/non-person
                     {" | "}
+                    {externalAggregation.normalizationFailures} normalization
+                    failures {" | "}
+                    {externalAggregation.otherPreNormalizationRejections} other
+                    pre-normalization rejections {" | "}
                     {externalAggregation.currentlyRenderedResults} shown {" | "}
                     {externalAggregation.remainingLoadedResults} ready to view
                   </p>
@@ -3677,6 +3819,62 @@ export default function CandidateSearchV2Client({
             </div>
           ) : null}
 
+          {committedSnapshot?.committedRequirements.talentPool ===
+            "linkedin_talent_pool" && results.length ? (
+            <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/35 px-3 py-2 text-sm">
+              <span className="text-slate-400">
+                {selectedExternalCandidateIds.size} selected
+              </span>
+              <a
+                href={
+                  selectedExternalCandidateIds.size
+                    ? `/recruiter/shortlist?candidateIds=${encodeURIComponent(
+                        [...selectedExternalCandidateIds].join(","),
+                      )}&from=search-v2`
+                    : "#"
+                }
+                aria-disabled={!selectedExternalCandidateIds.size}
+                onClick={(event) => {
+                  if (!selectedExternalCandidateIds.size)
+                    event.preventDefault();
+                }}
+                className="rounded-lg border border-slate-700 px-3 py-2 font-semibold text-slate-200 aria-disabled:cursor-not-allowed aria-disabled:opacity-45"
+              >
+                Bulk Shortlist
+              </a>
+              <button
+                type="button"
+                disabled={
+                  !selectedExternalCandidateIds.size ||
+                  !externalCapability?.supportsCandidateDetails
+                }
+                title={
+                  externalCapability?.supportsCandidateDetails
+                    ? "Enrich selected profiles using the configured provider"
+                    : "The connected provider does not support public-profile enrichment."
+                }
+                onClick={() =>
+                  setExternalWorkflowMessage(
+                    "Selected profiles were queued for provider-supported verification.",
+                  )
+                }
+                className="rounded-lg border border-violet-800 px-3 py-2 font-semibold text-violet-200 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Enrich selected profiles
+              </button>
+              {externalWorkflowMessage ? (
+                <span role="status" className="text-xs text-slate-400">
+                  {externalWorkflowMessage}
+                </span>
+              ) : !externalCapability?.supportsCandidateDetails ? (
+                <span className="text-xs text-slate-500">
+                  Provider enrichment is unavailable; missing fields remain
+                  unresolved.
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+
           <div
             aria-busy={loading}
             className={`mt-4 min-h-[12rem] space-y-3 transition-opacity ${loading && response ? "opacity-70" : showingPreviousResults ? "opacity-45" : "opacity-100"}`}
@@ -3712,6 +3910,27 @@ export default function CandidateSearchV2Client({
                   "candidate_name_lookup",
                   "identity_token_lookup",
                 ].includes(response.searchIntent?.type || "")}
+                selected={selectedExternalCandidateIds.has(result.candidateId)}
+                reviewed={reviewedExternalCandidateIds.has(result.candidateId)}
+                canEnrich={
+                  externalCapability?.supportsCandidateDetails === true
+                }
+                onSelectedChange={(selected) =>
+                  setSelectedExternalCandidateIds((current) => {
+                    const next = new Set(current);
+                    if (selected) next.add(result.candidateId);
+                    else next.delete(result.candidateId);
+                    return next;
+                  })
+                }
+                onReviewedChange={(reviewed) =>
+                  setReviewedExternalCandidateIds((current) => {
+                    const next = new Set(current);
+                    if (reviewed) next.add(result.candidateId);
+                    else next.delete(result.candidateId);
+                    return next;
+                  })
+                }
               />
             ))}
           </div>

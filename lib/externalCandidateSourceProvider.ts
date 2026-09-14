@@ -74,6 +74,10 @@ export type ExternalCandidate = {
   currentEmployer?: string;
   skills?: string[];
   experienceSummary?: string;
+  internalSourceAudit?: {
+    professionalSummaryRaw: string | null;
+    professionalSummaryField: string | null;
+  };
   employmentText?: string[];
   projectText?: string[];
   education?: string[];
@@ -104,6 +108,9 @@ export type ExternalProviderSearchRequest = {
 export type ExternalProviderSearchResponse = {
   candidates: ExternalCandidate[];
   providerResultCount?: number;
+  invalidNonPersonCount?: number;
+  normalizationFailureCount?: number;
+  otherPreNormalizationRejectionCount?: number;
   nextCursor?: string;
   sourceRequestId: string;
 };

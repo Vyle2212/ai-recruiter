@@ -159,33 +159,14 @@ export default function CanonicalProfileOverview({
         <Section title="Career overview">
           <dl className="grid min-w-0 gap-3 sm:grid-cols-2">
             {externalProfile ? (
-              <>
-                <div>
-                  <dt className={label}>External employment records</dt>
-                  <dd className={value}>{overview.career.employmentCount}</dd>
-                </div>
-                <div>
-                  <dt className={label}>Total professional experience</dt>
-                  <dd className={value}>
-                    {overview.career.experienceCalculationStatus ===
-                    "unavailable"
-                      ? "Not established from source"
-                      : `${years(overview.career.totalExperienceYears)}${overview.career.experienceCalculationStatus === "partial" ? " (partial from dated source records)" : ""}`}
-                  </dd>
-                </div>
-                <div>
-                  <dt className={label}>Dated employment records</dt>
-                  <dd className={value}>
-                    {overview.career.datedEmploymentCount || 0}
-                  </dd>
-                </div>
-                <div>
-                  <dt className={label}>Independently verified records</dt>
-                  <dd className={value}>
-                    {overview.career.independentlyVerifiedEmploymentCount || 0}
-                  </dd>
-                </div>
-              </>
+              <div>
+                <dt className={label}>Total professional experience</dt>
+                <dd className={value}>
+                  {overview.career.experienceCalculationStatus === "unavailable"
+                    ? "Not established from source"
+                    : `${years(overview.career.totalExperienceYears)}${overview.career.experienceCalculationStatus === "partial" ? " (partial from dated source records)" : ""}`}
+                </dd>
+              </div>
             ) : overview.career.employmentCount ? (
               <div>
                 <dt className={label}>Verified employment history</dt>

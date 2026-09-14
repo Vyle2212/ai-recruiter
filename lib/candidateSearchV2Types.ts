@@ -88,6 +88,7 @@ export type CandidateSearchV2Request = {
   cursor?: string;
   externalBatchCursor?: string;
   externalVerifiedOnly?: boolean;
+  externalSort?: "best_available_evidence" | "most_relevant" | "most_complete";
 
   semanticWeight?: number;
   keywordWeight?: number;

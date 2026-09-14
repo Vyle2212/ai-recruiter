@@ -93,6 +93,34 @@ function parsedDate(
           precision: "present",
         }
       : null;
+  const namedMonth = value.match(
+    /^(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+((?:19|20)\d{2})$/i,
+  );
+  if (namedMonth) {
+    const month = [
+      "jan",
+      "feb",
+      "mar",
+      "apr",
+      "may",
+      "jun",
+      "jul",
+      "aug",
+      "sep",
+      "oct",
+      "nov",
+      "dec",
+    ].indexOf(namedMonth[1].slice(0, 3).toLocaleLowerCase());
+    const year = Number(namedMonth[2]);
+    return {
+      timestamp:
+        boundary === "start"
+          ? Date.UTC(year, month, 1)
+          : Date.UTC(year, month + 1, 0, 23, 59, 59, 999),
+      canonical: `${year}-${String(month + 1).padStart(2, "0")}`,
+      precision: "month",
+    };
+  }
   let match = value.match(/^(\d{4})$/);
   if (match) {
     const year = Number(match[1]);
@@ -149,6 +177,14 @@ function parsedDate(
   return null;
 }
 
+function explicitEmploymentDateRange(value: string | null) {
+  if (!value) return null;
+  const match = value.match(
+    /^\s*((?:(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+)?(?:19|20)\d{2}|(?:19|20)\d{2}-\d{2}(?:-\d{2})?)\s*(?:-|–|—|to)\s*((?:present|current|now)|(?:(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+)?(?:19|20)\d{2}|(?:19|20)\d{2}-\d{2}(?:-\d{2})?)\s*$/i,
+  );
+  return match ? { start: match[1], end: match[2] } : null;
+}
+
 export function normalizeExternalEmploymentRecords(
   work: unknown[],
   candidateName?: string | null,
@@ -179,8 +215,32 @@ export function normalizeExternalEmploymentRecords(
       "description",
       "summary",
     ]).value;
-    const start = firstTextField(record, ["startDate", "start", "dateFrom"]);
-    const end = firstTextField(record, ["endDate", "end", "dateTo"]);
+    const explicitStart = firstTextField(record, [
+      "startDate",
+      "start",
+      "dateFrom",
+    ]);
+    const explicitEnd = firstTextField(record, ["endDate", "end", "dateTo"]);
+    const dateRange = firstTextField(record, [
+      "dateRange",
+      "dates",
+      "period",
+      "tenure",
+    ]);
+    const parsedRange =
+      title && employer ? explicitEmploymentDateRange(dateRange.value) : null;
+    const start = explicitStart.value
+      ? explicitStart
+      : {
+          value: parsedRange?.start || null,
+          field: parsedRange ? dateRange.field : null,
+        };
+    const end = explicitEnd.value
+      ? explicitEnd
+      : {
+          value: parsedRange?.end || null,
+          field: parsedRange ? dateRange.field : null,
+        };
     const currentFlagField = ["isCurrent", "current"].find(
       (field) => record[field] === true,
     );
@@ -358,6 +418,11 @@ export function latestDatedExternalEmployment(
 export type ExternalTalentProfilePresentation = {
   profileTitle: string | null;
   professionalSummary: string | null;
+  profileReportedTenure: {
+    years: number;
+    label: string;
+    independentlyVerified: false;
+  } | null;
   employmentRecords: ExternalEmploymentRecord[];
   experienceCalculation: ExternalExperienceCalculation;
   currentEmployment: ExternalEmploymentRecord | null;
@@ -368,6 +433,70 @@ export type ExternalTalentProfilePresentation = {
   skillRecords: string[];
   independentlyVerifiedEmploymentRecords: number;
 };
+
+export function sanitizeExternalProfessionalSummary(
+  value: unknown,
+  identityValues: Array<string | null | undefined> = [],
+) {
+  if (typeof value !== "string") return null;
+  const identityKey = (item: string) =>
+    item
+      .toLocaleLowerCase()
+      .replace(/^[\s\p{P}\p{S}]+|[\s\p{P}\p{S}]+$/gu, "")
+      .replace(/\s+/g, " ");
+  const identities = new Set(
+    identityValues
+      .map(clean)
+      .filter((item): item is string => Boolean(item))
+      .map(identityKey),
+  );
+  const segments = value
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
+    .replace(/https?:\/\/\S+|www\.\S+/gi, " ")
+    .replace(/^\s{0,3}#{1,6}\s*/gm, "")
+    .replace(/[|¦]{2,}|\s+[|¦]\s+/g, "\n")
+    .split(/\r?\n|(?<=[.!?])\s+(?=[A-Z])/)
+    .map((item) => item.replace(/^[\s•·▪■□\-–—:;]+|[\s|¦]+$/g, ""))
+    .map((item) => item.replace(/\s+/g, " ").trim())
+    .filter(
+      (item) =>
+        item.length >= 16 &&
+        !identities.has(identityKey(item)) &&
+        !/^(?:home|about|experience|education|skills|contact|connections?|followers?|linkedin|people also viewed|show more|see all)$/i.test(
+          item,
+        ),
+    );
+  const seen = new Set<string>();
+  const unique = segments.filter((item) => {
+    const key = item
+      .toLocaleLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const summary = unique.slice(0, 3).join(" ").slice(0, 520).trim();
+  return summary || null;
+}
+
+export function externalProfileReportedTenure(value: unknown) {
+  if (typeof value !== "string") return null;
+  const normalized = value.normalize("NFKC").replace(/\s+/g, " ");
+  const match = normalized.match(
+    /\b(?:over\s+|more\s+than\s+)?(\d{1,2})(?:\+)?\s+years?(?:\s+(?:and\s+)?(\d{1,2})\s+months?)?\b/i,
+  );
+  if (!match) return null;
+  const years = Number(match[1]);
+  const months = Number(match[2] || 0);
+  if (years < 1 || years > 70 || months > 11) return null;
+  return {
+    years: Math.round((years + months / 12) * 10) / 10,
+    label: `${years}+ years`,
+    independentlyVerified: false as const,
+  };
+}
 
 export function buildExternalTalentProfilePresentation(input: {
   profileTitle?: string | null;
@@ -384,7 +513,13 @@ export function buildExternalTalentProfilePresentation(input: {
   );
   return {
     profileTitle: clean(input.profileTitle),
-    professionalSummary: clean(input.experienceSummary),
+    professionalSummary: sanitizeExternalProfessionalSummary(
+      input.experienceSummary,
+      [input.profileTitle],
+    ),
+    profileReportedTenure: externalProfileReportedTenure(
+      input.experienceSummary,
+    ),
     employmentRecords,
     experienceCalculation:
       input.experienceCalculation ||

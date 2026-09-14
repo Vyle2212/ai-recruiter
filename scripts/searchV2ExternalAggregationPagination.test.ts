@@ -179,6 +179,13 @@ async function main() {
   assert.equal(calls.length, 1, "pagination must not call the provider");
   assert.equal(secondPage.items.length, 20);
   assert.equal(secondPage.aggregation.remainingLoadedResults, 55);
+  const sortedWithoutProviderCall = await executeExternalTalentSearch(
+    { ...request, page: 1, externalSort: "most_complete" },
+    undefined,
+    context,
+  );
+  assert.equal(calls.length, 1, "changing sort must reuse the loaded snapshot");
+  assert.equal(sortedWithoutProviderCall.items.length, 20);
   const initialPages = [first, secondPage];
   for (let page = 3; page <= 5; page += 1)
     initialPages.push(
@@ -318,7 +325,7 @@ async function main() {
   assert.match(client, /Mapping audit/);
   assert.match(
     readFileSync("lib/externalTalentScoring.ts", "utf8"),
-    /external-match-v8-person-profile-boundary/,
+    /external-match-v9-enterprise-evidence-order/,
   );
   assert.match(client, /disabled=\{loading \|\| loadingExternalBatch\}/);
   console.log(

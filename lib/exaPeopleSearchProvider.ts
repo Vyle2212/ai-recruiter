@@ -12,6 +12,7 @@ import {
   calculateCanonicalExternalExperience,
   confirmedExternalCurrentEmployment,
   normalizeExternalEmploymentRecords,
+  sanitizeExternalProfessionalSummary,
   sortExternalEmploymentRecords,
 } from "@/lib/externalTalentProfile";
 export type ExaResult = {
@@ -126,6 +127,18 @@ export function normalizeExaPersonResult(
   const profileTitle = same(explicitProfileTitle, displayName)
     ? currentTitle
     : explicitProfileTitle || currentTitle;
+  const rawProfessionalSummary =
+    typeof props.summary === "string" ? props.summary : excerpts[0] || null;
+  const professionalSummary = sanitizeExternalProfessionalSummary(
+    rawProfessionalSummary,
+    [
+      displayName,
+      profileTitle,
+      currentTitle,
+      currentEmployer,
+      props.location as string,
+    ],
+  );
   const employmentText = employmentRecords.map((record) =>
     [
       record.title,
@@ -151,8 +164,16 @@ export function normalizeExaPersonResult(
     location: typeof props.location === "string" ? props.location : undefined,
     currentEmployer,
     skills: textValues(props.skills),
-    experienceSummary:
-      typeof props.summary === "string" ? props.summary : excerpts[0],
+    experienceSummary: professionalSummary || undefined,
+    internalSourceAudit: {
+      professionalSummaryRaw: rawProfessionalSummary,
+      professionalSummaryField:
+        typeof props.summary === "string"
+          ? "properties.summary"
+          : excerpts[0]
+            ? "highlights.0"
+            : null,
+    },
     employmentText,
     employmentRecords,
     projectText: assignmentTextValues(props.projects),
@@ -187,12 +208,25 @@ export function normalizeExaPersonResult(
           : null,
     },
     profileUrl: url.url,
-    providerEvidence: excerpts.map((excerpt, i) => ({
-      requirementId: `provider-evidence-${i}`,
-      state: "supported",
-      excerpt,
-      sourceField: "highlights",
-    })),
+    providerEvidence: excerpts.flatMap((excerpt, i) => {
+      const cleaned = sanitizeExternalProfessionalSummary(excerpt, [
+        displayName,
+        profileTitle,
+        currentTitle,
+        currentEmployer,
+        props.location as string,
+      ]);
+      return cleaned
+        ? [
+            {
+              requirementId: `provider-evidence-${i}`,
+              state: "supported" as const,
+              excerpt: cleaned,
+              sourceField: "highlights",
+            },
+          ]
+        : [];
+    }),
     providerRank: index + 1,
   };
 }
@@ -320,12 +354,18 @@ export class ExaPeopleSearchProvider implements ExternalCandidateSourceProvider 
         response.headers.get("x-request-id") ||
         crypto.randomUUID(),
     );
-    const candidates = json.results
-      .map((x, i) => normalizeExaPersonResult(x, i, sourceRequestId))
-      .filter((x): x is ExternalCandidate => Boolean(x));
+    const normalized = json.results.map((x, i) =>
+      normalizeExaPersonResult(x, i, sourceRequestId),
+    );
+    const candidates = normalized.filter((x): x is ExternalCandidate =>
+      Boolean(x),
+    );
     return {
       candidates,
       providerResultCount: json.results.length,
+      invalidNonPersonCount: json.results.length - candidates.length,
+      normalizationFailureCount: 0,
+      otherPreNormalizationRejectionCount: 0,
       sourceRequestId,
     };
   }

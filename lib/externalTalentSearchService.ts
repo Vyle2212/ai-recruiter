@@ -40,6 +40,8 @@ type ExternalSnapshot = {
   providerRecordsFetched: number;
   recordsNormalized: number;
   invalidRecords: number;
+  normalizationFailures: number;
+  otherPreNormalizationRejections: number;
   duplicateRecords: number;
   batchCount: number;
   lastBatch: ExternalTalentSearchResponse["aggregation"]["lastBatch"];
@@ -47,6 +49,7 @@ type ExternalSnapshot = {
   marketMapping: ReturnType<typeof buildExternalMarketMapping>;
   marketQueryIndex: number;
   minimumScore: number;
+  sort: import("@/lib/externalTalentScoring").ExternalCandidateSort;
   rejectionSummary: ExternalTalentSearchResponse["rejectionSummary"];
 };
 const snapshots = new Map<string, ExternalSnapshot>();
@@ -171,6 +174,7 @@ function normalizeExternalBatch(
         currentEmployer: candidate.currentEmployer,
         skills: candidate.skills || [],
         experienceSummary: candidate.experienceSummary,
+        internalSourceAudit: candidate.internalSourceAudit,
         employmentText: candidate.employmentText || [],
         projectText: candidate.projectText || [],
         education: candidate.education || [],
@@ -236,11 +240,39 @@ function normalizeExternalBatch(
       ? Math.max(raw.candidates.length, Math.round(raw.providerResultCount))
       : raw.candidates.length;
   snapshot.providerRecordsFetched += providerRecordsFetched;
-  snapshot.recordsNormalized += raw.candidates.length;
-  snapshot.invalidRecords += invalidRecords;
+  snapshot.recordsNormalized += raw.candidates.length - invalidRecords;
+  const providerInvalidRecords = Math.max(
+    0,
+    Math.round(raw.invalidNonPersonCount || 0),
+  );
+  const normalizationFailures = Math.max(
+    0,
+    Math.round(raw.normalizationFailureCount || 0),
+  );
+  const otherPreNormalizationRejections = Math.max(
+    0,
+    Math.round(raw.otherPreNormalizationRejectionCount || 0),
+  );
+  if (
+    providerRecordsFetched !==
+    raw.candidates.length +
+      providerInvalidRecords +
+      normalizationFailures +
+      otherPreNormalizationRejections
+  )
+    throw new ExternalSourceError(
+      "INVALID_PROVIDER_RESPONSE",
+      "External provider pre-normalization counts did not reconcile.",
+    );
+  snapshot.invalidRecords += invalidRecords + providerInvalidRecords;
+  snapshot.normalizationFailures += normalizationFailures;
+  snapshot.otherPreNormalizationRejections += otherPreNormalizationRejections;
   snapshot.duplicateRecords += duplicateRecords;
   snapshot.loadedExternalTotal += uniqueLoaded;
-  snapshot.items = sortExternalCandidates([...snapshot.items, ...accepted]);
+  snapshot.items = sortExternalCandidates(
+    [...snapshot.items, ...accepted],
+    snapshot.sort,
+  );
   snapshot.sourceRequestId = raw.sourceRequestId;
   snapshot.sourceRequestIds.push(raw.sourceRequestId);
   snapshot.windowId = windowIdentity(snapshot.items);
@@ -272,8 +304,10 @@ function normalizeExternalBatch(
     batchNumber: snapshot.batchCount,
     segmentIndex: snapshot.marketQueryIndex,
     providerRecordsFetched,
-    recordsNormalized: raw.candidates.length,
-    invalidRecords,
+    recordsNormalized: raw.candidates.length - invalidRecords,
+    invalidRecords: invalidRecords + providerInvalidRecords,
+    normalizationFailures,
+    otherPreNormalizationRejections,
     duplicateRecords,
     newUniqueProfiles: uniqueLoaded,
     confirmedExclusions,
@@ -363,6 +397,8 @@ export async function executeExternalTalentSearch(
       providerRecordsFetched: 0,
       recordsNormalized: 0,
       invalidRecords: 0,
+      normalizationFailures: 0,
+      otherPreNormalizationRejections: 0,
       duplicateRecords: 0,
       batchCount: 0,
       lastBatch: {
@@ -371,6 +407,8 @@ export async function executeExternalTalentSearch(
         providerRecordsFetched: 0,
         recordsNormalized: 0,
         invalidRecords: 0,
+        normalizationFailures: 0,
+        otherPreNormalizationRejections: 0,
         duplicateRecords: 0,
         newUniqueProfiles: 0,
         confirmedExclusions: 0,
@@ -381,6 +419,7 @@ export async function executeExternalTalentSearch(
       marketMapping,
       marketQueryIndex: 0,
       minimumScore: Math.max(0, Number(request.minimumScore) || 0),
+      sort: request.externalSort || "best_available_evidence",
       rejectionSummary: {
         evaluated: 0,
         eligible: 0,
@@ -403,10 +442,16 @@ export async function executeExternalTalentSearch(
     normalizeExternalBatch(raw, snapshot);
     normalizationMs = performance.now() - normalizeStart;
     const scoreStart = performance.now();
-    snapshot.items = sortExternalCandidates(snapshot.items);
+    snapshot.items = sortExternalCandidates(snapshot.items, snapshot.sort);
     snapshot.windowId = windowIdentity(snapshot.items);
     scoringMs = performance.now() - scoreStart;
     snapshots.set(committedSearchId, snapshot);
+  }
+  const requestedSort = request.externalSort || "best_available_evidence";
+  if (snapshot.sort !== requestedSort) {
+    snapshot.sort = requestedSort;
+    snapshot.items = sortExternalCandidates(snapshot.items, snapshot.sort);
+    snapshot.windowId = windowIdentity(snapshot.items);
   }
   if (request.externalBatchCursor) {
     const requestedBatchToken = request.externalBatchCursor;
@@ -584,6 +629,8 @@ export async function executeExternalTalentSearch(
       providerRecordsFetched: snapshot.providerRecordsFetched,
       recordsNormalized: snapshot.recordsNormalized,
       invalidRecords: snapshot.invalidRecords,
+      normalizationFailures: snapshot.normalizationFailures,
+      otherPreNormalizationRejections: snapshot.otherPreNormalizationRejections,
       duplicateRecords: snapshot.duplicateRecords,
       uniqueProfiles: snapshot.loadedExternalTotal,
       evidenceSupported: snapshot.rejectionSummary.evidenceSupported,
