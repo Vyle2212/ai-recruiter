@@ -5,7 +5,6 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { BookOpen, BriefcaseBusiness, CalendarDays, CheckCircle2, Clock, Copy, Cpu, FileSpreadsheet, FileText, Link2, Mail, MessageCircle, Phone, Search, Send, ShieldCheck, Sparkles, Users, X } from "lucide-react";
 import { jsPDF } from "jspdf";
-import * as XLSX from "xlsx";
 import { buildCanonicalCandidateProfile, validateCanonicalCandidateProfile } from "@/lib/canonicalCandidateProfile";
 import {
   clientReadyCompareCandidates,
@@ -18,6 +17,7 @@ import {
 import { calculateSubmissionConfidence, type SubmissionConfidenceResult } from "@/lib/submissionConfidence";
 import { buildDecisionReasoning, type DecisionReasoning } from "@/lib/ai/decisionReasoning";
 import { generateSubmissionOutputs } from "@/lib/ai/submissionGenerator";
+import { writeSafeSpreadsheetFile } from "@/lib/safeSpreadsheetExport";
 
 const MATCHES_CACHE_KEY = "sapTalentHub.matches.pageState.v1";
 const SEARCH_SESSION_PREFIX = "sapTalentHub.searchSession.v1.";
@@ -2780,7 +2780,6 @@ function exportPdf(ranked: CandidateCompareSignal[], currentSearchCount: number,
   doc.save(exportFileName("candidate-compare", "pdf"));
 }
 function exportWorkbook(ranked: CandidateCompareSignal[], currentSearchCount: number, _notes: Record<string, string>, activeModule: string, reportMeta: ReportMeta = {}) {
-  const wb = XLSX.utils.book_new();
   const generatedDate = new Date().toISOString().slice(0, 10);
   const moduleLabel = activeModule ? `SAP ${normalizeModule(activeModule)}` : "Active Search";
   const invalidForExport = ranked.filter((candidate) => !normalizeCandidateDisplayData(candidate).validName);
@@ -2799,27 +2798,7 @@ function exportWorkbook(ranked: CandidateCompareSignal[], currentSearchCount: nu
     { name: "Matrix", headerRow: 1, filterRow: 1, widths: [8, 28, 12, 14, 24, 18, 22, 46, 18, 24, 16], rows: [["Executive Matrix"], ["Rank", "Candidate", "AI Match", "SAP Years", "Background", "Current Company", "Company Type", "Key Strength", "Risk", "Validation", "Shortlisted"], ...candidatesForExport.slice(0, 20).map(rowFor)] },
     { name: "Recruiter Actions", headerRow: 1, filterRow: 1, widths: [28, 16, 18, 16, 24, 22, 58], rows: [["Recruiter Action Checklist"], ["Candidate", "Confirm Salary", "Confirm Availability", "Confirm Notice", "Confirm Current Employer", "Validate Architecture", "Immediate Next Action"], ...candidatesForExport.slice(0, 20).map((candidate, index) => { const rank = globalSearchRank(candidate, index); const itemConfidence = submissionConfidence(candidate, activeModule); const backup = candidatesForExport.find((item) => item.id !== candidate.id); return [candidateExportName(candidate, rank), "[ ]", "[ ]", "[ ]", "[ ]", "[ ]", immediateNextAction(candidate, backup, itemConfidence)]; })] },
   ];
-  const applyStyle = (ws: XLSX.WorkSheet, rows: any[][], headerRow: number, filterRow?: number, widths: number[] = []) => {
-    const range = XLSX.utils.decode_range(ws["!ref"] || "A1:A1");
-    ws["!freeze"] = { xSplit: 0, ySplit: headerRow + 1 } as any;
-    ws["!cols"] = widths.map((wch) => ({ wch }));
-    ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: Math.max(range.e.c, 1) } }];
-    if (typeof filterRow === "number") ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: filterRow, c: 0 }, e: { r: rows.length - 1, c: range.e.c } }) } as any;
-    for (let r = range.s.r; r <= range.e.r; r += 1) for (let c = range.s.c; c <= range.e.c; c += 1) {
-      const cell = ws[XLSX.utils.encode_cell({ r, c })];
-      if (!cell) continue;
-      const value = String(cell.v ?? "");
-      const isTitle = r === 0;
-      const isHeader = r === headerRow;
-      const matchNumber = /%$/.test(value) ? Number(value.replace("%", "")) : NaN;
-      const matchFill = Number.isFinite(matchNumber) ? (matchNumber >= 90 ? "DCFCE7" : matchNumber >= 80 ? "FEF3C7" : "FCE7F3") : undefined;
-      const riskFill = /high/i.test(value) ? "FEE2E2" : /medium/i.test(value) ? "FEF3C7" : /low/i.test(value) ? "DCFCE7" : undefined;
-      const shortlistedFill = /shortlisted/i.test(value) ? "DCFCE7" : undefined;
-      cell.s = { font: { name: "Aptos", sz: isTitle ? 14 : 10, bold: isTitle || isHeader, color: { rgb: isTitle || isHeader ? "FFFFFF" : "0F172A" } }, fill: { fgColor: { rgb: isTitle || isHeader ? "0F172A" : shortlistedFill || riskFill || matchFill || (r % 2 === 0 ? "F8FAFC" : "FFFFFF") } }, border: { top: { style: "thin", color: { rgb: "CBD5E1" } }, bottom: { style: "thin", color: { rgb: "CBD5E1" } }, left: { style: "thin", color: { rgb: "CBD5E1" } }, right: { style: "thin", color: { rgb: "CBD5E1" } } }, alignment: { wrapText: true, vertical: "top" } } as any;
-    }
-  };
-  sheets.forEach((sheet) => { const ws = XLSX.utils.aoa_to_sheet(sheet.rows); applyStyle(ws, sheet.rows, sheet.headerRow, sheet.filterRow, sheet.widths); XLSX.utils.book_append_sheet(wb, ws, sheet.name); });
-  XLSX.writeFile(wb, exportFileName("candidate-compare", "xlsx"));
+  void writeSafeSpreadsheetFile(sheets, exportFileName("candidate-compare", "xlsx"));
 }
 
 type SubmissionTemplateKey = "Client Email" | "Executive Brief" | "Hiring Manager Brief" | "WhatsApp" | "Recruiter Checklist" | "Positioning" | "LinkedIn Message" | "Teams Update" | "Client Meeting Notes" | "Interview Debrief" | "Submission Cover Sheet";

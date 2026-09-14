@@ -5,10 +5,12 @@ on:
     branches:
       - "codex/production-trust-*"
       - "codex/recruiter-api-authorization-*"
+      - "codex/dependency-security-*"
   pull_request:
     branches:
       - "codex/production-trust-*"
       - "codex/recruiter-api-authorization-*"
+      - "codex/dependency-security-*"
       - "release/**"
       - integration
   workflow_dispatch:
@@ -27,10 +29,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout exact revision
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
           cache: npm
@@ -40,6 +42,68 @@ jobs:
 
       - name: Reject high or critical dependency findings
         run: npm audit --audit-level=high
+
+      - name: Require explicit treatment through moderate severity
+        run: npm audit --audit-level=moderate
+
+      - name: Verify lockfile and generate license inventory
+        run: npm run audit:production-trust:supply-chain
+
+      - name: Verify production CycloneDX SBOM
+        shell: bash
+        run: test -s artifacts/production-sbom.cdx.json
+
+      - name: Upload sanitized supply-chain evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: production-trust-supply-chain-${{ github.sha }}
+          path: |
+            artifacts/production-trust-supply-chain.json
+            artifacts/production-sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 7
+
+  dependency-review:
+    name: Pull request dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Reject unauthorized vulnerable or restrictive dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          deny-licenses: GPL-3.0, AGPL-3.0, SSPL-1.0
+
+  secret-history:
+    name: Current tree and complete history secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout complete reachable history
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Scan committed content without external verification
+        shell: bash
+        run: >-
+          docker run --rm -v $PWD:/tmp -w /tmp
+          ghcr.io/trufflesecurity/trufflehog:3.97.4 git file:///tmp
+          --since-commit=300b6a1b03921a2d4710a2585c62bebc69d55831
+          --branch=${{ github.sha }} --no-verification --fail --no-update
+          --exclude-paths=.trufflehog-history-exclude.txt
+
+      - name: Scan the current committed tree
+        shell: bash
+        run: >-
+          docker run --rm -v "$PWD:/tmp" -w /tmp
+          ghcr.io/trufflesecurity/trufflehog:3.97.4 filesystem /tmp
+          --no-verification --fail --no-update
+          --exclude-paths=.trufflehog-current-exclude.txt
 
   security-and-regression:
     name: Security and deterministic regressions
@@ -54,12 +118,12 @@ jobs:
       EXTERNAL_TALENT_PROVIDER: disabled
     steps:
       - name: Checkout exact revision
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 2
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
           cache: npm
@@ -79,6 +143,9 @@ jobs:
       - name: Canonical evidence and immutable golden regressions
         run: npm run test:production-trust:canonical
 
+      - name: Spreadsheet export and lazy-client regressions
+        run: npm run test:production-trust:dependencies
+
       - name: TypeScript typecheck
         run: npm run typecheck
 
@@ -93,7 +160,7 @@ jobs:
         run: npm run audit:production-trust:ci
 
       - name: Upload sanitized security summary
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: production-trust-sanitized-summary-${{ github.sha }}
           path: artifacts/production-trust-ci-summary.json
@@ -114,16 +181,12 @@ jobs:
       EXTERNAL_TALENT_PROVIDER: disabled
       NEXT_PUBLIC_SUPABASE_URL: https://ci.invalid
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-public-anon-placeholder
-      SUPABASE_SERVICE_ROLE_KEY: ci-inert-service-role-placeholder
-      CANDIDATE_SUPABASE_URL: https://ci.invalid
-      CANDIDATE_SUPABASE_SERVICE_ROLE_KEY: ci-inert-candidate-role-placeholder
-      OPENAI_API_KEY: ci-inert-build-placeholder
     steps:
       - name: Checkout exact revision
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
           cache: npm
@@ -131,14 +194,14 @@ jobs:
       - name: Clean dependency installation
         run: npm ci
 
-      - name: Next.js 16.2.12 Webpack production build
+      - name: Next.js 16.3.5 Webpack production build
         run: npm run build:webpack
 
       - name: Scan client bundle for server secret material
         run: npm run scan:production-trust:bundle
 
       - name: Upload sanitized build security summary
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: production-trust-build-summary-${{ github.sha }}
           path: artifacts/production-trust-client-bundle-scan.json

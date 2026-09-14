@@ -1,10 +1,3 @@
-import OpenAI from "openai";
+import { createLazyOpenAiClient } from "./runtimeClients";
 
-export const openrouter =
-  new OpenAI({
-    apiKey:
-      process.env.OPENROUTER_API_KEY,
-
-    baseURL:
-      "https://openrouter.ai/api/v1",
-  });
+export const openrouter = createLazyOpenAiClient("openrouter");

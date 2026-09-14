@@ -1,5 +1,3 @@
-import OpenAI from "openai";
+import { createLazyOpenAiClient } from "./runtimeClients";
 
-export const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+export const openai = createLazyOpenAiClient();

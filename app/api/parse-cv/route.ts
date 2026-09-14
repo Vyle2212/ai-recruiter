@@ -1,11 +1,9 @@
 ﻿import { NextResponse } from "next/server";
-import OpenAI from "openai";
 import { enrichCandidateWithSapTaxonomy } from "@/lib/sapTalentTaxonomy";
 import { evaluateResumeQualityGate } from "@/lib/resumeQualityGate";
+import { createLazyOpenAiClient } from "@/lib/runtimeClients";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+const openai = createLazyOpenAiClient();
 
 export async function POST(req: Request) {
   try {
