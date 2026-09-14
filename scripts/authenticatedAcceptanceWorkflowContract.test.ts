@@ -65,6 +65,17 @@ async function main() {
     administration,
     /group: production-trust-acceptance-environment/,
   );
+  const provision = await readFile(
+    "scripts/authenticatedAcceptanceProvision.ts",
+    "utf8",
+  );
+  assert.match(provision, /acceptance_run_hash/);
+  assert.match(provision, /acceptance_partial_provision_discovery_failed/);
+  assert.match(provision, /acceptance_identity_table_residue_detected/);
+  assert.doesNotMatch(
+    provision,
+    /process\.env\.(?:ACCEPTANCE_)?(?:CANDIDATE_ID|TABLE_NAME|DELETE_FILTER)/,
+  );
   console.log("Authenticated acceptance workflow contract tests passed.");
 }
 

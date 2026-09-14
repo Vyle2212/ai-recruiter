@@ -271,7 +271,52 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
     .select("entity_type,entity_id")
     .eq("run_id", config.runId);
   if (error) throw new Error("acceptance_entity_ledger_read_failed");
-  const entities = (data || []) as Entity[];
+  const runHash = pseudonymousAcceptanceIdentifier(config.runId);
+  const syntheticEmailSuffix = `+${runHash}@acceptance.invalid`;
+  const syntheticOrganizationName = `PTF synthetic organization ${runHash}`;
+  const { data: discoveredProfiles, error: profileDiscoveryError } =
+    await client
+      .from("user_profiles")
+      .select("id")
+      .like("email", `%${syntheticEmailSuffix}`);
+  const { data: discoveredOrganizations, error: organizationDiscoveryError } =
+    await client
+      .from("organizations")
+      .select("id")
+      .eq("name", syntheticOrganizationName);
+  const { data: authPage, error: authDiscoveryError } =
+    await client.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (profileDiscoveryError || organizationDiscoveryError || authDiscoveryError)
+    throw new Error("acceptance_partial_provision_discovery_failed");
+  const discovered: Entity[] = [
+    ...(discoveredProfiles || []).map((item) => ({
+      entity_type: "user_profile" as const,
+      entity_id: String(item.id),
+    })),
+    ...(discoveredOrganizations || []).map((item) => ({
+      entity_type: "organization" as const,
+      entity_id: String(item.id),
+    })),
+    ...(authPage.users || [])
+      .filter(
+        (user) =>
+          user.user_metadata?.synthetic === true &&
+          user.user_metadata?.acceptance_run_hash === runHash,
+      )
+      .map((user) => ({
+        entity_type: "auth_user" as const,
+        entity_id: user.id,
+      })),
+  ];
+  const entities = [...((data || []) as Entity[]), ...discovered].filter(
+    (entity, index, all) =>
+      index ===
+      all.findIndex(
+        (candidate) =>
+          candidate.entity_type === entity.entity_type &&
+          candidate.entity_id === entity.entity_id,
+      ),
+  );
   const plan = acceptanceCleanupPlan(entities);
   const profileIds = plan.profileIds;
   if (profileIds.length) {
@@ -293,10 +338,36 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
       .in("id", organizationIds);
     if (deleteError) throw new Error("acceptance_organization_cleanup_failed");
   }
-  await client
+  const { count: profileResidue, error: profileResidueError } = await client
+    .from("user_profiles")
+    .select("id", { count: "exact", head: true })
+    .like("email", `%${syntheticEmailSuffix}`);
+  const { count: organizationResidue, error: organizationResidueError } =
+    await client
+      .from("organizations")
+      .select("id", { count: "exact", head: true })
+      .eq("name", syntheticOrganizationName);
+  const { data: remainingAuth, error: authResidueError } =
+    await client.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (
+    profileResidueError ||
+    organizationResidueError ||
+    authResidueError ||
+    profileResidue !== 0 ||
+    organizationResidue !== 0 ||
+    (remainingAuth.users || []).some(
+      (user) =>
+        user.user_metadata?.synthetic === true &&
+        user.user_metadata?.acceptance_run_hash === runHash,
+    )
+  )
+    throw new Error("acceptance_identity_table_residue_detected");
+  const { error: ledgerDeleteError } = await client
     .from("acceptance_test_entities")
     .delete()
     .eq("run_id", config.runId);
+  if (ledgerDeleteError)
+    throw new Error("acceptance_entity_ledger_cleanup_failed");
   const { error: runError } = await client
     .from("acceptance_test_runs")
     .update({ status: "cleaned", cleaned_at: new Date().toISOString() })
