@@ -33,6 +33,7 @@ assert.equal(evaluateAcceptanceEnvironment(valid, now).allowed, true);
 for (const [key, value, blocker] of [
   ["acceptanceTestMode", "false", "acceptance_test_mode_not_enabled"],
   ["appEnvironment", "production", "non_production_environment_not_confirmed"],
+  ["appEnvironment", "staging", "non_production_environment_not_confirmed"],
   [
     "projectRefAllowlist",
     "another-ref",

@@ -17,6 +17,7 @@ concurrency:
 
 jobs:
   authenticated-acceptance:
+    if: startsWith(github.ref_name, 'codex/authenticated-acceptance-')
     name: Exact-build authenticated acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -26,7 +27,9 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
       ACCEPTANCE_TEST_MODE: "true"
       APP_ENV: acceptance
+      ACCEPTANCE_DEPLOYMENT_PROTECTION_REQUIRED: "true"
       ACCEPTANCE_BASE_URL: ${{ secrets.ACCEPTANCE_BASE_URL }}
+      ACCEPTANCE_DEPLOYMENT_BYPASS_SECRET: ${{ secrets.ACCEPTANCE_DEPLOYMENT_BYPASS_SECRET }}
       ACCEPTANCE_EXPECTED_SHA: ${{ inputs.tested_sha }}
       ACCEPTANCE_SUPABASE_URL: ${{ secrets.ACCEPTANCE_SUPABASE_URL }}
       ACCEPTANCE_SUPABASE_ANON_KEY: ${{ secrets.ACCEPTANCE_SUPABASE_ANON_KEY }}
@@ -37,19 +40,21 @@ jobs:
       ACCEPTANCE_ENVIRONMENT_ID: ${{ secrets.ACCEPTANCE_ENVIRONMENT_ID }}
       ACCEPTANCE_INTERNAL_SEARCH_QUERY: ${{ secrets.ACCEPTANCE_INTERNAL_SEARCH_QUERY }}
       ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER: ${{ secrets.ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER }}
+      ACCEPTANCE_SYNTHETIC_FIXTURE_OWNER_RUN_ID: ${{ secrets.ACCEPTANCE_SYNTHETIC_FIXTURE_OWNER_RUN_ID }}
       ACCEPTANCE_EXTERNAL_SEARCH_QUERY: ${{ secrets.ACCEPTANCE_EXTERNAL_SEARCH_QUERY }}
       ACCEPTANCE_EXTERNAL_PROVIDER_APPROVED: ${{ secrets.ACCEPTANCE_EXTERNAL_PROVIDER_APPROVED }}
     steps:
       - name: Checkout exact requested revision
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ inputs.tested_sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 1
 
       - name: Verify checked-out revision and HTTPS target
         shell: bash
         run: |
           set -euo pipefail
+          test "${{ inputs.tested_sha }}" = "${{ github.sha }}"
           test "$(git rev-parse HEAD)" = "$ACCEPTANCE_EXPECTED_SHA"
           case "$ACCEPTANCE_BASE_URL" in https://*) ;; *) exit 1 ;; esac
 
@@ -79,19 +84,21 @@ jobs:
             echo "ACCEPTANCE_CREDENTIAL_BUNDLE_PATH=$RUNNER_TEMP/acceptance-credentials.json"
           } >> "$GITHUB_ENV"
 
+      - name: Verify protected exact-SHA application release
+        run: npm run acceptance:release:preflight
+
       - name: Verify fail-closed environment and database marker
         run: npm run acceptance:environment:verify
 
+      - name: Verify acceptance-owned synthetic search dataset
+        run: npm run acceptance:synthetic:verify
+
+      - name: Arm reversible identity cleanup
+        shell: bash
+        run: echo "ACCEPTANCE_CLEANUP_ARMED=true" >> "$GITHUB_ENV"
+
       - name: Provision controlled synthetic identities
         run: npm run acceptance:provision
-
-      - name: Verify local production Webpack build for exact SHA
-        env:
-          APP_ENV: test
-          AUTH_MODE: disabled
-          EXTERNAL_TALENT_SEARCH_ENABLED: "false"
-          EXTERNAL_TALENT_PROVIDER: disabled
-        run: npm run build:webpack
 
       - name: Run real authenticated browser and API acceptance
         run: npm run acceptance:e2e
@@ -101,8 +108,12 @@ jobs:
         run: npm run acceptance:report
 
       - name: Clean synthetic identities and records
-        if: always()
+        if: always() && env.ACCEPTANCE_CLEANUP_ARMED == 'true'
         run: npm run acceptance:cleanup
+
+      - name: Verify cleanup completed
+        if: always() && env.ACCEPTANCE_CLEANUP_ARMED == 'true'
+        run: npm run acceptance:cleanup:verify
 
       - name: Remove all ephemeral authentication material
         if: always()

@@ -52,15 +52,33 @@ create table if not exists public.acceptance_test_entities (
   unique (run_id, entity_type, entity_id)
 );
 
+create table if not exists public.acceptance_synthetic_candidates (
+  marker text primary key,
+  candidate_id uuid not null unique,
+  fixture_version text not null,
+  synthetic_namespace text not null,
+  owner_run_id text not null,
+  owner_hash text not null,
+  expected_commit_sha text not null check (expected_commit_sha ~ '^[a-f0-9]{40}$'),
+  search_query text not null,
+  active boolean not null default false,
+  installed_at timestamptz not null default now(),
+  check (synthetic_namespace like 'ptf1c2a/%'),
+  check (marker like 'PTF Synthetic %')
+);
+
 alter table public.acceptance_environment_markers enable row level security;
 alter table public.acceptance_test_runs enable row level security;
 alter table public.acceptance_test_entities enable row level security;
+alter table public.acceptance_synthetic_candidates enable row level security;
 revoke all on public.acceptance_environment_markers from public, anon, authenticated;
 revoke all on public.acceptance_test_runs from public, anon, authenticated;
 revoke all on public.acceptance_test_entities from public, anon, authenticated;
+revoke all on public.acceptance_synthetic_candidates from public, anon, authenticated;
 grant all on public.acceptance_environment_markers to service_role;
 grant all on public.acceptance_test_runs to service_role;
 grant all on public.acceptance_test_entities to service_role;
+grant all on public.acceptance_synthetic_candidates to service_role;
 
 insert into public.acceptance_environment_markers (
   singleton,

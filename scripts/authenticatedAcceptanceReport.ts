@@ -69,8 +69,11 @@ async function main() {
       "acceptance-evidence/recruiter-search-page.png",
       "acceptance-evidence/client-role-denied.png",
       "acceptance-evidence/private-candidate-drawer.png",
-      "acceptance-evidence/external-search-expansion.png",
     ],
+    externalProviderAcceptance:
+      process.env.ACCEPTANCE_EXTERNAL_PROVIDER_APPROVED === "true"
+        ? "executed"
+        : "not_executed_owner_approval_required",
     durableAuditStorage: "deferred_to_production_trust_task_1d",
   };
   const violations = assertAcceptanceEvidenceIsSanitized(report);

@@ -14,6 +14,7 @@ import {
   type AcceptanceCredentialBundle,
   type AcceptanceIdentityKey,
 } from "../lib/acceptanceSyntheticIdentityContract";
+import { acceptanceCleanupPlan } from "../lib/acceptanceCleanupPlan";
 
 type SafeConfig = Extract<
   ReturnType<typeof evaluateAcceptanceEnvironment>,
@@ -264,11 +265,8 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
     .eq("run_id", config.runId);
   if (error) throw new Error("acceptance_entity_ledger_read_failed");
   const entities = (data || []) as Entity[];
-  const ids = (kind: Entity["entity_type"]) =>
-    entities
-      .filter((item) => item.entity_type === kind)
-      .map((item) => item.entity_id);
-  const profileIds = ids("user_profile");
+  const plan = acceptanceCleanupPlan(entities);
+  const profileIds = plan.profileIds;
   if (profileIds.length) {
     const { error: deleteError } = await client
       .from("user_profiles")
@@ -276,11 +274,11 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
       .in("id", profileIds);
     if (deleteError) throw new Error("acceptance_profile_cleanup_failed");
   }
-  for (const userId of ids("auth_user")) {
+  for (const userId of plan.authUserIds) {
     const { error: deleteError } = await client.auth.admin.deleteUser(userId);
     if (deleteError) throw new Error("acceptance_auth_cleanup_failed");
   }
-  const organizationIds = ids("organization");
+  const organizationIds = plan.organizationIds;
   if (organizationIds.length) {
     const { error: deleteError } = await client
       .from("organizations")
@@ -305,9 +303,9 @@ async function main() {
   if (typeof window !== "undefined")
     throw new Error("server_only_utility_required");
   const action = process.argv[2];
-  if (!["verify", "provision", "cleanup"].includes(action))
+  if (!["verify", "provision", "cleanup", "cleanup-verify"].includes(action))
     throw new Error(
-      "usage: authenticatedAcceptanceProvision <verify|provision|cleanup>",
+      "usage: authenticatedAcceptanceProvision <verify|provision|cleanup|cleanup-verify>",
     );
   const config = loadConfig();
   const client = adminClient(config);
@@ -333,6 +331,30 @@ async function main() {
         identitiesProvisioned: Object.keys(bundle.identities).length,
         unknownRoleConstraintRejected:
           bundle.unknownRoleControl.constraintRejected,
+      }),
+    );
+    return;
+  }
+  if (action === "cleanup-verify") {
+    const { data, error } = await client
+      .from("acceptance_test_entities")
+      .select("entity_id")
+      .eq("run_id", config.runId);
+    if (error || (data || []).length)
+      throw new Error("acceptance_cleanup_verification_failed");
+    const { data: run, error: runError } = await client
+      .from("acceptance_test_runs")
+      .select("status")
+      .eq("run_id", config.runId)
+      .maybeSingle();
+    if (runError || (run && run.status !== "cleaned"))
+      throw new Error("acceptance_cleanup_status_invalid");
+    console.log(
+      JSON.stringify({
+        ok: true,
+        action,
+        runHash: pseudonymousAcceptanceIdentifier(config.runId),
+        remainingEntities: 0,
       }),
     );
     return;

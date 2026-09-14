@@ -2,6 +2,11 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import {
+  AUTHENTICATED_ACCEPTANCE_HARNESS_VERSION,
+  pseudonymousAcceptanceIdentifier,
+} from "../../../../lib/acceptanceEnvironmentSafety";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -30,11 +35,21 @@ export async function GET() {
       { status: 404, headers },
     );
 
-  const commitSha = String(process.env.ACCEPTANCE_DEPLOYED_SHA || "").trim();
+  const commitSha = String(
+    process.env.ACCEPTANCE_DEPLOYED_SHA ||
+      process.env.VERCEL_GIT_COMMIT_SHA ||
+      "",
+  ).trim();
   const environmentId = String(
     process.env.ACCEPTANCE_ENVIRONMENT_ID || "",
   ).trim();
-  if (!/^[a-f0-9]{40}$/.test(commitSha) || !environmentId)
+  const projectRef = String(
+    process.env.ACCEPTANCE_SUPABASE_PROJECT_REF || "",
+  ).trim();
+  const deploymentIdentity = String(
+    process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_URL || "",
+  ).trim();
+  if (!/^[a-f0-9]{40}$/.test(commitSha) || !environmentId || !projectRef)
     return Response.json(
       { error: { code: "release_identity_unavailable" } },
       { status: 503, headers },
@@ -42,13 +57,19 @@ export async function GET() {
 
   return Response.json(
     {
-      harnessVersion: "production-trust-authenticated-acceptance-v1",
+      schemaVersion: "acceptance-release-evidence-v2",
+      harnessVersion: AUTHENTICATED_ACCEPTANCE_HARNESS_VERSION,
       commitSha,
       buildId: await buildId(),
-      environmentHash: createHash("sha256")
-        .update(environmentId)
-        .digest("hex")
-        .slice(0, 16),
+      classification: "acceptance",
+      environmentHash: pseudonymousAcceptanceIdentifier(environmentId),
+      projectRefHash: pseudonymousAcceptanceIdentifier(projectRef),
+      deploymentHash: deploymentIdentity
+        ? createHash("sha256")
+            .update(deploymentIdentity)
+            .digest("hex")
+            .slice(0, 16)
+        : "",
     },
     { headers },
   );

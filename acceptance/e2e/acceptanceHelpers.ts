@@ -9,6 +9,16 @@ import {
   type BrowserContext,
 } from "@playwright/test";
 
+import {
+  acceptanceBridgeConfigurationFromProcess,
+  acceptanceRequestHeaders,
+  VERCEL_PROTECTION_BYPASS_HEADER,
+} from "../../lib/acceptanceDeploymentBridge";
+
+type AcceptanceApiRequestOptions = NonNullable<
+  Parameters<APIRequestContext["get"]>[1]
+>;
+
 import type {
   AcceptanceCredentialBundle,
   AcceptanceIdentityKey,
@@ -103,13 +113,72 @@ export async function authenticatedApi(
   role: AcceptanceIdentityKey,
   storageState?: Awaited<ReturnType<typeof authenticatedStorageState>>,
 ) {
-  return playwrightRequest.newContext({
-    baseURL: acceptanceRequired("ACCEPTANCE_BASE_URL"),
+  const context = await playwrightRequest.newContext({
     storageState: storageState || (await authenticatedStorageState(role)),
-    extraHTTPHeaders: {
-      Origin: acceptanceRequired("ACCEPTANCE_BASE_URL"),
-      "X-Acceptance-Run": "synthetic",
-    },
+  });
+  return bridgedApi(context);
+}
+
+export async function anonymousAcceptanceApi() {
+  return bridgedApi(await playwrightRequest.newContext());
+}
+
+function bridgedApi(context: APIRequestContext) {
+  const send = (
+    method: "get" | "post" | "put" | "patch" | "delete",
+    target: string,
+    options: AcceptanceApiRequestOptions = {},
+  ) => {
+    const request = acceptanceRequestHeaders(
+      target,
+      acceptanceBridgeConfigurationFromProcess(),
+      {
+        Origin: acceptanceRequired("ACCEPTANCE_BASE_URL"),
+        "X-Acceptance-Run": "synthetic",
+        ...(options.headers || {}),
+      },
+    );
+    return context[method](request.url.toString(), {
+      ...options,
+      headers: Object.fromEntries(request.headers.entries()),
+      maxRedirects: 0,
+    });
+  };
+  return {
+    get: (target: string, options?: AcceptanceApiRequestOptions) =>
+      send("get", target, options),
+    post: (target: string, options?: AcceptanceApiRequestOptions) =>
+      send("post", target, options),
+    put: (target: string, options?: AcceptanceApiRequestOptions) =>
+      send("put", target, options),
+    patch: (target: string, options?: AcceptanceApiRequestOptions) =>
+      send("patch", target, options),
+    delete: (target: string, options?: AcceptanceApiRequestOptions) =>
+      send("delete", target, options),
+    dispose: () => context.dispose(),
+  };
+}
+
+export async function installAcceptanceBrowserBridge(context: BrowserContext) {
+  const config = acceptanceBridgeConfigurationFromProcess();
+  const origin = new URL(acceptanceRequired("ACCEPTANCE_BASE_URL")).origin;
+  await context.route("**/*", async (route) => {
+    const request = route.request();
+    const target = new URL(request.url());
+    const headers = { ...request.headers() };
+    delete headers[VERCEL_PROTECTION_BYPASS_HEADER];
+    if (target.origin === origin) {
+      const bridged = acceptanceRequestHeaders(target, config, headers);
+      await route.continue({
+        headers: Object.fromEntries(bridged.headers.entries()),
+      });
+      return;
+    }
+    if (request.isNavigationRequest()) {
+      await route.abort("blockedbyclient");
+      return;
+    }
+    await route.continue({ headers });
   });
 }
 

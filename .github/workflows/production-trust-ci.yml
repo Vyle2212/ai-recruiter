@@ -155,7 +155,9 @@ jobs:
         run: npm run typecheck
 
       - name: Scoped formatting check
-        run: npm run check:production-trust:format
+        run: |
+          npm run check:production-trust:format
+          npm run check:acceptance:format
 
       - name: Commit whitespace check
         shell: bash
