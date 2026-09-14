@@ -13,33 +13,14 @@ export type AcceptanceSyntheticRegistryRecord = {
   fixture_version?: unknown;
   synthetic_namespace?: unknown;
   owner_run_id?: unknown;
+  owner_hash?: unknown;
+  environment_id?: unknown;
+  project_ref?: unknown;
   expected_commit_sha?: unknown;
+  expires_at?: unknown;
   search_query?: unknown;
   active?: unknown;
 };
-
-export function acceptanceSyntheticRegistryBlockers(
-  registry: AcceptanceSyntheticRegistryRecord | null,
-  expectedSha: string,
-  ownerRunId: string,
-) {
-  if (!registry) return ["synthetic_registry_missing"];
-  const blockers: string[] = [];
-  if (
-    registry.marker !== ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER ||
-    registry.candidate_id !== ACCEPTANCE_SYNTHETIC_CANDIDATE_ID ||
-    registry.fixture_version !== ACCEPTANCE_SYNTHETIC_FIXTURE_VERSION ||
-    registry.synthetic_namespace !== "ptf1c2a/persistent-search-fixture" ||
-    registry.search_query !== ACCEPTANCE_INTERNAL_SEARCH_QUERY ||
-    registry.active !== true
-  )
-    blockers.push("synthetic_registry_contract_mismatch");
-  if (registry.owner_run_id !== ownerRunId)
-    blockers.push("synthetic_registry_owner_mismatch");
-  if (registry.expected_commit_sha !== expectedSha)
-    blockers.push("synthetic_registry_commit_mismatch");
-  return blockers;
-}
 
 export function acceptanceSyntheticCandidateRecord() {
   return {

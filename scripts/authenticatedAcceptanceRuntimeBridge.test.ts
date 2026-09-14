@@ -22,14 +22,16 @@ async function main() {
     projectRef: "acceptance-project",
   };
   const release = {
-    schemaVersion: "acceptance-release-evidence-v2",
-    harnessVersion: "production-trust-authenticated-acceptance-v1",
+    schemaVersion: "acceptance-release-evidence-v3",
+    harnessVersion: "production-trust-authenticated-acceptance-v2",
     commitSha: expected.commitSha,
     classification: "acceptance",
     environmentHash: acceptanceHash(expected.environmentId),
     projectRefHash: acceptanceHash(expected.projectRef),
     buildId: "synthetic-build-id",
     deploymentHash: "0".repeat(16),
+    externalTalentEnabled: false,
+    externalProviderConfigured: false,
   };
 
   const direct = acceptanceRequestHeaders("/api/acceptance/release", config);
@@ -90,6 +92,34 @@ async function main() {
     },
     config,
     expected,
+  );
+  await fetchAcceptanceReleaseEvidence(
+    async () =>
+      Response.json({
+        ...release,
+        externalTalentEnabled: true,
+        externalProviderConfigured: true,
+      }),
+    config,
+    { ...expected, externalMode: "required" },
+  );
+  await assert.rejects(
+    () =>
+      fetchAcceptanceReleaseEvidence(
+        async () => Response.json(release),
+        config,
+        { ...expected, externalMode: "required" },
+      ),
+    /identity_mismatch/,
+  );
+  await assert.rejects(
+    () =>
+      fetchAcceptanceReleaseEvidence(
+        async () => Response.json({ ...release, externalTalentEnabled: true }),
+        config,
+        { ...expected, externalMode: "disabled" },
+      ),
+    /identity_mismatch/,
   );
 
   assert.throws(

@@ -57,7 +57,7 @@ export async function GET() {
 
   return Response.json(
     {
-      schemaVersion: "acceptance-release-evidence-v2",
+      schemaVersion: "acceptance-release-evidence-v3",
       harnessVersion: AUTHENTICATED_ACCEPTANCE_HARNESS_VERSION,
       commitSha,
       buildId: await buildId(),
@@ -70,6 +70,13 @@ export async function GET() {
             .digest("hex")
             .slice(0, 16)
         : "",
+      externalTalentEnabled:
+        process.env.EXTERNAL_TALENT_SEARCH_ENABLED === "true",
+      externalProviderConfigured:
+        process.env.EXTERNAL_TALENT_SEARCH_ENABLED === "true" &&
+        process.env.EXTERNAL_TALENT_PROVIDER === "exa" &&
+        Boolean(process.env.EXA_API_KEY) &&
+        Boolean(process.env.ANTHROPIC_API_KEY),
     },
     { headers },
   );

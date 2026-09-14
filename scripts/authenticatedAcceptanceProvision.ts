@@ -1,5 +1,12 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { chmod, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  chmod,
+  mkdir,
+  readFile,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -349,6 +356,12 @@ async function main() {
       .maybeSingle();
     if (runError || (run && run.status !== "cleaned"))
       throw new Error("acceptance_cleanup_status_invalid");
+    if (process.env.GITHUB_ENV)
+      await appendFile(
+        process.env.GITHUB_ENV,
+        "ACCEPTANCE_IDENTITY_CLEANUP_VERIFIED=true\n",
+        "utf8",
+      );
     console.log(
       JSON.stringify({
         ok: true,

@@ -7,12 +7,17 @@ on:
         description: Exact deployed commit SHA to verify
         required: true
         type: string
+      external_mode:
+        description: Acceptance launch scope
+        required: true
+        type: choice
+        options: [required, disabled]
 
 permissions:
   contents: read
 
 concurrency:
-  group: authenticated-acceptance-${{ inputs.tested_sha }}
+  group: production-trust-acceptance-environment
   cancel-in-progress: false
 
 jobs:
@@ -20,7 +25,7 @@ jobs:
     if: startsWith(github.ref_name, 'codex/authenticated-acceptance-')
     name: Exact-build authenticated acceptance
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 55
     environment: acceptance
     env:
       CI: "true"
@@ -28,6 +33,7 @@ jobs:
       ACCEPTANCE_TEST_MODE: "true"
       APP_ENV: acceptance
       ACCEPTANCE_DEPLOYMENT_PROTECTION_REQUIRED: "true"
+      ACCEPTANCE_EXTERNAL_MODE: ${{ inputs.external_mode }}
       ACCEPTANCE_BASE_URL: ${{ secrets.ACCEPTANCE_BASE_URL }}
       ACCEPTANCE_DEPLOYMENT_BYPASS_SECRET: ${{ secrets.ACCEPTANCE_DEPLOYMENT_BYPASS_SECRET }}
       ACCEPTANCE_EXPECTED_SHA: ${{ inputs.tested_sha }}
@@ -38,9 +44,8 @@ jobs:
       ACCEPTANCE_SUPABASE_PROJECT_REF_ALLOWLIST: ${{ secrets.ACCEPTANCE_SUPABASE_PROJECT_REF_ALLOWLIST }}
       ACCEPTANCE_PRODUCTION_PROJECT_REF_DENYLIST: ${{ secrets.ACCEPTANCE_PRODUCTION_PROJECT_REF_DENYLIST }}
       ACCEPTANCE_ENVIRONMENT_ID: ${{ secrets.ACCEPTANCE_ENVIRONMENT_ID }}
-      ACCEPTANCE_INTERNAL_SEARCH_QUERY: ${{ secrets.ACCEPTANCE_INTERNAL_SEARCH_QUERY }}
-      ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER: ${{ secrets.ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER }}
-      ACCEPTANCE_SYNTHETIC_FIXTURE_OWNER_RUN_ID: ${{ secrets.ACCEPTANCE_SYNTHETIC_FIXTURE_OWNER_RUN_ID }}
+      ACCEPTANCE_INTERNAL_SEARCH_QUERY: PTF Synthetic Tester
+      ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER: PTF Synthetic Tester
       ACCEPTANCE_EXTERNAL_SEARCH_QUERY: ${{ secrets.ACCEPTANCE_EXTERNAL_SEARCH_QUERY }}
       ACCEPTANCE_EXTERNAL_PROVIDER_APPROVED: ${{ secrets.ACCEPTANCE_EXTERNAL_PROVIDER_APPROVED }}
     steps:
@@ -49,7 +54,6 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
-
       - name: Verify checked-out revision and HTTPS target
         shell: bash
         run: |
@@ -57,20 +61,16 @@ jobs:
           test "${{ inputs.tested_sha }}" = "${{ github.sha }}"
           test "$(git rev-parse HEAD)" = "$ACCEPTANCE_EXPECTED_SHA"
           case "$ACCEPTANCE_BASE_URL" in https://*) ;; *) exit 1 ;; esac
-
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
           cache: npm
-
       - name: Clean dependency installation
         run: npm ci
-
       - name: Install pinned Chromium runtime
         run: npx playwright install --with-deps chromium
-
-      - name: Create ephemeral acceptance run metadata
+      - name: Create run-owned acceptance metadata
         shell: bash
         run: |
           set -euo pipefail
@@ -83,53 +83,58 @@ jobs:
             echo "ACCEPTANCE_EXPIRES_AT=$expires_at"
             echo "ACCEPTANCE_CREDENTIAL_BUNDLE_PATH=$RUNNER_TEMP/acceptance-credentials.json"
           } >> "$GITHUB_ENV"
-
       - name: Verify protected exact-SHA application release
         run: npm run acceptance:release:preflight
-
       - name: Verify fail-closed environment and database marker
         run: npm run acceptance:environment:verify
-
-      - name: Verify acceptance-owned synthetic search dataset
-        run: npm run acceptance:synthetic:verify
-
-      - name: Arm reversible identity cleanup
+      - name: Verify fixed fixture namespace is available
+        run: npm run acceptance:synthetic:availability
+      - name: Arm fixture cleanup
         shell: bash
-        run: echo "ACCEPTANCE_CLEANUP_ARMED=true" >> "$GITHUB_ENV"
-
+        run: echo "ACCEPTANCE_FIXTURE_CLEANUP_ARMED=true" >> "$GITHUB_ENV"
+      - name: Install run-owned synthetic candidate and index
+        run: npm run acceptance:synthetic:install
+      - name: Verify synthetic candidate through canonical search pipeline
+        run: npm run acceptance:synthetic:verify
+      - name: Arm identity and mutation cleanup
+        shell: bash
+        run: echo "ACCEPTANCE_IDENTITY_CLEANUP_ARMED=true" >> "$GITHUB_ENV"
       - name: Provision controlled synthetic identities
         run: npm run acceptance:provision
-
-      - name: Run real authenticated browser and API acceptance
+      - name: Run authenticated browser and API acceptance
         run: npm run acceptance:e2e
-
-      - name: Generate sanitized acceptance report
+      - name: Generate pre-cleanup sanitized evidence
         if: always()
-        run: npm run acceptance:report
-
-      - name: Clean synthetic identities and records
-        if: always() && env.ACCEPTANCE_CLEANUP_ARMED == 'true'
+        run: npm run acceptance:report:initial
+      - name: Clean identities and controlled mutations
+        if: always() && env.ACCEPTANCE_IDENTITY_CLEANUP_ARMED == 'true'
         run: npm run acceptance:cleanup
-
-      - name: Verify cleanup completed
-        if: always() && env.ACCEPTANCE_CLEANUP_ARMED == 'true'
+      - name: Verify identity and mutation cleanup
+        if: always() && env.ACCEPTANCE_IDENTITY_CLEANUP_ARMED == 'true'
         run: npm run acceptance:cleanup:verify
-
-      - name: Remove all ephemeral authentication material
+      - name: Remove candidate search index, registry lease and candidate
+        if: always() && env.ACCEPTANCE_FIXTURE_CLEANUP_ARMED == 'true'
+        run: npm run acceptance:synthetic:remove
+      - name: Verify zero per-run residue
+        if: always() && env.ACCEPTANCE_FIXTURE_CLEANUP_ARMED == 'true'
+        run: npm run acceptance:synthetic:residue
+      - name: Generate final release-truth report
+        if: always()
+        run: npm run acceptance:report:final
+      - name: Remove temporary browser credentials
         if: always()
         shell: bash
         run: |
-          set -euo pipefail
-          rm -f "$RUNNER_TEMP/acceptance-credentials.json"
-          find "$RUNNER_TEMP" -maxdepth 1 -type f -name '*storage-state*' -delete
-
-      - name: Upload sanitized acceptance evidence only
+          if [ -n "${ACCEPTANCE_CREDENTIAL_BUNDLE_PATH:-}" ]; then
+            rm -f -- "$ACCEPTANCE_CREDENTIAL_BUNDLE_PATH"
+          fi
+      - name: Upload sanitized acceptance evidence
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@v7
         with:
-          name: authenticated-acceptance-${{ inputs.tested_sha }}
+          name: authenticated-acceptance-sanitized-${{ github.run_id }}
           path: |
             artifacts/authenticated-acceptance-report.json
-            artifacts/acceptance-evidence/*.png
+            acceptance-evidence/*.png
           if-no-files-found: error
           retention-days: 7

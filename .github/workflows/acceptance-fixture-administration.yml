@@ -1,0 +1,85 @@
+name: Protected Acceptance Fixture Administration
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Fixed synthetic fixture operation
+        required: true
+        type: choice
+        options: [verify, remove-expired-fixed-fixture]
+      tested_sha:
+        description: Exact protected deployment SHA
+        required: true
+        type: string
+      external_mode:
+        description: Deployed launch scope
+        required: true
+        type: choice
+        options: [required, disabled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-trust-acceptance-environment
+  cancel-in-progress: false
+
+jobs:
+  fixed-fixture-administration:
+    if: startsWith(github.ref_name, 'codex/authenticated-acceptance-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: acceptance
+    env:
+      ACCEPTANCE_TEST_MODE: "true"
+      APP_ENV: acceptance
+      ACCEPTANCE_DEPLOYMENT_PROTECTION_REQUIRED: "true"
+      ACCEPTANCE_EXTERNAL_MODE: ${{ inputs.external_mode }}
+      ACCEPTANCE_BASE_URL: ${{ secrets.ACCEPTANCE_BASE_URL }}
+      ACCEPTANCE_DEPLOYMENT_BYPASS_SECRET: ${{ secrets.ACCEPTANCE_DEPLOYMENT_BYPASS_SECRET }}
+      ACCEPTANCE_EXPECTED_SHA: ${{ inputs.tested_sha }}
+      ACCEPTANCE_SUPABASE_URL: ${{ secrets.ACCEPTANCE_SUPABASE_URL }}
+      ACCEPTANCE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.ACCEPTANCE_SUPABASE_SERVICE_ROLE_KEY }}
+      ACCEPTANCE_SUPABASE_PROJECT_REF: ${{ secrets.ACCEPTANCE_SUPABASE_PROJECT_REF }}
+      ACCEPTANCE_SUPABASE_PROJECT_REF_ALLOWLIST: ${{ secrets.ACCEPTANCE_SUPABASE_PROJECT_REF_ALLOWLIST }}
+      ACCEPTANCE_PRODUCTION_PROJECT_REF_DENYLIST: ${{ secrets.ACCEPTANCE_PRODUCTION_PROJECT_REF_DENYLIST }}
+      ACCEPTANCE_ENVIRONMENT_ID: ${{ secrets.ACCEPTANCE_ENVIRONMENT_ID }}
+      ACCEPTANCE_INTERNAL_SEARCH_QUERY: PTF Synthetic Tester
+      ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER: PTF Synthetic Tester
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Generate protected administration metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$ACCEPTANCE_EXPECTED_SHA"
+          run_id="ptf1c2-admin-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          {
+            echo "ACCEPTANCE_RUN_ID=$run_id"
+            echo "ACCEPTANCE_SYNTHETIC_NAMESPACE=ptf1c2/$run_id"
+            echo "ACCEPTANCE_CLEANUP_OWNER=github-actions-protected-administration"
+            echo "ACCEPTANCE_EXPIRES_AT=$(date -u -d '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')"
+            echo "ACCEPTANCE_CREDENTIAL_BUNDLE_PATH=$RUNNER_TEMP/acceptance-admin-placeholder.json"
+          } >> "$GITHUB_ENV"
+      - run: npm run acceptance:release:preflight
+      - run: npm run acceptance:environment:verify
+      - name: Execute fixed-target operation
+        shell: bash
+        run: |
+          if [ "${{ inputs.operation }}" = "verify" ]; then
+            npx tsx scripts/authenticatedAcceptanceSyntheticFixture.ts admin-verify
+          else
+            npx tsx scripts/authenticatedAcceptanceSyntheticFixture.ts remove-expired-fixed-fixture
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: acceptance-fixture-administration-${{ github.run_id }}
+          path: artifacts/acceptance-fixture-administration.json
+          if-no-files-found: error
+          retention-days: 7

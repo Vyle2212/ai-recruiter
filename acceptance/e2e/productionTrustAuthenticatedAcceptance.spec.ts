@@ -12,10 +12,14 @@ import {
   installAuthenticatedBrowserState,
   installAcceptanceBrowserBridge,
 } from "./acceptanceHelpers";
+import { parseAcceptanceExternalMode } from "../../lib/acceptanceFixtureLease";
 
 const searchPath = "/api/recruiter/search-v2";
 const searchPage = "/recruiter/talent-search/v2";
 const runToken = String(process.env.ACCEPTANCE_RUN_ID || "ptf1c2-missing");
+const externalMode = parseAcceptanceExternalMode(
+  process.env.ACCEPTANCE_EXTERNAL_MODE,
+);
 let internalCandidateId = "";
 
 test.describe
@@ -205,6 +209,13 @@ test.describe
         )
       ).status(),
     ).toBe(200);
+    const conversationResidue = await recruiter.get(
+      "/api/recruiter/copilot/history",
+    );
+    expect(conversationResidue.status()).toBe(200);
+    expect(JSON.stringify(await conversationResidue.json())).not.toContain(
+      conversationId,
+    );
 
     await expectPrivateErrorOnly(
       await recruiter.post("/api/recruiter/workflow/automation-decisions", {
@@ -234,6 +245,13 @@ test.describe
         )
       ).status(),
     ).toBe(200);
+    const approvalResidue = await manager.get(
+      "/api/recruiter/workflow/automation-decisions",
+    );
+    expect(approvalResidue.status()).toBe(200);
+    expect(JSON.stringify(await approvalResidue.json())).not.toContain(
+      proposalId,
+    );
 
     const rules = await admin.get("/api/recruiter/workflow/automation-rules");
     expect(rules.status()).toBe(200);
@@ -257,6 +275,7 @@ test.describe
       managerApproval: "completed_and_cleaned",
       managerAdminOnly: 403,
       adminOnly: "completed_without_state_delta",
+      workflowMutationResidue: 0,
     });
     await recruiter.dispose();
     await manager.dispose();
@@ -446,8 +465,8 @@ test.describe
 
   test("external continuation tokens fail closed across actor scope and after logout", async ({}, testInfo) => {
     test.skip(
-      process.env.ACCEPTANCE_EXTERNAL_PROVIDER_APPROVED !== "true",
-      "External provider acceptance requires explicit approval.",
+      externalMode === "disabled",
+      "External provider is deliberately disabled for internal-only acceptance.",
     );
     const query = acceptanceRequired("ACCEPTANCE_EXTERNAL_SEARCH_QUERY");
     const session = await authenticatedSession("recruiter");
@@ -507,8 +526,8 @@ test.describe
     page,
   }, testInfo) => {
     test.skip(
-      process.env.ACCEPTANCE_EXTERNAL_PROVIDER_APPROVED !== "true",
-      "External provider acceptance requires explicit approval.",
+      externalMode === "disabled",
+      "External provider is deliberately disabled for internal-only acceptance.",
     );
     await installAuthenticatedBrowserState(page.context(), "recruiter");
     let searchCalls = 0;
@@ -543,5 +562,27 @@ test.describe
       pageTwoAdditionalCalls: 0,
       expansionAdditionalCalls: 1,
     });
+  });
+
+  test("disabled external scope fails closed before provider execution", async ({}, testInfo) => {
+    test.skip(
+      externalMode !== "disabled",
+      "Only applies to internal-only acceptance.",
+    );
+    const recruiter = await authenticatedApi("recruiter");
+    const response = await recruiter.post(searchPath, {
+      data: {
+        query: "PTF synthetic external provider denial control",
+        talentPool: "linkedin_talent_pool",
+      },
+    });
+    expect(response.status()).toBe(409);
+    expect((await response.json()).reason).toBe("SOURCE_NOT_CONNECTED");
+    await attachSanitized(testInfo, "external-disabled", {
+      providerInvocationCount: 0,
+      status: 409,
+      acceptanceScope: "Internal Talent Hub release only",
+    });
+    await recruiter.dispose();
   });
 });

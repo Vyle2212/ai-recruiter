@@ -27,7 +27,7 @@ export type AcceptanceIdentityKey =
   (typeof ACCEPTANCE_IDENTITY_CASES)[number]["key"];
 
 export type AcceptanceCredentialBundle = {
-  schemaVersion: "production-trust-authenticated-acceptance-v1";
+  schemaVersion: "production-trust-authenticated-acceptance-v2";
   runId: string;
   expiresAt: string;
   identities: Record<

@@ -59,13 +59,28 @@ create table if not exists public.acceptance_synthetic_candidates (
   synthetic_namespace text not null,
   owner_run_id text not null,
   owner_hash text not null,
+  environment_id text not null,
+  project_ref text not null,
   expected_commit_sha text not null check (expected_commit_sha ~ '^[a-f0-9]{40}$'),
+  expires_at timestamptz not null,
   search_query text not null,
   active boolean not null default false,
   installed_at timestamptz not null default now(),
-  check (synthetic_namespace like 'ptf1c2a/%'),
+  check (synthetic_namespace like 'ptf1c2/%'),
+  check (expires_at > installed_at),
   check (marker like 'PTF Synthetic %')
 );
+
+alter table public.acceptance_synthetic_candidates
+  add column if not exists environment_id text,
+  add column if not exists project_ref text,
+  add column if not exists expires_at timestamptz;
+
+alter table public.acceptance_synthetic_candidates
+  drop constraint if exists acceptance_synthetic_candidates_synthetic_namespace_check;
+alter table public.acceptance_synthetic_candidates
+  add constraint acceptance_synthetic_candidates_synthetic_namespace_check
+  check (synthetic_namespace like 'ptf1c2/%');
 
 alter table public.acceptance_environment_markers enable row level security;
 alter table public.acceptance_test_runs enable row level security;
@@ -93,7 +108,7 @@ insert into public.acceptance_environment_markers (
   current_setting('app.acceptance_environment_id'),
   'acceptance',
   true,
-  'production-trust-authenticated-acceptance-v1'
+  'production-trust-authenticated-acceptance-v2'
 )
 on conflict (singleton) do update set
   project_ref = excluded.project_ref,

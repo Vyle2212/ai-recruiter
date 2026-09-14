@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-import { acceptanceCleanupPlan } from "../lib/acceptanceCleanupPlan";
-
 async function main() {
   const workflow = await readFile(
     ".github/workflows/authenticated-acceptance.yml",
@@ -12,13 +10,19 @@ async function main() {
     "Verify checked-out revision and HTTPS target",
     "Verify protected exact-SHA application release",
     "Verify fail-closed environment and database marker",
-    "Verify acceptance-owned synthetic search dataset",
+    "Verify fixed fixture namespace is available",
+    "Arm fixture cleanup",
+    "Install run-owned synthetic candidate and index",
+    "Verify synthetic candidate through canonical search pipeline",
     "Provision controlled synthetic identities",
-    "Run real authenticated browser and API acceptance",
-    "Generate sanitized acceptance report",
-    "Clean synthetic identities and records",
-    "Verify cleanup completed",
-    "Upload sanitized acceptance evidence only",
+    "Run authenticated browser and API acceptance",
+    "Generate pre-cleanup sanitized evidence",
+    "Clean identities and controlled mutations",
+    "Verify identity and mutation cleanup",
+    "Remove candidate search index, registry lease and candidate",
+    "Verify zero per-run residue",
+    "Generate final release-truth report",
+    "Upload sanitized acceptance evidence",
   ];
   let previous = -1;
   for (const step of order) {
@@ -28,27 +32,38 @@ async function main() {
   }
   assert.match(workflow, /workflow_dispatch:/);
   assert.doesNotMatch(workflow, /pull_request_target:/);
+  assert.match(workflow, /group: production-trust-acceptance-environment/);
+  assert.match(workflow, /cancel-in-progress: false/);
+  assert.doesNotMatch(
+    workflow,
+    /authenticated-acceptance-\$\{\{ inputs\.tested_sha/,
+  );
+  assert.doesNotMatch(workflow, /ACCEPTANCE_SYNTHETIC_FIXTURE_OWNER_RUN_ID/);
   assert.match(
     workflow,
-    /if: always\(\) && env\.ACCEPTANCE_CLEANUP_ARMED == 'true'/,
+    /external_mode:[\s\S]*options: \[required, disabled\]/,
   );
-  assert.deepEqual(
-    acceptanceCleanupPlan([
-      { entity_type: "auth_user", entity_id: "partial-user" },
-      { entity_type: "auth_user", entity_id: "partial-user" },
-      { entity_type: "organization", entity_id: "partial-org" },
-    ]),
-    {
-      profileIds: [],
-      authUserIds: ["partial-user"],
-      organizationIds: ["partial-org"],
-    },
-  );
+  assert.match(workflow, /ACCEPTANCE_FIXTURE_CLEANUP_ARMED == 'true'/);
   assert.match(workflow, /ACCEPTANCE_DEPLOYMENT_BYPASS_SECRET:.*secrets\./);
   assert.doesNotMatch(workflow, /x-vercel-protection-bypass/);
   assert.match(
     workflow,
     /startsWith\(github\.ref_name, 'codex\/authenticated-acceptance-'/,
+  );
+
+  const administration = await readFile(
+    ".github/workflows/acceptance-fixture-administration.yml",
+    "utf8",
+  );
+  assert.match(
+    administration,
+    /options: \[verify, remove-expired-fixed-fixture\]/,
+  );
+  assert.doesNotMatch(administration, /candidate_id|table_name|sql|filter:/i);
+  assert.match(administration, /environment: acceptance/);
+  assert.match(
+    administration,
+    /group: production-trust-acceptance-environment/,
   );
   console.log("Authenticated acceptance workflow contract tests passed.");
 }

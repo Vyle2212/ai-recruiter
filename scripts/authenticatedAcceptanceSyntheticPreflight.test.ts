@@ -5,7 +5,6 @@ import {
   ACCEPTANCE_SYNTHETIC_CANDIDATE_ID,
   ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER,
   ACCEPTANCE_SYNTHETIC_FIXTURE_VERSION,
-  acceptanceSyntheticRegistryBlockers,
   acceptanceSyntheticCandidateRecord,
   validateAcceptanceSyntheticCandidate,
 } from "../lib/acceptanceSyntheticCandidateFixture";
@@ -20,36 +19,7 @@ assert.ok(valid.canonical.projectRecords >= 1);
 assert.equal(valid.canonical.currentEmploymentRecords, 1);
 assert.ok((valid.canonical.totalCareerYears || 0) >= 7);
 
-const registry = {
-  marker: ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER,
-  candidate_id: ACCEPTANCE_SYNTHETIC_CANDIDATE_ID,
-  fixture_version: ACCEPTANCE_SYNTHETIC_FIXTURE_VERSION,
-  synthetic_namespace: "ptf1c2a/persistent-search-fixture",
-  owner_run_id: "ptf1c2-fixture-owner",
-  expected_commit_sha: "b".repeat(40),
-  search_query: ACCEPTANCE_INTERNAL_SEARCH_QUERY,
-  active: true,
-};
-assert.deepEqual(
-  acceptanceSyntheticRegistryBlockers(
-    registry,
-    "b".repeat(40),
-    "ptf1c2-fixture-owner",
-  ),
-  [],
-);
-assert.ok(
-  acceptanceSyntheticRegistryBlockers(null, "b".repeat(40), "owner").includes(
-    "synthetic_registry_missing",
-  ),
-);
-assert.ok(
-  acceptanceSyntheticRegistryBlockers(
-    registry,
-    "b".repeat(40),
-    "wrong-owner",
-  ).includes("synthetic_registry_owner_mismatch"),
-);
+assert.equal(ACCEPTANCE_SYNTHETIC_FIXTURE_VERSION, "ptf1c2a-candidate-v1");
 
 for (const mutation of [
   { name: "Real Person" },
@@ -64,5 +34,11 @@ for (const mutation of [
   });
   assert.equal(result.valid, false);
 }
+const serialized = JSON.stringify(fixture);
+assert.doesNotMatch(
+  serialized,
+  /linkedin\.com|example\.com|@gmail\.|@outlook\./i,
+);
+assert.match(serialized, /acceptance\.invalid/);
 
 console.log("Authenticated acceptance synthetic candidate tests passed.");

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 
 export const AUTHENTICATED_ACCEPTANCE_HARNESS_VERSION =
-  "production-trust-authenticated-acceptance-v1";
+  "production-trust-authenticated-acceptance-v2";
 
 export type AcceptanceEnvironmentInput = {
   acceptanceTestMode?: string;

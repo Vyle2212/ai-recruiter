@@ -25,7 +25,9 @@ async function main() {
   assert.equal(response.headers.get("cache-control"), "private, no-store");
   const body = await response.json();
   assert.equal(body.commitSha, process.env.ACCEPTANCE_DEPLOYED_SHA);
-  assert.equal(body.schemaVersion, "acceptance-release-evidence-v2");
+  assert.equal(body.schemaVersion, "acceptance-release-evidence-v3");
+  assert.equal(body.externalTalentEnabled, false);
+  assert.equal(body.externalProviderConfigured, false);
   assert.equal(body.classification, "acceptance");
   assert.match(body.environmentHash, /^[a-f0-9]{16}$/);
   assert.match(body.projectRefHash, /^[a-f0-9]{16}$/);

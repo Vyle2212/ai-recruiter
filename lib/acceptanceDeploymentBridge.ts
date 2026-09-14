@@ -16,6 +16,7 @@ export type AcceptanceReleaseExpectation = {
   commitSha: string;
   environmentId: string;
   projectRef: string;
+  externalMode?: "required" | "disabled";
 };
 
 export function acceptanceHash(value: string) {
@@ -102,6 +103,8 @@ type ReleaseEvidence = {
   projectRefHash?: unknown;
   buildId?: unknown;
   deploymentHash?: unknown;
+  externalTalentEnabled?: unknown;
+  externalProviderConfigured?: unknown;
 };
 
 export async function fetchAcceptanceReleaseEvidence(
@@ -130,14 +133,19 @@ export async function fetchAcceptanceReleaseEvidence(
     throw new Error("acceptance_release_application_evidence_invalid");
   }
   const valid =
-    body.schemaVersion === "acceptance-release-evidence-v2" &&
+    body.schemaVersion === "acceptance-release-evidence-v3" &&
     body.harnessVersion === AUTHENTICATED_ACCEPTANCE_HARNESS_VERSION &&
     body.commitSha === expected.commitSha &&
     body.classification === "acceptance" &&
     body.environmentHash === acceptanceHash(expected.environmentId) &&
     body.projectRefHash === acceptanceHash(expected.projectRef) &&
     typeof body.buildId === "string" &&
-    body.buildId.length > 0;
+    body.buildId.length > 0 &&
+    (expected.externalMode !== "required" ||
+      (body.externalTalentEnabled === true &&
+        body.externalProviderConfigured === true)) &&
+    (expected.externalMode !== "disabled" ||
+      body.externalTalentEnabled === false);
   if (!valid) throw new Error("acceptance_release_identity_mismatch");
   return {
     schemaVersion: body.schemaVersion,
@@ -149,6 +157,8 @@ export async function fetchAcceptanceReleaseEvidence(
     buildId: body.buildId,
     deploymentHash:
       typeof body.deploymentHash === "string" ? body.deploymentHash : "",
+    externalTalentEnabled: body.externalTalentEnabled === true,
+    externalProviderConfigured: body.externalProviderConfigured === true,
   };
 }
 
