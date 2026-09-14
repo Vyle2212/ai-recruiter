@@ -1,69 +1,48 @@
-import {
-  NextRequest,
-  NextResponse,
-} from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-import {
-  executeCandidateLifecycleTransition,
-} from "@/lib/candidateLifecyclePersistence";
-import type {
-  CandidatePipelineStage,
-} from "@/lib/candidateLifecycleTypes";
+import { executeCandidateLifecycleTransition } from "@/lib/candidateLifecyclePersistence";
+import type { CandidatePipelineStage } from "@/lib/candidateLifecycleTypes";
+import { requireRecruiterApiRouteAuthorization } from "@/lib/recruiterApiAuthorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(
-  request: NextRequest,
-) {
+export async function POST(request: NextRequest) {
+  const authorization = await requireRecruiterApiRouteAuthorization({
+    request,
+    policyId: "workflow-move-stage",
+  });
+  if (!authorization.allowed) return authorization.response;
   try {
-    const body = await request
-      .json()
-      .catch(() => ({}));
+    const body = await request.json().catch(() => ({}));
 
-    const candidateId = String(
-      body.candidateId || "",
-    ).trim();
+    const candidateId = String(body.candidateId || "").trim();
 
-    const toStage = String(
-      body.toStage || "",
-    ).trim() as CandidatePipelineStage;
+    const toStage = String(body.toStage || "").trim() as CandidatePipelineStage;
 
     if (!candidateId || !toStage) {
       return NextResponse.json(
         {
-          error:
-            "candidateId and toStage are required",
+          error: "candidateId and toStage are required",
         },
         { status: 400 },
       );
     }
 
-    const result =
-      executeCandidateLifecycleTransition({
-        candidateId,
-        toStage,
-        expectedStage:
-          body.expectedStage,
-        note:
-          body.note,
-        dueAt:
-          body.dueAt,
-        actorId:
-          body.actorId,
-        actorName:
-          body.actorName,
-        execute:
-          body.execute === true,
-      });
+    const result = executeCandidateLifecycleTransition({
+      candidateId,
+      toStage,
+      expectedStage: body.expectedStage,
+      note: body.note,
+      dueAt: body.dueAt,
+      actorId: body.actorId,
+      actorName: body.actorName,
+      execute: body.execute === true,
+    });
 
-    return NextResponse.json(
-      result,
-      {
-        status:
-          result.status,
-      },
-    );
+    return NextResponse.json(result, {
+      status: result.status,
+    });
   } catch (error) {
     return NextResponse.json(
       {

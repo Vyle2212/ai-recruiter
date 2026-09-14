@@ -4,10 +4,15 @@ import { NextResponse } from "next/server";
 import {
   isStagingPortalGuardEnabled,
   shouldProtectPortal,
+  updateRecruiterApiSession,
   updateStagingSession,
 } from "./utils/supabase/proxy";
 
 export async function proxy(request: NextRequest) {
+  if (request.nextUrl.pathname.startsWith("/api/recruiter/")) {
+    return updateRecruiterApiSession(request);
+  }
+
   if (!shouldProtectPortal(request.nextUrl.pathname)) {
     return NextResponse.next();
   }
@@ -29,5 +34,6 @@ export const config = {
     "/recruiter/:path*",
     "/client/:path*",
     "/candidate/:path*",
+    "/api/recruiter/:path*",
   ],
 };

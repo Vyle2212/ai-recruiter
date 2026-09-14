@@ -1,0 +1,745 @@
+export const RECRUITER_API_SECURITY_VERSION =
+  "recruiter-api-security-wave-a-v1";
+
+export const RECRUITER_API_PERMISSIONS = [
+  "recruiter.candidate.read",
+  "recruiter.candidate.compare",
+  "recruiter.shortlist.manage",
+  "recruiter.submission.manage",
+  "recruiter.workflow.read",
+  "recruiter.workflow.write",
+  "recruiter.reporting.read",
+  "recruiter.copilot.use",
+  "recruiter.data_quality.review",
+  "recruiter.data_quality.apply",
+  "recruiter.automation.approve",
+  "recruiter.automation.execute",
+] as const;
+
+export type RecruiterApiPermission = (typeof RECRUITER_API_PERMISSIONS)[number];
+export type RecruiterApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+export type RecruiterApiAuditCategory =
+  | "candidate_access"
+  | "candidate_comparison"
+  | "shortlist"
+  | "submission"
+  | "workflow"
+  | "reporting"
+  | "copilot"
+  | "data_quality"
+  | "automation"
+  | "search";
+
+export type RecruiterApiRoutePolicy = Readonly<{
+  id: string;
+  routePattern: string;
+  supportedMethods: readonly RecruiterApiMethod[];
+  requiredPermission: RecruiterApiPermission;
+  readsCandidatePii: boolean;
+  persistentMutation: boolean;
+  serviceRoleAccess: boolean;
+  invokesAi: boolean;
+  invokesExternalProvider: boolean;
+  auditCategory: RecruiterApiAuditCategory;
+  maxRequestBytes: number;
+}>;
+
+const ONE_MIB = 1024 * 1024;
+const TEN_MIB = 10 * ONE_MIB;
+type PolicyFlags = Partial<
+  Pick<
+    RecruiterApiRoutePolicy,
+    | "readsCandidatePii"
+    | "persistentMutation"
+    | "serviceRoleAccess"
+    | "invokesAi"
+    | "invokesExternalProvider"
+    | "maxRequestBytes"
+  >
+>;
+const p = (
+  id: string,
+  routePattern: string,
+  supportedMethods: readonly RecruiterApiMethod[],
+  requiredPermission: RecruiterApiPermission,
+  auditCategory: RecruiterApiAuditCategory,
+  flags: PolicyFlags = {},
+): RecruiterApiRoutePolicy => ({
+  id,
+  routePattern,
+  supportedMethods,
+  requiredPermission,
+  auditCategory,
+  readsCandidatePii: flags.readsCandidatePii ?? true,
+  persistentMutation: flags.persistentMutation ?? false,
+  serviceRoleAccess: flags.serviceRoleAccess ?? false,
+  invokesAi: flags.invokesAi ?? false,
+  invokesExternalProvider: flags.invokesExternalProvider ?? false,
+  maxRequestBytes: flags.maxRequestBytes ?? ONE_MIB,
+});
+
+export const RECRUITER_API_ROUTE_POLICIES = [
+  p(
+    "ai-review",
+    "/api/recruiter/ai-extraction-review",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "ai-review-apply-history",
+    "/api/recruiter/ai-extraction-review/apply-history",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "ai-review-apply-preview",
+    "/api/recruiter/ai-extraction-review/apply-preview",
+    ["POST"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "ai-review-approvals-read",
+    "/api/recruiter/ai-extraction-review/approvals",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "ai-review-approvals-write",
+    "/api/recruiter/ai-extraction-review/approvals",
+    ["POST"],
+    "recruiter.data_quality.apply",
+    "data_quality",
+    { persistentMutation: true },
+  ),
+  p(
+    "ai-review-batch-decisions",
+    "/api/recruiter/ai-extraction-review/batch-decisions",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "ai-review-batch-decisions-preview",
+    "/api/recruiter/ai-extraction-review/batch-decisions-preview",
+    ["POST"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "ai-review-batch-decisions-apply",
+    "/api/recruiter/ai-extraction-review/batch-decisions-apply",
+    ["POST"],
+    "recruiter.data_quality.apply",
+    "data_quality",
+    { persistentMutation: true },
+  ),
+  p(
+    "ai-review-batch-plan",
+    "/api/recruiter/ai-extraction-review/batch-plan",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "ai-review-batch-progress",
+    "/api/recruiter/ai-extraction-review/batch-progress",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "ai-review-batch-promote",
+    "/api/recruiter/ai-extraction-review/batch-promote",
+    ["POST"],
+    "recruiter.data_quality.apply",
+    "data_quality",
+    { persistentMutation: true },
+  ),
+  p(
+    "ai-review-candidate-apply-preview",
+    "/api/recruiter/ai-extraction-review/candidate-apply-preview",
+    ["POST"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "ai-review-candidate-apply-execute",
+    "/api/recruiter/ai-extraction-review/candidate-apply-execute",
+    ["POST"],
+    "recruiter.data_quality.apply",
+    "data_quality",
+    { persistentMutation: true, serviceRoleAccess: true },
+  ),
+  p(
+    "ai-review-preview-approval",
+    "/api/recruiter/ai-extraction-review/preview-approval",
+    ["POST"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "ai-review-stage-approved",
+    "/api/recruiter/ai-extraction-review/stage-approved",
+    ["POST"],
+    "recruiter.data_quality.apply",
+    "data_quality",
+    { persistentMutation: true },
+  ),
+  p(
+    "ai-review-staging-preview",
+    "/api/recruiter/ai-extraction-review/staging-preview",
+    ["POST"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "candidate-compare",
+    "/api/recruiter/candidate-compare",
+    ["POST"],
+    "recruiter.candidate.compare",
+    "candidate_comparison",
+  ),
+  p(
+    "candidate-self-confirm-review",
+    "/api/recruiter/candidate-self-confirm/review",
+    ["GET"],
+    "recruiter.candidate.read",
+    "candidate_access",
+  ),
+  p(
+    "client-report",
+    "/api/recruiter/client-report",
+    ["POST"],
+    "recruiter.reporting.read",
+    "reporting",
+  ),
+  p(
+    "copilot-chat",
+    "/api/recruiter/copilot/chat",
+    ["POST"],
+    "recruiter.copilot.use",
+    "copilot",
+    { persistentMutation: true },
+  ),
+  p(
+    "copilot-context",
+    "/api/recruiter/copilot/context",
+    ["GET"],
+    "recruiter.copilot.use",
+    "copilot",
+  ),
+  p(
+    "copilot-history-read",
+    "/api/recruiter/copilot/history",
+    ["GET"],
+    "recruiter.copilot.use",
+    "copilot",
+  ),
+  p(
+    "copilot-history-write",
+    "/api/recruiter/copilot/history",
+    ["POST", "DELETE"],
+    "recruiter.copilot.use",
+    "copilot",
+    { persistentMutation: true },
+  ),
+  p(
+    "copilot-suggestions",
+    "/api/recruiter/copilot/suggestions",
+    ["GET"],
+    "recruiter.copilot.use",
+    "copilot",
+  ),
+  p(
+    "dashboard",
+    "/api/recruiter/dashboard",
+    ["GET"],
+    "recruiter.workflow.read",
+    "workflow",
+  ),
+  p(
+    "quick-apply-candidate",
+    "/api/recruiter/quick-fix-apply-review/candidate/[candidateId]",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "quick-apply-decisions-read",
+    "/api/recruiter/quick-fix-apply-review/decisions",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "quick-apply-decisions-write",
+    "/api/recruiter/quick-fix-apply-review/decisions",
+    ["POST"],
+    "recruiter.data_quality.apply",
+    "data_quality",
+    { persistentMutation: true },
+  ),
+  p(
+    "quick-apply-post-verification",
+    "/api/recruiter/quick-fix-apply-review/post-apply-verification",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "quick-apply-repair-impact",
+    "/api/recruiter/quick-fix-apply-review/repair-impact",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "quick-apply-rollback-readiness",
+    "/api/recruiter/quick-fix-apply-review/rollback-readiness",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "quick-apply-subset-execute",
+    "/api/recruiter/quick-fix-apply-review/subset-apply-execute",
+    ["POST"],
+    "recruiter.data_quality.apply",
+    "data_quality",
+    { persistentMutation: true },
+  ),
+  p(
+    "quick-apply-subset-apply-preview",
+    "/api/recruiter/quick-fix-apply-review/subset-apply-preview",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "quick-apply-subset-audit",
+    "/api/recruiter/quick-fix-apply-review/subset-audit",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "quick-apply-subset-preview-read",
+    "/api/recruiter/quick-fix-apply-review/subset-preview",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "quick-apply-subset-preview-write",
+    "/api/recruiter/quick-fix-apply-review/subset-preview",
+    ["POST"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "quick-apply-subset-write-read",
+    "/api/recruiter/quick-fix-apply-review/subset-write",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "quick-apply-subset-write",
+    "/api/recruiter/quick-fix-apply-review/subset-write",
+    ["POST"],
+    "recruiter.data_quality.apply",
+    "data_quality",
+    { persistentMutation: true },
+  ),
+  p(
+    "quick-apply-summary",
+    "/api/recruiter/quick-fix-apply-review/summary",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "quick-apply-workflow-refresh",
+    "/api/recruiter/quick-fix-apply-review/workflow-refresh-preview",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "quick-repair-approvals-audit",
+    "/api/recruiter/quick-fix-repair/approvals-audit",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "quick-repair-approvals-preview",
+    "/api/recruiter/quick-fix-repair/approvals-preview",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "quick-repair-write-preview-read",
+    "/api/recruiter/quick-fix-repair/approvals-write-preview",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "quick-repair-write-preview",
+    "/api/recruiter/quick-fix-repair/approvals-write-preview",
+    ["POST"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "quick-repair-approvals-write",
+    "/api/recruiter/quick-fix-repair/approvals-write",
+    ["POST"],
+    "recruiter.data_quality.apply",
+    "data_quality",
+    { persistentMutation: true },
+  ),
+  p(
+    "quick-repair-candidate",
+    "/api/recruiter/quick-fix-repair/candidate/[candidateId]",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "quick-repair-suggestions",
+    "/api/recruiter/quick-fix-repair/suggestions",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "quick-repair-summary",
+    "/api/recruiter/quick-fix-repair/summary",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "repair-queue-batches",
+    "/api/recruiter/repair-queue/batches",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "repair-queue-candidate",
+    "/api/recruiter/repair-queue/candidate/[candidateId]",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "repair-queue-summary",
+    "/api/recruiter/repair-queue/summary",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "search-v2",
+    "/api/recruiter/search-v2",
+    ["GET", "POST"],
+    "recruiter.candidate.read",
+    "search",
+    { serviceRoleAccess: true, invokesExternalProvider: true },
+  ),
+  p(
+    "search-v2-candidate-detail",
+    "/api/recruiter/search-v2/candidate-details/[candidateId]",
+    ["GET"],
+    "recruiter.candidate.read",
+    "search",
+    { serviceRoleAccess: true },
+  ),
+  p(
+    "search-v2-external-analysis",
+    "/api/recruiter/search-v2/external-analysis",
+    ["GET", "POST"],
+    "recruiter.candidate.read",
+    "search",
+    { invokesAi: true },
+  ),
+  p(
+    "search-v2-external-import",
+    "/api/recruiter/search-v2/external-profile-import",
+    ["POST"],
+    "recruiter.candidate.read",
+    "search",
+    { maxRequestBytes: TEN_MIB },
+  ),
+  p(
+    "search-v2-guided-intent",
+    "/api/recruiter/search-v2/guided-intent",
+    ["POST"],
+    "recruiter.candidate.read",
+    "search",
+    { readsCandidatePii: false, invokesAi: true },
+  ),
+  p(
+    "search-v2-guided-source",
+    "/api/recruiter/search-v2/guided-source",
+    ["GET", "POST"],
+    "recruiter.candidate.read",
+    "search",
+    { readsCandidatePii: false },
+  ),
+  p(
+    "search-v2-history-read",
+    "/api/recruiter/search-v2/history",
+    ["GET"],
+    "recruiter.candidate.read",
+    "search",
+    { readsCandidatePii: false },
+  ),
+  p(
+    "search-v2-history-write",
+    "/api/recruiter/search-v2/history",
+    ["POST", "DELETE"],
+    "recruiter.candidate.read",
+    "search",
+    { readsCandidatePii: false },
+  ),
+  p(
+    "smart-shortlist",
+    "/api/recruiter/smart-shortlist",
+    ["GET"],
+    "recruiter.shortlist.manage",
+    "shortlist",
+  ),
+  p(
+    "submission-generator",
+    "/api/recruiter/submission-generator",
+    ["POST"],
+    "recruiter.submission.manage",
+    "submission",
+  ),
+  p(
+    "workflow-actions",
+    "/api/recruiter/workflow/actions",
+    ["POST"],
+    "recruiter.workflow.write",
+    "workflow",
+  ),
+  p(
+    "workflow-activity",
+    "/api/recruiter/workflow/activity",
+    ["GET"],
+    "recruiter.workflow.read",
+    "workflow",
+  ),
+  p(
+    "workflow-analytics",
+    "/api/recruiter/workflow/analytics",
+    ["GET"],
+    "recruiter.reporting.read",
+    "reporting",
+  ),
+  p(
+    "workflow-audit",
+    "/api/recruiter/workflow/audit",
+    ["GET"],
+    "recruiter.reporting.read",
+    "reporting",
+  ),
+  p(
+    "workflow-approval-history-read",
+    "/api/recruiter/workflow/automation-approval-history",
+    ["GET"],
+    "recruiter.automation.approve",
+    "automation",
+  ),
+  p(
+    "workflow-approval-history-write",
+    "/api/recruiter/workflow/automation-approval-history",
+    ["POST"],
+    "recruiter.automation.approve",
+    "automation",
+    { persistentMutation: true },
+  ),
+  p(
+    "workflow-automation-decisions-read",
+    "/api/recruiter/workflow/automation-decisions",
+    ["GET"],
+    "recruiter.automation.approve",
+    "automation",
+  ),
+  p(
+    "workflow-automation-decisions-write",
+    "/api/recruiter/workflow/automation-decisions",
+    ["POST", "DELETE"],
+    "recruiter.automation.approve",
+    "automation",
+    { persistentMutation: true },
+  ),
+  p(
+    "workflow-automation-preview",
+    "/api/recruiter/workflow/automation-preview",
+    ["GET"],
+    "recruiter.automation.approve",
+    "automation",
+  ),
+  p(
+    "workflow-automation-rules-read",
+    "/api/recruiter/workflow/automation-rules",
+    ["GET"],
+    "recruiter.automation.approve",
+    "automation",
+  ),
+  p(
+    "workflow-automation-rules-write",
+    "/api/recruiter/workflow/automation-rules",
+    ["POST", "DELETE"],
+    "recruiter.automation.execute",
+    "automation",
+    { persistentMutation: true },
+  ),
+  p(
+    "workflow-candidate",
+    "/api/recruiter/workflow/candidate/[candidateId]",
+    ["GET"],
+    "recruiter.workflow.read",
+    "workflow",
+  ),
+  p(
+    "workflow-execution-audit",
+    "/api/recruiter/workflow/execution-audit-preview",
+    ["GET"],
+    "recruiter.automation.execute",
+    "automation",
+  ),
+  p(
+    "workflow-execution-plan",
+    "/api/recruiter/workflow/execution-plan",
+    ["GET"],
+    "recruiter.automation.execute",
+    "automation",
+  ),
+  p(
+    "workflow-execution-preview",
+    "/api/recruiter/workflow/execution-preview",
+    ["GET"],
+    "recruiter.automation.execute",
+    "automation",
+  ),
+  p(
+    "workflow-execution-readiness",
+    "/api/recruiter/workflow/execution-readiness",
+    ["GET"],
+    "recruiter.automation.execute",
+    "automation",
+  ),
+  p(
+    "workflow-execution-release-gate",
+    "/api/recruiter/workflow/execution-release-gate",
+    ["GET"],
+    "recruiter.automation.execute",
+    "automation",
+  ),
+  p(
+    "workflow-execution-simulator",
+    "/api/recruiter/workflow/execution-simulator",
+    ["GET"],
+    "recruiter.automation.execute",
+    "automation",
+  ),
+  p(
+    "workflow-insights",
+    "/api/recruiter/workflow/insights",
+    ["GET"],
+    "recruiter.workflow.read",
+    "workflow",
+  ),
+  p(
+    "workflow-move-stage",
+    "/api/recruiter/workflow/move-stage",
+    ["POST"],
+    "recruiter.workflow.write",
+    "workflow",
+    { persistentMutation: true },
+  ),
+  p(
+    "workflow-notifications",
+    "/api/recruiter/workflow/notifications",
+    ["GET"],
+    "recruiter.workflow.read",
+    "workflow",
+  ),
+  p(
+    "workflow-rollback-stage",
+    "/api/recruiter/workflow/rollback-stage",
+    ["POST"],
+    "recruiter.workflow.write",
+    "workflow",
+    { persistentMutation: true },
+  ),
+  p(
+    "workflow-sla",
+    "/api/recruiter/workflow/sla",
+    ["GET"],
+    "recruiter.workflow.read",
+    "workflow",
+  ),
+  p(
+    "workflow-state",
+    "/api/recruiter/workflow/state",
+    ["GET"],
+    "recruiter.workflow.read",
+    "workflow",
+  ),
+  p(
+    "workflow-state-diff",
+    "/api/recruiter/workflow/state-diff",
+    ["GET"],
+    "recruiter.workflow.read",
+    "workflow",
+  ),
+  p(
+    "workflow-summary",
+    "/api/recruiter/workflow/summary",
+    ["GET"],
+    "recruiter.workflow.read",
+    "workflow",
+  ),
+  p(
+    "workflow-timeline",
+    "/api/recruiter/workflow/timeline",
+    ["GET"],
+    "recruiter.workflow.read",
+    "workflow",
+  ),
+] as const satisfies readonly RecruiterApiRoutePolicy[];
+
+function routeRegex(routePattern: string) {
+  return new RegExp(
+    `^${routePattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\[[^/]+\\\]/g, "[^/]+")}$`,
+  );
+}
+
+export function recruiterApiPolicyForRequest(pathname: string, method: string) {
+  const normalizedMethod = method.toUpperCase() as RecruiterApiMethod;
+  return RECRUITER_API_ROUTE_POLICIES.find(
+    (policy) =>
+      policy.supportedMethods.includes(normalizedMethod) &&
+      routeRegex(policy.routePattern).test(pathname),
+  );
+}
+
+export function recruiterApiPolicyById(id: string, method: string) {
+  const normalizedMethod = method.toUpperCase() as RecruiterApiMethod;
+  return RECRUITER_API_ROUTE_POLICIES.find(
+    (policy) =>
+      policy.id === id && policy.supportedMethods.includes(normalizedMethod),
+  );
+}

@@ -1,7 +1,4 @@
-import {
-  NextRequest,
-  NextResponse,
-} from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import {
   appendWorkflowAutomationApprovalHistory,
@@ -11,37 +8,25 @@ import type {
   RecruiterWorkflowAutomationAction,
   RecruiterWorkflowAutomationRuleId,
 } from "@/lib/recruiterWorkflowAutomationRules";
+import { requireRecruiterApiRouteAuthorization } from "@/lib/recruiterApiAuthorization";
 
-export const runtime =
-  "nodejs";
+export const runtime = "nodejs";
 
-export const dynamic =
-  "force-dynamic";
+export const dynamic = "force-dynamic";
 
-export async function GET(
-  request: NextRequest,
-) {
+export async function GET(request: NextRequest) {
   try {
-    const file =
-      readWorkflowAutomationApprovalHistory();
+    const file = readWorkflowAutomationApprovalHistory();
 
-    const proposalId =
-      request.nextUrl.searchParams.get(
-        "proposalId",
-      );
+    const proposalId = request.nextUrl.searchParams.get("proposalId");
 
     if (!proposalId) {
-      return NextResponse.json(
-        file,
-      );
+      return NextResponse.json(file);
     }
 
-    const events =
-      file.events.filter(
-        (event) =>
-          event.proposalId ===
-          proposalId,
-      );
+    const events = file.events.filter(
+      (event) => event.proposalId === proposalId,
+    );
 
     return NextResponse.json({
       ...file,
@@ -49,34 +34,18 @@ export async function GET(
       events,
 
       summary: {
-        total:
-          events.length,
+        total: events.length,
 
-        approved:
-          events.filter(
-            (event) =>
-              event.decision ===
-              "approved",
-          ).length,
+        approved: events.filter((event) => event.decision === "approved")
+          .length,
 
-        rejected:
-          events.filter(
-            (event) =>
-              event.decision ===
-              "rejected",
-          ).length,
+        rejected: events.filter((event) => event.decision === "rejected")
+          .length,
 
-        deferred:
-          events.filter(
-            (event) =>
-              event.decision ===
-              "deferred",
-          ).length,
+        deferred: events.filter((event) => event.decision === "deferred")
+          .length,
 
-        proposalsAffected:
-          events.length
-            ? 1
-            : 0,
+        proposalsAffected: events.length ? 1 : 0,
       },
     });
   } catch (error) {
@@ -94,74 +63,40 @@ export async function GET(
   }
 }
 
-export async function POST(
-  request: NextRequest,
-) {
+export async function POST(request: NextRequest) {
+  const authorization = await requireRecruiterApiRouteAuthorization({
+    request,
+    policyId: "workflow-approval-history-write",
+  });
+  if (!authorization.allowed) return authorization.response;
   try {
-    const body =
-      await request.json();
+    const body = await request.json();
 
-    const result =
-      appendWorkflowAutomationApprovalHistory({
-        proposalId:
-          String(
-            body?.proposalId ||
-              "",
-          ),
+    const result = appendWorkflowAutomationApprovalHistory({
+      proposalId: String(body?.proposalId || ""),
 
-        candidateId:
-          String(
-            body?.candidateId ||
-              "",
-          ),
+      candidateId: String(body?.candidateId || ""),
 
-        candidateName:
-          String(
-            body?.candidateName ||
-              "",
-          ),
+      candidateName: String(body?.candidateName || ""),
 
-        ruleId:
-          String(
-            body?.ruleId ||
-              "",
-          ) as RecruiterWorkflowAutomationRuleId,
+      ruleId: String(body?.ruleId || "") as RecruiterWorkflowAutomationRuleId,
 
-        proposedAction:
-          String(
-            body?.proposedAction ||
-              "",
-          ) as RecruiterWorkflowAutomationAction,
+      proposedAction: String(
+        body?.proposedAction || "",
+      ) as RecruiterWorkflowAutomationAction,
 
-        previousDecision:
-          body?.previousDecision ||
-          null,
+      previousDecision: body?.previousDecision || null,
 
-        decision:
-          body?.decision,
+      decision: body?.decision,
 
-        reason:
-          String(
-            body?.reason ||
-              "",
-          ),
+      reason: String(body?.reason || ""),
 
-        reviewerId:
-          typeof body?.reviewerId ===
-          "string"
-            ? body.reviewerId
-            : null,
+      reviewerId: authorization.scope.profileId,
 
-        reviewerName:
-          typeof body?.reviewerName ===
-          "string"
-            ? body.reviewerName
-            : null,
-      });
+      reviewerName: null,
+    });
 
-    return NextResponse.json(
-      result,
-    );
+    return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
       {

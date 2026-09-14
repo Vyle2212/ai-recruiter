@@ -5,15 +5,12 @@ import {
   isPublicPortalRoute,
   shouldProtectPortal,
 } from "../utils/supabase/proxy";
+import { config } from "../proxy";
 
 const protectedCases = [
   ["/admin", "/admin", ["admin"]],
   ["/admin/portal", "/admin", ["admin"]],
-  [
-    "/admin/staging-readiness",
-    "/admin",
-    ["admin"],
-  ],
+  ["/admin/staging-readiness", "/admin", ["admin"]],
   [
     "/recruiter/dashboard",
     "/recruiter",
@@ -25,16 +22,8 @@ const protectedCases = [
     ["admin", "recruiter_manager", "recruiter"],
   ],
   ["/client/portal", "/client", ["client"]],
-  [
-    "/client/candidates/example-id",
-    "/client",
-    ["client"],
-  ],
-  [
-    "/candidate/portal",
-    "/candidate",
-    ["candidate"],
-  ],
+  ["/client/candidates/example-id", "/client", ["client"]],
+  ["/candidate/portal", "/candidate", ["candidate"]],
 ] as const;
 
 for (const [pathname, prefix, allowedRoles] of protectedCases) {
@@ -74,26 +63,17 @@ for (const pathname of publicCases) {
   );
 }
 
-assert.equal(
-  isPublicPortalRoute("/client/portal/preview"),
-  true,
+assert.equal(isPublicPortalRoute("/client/portal/preview"), true);
+
+assert.ok(
+  config.matcher.includes("/api/recruiter/:path*"),
+  "The global proxy boundary must match every recruiter API route",
 );
 
-assert.equal(
-  isPublicPortalRoute(
-    "/candidate/self-confirm/example-id",
-  ),
-  true,
-);
+assert.equal(isPublicPortalRoute("/candidate/self-confirm/example-id"), true);
 
-assert.equal(
-  isPublicPortalRoute("/client/portal"),
-  false,
-);
+assert.equal(isPublicPortalRoute("/client/portal"), false);
 
-assert.equal(
-  isPublicPortalRoute("/candidate/portal"),
-  false,
-);
+assert.equal(isPublicPortalRoute("/candidate/portal"), false);
 
 console.log("portalRouteGuards.test.ts passed");

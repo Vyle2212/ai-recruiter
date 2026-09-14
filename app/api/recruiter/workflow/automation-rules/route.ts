@@ -1,7 +1,4 @@
-import {
-  NextRequest,
-  NextResponse,
-} from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import {
   readWorkflowAutomationRuleConfigs,
@@ -12,18 +9,15 @@ import type {
   RecruiterWorkflowAutomationPriority,
   RecruiterWorkflowAutomationRuleId,
 } from "@/lib/recruiterWorkflowAutomationRules";
+import { requireRecruiterApiRouteAuthorization } from "@/lib/recruiterApiAuthorization";
 
-export const runtime =
-  "nodejs";
+export const runtime = "nodejs";
 
-export const dynamic =
-  "force-dynamic";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    return NextResponse.json(
-      readWorkflowAutomationRuleConfigs(),
-    );
+    return NextResponse.json(readWorkflowAutomationRuleConfigs());
   } catch (error) {
     return NextResponse.json(
       {
@@ -39,50 +33,34 @@ export async function GET() {
   }
 }
 
-export async function POST(
-  request: NextRequest,
-) {
+export async function POST(request: NextRequest) {
+  const authorization = await requireRecruiterApiRouteAuthorization({
+    request,
+    policyId: "workflow-automation-rules-write",
+  });
+  if (!authorization.allowed) return authorization.response;
   try {
-    const body =
-      await request.json();
+    const body = await request.json();
 
-    const result =
-      saveWorkflowAutomationRuleConfig({
-        ruleId:
-          String(
-            body?.ruleId ||
-              "",
-          ) as RecruiterWorkflowAutomationRuleId,
+    const result = saveWorkflowAutomationRuleConfig({
+      ruleId: String(body?.ruleId || "") as RecruiterWorkflowAutomationRuleId,
 
-        enabled:
-          typeof body?.enabled ===
-          "boolean"
-            ? body.enabled
-            : undefined,
+      enabled: typeof body?.enabled === "boolean" ? body.enabled : undefined,
 
-        priority:
-          typeof body?.priority ===
-          "string"
-            ? body.priority as RecruiterWorkflowAutomationPriority
-            : undefined,
+      priority:
+        typeof body?.priority === "string"
+          ? (body.priority as RecruiterWorkflowAutomationPriority)
+          : undefined,
 
-        settings:
-          body?.settings &&
-          typeof body.settings ===
-            "object"
-            ? body.settings
-            : undefined,
+      settings:
+        body?.settings && typeof body.settings === "object"
+          ? body.settings
+          : undefined,
 
-        updatedBy:
-          typeof body?.updatedBy ===
-          "string"
-            ? body.updatedBy
-            : null,
-      });
+      updatedBy: authorization.scope.profileId,
+    });
 
-    return NextResponse.json(
-      result,
-    );
+    return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
       {
@@ -98,18 +76,16 @@ export async function POST(
   }
 }
 
-export async function DELETE(
-  request: NextRequest,
-) {
+export async function DELETE(request: NextRequest) {
+  const authorization = await requireRecruiterApiRouteAuthorization({
+    request,
+    policyId: "workflow-automation-rules-write",
+  });
+  if (!authorization.allowed) return authorization.response;
   try {
-    const updatedBy =
-      request.nextUrl.searchParams.get(
-        "updatedBy",
-      );
-
     return NextResponse.json(
       resetWorkflowAutomationRuleConfigs({
-        updatedBy,
+        updatedBy: authorization.scope.profileId,
       }),
     );
   } catch (error) {

@@ -1,7 +1,4 @@
-import {
-  NextRequest,
-  NextResponse,
-} from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import {
   deleteWorkflowAutomationDecision,
@@ -9,22 +6,20 @@ import {
   saveWorkflowAutomationDecision,
   type WorkflowAutomationDecisionStatus,
 } from "@/lib/recruiterWorkflowAutomationDecisions";
+import { requireRecruiterApiRouteAuthorization } from "@/lib/recruiterApiAuthorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const VALID_DECISIONS =
-  new Set<WorkflowAutomationDecisionStatus>([
-    "approved",
-    "rejected",
-    "deferred",
-  ]);
+const VALID_DECISIONS = new Set<WorkflowAutomationDecisionStatus>([
+  "approved",
+  "rejected",
+  "deferred",
+]);
 
 export async function GET() {
   try {
-    return NextResponse.json(
-      readWorkflowAutomationDecisions(),
-    );
+    return NextResponse.json(readWorkflowAutomationDecisions());
   } catch (error) {
     return NextResponse.json(
       {
@@ -40,27 +35,23 @@ export async function GET() {
   }
 }
 
-export async function POST(
-  request: NextRequest,
-) {
+export async function POST(request: NextRequest) {
+  const authorization = await requireRecruiterApiRouteAuthorization({
+    request,
+    policyId: "workflow-automation-decisions-write",
+  });
+  if (!authorization.allowed) return authorization.response;
   try {
-    const body =
-      await request.json();
+    const body = await request.json();
 
-    const decision =
-      String(
-        body?.decision || "",
-      ) as WorkflowAutomationDecisionStatus;
+    const decision = String(
+      body?.decision || "",
+    ) as WorkflowAutomationDecisionStatus;
 
-    if (
-      !VALID_DECISIONS.has(
-        decision,
-      )
-    ) {
+    if (!VALID_DECISIONS.has(decision)) {
       return NextResponse.json(
         {
-          error:
-            "Decision must be approved, rejected, or deferred.",
+          error: "Decision must be approved, rejected, or deferred.",
         },
         {
           status: 400,
@@ -68,55 +59,27 @@ export async function POST(
       );
     }
 
-    const result =
-      saveWorkflowAutomationDecision({
-        proposalId:
-          String(
-            body?.proposalId || "",
-          ),
+    const result = saveWorkflowAutomationDecision({
+      proposalId: String(body?.proposalId || ""),
 
-        candidateId:
-          String(
-            body?.candidateId || "",
-          ),
+      candidateId: String(body?.candidateId || ""),
 
-        ruleId:
-          String(
-            body?.ruleId || "",
-          ),
+      ruleId: String(body?.ruleId || ""),
 
-        proposedAction:
-          String(
-            body?.proposedAction || "",
-          ),
+      proposedAction: String(body?.proposedAction || ""),
 
-        decision,
+      decision,
 
-        reason:
-          typeof body?.reason ===
-          "string"
-            ? body.reason
-            : "",
+      reason: typeof body?.reason === "string" ? body.reason : "",
 
-        reviewerId:
-          typeof body?.reviewerId ===
-          "string"
-            ? body.reviewerId
-            : null,
+      reviewerId: authorization.scope.profileId,
 
-        reviewerName:
-          typeof body?.reviewerName ===
-          "string"
-            ? body.reviewerName
-            : null,
-      });
+      reviewerName: null,
+    });
 
-    return NextResponse.json(
-      result,
-      {
-        status: 201,
-      },
-    );
+    return NextResponse.json(result, {
+      status: 201,
+    });
   } catch (error) {
     return NextResponse.json(
       {
@@ -132,20 +95,19 @@ export async function POST(
   }
 }
 
-export async function DELETE(
-  request: NextRequest,
-) {
+export async function DELETE(request: NextRequest) {
+  const authorization = await requireRecruiterApiRouteAuthorization({
+    request,
+    policyId: "workflow-automation-decisions-write",
+  });
+  if (!authorization.allowed) return authorization.response;
   try {
-    const proposalId =
-      request.nextUrl.searchParams.get(
-        "proposalId",
-      );
+    const proposalId = request.nextUrl.searchParams.get("proposalId");
 
     if (!proposalId) {
       return NextResponse.json(
         {
-          error:
-            "Proposal ID is required.",
+          error: "Proposal ID is required.",
         },
         {
           status: 400,
@@ -153,11 +115,7 @@ export async function DELETE(
       );
     }
 
-    return NextResponse.json(
-      deleteWorkflowAutomationDecision(
-        proposalId,
-      ),
-    );
+    return NextResponse.json(deleteWorkflowAutomationDecision(proposalId));
   } catch (error) {
     return NextResponse.json(
       {

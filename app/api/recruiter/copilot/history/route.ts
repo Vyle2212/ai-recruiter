@@ -1,7 +1,4 @@
-import {
-  NextRequest,
-  NextResponse,
-} from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import {
   appendRecruiterCopilotExchange,
@@ -9,15 +6,14 @@ import {
   deleteRecruiterCopilotConversation,
   readRecruiterCopilotConversations,
 } from "@/lib/recruiterCopilotConversationStore";
+import { requireRecruiterApiRouteAuthorization } from "@/lib/recruiterApiAuthorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    return NextResponse.json(
-      readRecruiterCopilotConversations(),
-    );
+    return NextResponse.json(readRecruiterCopilotConversations());
   } catch (error) {
     return NextResponse.json(
       {
@@ -33,25 +29,24 @@ export async function GET() {
   }
 }
 
-export async function POST(
-  request: NextRequest,
-) {
+export async function POST(request: NextRequest) {
+  const authorization = await requireRecruiterApiRouteAuthorization({
+    request,
+    policyId: "copilot-history-write",
+  });
+  if (!authorization.allowed) return authorization.response;
   try {
-    const body =
-      await request.json();
+    const body = await request.json();
 
     const question =
-      typeof body?.question === "string"
-        ? body.question.trim()
-        : "";
+      typeof body?.question === "string" ? body.question.trim() : "";
 
     const answer = body?.answer;
 
     if (!question || !answer) {
       return NextResponse.json(
         {
-          error:
-            "Question and answer are required.",
+          error: "Question and answer are required.",
         },
         {
           status: 400,
@@ -59,23 +54,18 @@ export async function POST(
       );
     }
 
-    const result =
-      appendRecruiterCopilotExchange({
-        conversationId:
-          typeof body?.conversationId ===
-          "string"
-            ? body.conversationId
-            : undefined,
-        question,
-        answer,
-      });
+    const result = appendRecruiterCopilotExchange({
+      conversationId:
+        typeof body?.conversationId === "string"
+          ? body.conversationId
+          : undefined,
+      question,
+      answer,
+    });
 
-    return NextResponse.json(
-      result,
-      {
-        status: 201,
-      },
-    );
+    return NextResponse.json(result, {
+      status: 201,
+    });
   } catch (error) {
     return NextResponse.json(
       {
@@ -91,25 +81,21 @@ export async function POST(
   }
 }
 
-export async function DELETE(
-  request: NextRequest,
-) {
+export async function DELETE(request: NextRequest) {
+  const authorization = await requireRecruiterApiRouteAuthorization({
+    request,
+    policyId: "copilot-history-write",
+  });
+  if (!authorization.allowed) return authorization.response;
   try {
-    const conversationId =
-      request.nextUrl.searchParams.get(
-        "conversationId",
-      );
+    const conversationId = request.nextUrl.searchParams.get("conversationId");
 
     if (!conversationId) {
-      return NextResponse.json(
-        clearRecruiterCopilotConversations(),
-      );
+      return NextResponse.json(clearRecruiterCopilotConversations());
     }
 
     return NextResponse.json(
-      deleteRecruiterCopilotConversation(
-        conversationId,
-      ),
+      deleteRecruiterCopilotConversation(conversationId),
     );
   } catch (error) {
     return NextResponse.json(

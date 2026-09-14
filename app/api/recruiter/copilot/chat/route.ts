@@ -1,44 +1,32 @@
-import {
-  NextRequest,
-  NextResponse,
-} from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-import {
-  answerRecruiterCopilotQuestion,
-} from "@/lib/recruiterCopilotAnswerEngine";
-import {
-  buildRecruiterCopilotContext,
-} from "@/lib/recruiterCopilotContext";
-import {
-  readPersistedWorkflowState,
-} from "@/lib/recruiterWorkflowStateHydration";
-import {
-  appendRecruiterCopilotExchange,
-} from "@/lib/recruiterCopilotConversationStore";
+import { answerRecruiterCopilotQuestion } from "@/lib/recruiterCopilotAnswerEngine";
+import { buildRecruiterCopilotContext } from "@/lib/recruiterCopilotContext";
+import { readPersistedWorkflowState } from "@/lib/recruiterWorkflowStateHydration";
+import { appendRecruiterCopilotExchange } from "@/lib/recruiterCopilotConversationStore";
+import { requireRecruiterApiRouteAuthorization } from "@/lib/recruiterApiAuthorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_QUESTION_LENGTH = 500;
 
-export async function POST(
-  request: NextRequest,
-) {
+export async function POST(request: NextRequest) {
+  const authorization = await requireRecruiterApiRouteAuthorization({
+    request,
+    policyId: "copilot-chat",
+  });
+  if (!authorization.allowed) return authorization.response;
   try {
-    const body =
-      await request.json();
+    const body = await request.json();
 
     const question =
-      typeof body?.question ===
-      "string"
-        ? body.question.trim()
-        : "";
+      typeof body?.question === "string" ? body.question.trim() : "";
 
     if (!question) {
       return NextResponse.json(
         {
-          error:
-            "Question is required.",
+          error: "Question is required.",
         },
         {
           status: 400,
@@ -46,14 +34,10 @@ export async function POST(
       );
     }
 
-    if (
-      question.length >
-      MAX_QUESTION_LENGTH
-    ) {
+    if (question.length > MAX_QUESTION_LENGTH) {
       return NextResponse.json(
         {
-          error:
-            `Question must not exceed ${MAX_QUESTION_LENGTH} characters.`,
+          error: `Question must not exceed ${MAX_QUESTION_LENGTH} characters.`,
         },
         {
           status: 400,
@@ -61,25 +45,15 @@ export async function POST(
       );
     }
 
-    const saved =
-      readPersistedWorkflowState();
+    const saved = readPersistedWorkflowState();
 
-    const context =
-      buildRecruiterCopilotContext(
-        saved?.states || [],
-        {
-          generatedAt:
-            saved?.generatedAt,
-          recentActivityLimit: 25,
-          priorityCandidateLimit: 20,
-        },
-      );
+    const context = buildRecruiterCopilotContext(saved?.states || [], {
+      generatedAt: saved?.generatedAt,
+      recentActivityLimit: 25,
+      priorityCandidateLimit: 20,
+    });
 
-    const answer =
-      answerRecruiterCopilotQuestion(
-        question,
-        context,
-      );
+    const answer = answerRecruiterCopilotQuestion(question, context);
 
     let conversation: {
       conversationId: string | null;
@@ -92,19 +66,17 @@ export async function POST(
     };
 
     try {
-      const savedExchange =
-        appendRecruiterCopilotExchange({
-          conversationId:
-            typeof body?.conversationId === "string"
-              ? body.conversationId.trim() || undefined
-              : undefined,
-          question,
-          answer,
-        });
+      const savedExchange = appendRecruiterCopilotExchange({
+        conversationId:
+          typeof body?.conversationId === "string"
+            ? body.conversationId.trim() || undefined
+            : undefined,
+        question,
+        answer,
+      });
 
       conversation = {
-        conversationId:
-          savedExchange.conversation.conversationId,
+        conversationId: savedExchange.conversation.conversationId,
         saved: true,
         saveError: null,
       };

@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { applyBatchBulkDecision } from "@/lib/aiExtractionBatchDecisionStore";
+import { requireRecruiterApiRouteAuthorization } from "@/lib/recruiterApiAuthorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  const authorization = await requireRecruiterApiRouteAuthorization({
+    request: req,
+    policyId: "ai-review-batch-decisions-apply",
+  });
+  if (!authorization.allowed) return authorization.response;
   try {
     const body = await req.json().catch(() => ({}));
     const report = applyBatchBulkDecision({
@@ -15,6 +21,14 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json(report);
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to apply batch decisions" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to apply batch decisions",
+      },
+      { status: 500 },
+    );
   }
 }

@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { recruiterApiPolicyForRequest } from "../lib/recruiterApiPolicyRegistry";
 
 const root = path.join(process.cwd(), "app", "api", "recruiter");
 const routes: string[] = [];
@@ -20,6 +21,11 @@ const inventory = routes.sort().map((file) => {
   const methods = [
     ...source.matchAll(/export async function (GET|POST|PUT|PATCH|DELETE)/g),
   ].map((match) => match[1]);
+  const policies = methods.map((method) =>
+    recruiterApiPolicyForRequest(route, method),
+  );
+  if (policies.some((policy) => !policy))
+    throw new Error(`Missing recruiter API policy for ${route}`);
   const centralSearchBoundary = source.includes(
     "requireRecruiterSearchAuthorization",
   );
@@ -49,13 +55,24 @@ const inventory = routes.sort().map((file) => {
   return {
     route,
     methods,
+    policies: policies.map((policy) => ({
+      id: policy!.id,
+      methods: policy!.supportedMethods,
+      requiredPermission: policy!.requiredPermission,
+      readsCandidatePii: policy!.readsCandidatePii,
+      persistentMutation: policy!.persistentMutation,
+      serviceRoleAccess: policy!.serviceRoleAccess,
+      invokesAi: policy!.invokesAi,
+      invokesExternalProvider: policy!.invokesExternalProvider,
+      auditCategory: policy!.auditCategory,
+    })),
     authorization: centralSearchBoundary
-      ? "strict_search_v2_authn_and_role_authz"
-      : legacyRecruiterBoundary
-        ? "legacy_recruiter_authn_and_role_authz"
-        : directSessionAuthentication
-          ? "authentication_only_or_inline_unknown"
-          : "no_route_boundary_ui_proxy_not_sufficient",
+      ? "global_policy_and_search_handler_authz"
+      : source.includes("requireRecruiterApiRouteAuthorization")
+        ? "global_policy_and_high_risk_handler_authz"
+        : legacyRecruiterBoundary || directSessionAuthentication
+          ? "global_policy_and_existing_inline_authz"
+          : "global_policy_authn_and_permission_authz",
     serviceRoleAccess: serviceRole
       ? source.includes("createClient(") ||
         source.includes("SUPABASE_SERVICE_ROLE")
@@ -90,18 +107,25 @@ const searchV2 = inventory.filter((item) =>
 if (
   searchV2.length !== 7 ||
   searchV2.some(
-    (item) => item.authorization !== "strict_search_v2_authn_and_role_authz",
+    (item) => item.authorization !== "global_policy_and_search_handler_authz",
   )
 )
   throw new Error(
     "The complete Search V2 API family must use the strict boundary.",
   );
 
+if (inventory.some((item) => item.policies.length !== item.methods.length))
+  throw new Error("Every recruiter route method must have exactly one policy.");
+
 console.log(
   JSON.stringify(
     {
       generatedFrom: "app/api/recruiter/**/route.ts",
       routeCount: inventory.length,
+      exportedMethodCount: inventory.reduce(
+        (total, item) => total + item.methods.length,
+        0,
+      ),
       summary: Object.fromEntries(
         [...new Set(inventory.map((item) => item.authorization))].map(
           (authorization) => [
