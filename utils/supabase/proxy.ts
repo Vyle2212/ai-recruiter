@@ -263,6 +263,26 @@ export async function updateRecruiterApiSession(request: NextRequest) {
       "The request cannot be processed.",
     );
 
+  if (policy.persistentMutation || policy.serviceRoleAccess)
+    console.warn(
+      JSON.stringify({
+        type: "recruiter_api_security",
+        event: policy.persistentMutation
+          ? "mutation_allowed"
+          : "service_role_operation_allowed",
+        routePolicyId: policy.id,
+        method: request.method,
+        decision: "allowed",
+        actorHash: authorization.scope.cacheKey.slice(0, 12),
+        role: authorization.scope.role,
+        ...(authorization.scope.organizationId
+          ? {
+              organizationScopeHash: authorization.scope.cacheKey.slice(12, 24),
+            }
+          : {}),
+      }),
+    );
+
   for (const [key, value] of Object.entries(recruiterApiHeaders))
     response.headers.set(key, value);
   return response;
