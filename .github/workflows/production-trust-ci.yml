@@ -7,12 +7,14 @@ on:
       - "codex/recruiter-api-authorization-*"
       - "codex/dependency-security-*"
       - "codex/authenticated-acceptance-*"
+      - "codex/acceptance-workflow-*"
   pull_request:
     branches:
       - "codex/production-trust-*"
       - "codex/recruiter-api-authorization-*"
       - "codex/dependency-security-*"
       - "codex/authenticated-acceptance-*"
+      - "codex/acceptance-workflow-*"
       - "release/**"
       - integration
   workflow_dispatch:
@@ -132,6 +134,9 @@ jobs:
 
       - name: Clean dependency installation
         run: npm ci
+
+      - name: Reject mutable GitHub Action references
+        run: npm run test:github-actions-pinning
 
       - name: Route policy and authorization matrix
         run: npm run test:production-trust:authorization
