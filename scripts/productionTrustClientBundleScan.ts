@@ -49,6 +49,10 @@ const totalHits = Object.values(hitCounts).reduce(
 const report = {
   schemaVersion: "production-trust-client-bundle-scan-v1",
   testedCommit: process.env.GITHUB_SHA || "local-worktree",
+  buildId: readFileSync(
+    path.join(process.cwd(), ".next", "BUILD_ID"),
+    "utf8",
+  ).trim(),
   scannedFiles: files.length,
   forbiddenPatternHits: totalHits,
   patternsWithHits: Object.entries(hitCounts)
