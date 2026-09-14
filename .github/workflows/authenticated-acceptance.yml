@@ -1,0 +1,124 @@
+name: Production Trust Authenticated Acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      tested_sha:
+        description: Exact deployed commit SHA to verify
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: authenticated-acceptance-${{ inputs.tested_sha }}
+  cancel-in-progress: false
+
+jobs:
+  authenticated-acceptance:
+    name: Exact-build authenticated acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: acceptance
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      ACCEPTANCE_TEST_MODE: "true"
+      APP_ENV: acceptance
+      ACCEPTANCE_BASE_URL: ${{ secrets.ACCEPTANCE_BASE_URL }}
+      ACCEPTANCE_EXPECTED_SHA: ${{ inputs.tested_sha }}
+      ACCEPTANCE_SUPABASE_URL: ${{ secrets.ACCEPTANCE_SUPABASE_URL }}
+      ACCEPTANCE_SUPABASE_ANON_KEY: ${{ secrets.ACCEPTANCE_SUPABASE_ANON_KEY }}
+      ACCEPTANCE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.ACCEPTANCE_SUPABASE_SERVICE_ROLE_KEY }}
+      ACCEPTANCE_SUPABASE_PROJECT_REF: ${{ secrets.ACCEPTANCE_SUPABASE_PROJECT_REF }}
+      ACCEPTANCE_SUPABASE_PROJECT_REF_ALLOWLIST: ${{ secrets.ACCEPTANCE_SUPABASE_PROJECT_REF_ALLOWLIST }}
+      ACCEPTANCE_PRODUCTION_PROJECT_REF_DENYLIST: ${{ secrets.ACCEPTANCE_PRODUCTION_PROJECT_REF_DENYLIST }}
+      ACCEPTANCE_ENVIRONMENT_ID: ${{ secrets.ACCEPTANCE_ENVIRONMENT_ID }}
+      ACCEPTANCE_INTERNAL_SEARCH_QUERY: ${{ secrets.ACCEPTANCE_INTERNAL_SEARCH_QUERY }}
+      ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER: ${{ secrets.ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER }}
+      ACCEPTANCE_EXTERNAL_SEARCH_QUERY: ${{ secrets.ACCEPTANCE_EXTERNAL_SEARCH_QUERY }}
+      ACCEPTANCE_EXTERNAL_PROVIDER_APPROVED: ${{ secrets.ACCEPTANCE_EXTERNAL_PROVIDER_APPROVED }}
+    steps:
+      - name: Checkout exact requested revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.tested_sha }}
+          fetch-depth: 1
+
+      - name: Verify checked-out revision and HTTPS target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$ACCEPTANCE_EXPECTED_SHA"
+          case "$ACCEPTANCE_BASE_URL" in https://*) ;; *) exit 1 ;; esac
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Clean dependency installation
+        run: npm ci
+
+      - name: Install pinned Chromium runtime
+        run: npx playwright install --with-deps chromium
+
+      - name: Create ephemeral acceptance run metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id="ptf1c2-gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          expires_at="$(date -u -d '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')"
+          {
+            echo "ACCEPTANCE_RUN_ID=$run_id"
+            echo "ACCEPTANCE_SYNTHETIC_NAMESPACE=ptf1c2/$run_id"
+            echo "ACCEPTANCE_CLEANUP_OWNER=github-actions"
+            echo "ACCEPTANCE_EXPIRES_AT=$expires_at"
+            echo "ACCEPTANCE_CREDENTIAL_BUNDLE_PATH=$RUNNER_TEMP/acceptance-credentials.json"
+          } >> "$GITHUB_ENV"
+
+      - name: Verify fail-closed environment and database marker
+        run: npm run acceptance:environment:verify
+
+      - name: Provision controlled synthetic identities
+        run: npm run acceptance:provision
+
+      - name: Verify local production Webpack build for exact SHA
+        env:
+          APP_ENV: test
+          AUTH_MODE: disabled
+          EXTERNAL_TALENT_SEARCH_ENABLED: "false"
+          EXTERNAL_TALENT_PROVIDER: disabled
+        run: npm run build:webpack
+
+      - name: Run real authenticated browser and API acceptance
+        run: npm run acceptance:e2e
+
+      - name: Generate sanitized acceptance report
+        if: always()
+        run: npm run acceptance:report
+
+      - name: Clean synthetic identities and records
+        if: always()
+        run: npm run acceptance:cleanup
+
+      - name: Remove all ephemeral authentication material
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f "$RUNNER_TEMP/acceptance-credentials.json"
+          find "$RUNNER_TEMP" -maxdepth 1 -type f -name '*storage-state*' -delete
+
+      - name: Upload sanitized acceptance evidence only
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: authenticated-acceptance-${{ inputs.tested_sha }}
+          path: |
+            artifacts/authenticated-acceptance-report.json
+            artifacts/acceptance-evidence/*.png
+          if-no-files-found: error
+          retention-days: 7

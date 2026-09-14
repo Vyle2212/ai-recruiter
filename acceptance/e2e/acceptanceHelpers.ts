@@ -1,0 +1,168 @@
+import { readFile } from "node:fs/promises";
+
+import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
+import {
+  request as playwrightRequest,
+  type APIRequestContext,
+  type APIResponse,
+  type BrowserContext,
+} from "@playwright/test";
+
+import type {
+  AcceptanceCredentialBundle,
+  AcceptanceIdentityKey,
+} from "../../lib/acceptanceSyntheticIdentityContract";
+
+type CookieToSet = {
+  name: string;
+  value: string;
+  options?: {
+    domain?: string;
+    path?: string;
+    expires?: Date | string | number;
+    httpOnly?: boolean;
+    secure?: boolean;
+    sameSite?: boolean | "lax" | "strict" | "none";
+  };
+};
+
+export function acceptanceRequired(name: string) {
+  const value = String(process.env[name] || "").trim();
+  if (!value) throw new Error(`acceptance_configuration_missing:${name}`);
+  return value;
+}
+
+export async function credentialBundle() {
+  const file = acceptanceRequired("ACCEPTANCE_CREDENTIAL_BUNDLE_PATH");
+  return JSON.parse(await readFile(file, "utf8")) as AcceptanceCredentialBundle;
+}
+
+function sameSite(value: unknown): "Lax" | "Strict" | "None" {
+  if (value === "strict") return "Strict";
+  if (value === "none") return "None";
+  return "Lax";
+}
+
+export async function authenticatedSession(role: AcceptanceIdentityKey) {
+  const bundle = await credentialBundle();
+  const identity = bundle.identities[role];
+  const cookieJar = new Map<string, CookieToSet>();
+  const supabase = createServerClient(
+    acceptanceRequired("ACCEPTANCE_SUPABASE_URL"),
+    acceptanceRequired("ACCEPTANCE_SUPABASE_ANON_KEY"),
+    {
+      cookies: {
+        getAll() {
+          return [...cookieJar.values()].map(({ name, value }) => ({
+            name,
+            value,
+          }));
+        },
+        setAll(cookies) {
+          for (const cookie of cookies) cookieJar.set(cookie.name, cookie);
+        },
+      },
+    },
+  );
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: identity.email,
+    password: identity.password,
+  });
+  if (error || !data.session)
+    throw new Error(`acceptance_session_create_failed:${role}`);
+  const base = new URL(acceptanceRequired("ACCEPTANCE_BASE_URL"));
+  return {
+    accessToken: data.session.access_token,
+    storageState: {
+      cookies: [...cookieJar.values()].map(({ name, value, options = {} }) => ({
+        name,
+        value,
+        domain: options.domain || base.hostname,
+        path: options.path || "/",
+        expires:
+          options.expires instanceof Date
+            ? options.expires.getTime() / 1000
+            : typeof options.expires === "number"
+              ? options.expires
+              : -1,
+        httpOnly: options.httpOnly ?? true,
+        secure: options.secure ?? true,
+        sameSite: sameSite(options.sameSite),
+      })),
+      origins: [],
+    },
+  };
+}
+
+export async function authenticatedStorageState(role: AcceptanceIdentityKey) {
+  return (await authenticatedSession(role)).storageState;
+}
+
+export async function authenticatedApi(
+  role: AcceptanceIdentityKey,
+  storageState?: Awaited<ReturnType<typeof authenticatedStorageState>>,
+) {
+  return playwrightRequest.newContext({
+    baseURL: acceptanceRequired("ACCEPTANCE_BASE_URL"),
+    storageState: storageState || (await authenticatedStorageState(role)),
+    extraHTTPHeaders: {
+      Origin: acceptanceRequired("ACCEPTANCE_BASE_URL"),
+      "X-Acceptance-Run": "synthetic",
+    },
+  });
+}
+
+export function acceptanceAdminClient() {
+  return createClient(
+    acceptanceRequired("ACCEPTANCE_SUPABASE_URL"),
+    acceptanceRequired("ACCEPTANCE_SUPABASE_SERVICE_ROLE_KEY"),
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+}
+
+export async function installAuthenticatedBrowserState(
+  context: BrowserContext,
+  role: AcceptanceIdentityKey,
+) {
+  const state = await authenticatedStorageState(role);
+  await context.addCookies(state.cookies);
+}
+
+export async function expectPrivateErrorOnly(
+  response: APIResponse,
+  expectedStatus: 401 | 403,
+) {
+  if (response.status() !== expectedStatus)
+    throw new Error(`expected_${expectedStatus}_received_${response.status()}`);
+  const cacheControl = response.headers()["cache-control"] || "";
+  if (!cacheControl.includes("private") || !cacheControl.includes("no-store"))
+    throw new Error("denied_response_cache_control_invalid");
+  const body = await response.json();
+  if (
+    !body ||
+    typeof body !== "object" ||
+    Object.keys(body).some((key) => key !== "error") ||
+    !body.error?.code
+  )
+    throw new Error("denied_response_not_error_only");
+  const serialized = JSON.stringify(body);
+  if (/candidate|provider|continuation|cacheKey|stack/i.test(serialized))
+    throw new Error("denied_response_contains_protected_fields");
+}
+
+export async function attachSanitized(
+  testInfo: {
+    attach(
+      name: string,
+      options: { body: string; contentType: string },
+    ): Promise<void>;
+  },
+  name: string,
+  value: unknown,
+) {
+  await testInfo.attach(name, {
+    body: JSON.stringify(value, null, 2),
+    contentType: "application/json",
+  });
+}
