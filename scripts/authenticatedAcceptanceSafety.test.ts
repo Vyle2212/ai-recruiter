@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import os from "node:os";
+import path from "node:path";
 
 import {
   assertAcceptanceEvidenceIsSanitized,
@@ -7,6 +9,7 @@ import {
 } from "../lib/acceptanceEnvironmentSafety";
 
 const now = new Date("2026-09-14T00:00:00.000Z");
+const repositoryRoot = path.resolve(process.cwd(), "synthetic-repository-root");
 const valid = {
   acceptanceTestMode: "true",
   appEnvironment: "acceptance",
@@ -19,8 +22,8 @@ const valid = {
   syntheticNamespace: "ptf1c2/ptf1c2-example-run",
   owner: "workflow-run-123",
   expiresAt: "2026-09-14T02:00:00.000Z",
-  credentialBundlePath: "C:\\temp\\acceptance-credentials.json",
-  repositoryRoot: "C:\\repo",
+  credentialBundlePath: path.join(os.tmpdir(), "acceptance-credentials.json"),
+  repositoryRoot,
   expectedCommitSha: "78cd22bd706e7b11ae2750fcee4fa057f1a3d8d1",
 };
 
@@ -53,7 +56,10 @@ for (const [key, value, blocker] of [
 }
 
 const inside = evaluateAcceptanceEnvironment(
-  { ...valid, credentialBundlePath: "C:\\repo\\tmp\\credentials.json" },
+  {
+    ...valid,
+    credentialBundlePath: path.join(repositoryRoot, "tmp", "credentials.json"),
+  },
   now,
 );
 assert.equal(inside.allowed, false);

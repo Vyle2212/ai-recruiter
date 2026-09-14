@@ -68,11 +68,12 @@ function isOutsideRepository(candidatePath: string, repositoryRoot: string) {
     path.resolve(repositoryRoot),
     path.resolve(candidatePath),
   );
-  return Boolean(relative) &&
-    !relative.startsWith("..") &&
-    !path.isAbsolute(relative)
-    ? false
-    : path.resolve(candidatePath) !== path.resolve(repositoryRoot);
+  return (
+    Boolean(relative) &&
+    (relative === ".." ||
+      relative.startsWith(".." + path.sep) ||
+      path.isAbsolute(relative))
+  );
 }
 
 export function evaluateAcceptanceEnvironment(
