@@ -1420,7 +1420,7 @@ async function runSelfTests(): Promise<void> {
     for (const value of [
       privateInput.stagingUrl,
       "eyJaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbb.cccccccccccccccccccc",
-      "postgresql://user:pass@host/db",
+      "postgresql://user:pass@host/db", // trufflehog:ignore -- deterministic leak-test sentinel
       "-----BEGIN PRIVATE KEY-----",
     ]) await leakTest(value);
   }]);

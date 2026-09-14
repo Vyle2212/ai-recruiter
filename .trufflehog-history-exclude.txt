@@ -1,0 +1,4 @@
+# Historical deterministic leak-test sentinels only. The current tree is scanned
+# separately without this exclusion. Classified 2026-09-14: unverified Postgres
+# detector in 3575eac49247, scripts/stagingPhase5RuntimeRlsValidationV6.ts.
+^scripts/stagingPhase5RuntimeRlsValidationV6\.ts$

@@ -1,9 +1,7 @@
-import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import { createLazyOpenAiClient } from "@/lib/runtimeClients";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const openai = createLazyOpenAiClient();
 
 export async function POST(req: Request) {
   try {

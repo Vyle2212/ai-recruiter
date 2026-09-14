@@ -1,8 +1,6 @@
-import OpenAI from "openai";
+import { createLazyOpenAiClient } from "./runtimeClients";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+const openai = createLazyOpenAiClient();
 
 export async function createEmbedding(text: string) {
   const response = await openai.embeddings.create({
