@@ -93,7 +93,7 @@ jobs:
         run: npm run audit:production-trust:ci
 
       - name: Upload sanitized security summary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: production-trust-sanitized-summary-${{ github.sha }}
           path: artifacts/production-trust-ci-summary.json
@@ -114,6 +114,7 @@ jobs:
       EXTERNAL_TALENT_PROVIDER: disabled
       NEXT_PUBLIC_SUPABASE_URL: https://ci.invalid
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-public-anon-placeholder
+      OPENAI_API_KEY: ci-inert-build-placeholder
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@v6
@@ -134,7 +135,7 @@ jobs:
         run: npm run scan:production-trust:bundle
 
       - name: Upload sanitized build security summary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: production-trust-build-summary-${{ github.sha }}
           path: artifacts/production-trust-client-bundle-scan.json
