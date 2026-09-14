@@ -114,6 +114,9 @@ jobs:
       EXTERNAL_TALENT_PROVIDER: disabled
       NEXT_PUBLIC_SUPABASE_URL: https://ci.invalid
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-public-anon-placeholder
+      SUPABASE_SERVICE_ROLE_KEY: ci-inert-service-role-placeholder
+      CANDIDATE_SUPABASE_URL: https://ci.invalid
+      CANDIDATE_SUPABASE_SERVICE_ROLE_KEY: ci-inert-candidate-role-placeholder
       OPENAI_API_KEY: ci-inert-build-placeholder
     steps:
       - name: Checkout exact revision
