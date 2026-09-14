@@ -1,0 +1,142 @@
+name: Production Trust Foundation CI
+
+on:
+  push:
+    branches:
+      - "codex/production-trust-*"
+      - "codex/recruiter-api-authorization-*"
+  pull_request:
+    branches:
+      - "codex/production-trust-*"
+      - "codex/recruiter-api-authorization-*"
+      - "release/**"
+      - integration
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-trust-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-audit:
+    name: High-severity dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Clean dependency installation
+        run: npm ci --ignore-scripts
+
+      - name: Reject high or critical dependency findings
+        run: npm audit --audit-level=high
+
+  security-and-regression:
+    name: Security and deterministic regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      APP_ENV: test
+      AUTH_MODE: disabled
+      EXTERNAL_TALENT_SEARCH_ENABLED: "false"
+      EXTERNAL_TALENT_PROVIDER: disabled
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Clean dependency installation
+        run: npm ci
+
+      - name: Route policy and authorization matrix
+        run: npm run test:production-trust:authorization
+
+      - name: Search authorization, cache scope, and candidate privacy
+        run: npm run test:production-trust:search-security
+
+      - name: Internal and external Search V2 regressions
+        run: npm run test:production-trust:search-regression
+
+      - name: Canonical evidence and immutable golden regressions
+        run: npm run test:production-trust:canonical
+
+      - name: TypeScript typecheck
+        run: npm run typecheck
+
+      - name: Scoped formatting check
+        run: npm run check:production-trust:format
+
+      - name: Commit whitespace check
+        shell: bash
+        run: git diff --check HEAD^ HEAD
+
+      - name: Generate sanitized CI evidence
+        run: npm run audit:production-trust:ci
+
+      - name: Upload sanitized security summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-trust-sanitized-summary-${{ github.sha }}
+          path: artifacts/production-trust-ci-summary.json
+          if-no-files-found: error
+          retention-days: 7
+
+  production-build:
+    name: Webpack production build and client secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: security-and-regression
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      APP_ENV: test
+      AUTH_MODE: disabled
+      EXTERNAL_TALENT_SEARCH_ENABLED: "false"
+      EXTERNAL_TALENT_PROVIDER: disabled
+      NEXT_PUBLIC_SUPABASE_URL: https://ci.invalid
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-public-anon-placeholder
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Clean dependency installation
+        run: npm ci
+
+      - name: Next.js 16.2.12 Webpack production build
+        run: npm run build:webpack
+
+      - name: Scan client bundle for server secret material
+        run: npm run scan:production-trust:bundle
+
+      - name: Upload sanitized build security summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-trust-build-summary-${{ github.sha }}
+          path: artifacts/production-trust-client-bundle-scan.json
+          if-no-files-found: error
+          retention-days: 7
