@@ -89,13 +89,13 @@ jobs:
           fetch-depth: 0
 
       - name: Scan committed content without external verification
-        uses: trufflesecurity/trufflehog@363923b901c911a9164f50b6c423f47c15372b1c # v3.97.4
-        with:
-          path: ./
-          base: 300b6a1b03921a2d4710a2585c62bebc69d55831
-          head: ${{ github.sha }}
-          version: 3.97.4
-          extra_args: --no-verification --exclude-paths=.trufflehog-history-exclude.txt
+        shell: bash
+        run: >-
+          docker run --rm -v $PWD:/tmp -w /tmp
+          ghcr.io/trufflesecurity/trufflehog:3.97.4 git file:///tmp
+          --since-commit=300b6a1b03921a2d4710a2585c62bebc69d55831
+          --branch=${{ github.sha }} --no-verification --fail --no-update
+          --exclude-paths=.trufflehog-history-exclude.txt
 
       - name: Scan the current committed tree
         shell: bash
