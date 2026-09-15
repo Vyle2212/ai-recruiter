@@ -19,3 +19,18 @@ const projectsOnly = normalizeActualCandidateSchema({raw_text: fixture.raw_text.
 // A project table must never qualify as an employment table.
 assert.equal(projectsOnly.employmentTimeline.length, 0);
 console.log('Employment table recovery: passed');
+const mixed = normalizeActualCandidateSchema({raw_text: 'Employment History Date Company Name Role Nov 20 - present Example Services Senior Consultant Sept 17 – Oct 20 (3 years 1 month) Example Bank Senior Executive (Application Programmer) May 16 – Aug 17 Example School Lecturer Qualifications Selected Project Experience Nov 10 - Present Example Client SAP Consultant'}).enterpriseProfile;
+assert.equal(mixed.employmentTimeline.length, 3);
+assert.equal(mixed.employmentTimeline[0].company, 'Example Services');
+assert.equal(mixed.employmentTimeline[1].company, 'Example Bank');
+assert.equal(mixed.employmentTimeline[2].title, 'Lecturer');
+const reversed = normalizeActualCandidateSchema({raw_text: 'Employment History Organization Designation Duration Example Systems SAP EWM Consultant May 2021 to Sep 2023 Example Logistics Warehouse executive Aug 2018 to April 2021. Example Client SAP Consultant April 2021 – September 2023 Project # 1 Support Project'}).enterpriseProfile;
+assert.equal(reversed.employmentTimeline.length, 2);
+assert.ok(reversed.employmentTimeline.every(x=>x.company !== 'Example Client'));
+const degrees = normalizeActualCandidateSchema({raw_text: 'Education Master of Business Administration – Example City University, Example Country Bachelor of Science in Accounting – University of Example Town, Example Country'}).enterpriseProfile.education;
+assert.equal(degrees.length, 2);
+assert.equal(degrees[1].qualification, 'Bachelor of Science in Accounting');
+const labels = normalizeActualCandidateSchema({raw_text: "Education Degree: Bachelor's Degree, Information Systems College/University: Example City University Year: 2011 Citizenship Example"}).enterpriseProfile.education;
+assert.equal(labels.length, 1);
+assert.equal(labels[0].endYear, '2011');
+console.log('Mixed employment columns and education boundaries: passed');

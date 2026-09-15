@@ -7,7 +7,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v22-explicit-history-tables";
+  "candidate-employment-v23-mixed-history-columns";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -494,7 +494,7 @@ function resumeCompany(input: string) {
 // Only enter this parser through an explicit Date / Company Name / Role table.
 // Flattened PDF rows keep date boundaries even when column layout is lost.
 function tabularResumeEmployment(source: string): EnterpriseEmployment[] {
-  const section = source.match(/\b(?<!PROJECT )(?:EXPERIENCE|EXPERINCE|EMPLOYMENT HISTORY|WORKING EXPERIENCE)\s+Date\s+Company Name\s+Role\s+([\s\S]*?)(?=\b(?:RELEVANT PROJECT|PROJECT EXPERIENCE|PROJECT EXPERINCE|EDUCATION)\b|$)/i)?.[1];
+  const section = source.match(/\b(?<!PROJECT )(?:EXPERIENCE|EXPERINCE|EMPLOYMENT HISTORY|WORKING EXPERIENCE)\s+Date\s+Company Name\s+Role\s+([\s\S]*?)(?=\b(?:RELEVANT PROJECT|PROJECT EXPERIENCE|PROJECT EXPERINCE|EDUCATION|QUALIFICATIONS|SAP EXPERIENCE|PROFESSIONAL EXPERIENCE|SELECTED PROJECT|SKILL|HONOURS|TRAINING)\b|$)/i)?.[1];
   if (!section) return [];
   const text = section.replace(/Page\s+\d+\s+of\s+\d+/gi, " ");
   const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*";
@@ -502,13 +502,13 @@ function tabularResumeEmployment(source: string): EnterpriseEmployment[] {
   const rows = [...text.matchAll(new RegExp(`\\b(${date})\\s*[-–—]\\s*(${date}|Present|Current)\\b`, "gi"))];
   const expand = (value: string) => value.replace(/\b(\d{2})$/, (_, year: string) => `${Number(year) <= 30 ? "20" : "19"}${year}`);
   return rows.flatMap((row, index) => {
-    const body = text.slice((row.index || 0) + row[0].length, rows[index + 1]?.index ?? text.length).trim();
+    const body = text.slice((row.index || 0) + row[0].length, rows[index + 1]?.index ?? text.length).trim().replace(/^\([^)]*\b(?:months?|years?)\)\s*/i, "");
     const clientAt = body.search(/\bClient\s*:/i);
-    const roleAt = body.search(/\b(?:SAP\s|S4\/HANA\s)/i);
+    const roleAt = body.search(/\b(?:SAP\s|S4\/HANA\s|Senior\s|Junior\s|Technical Consultant|HRIT\b|IT Engineer|Lecturer\b|Intern\b|Part Time\b|Web Application|Transition to Support|HSSE Applications|Global SAP|Production (?:Planner|Officer|Coordination))/i);
     const company = clientAt >= 0 ? body.slice(0, clientAt) : roleAt > 0 ? body.slice(0, roleAt) : "";
     if (!company) return [];
     // A role-column narrative is retained as evidence, never invented as a title.
-    const roleText = body.match(/\b((?:SAP|S4\/HANA)\s+[^.]{2,100}?(?:Consultant(?:\s+and\s+(?:Team\s+)?Lead)?|Team\s+Lead))\b/i)?.[1] || "";
+    const roleText = clientAt < 0 ? body.slice(roleAt).trim() : body.match(/\b((?:SAP|S4\/HANA)\s+[^.]{2,100}?(?:Consultant(?:\s+and\s+(?:Team\s+)?Lead)?|Team\s+Lead))\b/i)?.[1] || "";
     const parsed = entry({company, title: roleText,
       start: expand(row[1]), end: expand(row[2]), current: /^(Present|Current)$/i.test(row[2]),
       allowGroundedEmployerOnly: true, sourceRef: `resume.employmentTable.${index + 1}`,
@@ -519,13 +519,38 @@ function tabularResumeEmployment(source: string): EnterpriseEmployment[] {
   });
 }
 
+function organizationDesignationEmployment(source: string): EnterpriseEmployment[] {
+  const section = source.match(/\bEmployment History\s+Organization\s+Designation\s+Duration\s+([\s\S]*?)(?=\b(?:PROJECT\s*#|EDUCATION|QUALIFICATIONS)\b|$)/i)?.[1];
+  if (!section) return [];
+  const date = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+(?:19|20)\\d{2}";
+  const ranges = [...section.matchAll(new RegExp(`(${date})\\s*(?:to|[-–—])\\s*(${date}|Present|Current)\\b`, "gi"))];
+  const result: EnterpriseEmployment[] = [];
+  let offset = 0;
+  for (const [index, range] of ranges.entries()) {
+    const prefix = section.slice(offset, range.index).trim();
+    // A full stop after a completed row ends this compact table. Do not
+    // continue into the subsequent project narrative.
+    if (prefix.startsWith('.')) break;
+    const boundary = prefix.search(/\b(?:SAP\s|Warehouse\s)/i);
+    if (boundary < 1) break;
+    const parsed = entry({company: prefix.slice(0, boundary), title: prefix.slice(boundary),
+      start: range[1], end: range[2], current: /present|current/i.test(range[2]),
+      sourceRef: `resume.organizationDesignationTable.${index + 1}`, sourceType: 'parsed_resume',
+      confidence: 96, excerpt: `${prefix} ${range[0]}`});
+    if (!parsed) break;
+    result.push(parsed);
+    offset = (range.index || 0) + range[0].length;
+  }
+  return result;
+}
+
 function resumeEmployment(resumeText: string) {
   const output: EnterpriseEmployment[] = [];
   const source = resumeText
     .normalize("NFKC")
     .replace(/[\r\n]+/g, " ")
     .replace(/\s+/g, " ");
-  output.push(...tabularResumeEmployment(source));
+  output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source));
   const monthYear =
     "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[a-z]*[’']?\\s*(?:19|20)\\d{2}";
   const explicitCompanyPositionDate = new RegExp(

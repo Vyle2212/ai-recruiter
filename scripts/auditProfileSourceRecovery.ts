@@ -10,7 +10,13 @@ let rows: Record<string, unknown>[] = [];
 if (arg('--input')) {
   const bytes = fs.readFileSync(arg('--input')!);
   const parsed = JSON.parse(bytes.toString(bytes[0] === 255 ? 'utf16le' : 'utf8').replace(/^\uFEFF/, ''));
-  rows = parsed.map((row: Record<string, unknown>) => row.source || row);
+  const records = Array.isArray(parsed) ? parsed : parsed.samples;
+  if (!Array.isArray(records)) throw new Error("Expected a records array or samples export");
+  rows = records.map((row: Record<string, unknown>) => {
+    const source = row.source || row;
+    if (!source || typeof source !== "object" || Array.isArray(source)) throw new Error("Invalid source record");
+    return source as Record<string, unknown>;
+  });
 } else {
   const url = process.env.CANDIDATE_SUPABASE_URL;
   const key = process.env.CANDIDATE_SUPABASE_SERVICE_ROLE_KEY;

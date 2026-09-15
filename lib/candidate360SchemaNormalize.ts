@@ -18,7 +18,7 @@ import {
 
 export type CandidateSchemaRecord = Record<string, unknown>;
 export const CANDIDATE_CANONICAL_VERSION =
-  "candidate-canonical-v43-explicit-history-tables";
+  "candidate-canonical-v44-mixed-history-columns";
 export const CANDIDATE_DETAIL_PROJECTION_VERSION =
   "candidate-detail-v24-exact-project-identity";
 export const CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION =
@@ -3445,7 +3445,7 @@ function normalizeResumeEducation(sourceScopes: CandidateSchemaRecord[]) {
       /\s+Finished\s+\d{4}.*$/i,
       "",
     );
-    if (!normalizedInstitution) return;
+    if (!normalizedInstitution || (normalizedQualification.match(/\b(?:Bachelor|Master|Diploma)\b/gi) || []).length > 1) return;
     const key =
       `${normalizedQualification}|${normalizedInstitution}`.toLowerCase();
     if (
@@ -3474,6 +3474,14 @@ function normalizeResumeEducation(sourceScopes: CandidateSchemaRecord[]) {
       output.at(-1)!.fieldOfStudy = clean(item[5]).split(/\bPersonal\s+(?:Particulars|Details)\b/i)[0].trim();
     }
   }
+  const labelledDegree = resumeText.match(/\bEducation\s+Degree\s*:\s*(.{2,160}?)\s+College\s*\/\s*University\s*:\s*(.{2,140}?)\s+Year\s*:\s*((?:19|20)\d{2})/i);
+  if (labelledDegree) add(labelledDegree[1], labelledDegree[2], labelledDegree[3]);
+  const highestQualification = resumeText.match(/\bHighest Academic Qualification\s*:\s*(.{2,100}?)\s+([A-Z]{2,}[A-Za-z ]{1,60}(?:Institute of Technology|University|College)(?:,\s*[^:]{1,50}?)?)\s+Language\s*:/);
+  if (highestQualification) add(highestQualification[1], highestQualification[2]);
+  // Qualification followed by a separator and a named institution, in an
+  // education section only. Unknown dates remain unknown.
+  const degreeThenSchool = /\b((?:(?:Advanced|Postgraduate)\s+)?(?:Bachelor|Master|Diploma|B\.S\.|Double M\.\s*Sc)[^;]{0,140}?)\s*[-–—,]\s*((?:University of [A-Za-z .&'’-]{2,80}?)|(?:[A-Z][A-Za-z .&'’-]{1,90}?(?:University(?:\s+UK)?|College)))(?=\s*[,.(]|\s+(?:Bachelor|Master|Diploma|Professional)|$)/g;
+  for (const item of section.matchAll(degreeThenSchool)) add(item[1], item[2]);
   const fromPattern =
     /\b((?:Bachelor|Master|Doctor|PhD|Diploma|Degree|BSc|BA|MSc|MBA)[^,;]{0,140}?)(?:\s+from\s+|\s+at\s+)([^,;]{2,120}?)(?:\s+Finished\s+((?:19|20)\d{2})|(?=\b(?:Bachelor|Master|Doctor|PhD|Diploma|Degree|BSc|BA|MSc|MBA)\b)|$)/gi;
   let match: RegExpExecArray | null;
