@@ -44,10 +44,21 @@ assert.match(serialized, /acceptance\.invalid/);
 console.log("Authenticated acceptance synthetic candidate tests passed.");
 
 // The selected database schema stores these columns as TEXT, not JSONB.
-for (const field of ["experience", "education", "extraction_confidence", "confidence"] as const) {
+for (const field of [
+  "experience",
+  "education",
+  "extraction_confidence",
+  "confidence",
+] as const) {
   assert.equal(typeof fixture[field], "string", field);
 }
 assert.equal(JSON.parse(fixture.experience).length, 2);
 const databaseRoundTrip = JSON.parse(JSON.stringify(fixture));
-assert.equal(validateAcceptanceSyntheticCandidate(databaseRoundTrip).valid, true);
-assert.equal(validateAcceptanceSyntheticCandidate({...fixture, experience: "[]"}).valid, false);
+assert.equal(
+  validateAcceptanceSyntheticCandidate(databaseRoundTrip).valid,
+  true,
+);
+assert.equal(
+  validateAcceptanceSyntheticCandidate({ ...fixture, experience: "[]" }).valid,
+  false,
+);
