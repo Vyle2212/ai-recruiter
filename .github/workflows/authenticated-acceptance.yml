@@ -44,8 +44,8 @@ jobs:
       ACCEPTANCE_SUPABASE_PROJECT_REF_ALLOWLIST: ${{ secrets.ACCEPTANCE_SUPABASE_PROJECT_REF_ALLOWLIST }}
       ACCEPTANCE_PRODUCTION_PROJECT_REF_DENYLIST: ${{ secrets.ACCEPTANCE_PRODUCTION_PROJECT_REF_DENYLIST }}
       ACCEPTANCE_ENVIRONMENT_ID: ${{ secrets.ACCEPTANCE_ENVIRONMENT_ID }}
-      ACCEPTANCE_INTERNAL_SEARCH_QUERY: PTF Synthetic Tester
-      ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER: PTF Synthetic Tester
+      ACCEPTANCE_INTERNAL_SEARCH_QUERY: Synthetic PTF Tester
+      ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER: Synthetic PTF Tester
       ACCEPTANCE_EXTERNAL_SEARCH_QUERY: ${{ secrets.ACCEPTANCE_EXTERNAL_SEARCH_QUERY }}
       ACCEPTANCE_EXTERNAL_PROVIDER_APPROVED: ${{ secrets.ACCEPTANCE_EXTERNAL_PROVIDER_APPROVED }}
     steps:
@@ -72,6 +72,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Verify durable recruiter storage contracts
         run: npm run test:recruiter-runtime-storage
+      - name: Verify canonical synthetic name lookup
+        run: node --import tsx scripts/authenticatedAcceptanceSyntheticPreflight.test.ts
       - name: Create run-owned acceptance metadata
         shell: bash
         run: |

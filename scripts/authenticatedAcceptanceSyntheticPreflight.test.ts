@@ -19,7 +19,7 @@ assert.ok(valid.canonical.projectRecords >= 1);
 assert.equal(valid.canonical.currentEmploymentRecords, 1);
 assert.ok((valid.canonical.totalCareerYears || 0) >= 7);
 
-assert.equal(ACCEPTANCE_SYNTHETIC_FIXTURE_VERSION, "ptf1c2a-candidate-v2");
+assert.equal(ACCEPTANCE_SYNTHETIC_FIXTURE_VERSION, "ptf1c2a-candidate-v3");
 
 for (const mutation of [
   { name: "Real Person" },
@@ -61,4 +61,37 @@ assert.equal(
 assert.equal(
   validateAcceptanceSyntheticCandidate({ ...fixture, experience: "[]" }).valid,
   false,
+);
+
+// Reproduce the deployed dataset's canonical-name override, not the raw adapter.
+const {
+  normalizeActualCandidateSchema,
+} = require("../lib/candidate360SchemaNormalize");
+const { buildCandidateSearchIndexRow } = require("../lib/candidateSearchIndex");
+const {
+  candidateSearchV2ProjectionDocument,
+} = require("../lib/candidateSearchV2Projection");
+const {
+  detectSearchV2UnifiedIntent,
+  canonicalLookupMatches,
+} = require("../lib/searchV2UnifiedIntent");
+function lookup(record: typeof fixture) {
+  const canonical = normalizeActualCandidateSchema(record);
+  const document = candidateSearchV2ProjectionDocument({
+    ...buildCandidateSearchIndexRow(record),
+    display_name: canonical.candidateName || null,
+  });
+  return canonicalLookupMatches(
+    [document],
+    detectSearchV2UnifiedIntent(record.name),
+  );
+}
+assert.equal(lookup({ ...fixture, name: "PTF Synthetic Tester" }).length, 0);
+assert.equal(lookup(fixture).length, 1);
+assert.equal(
+  lookup(fixture)[0].document.candidateId,
+  ACCEPTANCE_SYNTHETIC_CANDIDATE_ID,
+);
+console.log(
+  "Canonical indexed name lookup regression passed (old fixture zero, corrected fixture one).",
 );

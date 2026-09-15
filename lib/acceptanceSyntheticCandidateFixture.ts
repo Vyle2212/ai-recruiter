@@ -1,11 +1,11 @@
 import { normalizeActualCandidateSchema } from "./candidate360SchemaNormalize";
 import { isDeepStrictEqual } from "node:util";
 
-export const ACCEPTANCE_SYNTHETIC_FIXTURE_VERSION = "ptf1c2a-candidate-v2";
+export const ACCEPTANCE_SYNTHETIC_FIXTURE_VERSION = "ptf1c2a-candidate-v3";
 export const ACCEPTANCE_SYNTHETIC_CANDIDATE_ID =
   "a11ce000-0000-4000-8000-00000000012a";
-export const ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER = "PTF Synthetic Tester";
-export const ACCEPTANCE_INTERNAL_SEARCH_QUERY = "PTF Synthetic Tester";
+export const ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER = "Synthetic PTF Tester";
+export const ACCEPTANCE_INTERNAL_SEARCH_QUERY = "Synthetic PTF Tester";
 
 export type AcceptanceSyntheticRegistryRecord = {
   marker?: unknown;
@@ -137,6 +137,8 @@ export function validateAcceptanceSyntheticCandidate(value: unknown) {
       blockers.push("synthetic_candidate_required_evidence_missing");
 
   const canonical = normalizeActualCandidateSchema(candidate);
+  if (canonical.candidateName !== ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER)
+    blockers.push("synthetic_candidate_canonical_name_missing");
   const employment = canonical.enterpriseProfile.employmentTimeline;
   const projects = canonical.enterpriseProfile.projects;
   if (employment.length !== 2)
