@@ -18,7 +18,7 @@ import {
 
 export type CandidateSchemaRecord = Record<string, unknown>;
 export const CANDIDATE_CANONICAL_VERSION =
-  "candidate-canonical-v44-mixed-history-columns";
+  "candidate-canonical-v45-prose-history-headings";
 export const CANDIDATE_DETAIL_PROJECTION_VERSION =
   "candidate-detail-v24-exact-project-identity";
 export const CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION =
@@ -3482,6 +3482,12 @@ function normalizeResumeEducation(sourceScopes: CandidateSchemaRecord[]) {
   // education section only. Unknown dates remain unknown.
   const degreeThenSchool = /\b((?:(?:Advanced|Postgraduate)\s+)?(?:Bachelor|Master|Diploma|B\.S\.|Double M\.\s*Sc)[^;]{0,140}?)\s*[-–—,]\s*((?:University of [A-Za-z .&'’-]{2,80}?)|(?:[A-Z][A-Za-z .&'’-]{1,90}?(?:University(?:\s+UK)?|College)))(?=\s*[,.(]|\s+(?:Bachelor|Master|Diploma|Professional)|$)/g;
   for (const item of section.matchAll(degreeThenSchool)) add(item[1], item[2]);
+  const schoolRangeDegree = /^\s*([A-Z][A-Za-z ]{1,70}University)\s*[,，]\s*((?:19|20)\d{2})\s*[-–—]\s*((?:19|20)\d{2})\s*[-–—]\s*((?:Master|Bachelor)\s+of\s+[^,;]{2,100}?)(?=\s*[-–—]|,|;|$)/g;
+  for (const item of section.matchAll(schoolRangeDegree)) {
+    const before = output.length;
+    add(item[4], item[1], item[3]);
+    if (output.length > before) output.at(-1)!.startYear = item[2];
+  }
   const fromPattern =
     /\b((?:Bachelor|Master|Doctor|PhD|Diploma|Degree|BSc|BA|MSc|MBA)[^,;]{0,140}?)(?:\s+from\s+|\s+at\s+)([^,;]{2,120}?)(?:\s+Finished\s+((?:19|20)\d{2})|(?=\b(?:Bachelor|Master|Doctor|PhD|Diploma|Degree|BSc|BA|MSc|MBA)\b)|$)/gi;
   let match: RegExpExecArray | null;

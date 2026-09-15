@@ -34,3 +34,13 @@ const labels = normalizeActualCandidateSchema({raw_text: "Education Degree: Bach
 assert.equal(labels.length, 1);
 assert.equal(labels[0].endYear, '2011');
 console.log('Mixed employment columns and education boundaries: passed');
+const prose = normalizeActualCandidateSchema({raw_text: 'PROFESSIONAL EXPERIENCE Example Systems, Inc. – Package Consultant March 2022 – Present Delivered training and daily support. Example Services Inc. – Senior Consultant February 2017 – February 2020 EDUCATION'}).enterpriseProfile;
+assert.equal(prose.employmentTimeline.length, 2);
+assert.equal(prose.employmentTimeline[1].company, 'Example Services Inc.');
+assert.equal(normalizeActualCandidateSchema({raw_text: 'PROJECT EXPERIENCE Example Client – Senior Consultant February 2017 – February 2020'}).enterpriseProfile.employmentTimeline.length, 0);
+console.log('Prose employment headings: passed');
+const schoolFirst = normalizeActualCandidateSchema({raw_text: 'Education Example City University，2015 - 2017 - Master of Business Administration - MBA, GPA 4.0 - Student club Example Town University，2011 - 2015 - Bachelor of Business Administration - BBA'}).enterpriseProfile.education;
+assert.equal(schoolFirst.length, 1);
+assert.equal(schoolFirst[0].institution, 'Example City University');
+assert.equal(schoolFirst[0].startYear, '2015');
+console.log('School-first boundary: passed');
