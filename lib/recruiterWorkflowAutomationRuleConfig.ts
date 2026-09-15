@@ -280,7 +280,7 @@ function summary(
   };
 }
 
-function buildFile(
+export function buildWorkflowAutomationRuleConfigFile(
   rules:
     WorkflowAutomationRuleConfig[],
   generatedAt =
@@ -431,7 +431,7 @@ export function readWorkflowAutomationRuleConfigs(
       fullPath,
     )
   ) {
-    return buildFile(
+    return buildWorkflowAutomationRuleConfigFile(
       defaults,
     );
   }
@@ -482,14 +482,14 @@ export function readWorkflowAutomationRuleConfigs(
           ),
       );
 
-    return buildFile(
+    return buildWorkflowAutomationRuleConfigFile(
       rules,
       normalizeDate(
         parsed?.generatedAt,
       ),
     );
   } catch {
-    return buildFile(
+    return buildWorkflowAutomationRuleConfigFile(
       defaults,
     );
   }
@@ -517,7 +517,7 @@ export function writeWorkflowAutomationRuleConfigs(
   );
 
   const file =
-    buildFile(
+    buildWorkflowAutomationRuleConfigFile(
       rules,
     );
 
@@ -542,12 +542,15 @@ export function writeWorkflowAutomationRuleConfigs(
   return file;
 }
 
-export function saveWorkflowAutomationRuleConfig(
+export function saveWorkflowAutomationRuleConfig(input: SaveWorkflowAutomationRuleConfigInput, options: { filePath?: string } = {}) {
+  const result = applyWorkflowAutomationRuleConfig(input, readWorkflowAutomationRuleConfigs(options.filePath));
+  return { ...result, file: writeWorkflowAutomationRuleConfigs(result.file.rules, options.filePath) };
+}
+
+export function applyWorkflowAutomationRuleConfig(
   input:
     SaveWorkflowAutomationRuleConfigInput,
-  options: {
-    filePath?: string;
-  } = {},
+  current: WorkflowAutomationRuleConfigFile,
 ) {
   if (
     !RULE_IDS.has(
@@ -559,10 +562,6 @@ export function saveWorkflowAutomationRuleConfig(
     );
   }
 
-  const current =
-    readWorkflowAutomationRuleConfigs(
-      options.filePath,
-    );
 
   const existing =
     current.rules.find(
@@ -666,10 +665,7 @@ export function saveWorkflowAutomationRuleConfig(
       updated,
 
     file:
-      writeWorkflowAutomationRuleConfigs(
-        rules,
-        options.filePath,
-      ),
+      buildWorkflowAutomationRuleConfigFile(rules),
   };
 }
 

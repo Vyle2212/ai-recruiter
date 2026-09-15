@@ -1,9 +1,10 @@
+import { createRecruiterRuntimeStore } from "@/lib/recruiterRuntimeStore.server";
 import { NextRequest, NextResponse } from "next/server";
 
 import { answerRecruiterCopilotQuestion } from "@/lib/recruiterCopilotAnswerEngine";
 import { buildRecruiterCopilotContext } from "@/lib/recruiterCopilotContext";
 import { readPersistedWorkflowState } from "@/lib/recruiterWorkflowStateHydration";
-import { appendRecruiterCopilotExchange } from "@/lib/recruiterCopilotConversationStore";
+
 import { requireRecruiterApiRouteAuthorization } from "@/lib/recruiterApiAuthorization";
 
 export const runtime = "nodejs";
@@ -18,6 +19,7 @@ export async function POST(request: NextRequest) {
   });
   if (!authorization.allowed) return authorization.response;
   try {
+    const store = createRecruiterRuntimeStore(authorization.scope);
     const body = await request.json();
 
     const question =
@@ -66,7 +68,7 @@ export async function POST(request: NextRequest) {
     };
 
     try {
-      const savedExchange = appendRecruiterCopilotExchange({
+      const savedExchange = await store.appendRecruiterCopilotExchange({
         conversationId:
           typeof body?.conversationId === "string"
             ? body.conversationId.trim() || undefined

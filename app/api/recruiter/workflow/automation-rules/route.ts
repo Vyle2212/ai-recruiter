@@ -1,10 +1,6 @@
+import { createRecruiterRuntimeStore } from "@/lib/recruiterRuntimeStore.server";
 import { NextRequest, NextResponse } from "next/server";
 
-import {
-  readWorkflowAutomationRuleConfigs,
-  resetWorkflowAutomationRuleConfigs,
-  saveWorkflowAutomationRuleConfig,
-} from "@/lib/recruiterWorkflowAutomationRuleConfig";
 import type {
   RecruiterWorkflowAutomationPriority,
   RecruiterWorkflowAutomationRuleId,
@@ -15,9 +11,12 @@ export const runtime = "nodejs";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authorization = await requireRecruiterApiRouteAuthorization({ request });
+  if (!authorization.allowed) return authorization.response;
   try {
-    return NextResponse.json(readWorkflowAutomationRuleConfigs());
+    const store = createRecruiterRuntimeStore(authorization.scope);
+    return NextResponse.json(await store.readWorkflowAutomationRuleConfigs());
   } catch (error) {
     return NextResponse.json(
       {
@@ -40,9 +39,10 @@ export async function POST(request: NextRequest) {
   });
   if (!authorization.allowed) return authorization.response;
   try {
+    const store = createRecruiterRuntimeStore(authorization.scope);
     const body = await request.json();
 
-    const result = saveWorkflowAutomationRuleConfig({
+    const result = await store.saveWorkflowAutomationRuleConfig({
       ruleId: String(body?.ruleId || "") as RecruiterWorkflowAutomationRuleId,
 
       enabled: typeof body?.enabled === "boolean" ? body.enabled : undefined,
@@ -83,8 +83,9 @@ export async function DELETE(request: NextRequest) {
   });
   if (!authorization.allowed) return authorization.response;
   try {
+    const store = createRecruiterRuntimeStore(authorization.scope);
     return NextResponse.json(
-      resetWorkflowAutomationRuleConfigs({
+      await store.resetWorkflowAutomationRuleConfigs({
         updatedBy: authorization.scope.profileId,
       }),
     );

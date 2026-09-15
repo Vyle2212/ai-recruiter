@@ -70,6 +70,8 @@ jobs:
         run: npm ci
       - name: Install pinned Chromium runtime
         run: npx playwright install --with-deps chromium
+      - name: Verify durable recruiter storage contracts
+        run: npm run test:recruiter-runtime-storage
       - name: Create run-owned acceptance metadata
         shell: bash
         run: |

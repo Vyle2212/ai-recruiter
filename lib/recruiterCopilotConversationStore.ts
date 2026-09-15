@@ -321,6 +321,15 @@ export function writeRecruiterCopilotConversations(
 
 export function appendRecruiterCopilotExchange(
   input: AppendRecruiterCopilotExchangeInput,
+  options: { filePath?: string; maxConversations?: number; maxMessagesPerConversation?: number } = {},
+) {
+  const result = applyRecruiterCopilotExchange(input, readRecruiterCopilotConversations(options.filePath), options);
+  return { ...result, file: writeRecruiterCopilotConversations(result.file, options.filePath) };
+}
+
+export function applyRecruiterCopilotExchange(
+  input: AppendRecruiterCopilotExchangeInput,
+  source: RecruiterCopilotConversationFile,
   options: {
     filePath?: string;
     maxConversations?: number;
@@ -331,10 +340,7 @@ export function appendRecruiterCopilotExchange(
     parseDate(input.createdAt) ||
     new Date().toISOString();
 
-  const current =
-    readRecruiterCopilotConversations(
-      options.filePath,
-    );
+  const current = structuredClone(source);
 
   const conversationId =
     clean(input.conversationId) ||
@@ -443,11 +449,7 @@ export function appendRecruiterCopilotExchange(
     ...current.conversations,
   ].slice(0, maxConversations);
 
-  const saved =
-    writeRecruiterCopilotConversations(
-      current,
-      options.filePath,
-    );
+  const saved = { ...current, generatedAt: createdAt };
 
   return {
     conversation,

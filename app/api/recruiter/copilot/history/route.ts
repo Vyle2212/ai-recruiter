@@ -1,19 +1,18 @@
+import { isRecruiterCopilotHistoryAnswer } from "@/lib/recruiterCopilotHistoryInput";
+import { createRecruiterRuntimeStore } from "@/lib/recruiterRuntimeStore.server";
 import { NextRequest, NextResponse } from "next/server";
 
-import {
-  appendRecruiterCopilotExchange,
-  clearRecruiterCopilotConversations,
-  deleteRecruiterCopilotConversation,
-  readRecruiterCopilotConversations,
-} from "@/lib/recruiterCopilotConversationStore";
 import { requireRecruiterApiRouteAuthorization } from "@/lib/recruiterApiAuthorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authorization = await requireRecruiterApiRouteAuthorization({ request });
+  if (!authorization.allowed) return authorization.response;
   try {
-    return NextResponse.json(readRecruiterCopilotConversations());
+    const store = createRecruiterRuntimeStore(authorization.scope);
+    return NextResponse.json(await store.readRecruiterCopilotConversations());
   } catch (error) {
     return NextResponse.json(
       {
@@ -36,6 +35,7 @@ export async function POST(request: NextRequest) {
   });
   if (!authorization.allowed) return authorization.response;
   try {
+    const store = createRecruiterRuntimeStore(authorization.scope);
     const body = await request.json();
 
     const question =
@@ -43,10 +43,10 @@ export async function POST(request: NextRequest) {
 
     const answer = body?.answer;
 
-    if (!question || !answer) {
+    if (!question || !isRecruiterCopilotHistoryAnswer(answer)) {
       return NextResponse.json(
         {
-          error: "Question and answer are required.",
+          error: "A question and a valid Copilot answer are required.",
         },
         {
           status: 400,
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = appendRecruiterCopilotExchange({
+    const result = await store.appendRecruiterCopilotExchange({
       conversationId:
         typeof body?.conversationId === "string"
           ? body.conversationId
@@ -88,14 +88,15 @@ export async function DELETE(request: NextRequest) {
   });
   if (!authorization.allowed) return authorization.response;
   try {
+    const store = createRecruiterRuntimeStore(authorization.scope);
     const conversationId = request.nextUrl.searchParams.get("conversationId");
 
     if (!conversationId) {
-      return NextResponse.json(clearRecruiterCopilotConversations());
+      return NextResponse.json(await store.clearRecruiterCopilotConversations());
     }
 
     return NextResponse.json(
-      deleteRecruiterCopilotConversation(conversationId),
+      await store.deleteRecruiterCopilotConversation(conversationId),
     );
   } catch (error) {
     return NextResponse.json(

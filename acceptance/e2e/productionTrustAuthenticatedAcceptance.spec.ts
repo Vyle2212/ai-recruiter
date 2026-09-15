@@ -1,3 +1,4 @@
+import type { RecruiterCopilotAnswer } from "../../lib/recruiterCopilotAnswerEngine";
 import { test, expect } from "@playwright/test";
 
 import {
@@ -195,16 +196,43 @@ test.describe
         data: {
           conversationId: `acceptance-${runToken}`,
           question: "Synthetic acceptance question",
-          answer: { summary: "Synthetic acceptance answer" },
+          answer: {
+            question: "Synthetic acceptance question",
+            normalizedQuestion: "synthetic acceptance question",
+            title: "Acceptance check",
+            answer: "Synthetic acceptance answer",
+            intent: "unknown",
+            confidence: 0,
+            evidence: [],
+            suggestedActions: [],
+            generatedAt: new Date().toISOString(),
+            mode: "synthetic acceptance",
+            safety: {
+              candidateDbWrites: 0,
+              workflowWrites: 0,
+              emailSends: 0,
+              openAiCalls: 0,
+              deterministic: true,
+              readOnly: true,
+            },
+          } satisfies RecruiterCopilotAnswer,
         },
       },
     );
     expect(conversation.status()).toBe(201);
     const conversationBody = await conversation.json();
-    const conversationId =
-      conversationBody.conversation?.id ||
-      conversationBody.conversationId ||
-      `acceptance-${runToken}`;
+    const conversationId = conversationBody.conversation?.conversationId;
+    expect(conversationId).toBe(`acceptance-${runToken}`);
+    const persistedHistory = await recruiter.get(
+      "/api/recruiter/copilot/history",
+    );
+    expect(persistedHistory.status()).toBe(200);
+    expect(
+      (await persistedHistory.json()).conversations.some(
+        (item: { conversationId: string }) =>
+          item.conversationId === conversationId,
+      ),
+    ).toBe(true);
     expect(
       (
         await recruiter.delete(
@@ -241,6 +269,15 @@ test.describe
       },
     );
     expect(approval.status()).toBe(201);
+    const persistedDecisions = await manager.get(
+      "/api/recruiter/workflow/automation-decisions",
+    );
+    expect(persistedDecisions.status()).toBe(200);
+    expect(
+      (await persistedDecisions.json()).decisions.some(
+        (item: { proposalId: string }) => item.proposalId === proposalId,
+      ),
+    ).toBe(true);
     expect(
       (
         await manager.delete(
@@ -272,12 +309,22 @@ test.describe
       },
     );
     expect(adminMutation.status()).toBe(200);
+    const persistedRules = await admin.get(
+      "/api/recruiter/workflow/automation-rules",
+    );
+    expect(persistedRules.status()).toBe(200);
+    const persistedRule = (await persistedRules.json()).rules.find(
+      (rule: { ruleId: string }) => rule.ruleId === current.ruleId,
+    );
+    expect(persistedRule.enabled).toBe(current.enabled);
+    expect(persistedRule.priority).toBe(current.priority);
+    expect(persistedRule.settings).toEqual(current.settings);
     await attachSanitized(testInfo, "mutation-matrix", {
       recruiterNormal: "completed_and_cleaned",
       recruiterPrivileged: 403,
       managerApproval: "completed_and_cleaned",
       managerAdminOnly: 403,
-      adminOnly: "completed_without_state_delta",
+      adminOnly: "configuration_unchanged",
       workflowMutationResidue: 0,
     });
     await recruiter.dispose();

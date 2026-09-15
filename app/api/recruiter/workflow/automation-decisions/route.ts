@@ -1,11 +1,7 @@
+import { createRecruiterRuntimeStore } from "@/lib/recruiterRuntimeStore.server";
 import { NextRequest, NextResponse } from "next/server";
 
-import {
-  deleteWorkflowAutomationDecision,
-  readWorkflowAutomationDecisions,
-  saveWorkflowAutomationDecision,
-  type WorkflowAutomationDecisionStatus,
-} from "@/lib/recruiterWorkflowAutomationDecisions";
+import { type WorkflowAutomationDecisionStatus } from "@/lib/recruiterWorkflowAutomationDecisions";
 import { requireRecruiterApiRouteAuthorization } from "@/lib/recruiterApiAuthorization";
 
 export const runtime = "nodejs";
@@ -17,9 +13,12 @@ const VALID_DECISIONS = new Set<WorkflowAutomationDecisionStatus>([
   "deferred",
 ]);
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authorization = await requireRecruiterApiRouteAuthorization({ request });
+  if (!authorization.allowed) return authorization.response;
   try {
-    return NextResponse.json(readWorkflowAutomationDecisions());
+    const store = createRecruiterRuntimeStore(authorization.scope);
+    return NextResponse.json(await store.readWorkflowAutomationDecisions());
   } catch (error) {
     return NextResponse.json(
       {
@@ -42,6 +41,7 @@ export async function POST(request: NextRequest) {
   });
   if (!authorization.allowed) return authorization.response;
   try {
+    const store = createRecruiterRuntimeStore(authorization.scope);
     const body = await request.json();
 
     const decision = String(
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = saveWorkflowAutomationDecision({
+    const result = await store.saveWorkflowAutomationDecision({
       proposalId: String(body?.proposalId || ""),
 
       candidateId: String(body?.candidateId || ""),
@@ -102,6 +102,7 @@ export async function DELETE(request: NextRequest) {
   });
   if (!authorization.allowed) return authorization.response;
   try {
+    const store = createRecruiterRuntimeStore(authorization.scope);
     const proposalId = request.nextUrl.searchParams.get("proposalId");
 
     if (!proposalId) {
@@ -115,7 +116,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(deleteWorkflowAutomationDecision(proposalId));
+    return NextResponse.json(await store.deleteWorkflowAutomationDecision(proposalId));
   } catch (error) {
     return NextResponse.json(
       {

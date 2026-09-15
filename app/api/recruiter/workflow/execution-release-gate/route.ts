@@ -1,3 +1,5 @@
+import { requireRecruiterApiRouteAuthorization } from "@/lib/recruiterApiAuthorization";
+import { createRecruiterRuntimeStore } from "@/lib/recruiterRuntimeStore.server";
 import {
   NextRequest,
   NextResponse,
@@ -6,12 +8,7 @@ import {
 import {
   buildRecruiterCopilotContext,
 } from "@/lib/recruiterCopilotContext";
-import {
-  readWorkflowAutomationDecisions,
-} from "@/lib/recruiterWorkflowAutomationDecisions";
-import {
-  readWorkflowAutomationRuleConfigs,
-} from "@/lib/recruiterWorkflowAutomationRuleConfig";
+
 import {
   buildRecruiterWorkflowAutomationPreview,
 } from "@/lib/recruiterWorkflowAutomationRules";
@@ -69,7 +66,10 @@ function readLimit(
 export async function GET(
   request: NextRequest,
 ) {
+  const authorization = await requireRecruiterApiRouteAuthorization({ request });
+  if (!authorization.allowed) return authorization.response;
   try {
+    const store = createRecruiterRuntimeStore(authorization.scope);
     const saved =
       readPersistedWorkflowState();
 
@@ -120,12 +120,12 @@ export async function GET(
             500,
 
           ruleConfigs:
-            readWorkflowAutomationRuleConfigs(),
+            await store.readWorkflowAutomationRuleConfigs(),
         },
       );
 
     const decisions =
-      readWorkflowAutomationDecisions();
+      await store.readWorkflowAutomationDecisions();
 
     const readiness =
       buildWorkflowExecutionReadinessReport(

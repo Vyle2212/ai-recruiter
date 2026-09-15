@@ -293,6 +293,10 @@ export function readWorkflowAutomationDecisions(
   }
 }
 
+export function buildWorkflowAutomationDecisionFile(decisions: WorkflowAutomationDecision[]): WorkflowAutomationDecisionFile {
+  return { ...emptyWorkflowAutomationDecisionFile(), decisions, summary: summary(decisions) };
+}
+
 export function writeWorkflowAutomationDecisions(
   decisions: WorkflowAutomationDecision[],
   filePath = workflowAutomationDecisionPath(),
@@ -336,11 +340,14 @@ export function writeWorkflowAutomationDecisions(
   return file;
 }
 
-export function saveWorkflowAutomationDecision(
+export function saveWorkflowAutomationDecision(input: SaveWorkflowAutomationDecisionInput, options: { filePath?: string } = {}) {
+  const result = applyWorkflowAutomationDecision(input, readWorkflowAutomationDecisions(options.filePath));
+  return { ...result, file: writeWorkflowAutomationDecisions(result.file.decisions, options.filePath) };
+}
+
+export function applyWorkflowAutomationDecision(
   input: SaveWorkflowAutomationDecisionInput,
-  options: {
-    filePath?: string;
-  } = {},
+  current: WorkflowAutomationDecisionFile,
 ) {
   const proposalId =
     clean(input.proposalId);
@@ -375,10 +382,6 @@ export function saveWorkflowAutomationDecision(
     );
   }
 
-  const current =
-    readWorkflowAutomationDecisions(
-      options.filePath,
-    );
 
   const existing =
     current.decisions.find(
@@ -444,10 +447,7 @@ export function saveWorkflowAutomationDecision(
   return {
     decision,
     file:
-      writeWorkflowAutomationDecisions(
-        decisions,
-        options.filePath,
-      ),
+      buildWorkflowAutomationDecisionFile(decisions),
   };
 }
 

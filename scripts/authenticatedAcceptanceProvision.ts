@@ -338,6 +338,15 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
       .in("id", organizationIds);
     if (deleteError) throw new Error("acceptance_organization_cleanup_failed");
   }
+  // Organization/profile cascades must remove durable controlled mutations too.
+  if (organizationIds.length) {
+    const { count, error } = await client
+      .from("recruiter_runtime_state")
+      .select("organization_id", { count: "exact", head: true })
+      .in("organization_id", organizationIds);
+    if (error || count !== 0)
+      throw new Error("acceptance_runtime_state_residue_detected");
+  }
   const { count: profileResidue, error: profileResidueError } = await client
     .from("user_profiles")
     .select("id", { count: "exact", head: true })
@@ -388,6 +397,16 @@ async function main() {
   const config = loadConfig();
   const client = adminClient(config);
   await verifyDatabaseMarker(client, config);
+  if (action === "verify" || action === "provision") {
+    const { error } = await client
+      .from("recruiter_runtime_state")
+      .select("revision")
+      .limit(0);
+    if (error)
+      throw new Error(
+        "acceptance_environment_blocked:runtime_storage_migration_required",
+      );
+  }
   if (action === "verify") {
     console.log(
       JSON.stringify({
