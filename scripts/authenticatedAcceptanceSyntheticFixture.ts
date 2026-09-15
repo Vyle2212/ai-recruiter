@@ -24,6 +24,7 @@ import {
   ACCEPTANCE_INTERNAL_SEARCH_QUERY,
   ACCEPTANCE_SYNTHETIC_CANDIDATE_ID,
   ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER,
+  ACCEPTANCE_SYNTHETIC_REGISTRY_MARKER,
   acceptanceSyntheticCandidateRecord,
   validateAcceptanceSyntheticCandidate,
 } from "../lib/acceptanceSyntheticCandidateFixture";
@@ -89,7 +90,7 @@ async function presence(
       client
         .from("acceptance_synthetic_candidates")
         .select(registrySelect)
-        .eq("marker", ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER)
+        .eq("marker", ACCEPTANCE_SYNTHETIC_REGISTRY_MARKER)
         .maybeSingle(),
       client
         .from("candidates")
@@ -143,7 +144,7 @@ async function deleteExact(
     client
       .from("acceptance_synthetic_candidates")
       .delete()
-      .eq("marker", ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER),
+      .eq("marker", ACCEPTANCE_SYNTHETIC_REGISTRY_MARKER),
     client
       .from("candidates")
       .delete()

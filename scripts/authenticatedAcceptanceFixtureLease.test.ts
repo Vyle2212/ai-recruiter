@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { acceptanceSyntheticCandidateRecord } from "../lib/acceptanceSyntheticCandidateFixture";
 
 import {
   acceptanceFinalDecision,
@@ -28,6 +30,16 @@ const empty: AcceptanceFixturePresence = {
 const owned = {
   ...acceptanceFixtureLeaseRecord(expected),
 };
+
+// Exercise the persisted schema contract as well as the canonical name contract.
+const schema = readFileSync(
+  "supabase/acceptance/001_acceptance_environment_control.sql",
+  "utf8",
+);
+assert.ok(schema.includes("check (marker like 'PTF Synthetic %')"));
+assert.match(owned.marker, /^PTF Synthetic /);
+assert.equal(owned.search_query, acceptanceSyntheticCandidateRecord().name);
+assert.notEqual(owned.marker, owned.search_query);
 
 assert.equal(acceptanceFixtureState(empty, expected), "available");
 assert.equal(fixtureInstallAllowed("available"), true);

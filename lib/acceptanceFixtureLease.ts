@@ -1,6 +1,7 @@
 import {
   ACCEPTANCE_SYNTHETIC_CANDIDATE_ID,
   ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER,
+  ACCEPTANCE_SYNTHETIC_REGISTRY_MARKER,
   ACCEPTANCE_SYNTHETIC_FIXTURE_VERSION,
   type AcceptanceSyntheticRegistryRecord,
 } from "./acceptanceSyntheticCandidateFixture";
@@ -38,7 +39,7 @@ export function acceptanceFixtureLeaseRecord(
   expected: AcceptanceFixtureLeaseExpectation,
 ) {
   return {
-    marker: ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER,
+    marker: ACCEPTANCE_SYNTHETIC_REGISTRY_MARKER,
     candidate_id: ACCEPTANCE_SYNTHETIC_CANDIDATE_ID,
     fixture_version: ACCEPTANCE_SYNTHETIC_FIXTURE_VERSION,
     synthetic_namespace: expected.syntheticNamespace,

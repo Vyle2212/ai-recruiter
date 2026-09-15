@@ -4,6 +4,8 @@ import { isDeepStrictEqual } from "node:util";
 export const ACCEPTANCE_SYNTHETIC_FIXTURE_VERSION = "ptf1c2a-candidate-v3";
 export const ACCEPTANCE_SYNTHETIC_CANDIDATE_ID =
   "a11ce000-0000-4000-8000-00000000012a";
+// Stable database lease identifier; independent of the searchable person name.
+export const ACCEPTANCE_SYNTHETIC_REGISTRY_MARKER = "PTF Synthetic Tester";
 export const ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER = "Synthetic PTF Tester";
 export const ACCEPTANCE_INTERNAL_SEARCH_QUERY = "Synthetic PTF Tester";
 

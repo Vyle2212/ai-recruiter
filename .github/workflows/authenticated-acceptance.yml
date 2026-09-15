@@ -73,7 +73,9 @@ jobs:
       - name: Verify durable recruiter storage contracts
         run: npm run test:recruiter-runtime-storage
       - name: Verify canonical synthetic name lookup
-        run: node --import tsx scripts/authenticatedAcceptanceSyntheticPreflight.test.ts
+        run: |
+          node --import tsx scripts/authenticatedAcceptanceSyntheticPreflight.test.ts
+          node --import tsx scripts/authenticatedAcceptanceFixtureLease.test.ts
       - name: Create run-owned acceptance metadata
         shell: bash
         run: |
