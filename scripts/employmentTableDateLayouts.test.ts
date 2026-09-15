@@ -96,4 +96,16 @@ assert.equal(jobs(`Employment History ${durationEmployerRows.replaceAll('Decembe
 assert.equal(jobs('Employment History Duration: January 2020 - Nowhere Employer: Example Systems Ltd - Services').length, 0);
 assert.equal(jobs('Employment History Duration: January 2020 - January 20200 Employer: Example Systems Ltd - Services').length, 0);
 
+
+
+const terminalOrganization = 'Organization 1: Example Advisory Sdn Bhd Duration: April 2019 – March 2021 Designation: SAP Solution Architect';
+for (const ending of ['', '   ', ' Education Example University', ' Project History Organization 2: Example Client Duration: Jan 2022 – Dec 2022 Designation: SAP Analyst']) {
+  const terminalRows = jobs(`Professional Experience ${terminalOrganization}${ending}`);
+  assert.equal(terminalRows.length, 1, 'Retain a terminal labelled employment row');
+  assert.equal(terminalRows[0].title, 'SAP Solution Architect');
+  assert.equal(terminalRows[0].company, 'Example Advisory Sdn Bhd');
+}
+assert.equal(jobs(`Project History ${terminalOrganization}`).length, 0);
+assert.equal(jobs(`Professional Experience ${terminalOrganization.replace('March 2021', 'March 2018')}`).length, 0);
+
 console.log('Employment table dates, role boundaries and spaced-date layouts: passed');

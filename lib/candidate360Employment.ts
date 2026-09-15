@@ -9,7 +9,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v49-calendar-day-validation";
+  "candidate-employment-v50-terminal-organization";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -893,7 +893,7 @@ function organizationDurationDesignationEmployment(source: string): EnterpriseEm
   const section = source.match(/\b(?:Professional Experience|Employment History|Working Experience)\s*:?\s*([\s\S]*?)(?=\b(?:Project Experience|Project History|Education|Technical Skills|Certifications|Qualifications|References)\b|$)/i)?.[1];
   if (!section) return [];
   const monthYear = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[a-z]*\\s+(?:19|20)\\d{2}';
-  const pattern = new RegExp(`\\bOrganization\\s*\\d*\\s*:\\s*([\\s\\S]{2,160}?)\\s+Duration\\s*:\\s*(?:From\\s+)?(${monthYear})\\s*(?:[-–—]|to|until)\\s*(${monthYear}|Present|Current|To\\s+date)\\s+Designation\\s*:\\s*([\\s\\S]{2,140}?)(?=\\s+(?:Responsibilities?|Organization\\s*\\d*\\s*:|$))`, 'gi');
+  const pattern = new RegExp(`\\bOrganization\\s*\\d*\\s*:\\s*([\\s\\S]{2,160}?)\\s+Duration\\s*:\\s*(?:From\\s+)?(${monthYear})\\s*(?:[-–—]|to|until)\\s*(${monthYear}|Present|Current|To\\s+date)\\s+Designation\\s*:\\s*([\\s\\S]{2,140}?)(?=\\s+(?:Responsibilities?|Organization\\s*\\d*\\s*:)|\\s*$)`, 'gi');
   return [...section.matchAll(pattern)].flatMap((match, index) => {
     const company = match[1].trim();
     const end = match[3].replace(/^To\s+date$/i, 'Present');

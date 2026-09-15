@@ -112,3 +112,11 @@ Named dates previously discarded the explicit day before validating month precis
 The career-date consistency regression is now mandatory in Production Trust CI. Synthetic tests cover invalid month lengths, leap-year century rules, zero/overflow days, equivalence with valid ISO dates and exclusion from canonical career calculations. Local career-date tests, all 15 employment/canonical regression files, typecheck and required formatting checks passed.
 
 Against commit `c12023226c16ebb17c5b4ae5481feceef1d154de`, the private 277-source comparison found zero changed employment timelines and zero changed experience summaries: 79 profiles / 313 rows, 198 unresolved, and zero malformed, duplicate or invalid-range diagnostics. The other 693 sources remain unaudited. This precision fix does not establish live OCR, reviewed backfill or authenticated exact-artifact acceptance. Production remains NO_GO.
+
+## Continuation checkpoint: terminal organization rows
+
+The `Organization -> Duration -> Designation` reader required whitespace before its end-of-section alternative. As a result, a complete employment record ending exactly at the final title was lost after source trimming. The boundary now accepts the actual end of the bounded employment section, with or without trailing whitespace. Education and project sections remain excluded, and reversed dates remain rejected.
+
+Synthetic regressions reproduce the previous omission and cover end-of-document, trailing whitespace, education/project transitions and project-only rejection. All 16 local employment, calendar-date and canonical regression files plus typecheck passed. The unchanged private 277-source subset still yields 79 profiles / 313 rows, with 198 unresolved and zero changed employment timelines. Malformed, duplicate and invalid-range diagnostics remain zero. This is a coverage regression repair, not additional recovery measured on that subset.
+
+Exact-head CI remains required. Live OCR, reviewed backfill, the remaining 693 sources and authenticated exact-artifact acceptance remain outstanding; production remains NO_GO.
