@@ -9,7 +9,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v46-located-employer-history";
+  "candidate-employment-v47-complete-endpoint-tokens";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -838,7 +838,7 @@ function roleCompanyPeriodEmployment(source: string): EnterpriseEmployment[] {
   const month = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
   const dated = `(?:\\d{1,2}(?:st|nd|rd|th)?\\s+)?${month}\\s+(?:19|20)\\d{2}`;
   const role = '(?:(?:Senior|Junior|Lead|Principal)\\s+)?(?:[A-Za-z][A-Za-z/&()+-]*\\s+){0,4}(?:Engineer|Specialist|Executive|Consultant|Manager|Analyst|Developer|Administrator|Officer)';
-  const pattern = new RegExp(`\\b(${role})\\s+([A-Z][A-Za-z0-9&.,'() -]{1,120}?\\b(?:Pte\\s+(?:Ltd|Limited)|Sdn\\s+Bhd|Ltd|Limited|Inc))\\s+Period\\s*:\\s*(${dated})\\s*[-–—]\\s*(${dated}|Present|Current|Now)`, 'gi');
+  const pattern = new RegExp(`\\b(${role})\\s+([A-Z][A-Za-z0-9&.,'() -]{1,120}?\\b(?:Pte\\s+(?:Ltd|Limited)|Sdn\\s+Bhd|Ltd|Limited|Inc))\\s+Period\\s*:\\s*(${dated})\\s*[-–—]\\s*(${dated}|Present|Current|Now)(?![A-Za-z0-9_])`, 'gi');
   return [...section.matchAll(pattern)].flatMap((match, index) => {
     const current = /^(?:Present|Current|Now)$/i.test(match[4]);
     if (!supportedRange(match[3], match[4], current)) return [];
@@ -855,7 +855,7 @@ function locatedEmployerHistory(source: string): EnterpriseEmployment[] {
   const section = source.match(/\bEmployment History\s*:?\s*([\s\S]*?)(?=\b(?:Project Experience|Project History|Projects?|Education|Technical Skills|Certifications|Qualifications|References)\b|$)/i)?.[1];
   if (!section) return [];
   const monthYear = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s+(?:19|20)\\d{2}';
-  const pattern = new RegExp(`(?:^|[.;])\\s*([A-Z][^.;]{1,120}?)\\s*\\(([^();]{1,60})\\)\\s*((?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|(?:[A-Z]{2,8}\\s+)?Ltd\\.?)?)\\s*,\\s*([A-Z][A-Za-z .]{1,40})\\s+from\\s+(${monthYear})\\s+to\\s+(${monthYear}|Present|Current|Now|(?:To|Till)\\s+date)`, 'gi');
+  const pattern = new RegExp(`(?:^|[.;])\\s*([A-Z][^.;]{1,120}?)\\s*\\(([^();]{1,60})\\)\\s*((?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|(?:[A-Z]{2,8}\\s+)?Ltd\\.?)?)\\s*,\\s*([A-Z][A-Za-z .]{1,40})\\s+from\\s+(${monthYear})\\s+to\\s+(${monthYear}|Present|Current|Now|(?:To|Till)\\s+date)(?![A-Za-z0-9_])`, 'gi');
   return [...section.matchAll(pattern)].flatMap((match, index) => {
     const company = `${match[1]} ${match[3]}`.trim();
     const end = match[6].replace(/^(?:To|Till)\s+date$/i, 'Present');

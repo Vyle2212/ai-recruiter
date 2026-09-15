@@ -71,4 +71,13 @@ assert.equal(locatedEmployers[0].current, true);
 assert.equal(locatedEmployers[0].end, 'Present');
 assert.equal(jobs('Project History Example Client (Singapore), Singapore from Jan 2019 to till date').length, 0);
 assert.equal(jobs('Employment History Example Advisory (Kuala Lumpur), Malaysia from Jan 2022 to Jan 2020').length, 0);
+
+
+for (const endpoint of ['Jan 20200', 'Nowhere', 'Currently unavailable', 'Presently unknown', 'till dateUnknown']) {
+  assert.equal(jobs(`Employment History Example Advisory (Singapore), Singapore from Jan 2019 to ${endpoint}`).length, 0, `Reject truncated endpoint: ${endpoint}`);
+}
+for (const endpoint of ['Jan 20200', 'Nowhere', 'Currently unavailable', 'Presently unknown']) {
+  assert.equal(jobs(`Employment History Senior Systems Engineer Example Services Pte Ltd Period: Jan 2019 - ${endpoint}`).length, 0, `Reject truncated period endpoint: ${endpoint}`);
+}
+
 console.log('Employment table dates, role boundaries and spaced-date layouts: passed');

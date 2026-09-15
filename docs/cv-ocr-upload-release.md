@@ -88,3 +88,11 @@ One employment history lists repeated `Employer (city), country from date to dat
 On the unchanged private 277-source review subset, current extraction increased from 77 profiles / 306 employment rows to 78 profiles / 311 rows. Profiles without employment decreased from 200 to 199. Malformed, duplicate and invalid-range diagnostics remain zero; overlap review remains seven profiles and the possible client/employer equality flag remains one. All five recovered rows have explicit employers and date ranges, while all five intentionally retain a missing employment title. No source record or database row was changed, and 693 of the declared 970 sources remain unaudited.
 
 Synthetic regressions cover repeated employer/location rows, an employer suffix after the parenthesized city, project-section isolation, current-status normalization and reversed-date rejection. Exact-head CI remains required before merge. Live OCR, reviewed backfill, full-population audit and authenticated exact-deployment acceptance remain release blockers.
+
+## Continuation checkpoint: complete endpoint tokens
+
+The role/company/period and located-employer readers previously accepted prefixes of malformed endpoints: `Jan 20200` became `Jan 2020`, while `Nowhere` and `Currently unavailable` became current employment. Both readers now require the endpoint token to end before another letter, digit or underscore. Synthetic negative regressions reproduce these failures and cover both layouts; existing valid current and dated rows remain covered.
+
+The unchanged private 277-source subset still yields 78 profiles / 311 employment rows, with 199 unresolved profiles. Comparing complete employment timelines against the preceding parser produced zero changed profiles. Malformed, duplicate and invalid-range diagnostics remain zero. This is a precision repair, not additional source recovery or backfill. The other 693 sources remain unaudited.
+
+Local employment/canonical regressions and typecheck must pass, followed by exact-head GitHub CI. Live OCR, reviewed backfill, full-population audit and authenticated acceptance of the exact deployable artifact remain required; production remains NO_GO.
