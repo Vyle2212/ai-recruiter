@@ -65,7 +65,7 @@ for (const row of rows) {
   if (!hasText) reasons.push(hasReference ? 'SOURCE_TEXT_MISSING_RETRIEVE_REFERENCED_FILE' : 'SOURCE_TEXT_AND_REFERENCE_MISSING');
   if (/\b(?:EXPERINCE|EMPLOYMENT HISTORY|WORKING EXPERIENCE|PROFESSIONAL EXPERIENCE)\b/i.test(text) && !profile.employmentTimeline.length) reasons.push('EMPLOYMENT_SECTION_REQUIRES_REVIEW');
   if (/\b(?:EDUCATION|ACADEMIC QUALIFICATIONS)\b/i.test(text) && !profile.education.length) reasons.push('EDUCATION_SECTION_REQUIRES_REVIEW');
-  if (profile.employmentTimeline.some(x => !x.title || !x.start || !x.end)) reasons.push('INCOMPLETE_EMPLOYMENT_FIELDS');
+  if (profile.employmentTimeline.some(x => !x.company || !x.title || !x.start || !x.end)) reasons.push('INCOMPLETE_EMPLOYMENT_FIELDS');
   const token = crypto.createHash('sha256').update(String(row.id || rows.indexOf(row))).digest('hex').slice(0,12);
   const timeline = profile.employmentTimeline;
   const check = employmentTimelineDiagnostics(timeline);
@@ -79,12 +79,12 @@ for (const row of rows) {
   const possibleClientEmployerConflict = timeline.some(job => clientNames.has(job.company.trim().toLowerCase()));
   diagnostics.possibleClientEmployerConflicts += Number(possibleClientEmployerConflict);
   const delivery = targetModuleDeliveryEvidence({lifecycleEvidence: canonicalLifecycleEvidence(token, profile.projects)}, 'FICO');
-  profileChecks.push({token, employmentRecords: timeline.length, missingTitleRecords: timeline.filter(job => !job.title).length,
+  profileChecks.push({token, employmentRecords: timeline.length, missingTitleRecords: timeline.filter(job => !job.title).length, missingCompanyRecords: timeline.filter(job => !job.company).length,
     missingDateRecords: timeline.filter(job => !job.start || !job.end).length,
     totalCareerYears: profile.experienceSummary.totalCareerYears, currentRoleTenureYears: profile.experienceSummary.currentRoleTenureYears,
     projects: profile.projects.length, directFicoAssignments: delivery.directTargetAssignments.length,
     overlappingEmployment: overlaps, possibleClientEmployerConflict,
-    status: timeline.length ? (timeline.some(job => !job.title || !job.start || !job.end) ? 'INCOMPLETE_EMPLOYMENT' : 'EXTRACTED_REQUIRES_SOURCE_REVIEW') : 'UNRESOLVED_SOURCE_REVIEW_REQUIRED'});
+    status: timeline.length ? (timeline.some(job => !job.company || !job.title || !job.start || !job.end) ? 'INCOMPLETE_EMPLOYMENT' : 'EXTRACTED_REQUIRES_SOURCE_REVIEW') : 'UNRESOLVED_SOURCE_REVIEW_REQUIRED'});
 
   if (reasons.length) review.push({token, reasons});
   if (arg('--review-sources') && reasons.some(reason => ['EMPLOYMENT_SECTION_REQUIRES_REVIEW', 'INCOMPLETE_EMPLOYMENT_FIELDS'].includes(reason))) {

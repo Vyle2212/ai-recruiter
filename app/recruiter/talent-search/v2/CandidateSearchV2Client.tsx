@@ -1305,7 +1305,7 @@ export function CompactCandidateCard({
                     <p className="truncate">
                       {[
                         item.employer,
-                        item.start
+                        (item.start || item.end)
                           ? formatCandidateProfilePeriod(
                               item.start,
                               item.end,
@@ -1338,7 +1338,7 @@ export function CompactCandidateCard({
                         item.role ? `Role: ${item.role}` : null,
                         ...item.lifecycle,
                         ...item.modules,
-                        item.start
+                        (item.start || item.end)
                           ? formatCandidateProfilePeriod(item.start, item.end)
                           : null,
                       ]

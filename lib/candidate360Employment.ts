@@ -8,7 +8,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v28-consistent-career-dates";
+  "candidate-employment-v29-grounded-partial-employment";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -378,7 +378,12 @@ function entry(input: {
   const current =
     input.current === true || /^(?:present|current|now)$/i.test(end);
   const hasGroundedRange = supportedRange(start, end, current);
-  if (!(company && title) && !(input.allowGroundedEmployerOnly && company && hasGroundedRange)) return null;
+  const groundedStructuredPartial = input.sourceType === "employment" && Boolean(company || title);
+  if (!(company && title) && !groundedStructuredPartial && !(input.allowGroundedEmployerOnly && company && hasGroundedRange)) return null;
+  // Preserve a single known date without inventing an open-ended employment.
+  // A supplied but invalid complete range must still be excluded as a whole.
+  const partialStart = !end && !current && careerMonthIndex(start) !== null;
+  const partialEnd = !start && !current && careerMonthIndex(end) !== null;
   const responsibilities = sanitizeEmploymentResponsibilities(
     input.responsibilities || [],
     {
@@ -401,8 +406,8 @@ function entry(input: {
     modules: [...new Set(input.modules || [])],
     achievements: responsibilities.slice(0, 5),
     responsibilities: responsibilities.slice(0, 5),
-    start: hasGroundedRange ? start : "",
-    end: hasGroundedRange ? end : "",
+    start: hasGroundedRange || partialStart ? start : "",
+    end: hasGroundedRange || partialEnd ? end : "",
     duration: hasGroundedRange ? duration(start, end, current) : "",
     current,
     evidenceState:
@@ -1158,7 +1163,7 @@ export function canonicalEmploymentTimeline(input: {
       end,
       current:
         /^(?:true|yes|1)$/i.test(currentValue) ||
-        /present|current|now/i.test(end),
+        /^(?:present|current|now)$/i.test(end),
       sourceRef,
       sourceId:
         value(record, ["id", "employment_id", "employmentId"]) || undefined,

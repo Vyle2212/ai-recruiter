@@ -28,3 +28,22 @@ try {
 }
 assert.equal(normalizeActualCandidateSchema({raw_text:'PROFESSIONAL EXPERIENCE Example Vendor – Custom Planning | Example Customer | Dec 2025 – Mar 2025'}).enterpriseProfile.employmentTimeline.length, 0);
 console.log('Timezone-independent experience calculation: passed');
+
+const partial = normalizeActualCandidateSchema({employment_history:[
+  {title:'SAP FICO Consultant',start_date:'Jan 2020'},
+  {company:'Example Employer',end_date:'Dec 2022'},
+  {title:'Senior SAP consultant with experience of over 20 years covering various roles within'}
+]}).enterpriseProfile;
+assert.equal(partial.employmentTimeline.length, 2);
+const titleOnly = partial.employmentTimeline.find(job => job.title === 'SAP FICO Consultant')!;
+assert.equal(titleOnly.company, '');
+assert.equal(titleOnly.start, 'Jan 2020');
+assert.equal(titleOnly.end, '');
+assert.equal(titleOnly.current, false);
+assert.equal(titleOnly.evidenceState, 'source_extracted');
+assert.ok(titleOnly.provenance?.length);
+const companyOnly = partial.employmentTimeline.find(job => job.company === 'Example Employer')!;
+assert.equal(companyOnly.title, '');
+assert.equal(companyOnly.end, 'Dec 2022');
+assert.equal(partial.experienceSummary.totalCareerYears, null);
+console.log('Grounded incomplete employment stays visible without invented tenure: passed');
