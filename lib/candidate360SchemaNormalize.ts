@@ -18,7 +18,7 @@ import {
 
 export type CandidateSchemaRecord = Record<string, unknown>;
 export const CANDIDATE_CANONICAL_VERSION =
-  "candidate-canonical-v42-exact-project-identity";
+  "candidate-canonical-v43-explicit-history-tables";
 export const CANDIDATE_DETAIL_PROJECTION_VERSION =
   "candidate-detail-v24-exact-project-identity";
 export const CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION =
@@ -3464,6 +3464,16 @@ function normalizeResumeEducation(sourceScopes: CandidateSchemaRecord[]) {
       endYear,
     });
   };
+  // Date-first education records survive PDF text flattening.
+  const dateFirst = /\bFormal Education\s*:\s*[^\w]*((?:19|20)\d{2})\s*[-–—]\s*((?:19|20)\d{2})\s+(University\s+of\s+[^,;]{2,100}),\s*[^;]{0,80}?\s+((?:bachelor|master)[’']?s?\s+degree\s*(?:\([^)]*\))?\s+in\s+[^.;]{2,100})[.]\s*(?:Major\s*:\s*([^.;]{2,100}))?/gi;
+  for (const item of resumeText.matchAll(dateFirst)) {
+    const before = output.length;
+    add(item[4], item[3], item[2]);
+    if (output.length > before) {
+      output.at(-1)!.startYear = item[1];
+      output.at(-1)!.fieldOfStudy = clean(item[5]).split(/\bPersonal\s+(?:Particulars|Details)\b/i)[0].trim();
+    }
+  }
   const fromPattern =
     /\b((?:Bachelor|Master|Doctor|PhD|Diploma|Degree|BSc|BA|MSc|MBA)[^,;]{0,140}?)(?:\s+from\s+|\s+at\s+)([^,;]{2,120}?)(?:\s+Finished\s+((?:19|20)\d{2})|(?=\b(?:Bachelor|Master|Doctor|PhD|Diploma|Degree|BSc|BA|MSc|MBA)\b)|$)/gi;
   let match: RegExpExecArray | null;

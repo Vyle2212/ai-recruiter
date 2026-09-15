@@ -7,7 +7,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v21-role-scoped-responsibilities";
+  "candidate-employment-v22-explicit-history-tables";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -383,6 +383,7 @@ function entry(input: {
   excerpt?: string;
   confidence: number;
   sourceId?: string;
+  allowGroundedEmployerOnly?: boolean;
 }): EnterpriseEmployment | null {
   const company = validEmploymentCompany(input.company);
   const title = validEmploymentTitle(input.title);
@@ -391,7 +392,7 @@ function entry(input: {
   const current =
     input.current === true || /^(?:present|current|now)$/i.test(end);
   const hasGroundedRange = supportedRange(start, end, current);
-  if (!(company && title)) return null;
+  if (!(company && title) && !(input.allowGroundedEmployerOnly && company && hasGroundedRange)) return null;
   const responsibilities = sanitizeEmploymentResponsibilities(
     input.responsibilities || [],
     {
@@ -490,12 +491,41 @@ function resumeCompany(input: string) {
   );
 }
 
+// Only enter this parser through an explicit Date / Company Name / Role table.
+// Flattened PDF rows keep date boundaries even when column layout is lost.
+function tabularResumeEmployment(source: string): EnterpriseEmployment[] {
+  const section = source.match(/\b(?<!PROJECT )(?:EXPERIENCE|EXPERINCE|EMPLOYMENT HISTORY|WORKING EXPERIENCE)\s+Date\s+Company Name\s+Role\s+([\s\S]*?)(?=\b(?:RELEVANT PROJECT|PROJECT EXPERIENCE|PROJECT EXPERINCE|EDUCATION)\b|$)/i)?.[1];
+  if (!section) return [];
+  const text = section.replace(/Page\s+\d+\s+of\s+\d+/gi, " ");
+  const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*";
+  const date = `${month}\\s+(?:\\d{4}|\\d{2})`;
+  const rows = [...text.matchAll(new RegExp(`\\b(${date})\\s*[-–—]\\s*(${date}|Present|Current)\\b`, "gi"))];
+  const expand = (value: string) => value.replace(/\b(\d{2})$/, (_, year: string) => `${Number(year) <= 30 ? "20" : "19"}${year}`);
+  return rows.flatMap((row, index) => {
+    const body = text.slice((row.index || 0) + row[0].length, rows[index + 1]?.index ?? text.length).trim();
+    const clientAt = body.search(/\bClient\s*:/i);
+    const roleAt = body.search(/\b(?:SAP\s|S4\/HANA\s)/i);
+    const company = clientAt >= 0 ? body.slice(0, clientAt) : roleAt > 0 ? body.slice(0, roleAt) : "";
+    if (!company) return [];
+    // A role-column narrative is retained as evidence, never invented as a title.
+    const roleText = body.match(/\b((?:SAP|S4\/HANA)\s+[^.]{2,100}?(?:Consultant(?:\s+and\s+(?:Team\s+)?Lead)?|Team\s+Lead))\b/i)?.[1] || "";
+    const parsed = entry({company, title: roleText,
+      start: expand(row[1]), end: expand(row[2]), current: /^(Present|Current)$/i.test(row[2]),
+      allowGroundedEmployerOnly: true, sourceRef: `resume.employmentTable.${index + 1}`,
+      sourceType: "parsed_resume", confidence: roleText ? 96 : 90,
+      excerpt: `${row[0]} ${body}`, responsibilities: [body.slice(company.length).trim()],
+    });
+    return parsed ? [parsed] : [];
+  });
+}
+
 function resumeEmployment(resumeText: string) {
   const output: EnterpriseEmployment[] = [];
   const source = resumeText
     .normalize("NFKC")
     .replace(/[\r\n]+/g, " ")
     .replace(/\s+/g, " ");
+  output.push(...tabularResumeEmployment(source));
   const monthYear =
     "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[a-z]*[’']?\\s*(?:19|20)\\d{2}";
   const explicitCompanyPositionDate = new RegExp(

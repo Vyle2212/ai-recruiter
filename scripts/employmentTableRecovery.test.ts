@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { normalizeActualCandidateSchema } from '../lib/candidate360SchemaNormalize';
+const fixture = JSON.parse(fs.readFileSync(new URL('./fixtures/employment-date-company-role.json', import.meta.url), 'utf8'));
+const profile = normalizeActualCandidateSchema(fixture).enterpriseProfile;
+assert.equal(profile.employmentTimeline.length, 6);
+assert.equal(profile.employmentTimeline[0].company, 'Example Consulting');
+assert.equal(profile.employmentTimeline[0].start, 'Apr 2023');
+assert.equal(profile.employmentTimeline[0].title, '');
+assert.equal(profile.employmentTimeline.filter(x => x.company === 'Example Consulting').length, 2);
+assert.equal(profile.employmentTimeline.find(x => x.start === 'Oct 2012')?.company, 'Example Systems');
+assert.equal(profile.employmentTimeline.find(x => x.start === 'Dec 2015')?.company, 'Example Delivery');
+assert.ok(profile.employmentTimeline.every(x => !/Example Client/.test(x.company)));
+assert.equal(profile.education[0].institution, 'University of Example City');
+assert.equal(profile.education[0].fieldOfStudy, 'Computerized Accounting');
+assert.equal(profile.education[0].startYear, '2001');
+assert.equal(profile.education[0].endYear, '2005');
+const projectsOnly = normalizeActualCandidateSchema({raw_text: fixture.raw_text.replace('EXPERINCE Date', 'RELEVANT PROJECT EXPERINCE Date')}).enterpriseProfile;
+// A project table must never qualify as an employment table.
+assert.equal(projectsOnly.employmentTimeline.length, 0);
+console.log('Employment table recovery: passed');
