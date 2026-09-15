@@ -9,7 +9,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v42-labelled-partial-date";
+  "candidate-employment-v43-client-labelled-title";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1210,6 +1210,47 @@ function resumeEmployment(resumeText: string) {
       confidence: 92,
     });
     if (parsed) output.push(parsed);
+  });
+
+  // Employment histories sometimes put the employer between a parenthesized
+  // tenure and an explicit Client label, followed by Current Position Title.
+  // Treat Client as a boundary only: it must never replace the employer or
+  // supply employment dates.
+  const datedEmployerClientTitle = new RegExp(
+    `\\(\\s*(${monthYear})\\s*[-–—]\\s*(${monthYear}|Present|Current)\\s*\\)\\s*([\\s\\S]{2,180}?)\\s*\\(\\s*Client\\s*:\\s*[\\s\\S]{1,180}?\\)\\s*Current\\s+Position\\s+Title\\s*:\\s*([\\s\\S]{2,120}?)(?=\\s+(?:Industry|Work\\s+Description|Projects?)\\s*:|$)`,
+    "gi",
+  );
+  [...source.matchAll(datedEmployerClientTitle)].forEach((match, index) => {
+    const markerIndex = match.index || 0;
+    const beforeMarker = source.slice(0, markerIndex).toLowerCase();
+    const employmentSection = Math.max(
+      beforeMarker.lastIndexOf("employment history"),
+      beforeMarker.lastIndexOf("working experience"),
+      beforeMarker.lastIndexOf("professional experience"),
+    );
+    const projectSection = Math.max(
+      beforeMarker.lastIndexOf("project experience"),
+      beforeMarker.lastIndexOf("project history"),
+    );
+    const current = /^(?:present|current)$/i.test(match[2]);
+    if (
+      employmentSection < 0 ||
+      projectSection > employmentSection ||
+      !supportedRange(match[1], match[2], current)
+    )
+      return;
+    const parsed = entry({
+      company: validEmploymentCompany(match[3]),
+      title: resumeRole(match[4]),
+      start: match[1],
+      end: match[2],
+      current,
+      sourceRef: `resume.datedEmployerClientTitle.${index + 1}`,
+      sourceType: "parsed_resume",
+      excerpt: match[0],
+      confidence: 96,
+    });
+    if (parsed?.company && parsed.title) output.push(parsed);
   });
 
   const labelledCurrent = source.match(
