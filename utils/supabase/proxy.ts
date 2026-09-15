@@ -1,3 +1,4 @@
+import { supabaseServerCookieOptions } from "../../lib/supabaseServerCookiePolicy";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -175,6 +176,7 @@ export async function updateRecruiterApiSession(request: NextRequest) {
       "Authentication is required.",
     );
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
+    cookieOptions: supabaseServerCookieOptions(),
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -307,6 +309,7 @@ export async function updateStagingSession(request: NextRequest) {
   }
 
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
+    cookieOptions: supabaseServerCookieOptions(),
     cookies: {
       getAll() {
         return request.cookies.getAll();

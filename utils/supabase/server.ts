@@ -1,3 +1,4 @@
+import { supabaseServerCookieOptions } from "../../lib/supabaseServerCookiePolicy";
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { buildSupabaseServerCookieAdapter } from '../../lib/supabaseServerCookieAdapter'
@@ -13,6 +14,7 @@ export async function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: supabaseServerCookieOptions(),
       cookies: {
         getAll: adapter.getAll,
         setAll(cookiesToSet) {
