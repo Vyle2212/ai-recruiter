@@ -166,8 +166,8 @@ test.describe
         data: "synthetic",
       }),
       await recruiter.post(target, {
-        headers: { "Content-Length": String(2 * 1024 * 1024) },
-        data: {},
+        // Let the HTTP client compute Content-Length from the real payload.
+        data: { syntheticPadding: "x".repeat(2 * 1024 * 1024) },
       }),
       await recruiter.post(target, {
         headers: { "X-Recruiter-Action": "different-policy" },
