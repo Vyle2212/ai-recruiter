@@ -133,7 +133,7 @@ function bridgedApi(context: APIRequestContext) {
       target,
       acceptanceBridgeConfigurationFromProcess(),
       {
-        Origin: acceptanceRequired("ACCEPTANCE_BASE_URL"),
+        Origin: new URL(acceptanceRequired("ACCEPTANCE_BASE_URL")).origin,
         "X-Acceptance-Run": "synthetic",
         ...(options.headers || {}),
       },
