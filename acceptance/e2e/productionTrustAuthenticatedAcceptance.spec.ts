@@ -489,11 +489,31 @@ test.describe
     await page.getByRole("button", { name: "Understand & review" }).click();
     await page.getByRole("button", { name: "Commit Search" }).click();
     const open = page.getByRole("button", { name: "Open profile" });
-    expect(await open.count()).toBeGreaterThan(0);
+    await expect(open.first()).toBeVisible();
     await open.first().click();
     await expect(page.getByRole("dialog")).toBeVisible();
     await expect(page.getByRole("tab", { name: /Experience/ })).toBeVisible();
     await expect(page.getByRole("tab", { name: /Projects/ })).toBeVisible();
+    const drawer = page.getByRole("dialog");
+    await drawer.getByRole("tab", { name: /Experience/ }).click();
+    await expect(
+      drawer.getByText("PTF Synthetic Consulting Ltd", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      drawer.getByText("PTF Synthetic Services Ltd", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      drawer.getByText("SAP Finance Analyst", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      drawer.getByText("PTF Synthetic Manufacturing Client", { exact: true }),
+    ).toHaveCount(0);
+    await drawer.getByRole("tab", { name: /Projects/ }).click();
+    await expect(
+      drawer
+        .getByText("PTF Synthetic Manufacturing Client", { exact: true })
+        .first(),
+    ).toBeVisible();
     await page.screenshot({
       path: "artifacts/acceptance-evidence/private-candidate-drawer.png",
       fullPage: false,
