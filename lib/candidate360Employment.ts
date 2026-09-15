@@ -7,7 +7,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v25-employment-title-boundaries";
+  "candidate-employment-v26-compact-employment-headings";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -500,7 +500,7 @@ function tabularResumeEmployment(source: string): EnterpriseEmployment[] {
   const text = section.replace(/Page\s+\d+\s+of\s+\d+/gi, " ");
   const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*";
   const date = `${month}\\s+(?:\\d{4}|\\d{2})`;
-  const rows = [...text.matchAll(new RegExp(`\\b(${date})\\s*[-–—]\\s*(${date}|Present|Current)\\b`, "gi"))];
+  const rows = [...text.matchAll(new RegExp(`\\b(${date})\\s*[-–—]\\s*(${date}|Present|Current|Now)\\b`, "gi"))];
   const expand = (value: string) => value.replace(/\b(\d{2})$/, (_, year: string) => `${Number(year) <= 30 ? "20" : "19"}${year}`);
   return rows.flatMap((row, index) => {
     const body = text.slice((row.index || 0) + row[0].length, rows[index + 1]?.index ?? text.length).trim().replace(/^\([^)]*\b(?:months?|years?)\)\s*/i, "");
@@ -521,10 +521,10 @@ function tabularResumeEmployment(source: string): EnterpriseEmployment[] {
 }
 
 function organizationDesignationEmployment(source: string): EnterpriseEmployment[] {
-  const section = source.match(/\bEmployment History\s+Organization\s+Designation\s+Duration\s+([\s\S]*?)(?=\b(?:PROJECT\s*#|EDUCATION|QUALIFICATIONS)\b|$)/i)?.[1];
+  const section = source.match(/\b(?:Employment History\s+)?Organization\s+Designation\s+Duration\s+([\s\S]*?)(?=\b(?:PROJECT\s*#|EDUCATION|QUALIFICATIONS)\b|$)/i)?.[1];
   if (!section) return [];
   const date = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+(?:19|20)\\d{2}";
-  const ranges = [...section.matchAll(new RegExp(`(${date})\\s*(?:to|[-–—])\\s*(${date}|Present|Current)\\b`, "gi"))];
+  const ranges = [...section.matchAll(new RegExp(`(${date})\\s*(?:to|[-–—])\\s*(${date}|Present|Current|Now)\\b`, "gi"))];
   const result: EnterpriseEmployment[] = [];
   let offset = 0;
   for (const [index, range] of ranges.entries()) {
@@ -535,7 +535,7 @@ function organizationDesignationEmployment(source: string): EnterpriseEmployment
     const boundary = prefix.search(/\b(?:SAP\s|Warehouse\s)/i);
     if (boundary < 1) break;
     const parsed = entry({company: prefix.slice(0, boundary), title: prefix.slice(boundary),
-      start: range[1], end: range[2], current: /present|current/i.test(range[2]),
+      start: range[1], end: range[2], current: /present|current|now/i.test(range[2]),
       sourceRef: `resume.organizationDesignationTable.${index + 1}`, sourceType: 'parsed_resume',
       confidence: 96, excerpt: `${prefix} ${range[0]}`});
     if (!parsed) break;
@@ -562,13 +562,42 @@ function proseEmploymentHeadings(source: string): EnterpriseEmployment[] {
   });
 }
 
+// Recover the first explicit heading in each employment section. Deliberately
+// do not scan arbitrary responsibility sentences for employer-like words.
+function compactEmploymentHeading(source: string): EnterpriseEmployment[] {
+  const headings = [...source.matchAll(/\b(?:PROFESSIONAL EXPERIENCE|EMPLOYMENT HISTORY|WORKING EXPERIENCE)\s*:?\s*/gi)];
+  const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+(?:19|20)\\d{2}";
+  const range = `(${month})\\s*(?:to|[-–—])\\s*(${month}|Present|Current|Now)`;
+  const role = "(?:SAP\\s+[A-Za-z0-9/&() -]{0,50}?|Business\\s+|Senior\\s+|Functional\\s+|Technical\\s+)?(?:Consultant|Analyst|Engineer|Manager|Director|Developer|Administrator)(?:\\s*\\([^)]{1,60}\\))?";
+  const company = "[A-Z][A-Za-z0-9&.,'() -]{1,100}?";
+  const corporate = "(?:Sdn\\.?\\s*Bhd\\.?|Inc\\.?|Ltd\\.?|Limited|Corporation|Consulting|Lawfirm)";
+  const patterns = [
+    { re: new RegExp(`^(${company}\\s+${corporate})\\s+(${role})\\s+\\(?${range}\\)?`, 'i'), fields: [1,2,3,4] },
+    { re: new RegExp(`^(${role})\\s+(${company}\\s+${corporate})\\s+\\(?${range}\\)?`, 'i'), fields: [2,1,3,4] },
+    { re: new RegExp(`^(${company})\\s*\\(${range}\\)\\s+(${role})(?=\\s|$)`, 'i'), fields: [1,4,2,3] },
+    { re: new RegExp(`^${range}\\s+(${role})\\s+(${company}\\s+${corporate})(?=\\s|$)`, 'i'), fields: [4,3,1,2] },
+  ];
+  return headings.flatMap((heading, index) => {
+    const section = source.slice((heading.index || 0) + heading[0].length, headings[index + 1]?.index).split(/\b(?:PROJECT EXPERIENCE|PROJECT HISTORY|EDUCATION|PERSONAL DETAILS|TECHNICAL SKILLS)\b/i)[0];
+    for (const {re, fields} of patterns) {
+      const match = section.match(re);
+      if (!match || /\b(?:client|customer|project|summary|expertise)\b/i.test(match[fields[0]])) continue;
+      const parsed = entry({company: match[fields[0]], title: match[fields[1]], start: match[fields[2]], end: match[fields[3]],
+        current: /^(present|current|now)$/i.test(match[fields[3]]), sourceRef: `resume.compactEmploymentHeading.${index + 1}`,
+        sourceType: 'parsed_resume', confidence: 94, excerpt: match[0]});
+      if (parsed) return [parsed];
+    }
+    return [];
+  });
+}
+
 function resumeEmployment(resumeText: string) {
   const output: EnterpriseEmployment[] = [];
   const source = resumeText
     .normalize("NFKC")
     .replace(/[\r\n]+/g, " ")
     .replace(/\s+/g, " ");
-  output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source));
+  output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source));
   const monthYear =
     "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[a-z]*[’']?\\s*(?:19|20)\\d{2}";
   const explicitCompanyPositionDate = new RegExp(
