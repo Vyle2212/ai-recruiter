@@ -235,3 +235,53 @@ export async function attachSanitized(
     contentType: "application/json",
   });
 }
+
+// Retry only the explicit transient readiness contract, never authorization or
+// terminal index failures. Do not include response bodies in CI diagnostics.
+export async function waitForAcceptanceSearchReady(
+  api: Pick<APIRequestContext, "get">,
+) {
+  const deadline = Date.now() + 20_000;
+  while (true) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new Error("acceptance_search_readiness_timeout");
+    const response = await api.get("/api/recruiter/search-v2", {
+      timeout: remaining,
+    });
+    const httpStatus = response.status();
+    const body = await response.json().catch(() => null);
+    await response.dispose();
+    if (
+      httpStatus === 200 &&
+      body?.ready === true &&
+      body?.sources?.internal_profiles?.available === true &&
+      body?.sources?.internal_profiles?.population > 0
+    )
+      return;
+    const warming =
+      httpStatus === 503 &&
+      body?.ready === false &&
+      (body?.status === "cold" || body?.status === "warming") &&
+      body?.error?.code === "SEARCH_INDEX_WARMING";
+    if (!warming) {
+      const state = ["cold", "warming", "ready", "failed"].includes(
+        body?.status,
+      )
+        ? body.status
+        : "unknown";
+      const code = [
+        "SEARCH_INDEX_WARMING",
+        "SEARCH_INDEX_WARM_FAILED",
+        "SEARCH_INDEX_WARM_TIMEOUT",
+      ].includes(body?.error?.code)
+        ? body.error.code
+        : "unknown";
+      throw new Error(
+        `acceptance_search_not_ready http=${httpStatus} state=${state} code=${code}`,
+      );
+    }
+    await new Promise((resolve) =>
+      setTimeout(resolve, Math.min(1_000, Math.max(0, deadline - Date.now()))),
+    );
+  }
+}

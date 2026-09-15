@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 
 import {
   acceptanceRequired,
+  waitForAcceptanceSearchReady,
   acceptanceAdminClient,
   anonymousAcceptanceApi,
   attachSanitized,
@@ -72,10 +73,12 @@ test.describe
     const outcomes: Record<string, number> = {};
     for (const role of ["recruiter", "recruiter_manager", "admin"] as const) {
       const api = await authenticatedApi(role);
-      const response = await api.get(searchPath);
-      expect(response.status(), role).toBe(200);
-      outcomes[role] = response.status();
-      await api.dispose();
+      try {
+        await waitForAcceptanceSearchReady(api);
+        outcomes[role] = 200;
+      } finally {
+        await api.dispose();
+      }
     }
     await attachSanitized(testInfo, "allowed-role-matrix", outcomes);
   });
