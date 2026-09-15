@@ -18,13 +18,13 @@ import {
 
 export type CandidateSchemaRecord = Record<string, unknown>;
 export const CANDIDATE_CANONICAL_VERSION =
-  "candidate-canonical-v47-labelled-assignment-blocks";
+  "candidate-canonical-v48-assignment-evidence-boundaries";
 export const CANDIDATE_DETAIL_PROJECTION_VERSION =
   "candidate-detail-v24-exact-project-identity";
 export const CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION =
   CANDIDATE_EMPLOYMENT_TIMELINE_VERSION;
 export const CANDIDATE_PROJECT_EXTRACTOR_VERSION =
-  "candidate-projects-v23-labelled-assignment-blocks";
+  "candidate-projects-v24-assignment-evidence-boundaries";
 
 type NormalizedCandidateProjection = ReturnType<
   typeof normalizeActualCandidateSchemaFresh
@@ -2592,6 +2592,20 @@ function normalizeResumeProjects(
   }
   return projects;
 }
+// Activities such as data migration and interface integration do not establish
+// the overall assignment type. Unknown is preferable to a default implementation.
+function labelledAssignmentType(value: string): string {
+  if (/\broll(?:out|-out|ed out|ing out)\b/i.test(value)) return "Rollout";
+  if (/\b(?:implementation|migration|integration|upgrade|conversion)\s+(?:project|programme|program)\b/i.test(value)) {
+    const kind = value.match(/\b(implementation|migration|integration|upgrade|conversion)\s+(?:project|programme|program)\b/i)![1];
+    return kind[0].toUpperCase() + kind.slice(1).toLowerCase();
+  }
+  if (/\b(?:support and implement change requests?|production support|day[- ]to[- ]day|incident tickets?|SLA)\b/i.test(value)) return "Support / Enhancement";
+  if (/\b(?:implement(?:ed|ing)?|implementation)\b/i.test(value) && !/\b(?:post[- ]implementation|after implementation)\b/i.test(value)) return "Implementation";
+  if (/\b(?:production support|application support|day[- ]to[- ]day|incident tickets?|SLA|support project)\b/i.test(value)) return "Support / Enhancement";
+  return "";
+}
+
 function narrativeProjects(
   sourceScopes: CandidateSchemaRecord[],
 ): EnterpriseProject[] {
@@ -2665,11 +2679,11 @@ function narrativeProjects(
   groupedSegments.push(...labelledAssignments);
   const hasDelivery = (value: string) => delivery.test(value) || (labelledAssignments.includes(value) && /\b(?:implement(?:ing|ation)?|configur(?:e|ing|ation)|testing|go.?live|support)\b/i.test(value));
   const segments = groupedSegments.filter((value) => {
+    if (!labelledAssignments.includes(value) && labelledAssignments.length && (/\bCompany\s+client\s*:/i.test(value) || labelledAssignments.some(block => block.includes(value)))) return false;
     if (
       value.length < 24 ||
       (value.length > 1200 && !labelledAssignments.includes(value)) ||
-      !lifecycle.test(value) ||
-      !hasDelivery(value) ||
+      (!labelledAssignments.includes(value) && (!lifecycle.test(value) || !hasDelivery(value))) ||
       excludedSection.test(value)
     )
       return false;
@@ -2682,7 +2696,7 @@ function narrativeProjects(
   const unique = [
     ...new Map(segments.map((value) => [value.toLowerCase(), value])).values(),
   ]
-    .filter((excerpt) => lifecycle.test(excerpt) && hasDelivery(excerpt))
+    .filter((excerpt) => labelledAssignments.includes(excerpt) || (lifecycle.test(excerpt) && hasDelivery(excerpt)))
     .slice(0, 40);
   const stableAssignmentId = (value: string) => {
     let hash = 2166136261;
@@ -2693,7 +2707,9 @@ function narrativeProjects(
     return (hash >>> 0).toString(36);
   };
   return unique.map((segment, index) => {
-    const projectType = /\broll(?:out|-out|ed out)\b/i.test(segment)
+    const projectType = labelledAssignments.includes(segment)
+      ? labelledAssignmentType(segment)
+      : /\broll(?:out|-out|ed out)\b/i.test(segment)
       ? "Rollout"
       : /\bmigrat/i.test(segment)
         ? "Migration"
@@ -2833,7 +2849,7 @@ function narrativeProjects(
       modules = modules.filter((item) => !/^(FI|CO)$/i.test(item));
     const assignmentAnchor =
       clean(`${client}|${name}`).toLowerCase().replace(/^\|$/, "") || segment;
-    const assignmentId = `resume-narrative-assignment-${stableAssignmentId(assignmentAnchor)}`;
+    const assignmentId = `resume-narrative-assignment-${stableAssignmentId(`${assignmentAnchor}|${start}|${end}|${role}`)}`;
     const sourceRef = `resume.narrativeProjects.${index + 1}`;
     return withProjectEvidence(
       {

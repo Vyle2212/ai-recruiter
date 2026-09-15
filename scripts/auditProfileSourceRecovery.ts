@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { normalizeActualCandidateSchema } from '../lib/candidate360SchemaNormalize';
+import { CANDIDATE_CANONICAL_VERSION, normalizeActualCandidateSchema } from '../lib/candidate360SchemaNormalize';
 
 // Read-only inventory. Never updates candidate IDs, source fields or recruiter data.
 const arg = (name: string) => { const i = process.argv.indexOf(name); return i < 0 ? undefined : process.argv[i + 1]; };
@@ -31,6 +31,7 @@ if (arg('--input')) {
 }
 const review: {token: string; reasons: string[]}[] = [];
 let sourceTextPresent = 0, sourceReferencePresent = 0, employmentProfiles = 0, employmentRecords = 0, educationProfiles = 0;
+const completeness = {company: 0, title: 0, dateRange: 0, currentEmployerProfiles: 0, projects: 0, projectsWithoutType: 0, paginationLeaks: 0};
 for (const row of rows) {
   const text = ['raw_text','resume_text','raw_cv'].map(key => typeof row[key] === 'string' ? row[key] : '').join('\n');
   const hasText = text.trim().length > 0;
@@ -40,6 +41,15 @@ for (const row of rows) {
   employmentProfiles += Number(profile.employmentTimeline.length > 0);
   employmentRecords += profile.employmentTimeline.length;
   educationProfiles += Number(profile.education.length > 0);
+  for (const job of profile.employmentTimeline) {
+    completeness.company += Number(Boolean(job.company));
+    completeness.title += Number(Boolean(job.title));
+    completeness.dateRange += Number(Boolean(job.start && job.end));
+  }
+  completeness.currentEmployerProfiles += Number(profile.employmentTimeline.some(job => job.current && job.company));
+  completeness.projects += profile.projects.length;
+  completeness.projectsWithoutType += profile.projects.filter(project => !project.projectType).length;
+  completeness.paginationLeaks += profile.projects.filter(project => project.responsibilities.some(item => /\bPage\s+\d+\s+of\s+\d+\b/i.test(item))).length;
   const reasons: string[] = [];
   if (!hasText) reasons.push(hasReference ? 'SOURCE_TEXT_MISSING_RETRIEVE_REFERENCED_FILE' : 'SOURCE_TEXT_AND_REFERENCE_MISSING');
   if (/\b(?:EXPERINCE|EMPLOYMENT HISTORY|WORKING EXPERIENCE|PROFESSIONAL EXPERIENCE)\b/i.test(text) && !profile.employmentTimeline.length) reasons.push('EMPLOYMENT_SECTION_REQUIRES_REVIEW');
@@ -47,7 +57,7 @@ for (const row of rows) {
   if (profile.employmentTimeline.some(x => !x.title || !x.start || !x.end)) reasons.push('INCOMPLETE_EMPLOYMENT_FIELDS');
   if (reasons.length) review.push({token: crypto.createHash('sha256').update(String(row.id || rows.indexOf(row))).digest('hex').slice(0,12), reasons});
 }
-const report = {mode:'READ_ONLY', population: rows.length, sourceTextPresent, sourceReferencePresent, employmentProfiles, employmentRecords, educationProfiles, review,
+const report = {mode:'READ_ONLY', version: CANDIDATE_CANONICAL_VERSION, completeness, profilesWithoutEmployment: rows.length - employmentProfiles, population: rows.length, sourceTextPresent, sourceReferencePresent, employmentProfiles, employmentRecords, educationProfiles, review,
   limits:['A source reference does not prove the original file is accessible.', 'Section detection flags possible omissions; it does not prove extraction completeness.', 'No database records changed. Production UI and scoring distribution remain unverified.']};
 const output = JSON.stringify(report,null,2);
 if (arg('--output')) fs.writeFileSync(arg('--output')!, output, 'utf8'); else console.log(output);

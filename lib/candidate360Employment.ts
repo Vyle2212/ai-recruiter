@@ -127,6 +127,7 @@ export function embeddedCvIdentityHeader(
 
 export function stripEmbeddedCvHeaderFromProjectResponsibility(input: unknown) {
   const source = clean(input)
+    .replace(/\bPage\s+\d+\s+(?:of|\/)\s*\d+\b/gi, " ")
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, " ")
     .replace(/(?:\+?\d[\d\s().-]{7,}\d)/g, " ");
   const header = embeddedCvIdentityHeader(source);
