@@ -8,7 +8,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v32-table-date-layouts";
+  "candidate-employment-v33-dated-ledgers";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -489,7 +489,7 @@ function tabularResumeEmployment(source: string): EnterpriseEmployment[] {
   if (!section) return [];
   const text = section.replace(/Page\s+\d+\s+of\s+\d+/gi, " ");
   const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*";
-  const date = `${month}\\s+(?:\\d{4}|\\d{2})`;
+  const date = `(?:${month}\\s+(?:\\d{4}|\\d{2})|(?:19|20)\\d{2})`;
   const rows = [...text.matchAll(new RegExp(`\\b(${date})\\s*(?:[-–—]|to)\\s*(${date}|Present|Current|Now)\\b`, "gi"))];
   const expand = (value: string) => value.replace(/\b(\d{2})$/, (_, year: string) => `${Number(year) <= 30 ? "20" : "19"}${year}`);
   return rows.flatMap((row, index) => {
@@ -499,7 +499,7 @@ function tabularResumeEmployment(source: string): EnterpriseEmployment[] {
     if (previous && !text.slice((previous.index || 0) + previous[0].length, row.index).trim()) return [];
     const body = text.slice((row.index || 0) + row[0].length, rows[index + 1]?.index ?? text.length).trim().replace(/^\([^)]*\b(?:months?|years?)\)\s*/i, "");
     const clientAt = body.search(/\bClient\s*:/i);
-    const roleAt = body.search(/\b(?:SAP\s|S4\/HANA\s|Senior\s|Junior\s|Technical Consultant|Business & Integration Associate Manager|Managing Consultant|MM Consultant|Business Sys\\. Analyst|HRIT\b|IT Engineer|Lecturer\b|Intern\b|Part Time\b|Web Application|Transition to Support|HSSE Applications|Global SAP|Production (?:Planner|Officer|Coordination))/i);
+    const roleAt = body.search(/\b(?:SAP\s|ABAP\s|Application Developer|S4\/HANA\s|Senior\s|Junior\s|Project Specialist|Special Projects Executive|Assistant Manager|Technical Consultant|Business & Integration Associate Manager|Managing Consultant|MM Consultant|Business Sys\\. Analyst|HRIT\b|IT Engineer|Lecturer\b|Intern\b|Part Time\b|Web Application|Transition to Support|HSSE Applications|Global SAP|Production (?:Planner|Officer|Coordination))/i);
     const company = clientAt >= 0 ? body.slice(0, clientAt) : roleAt > 0 ? body.slice(0, roleAt) : "";
     if (!company) return [];
     // A role-column narrative is retained as evidence, never invented as a title.
@@ -727,6 +727,35 @@ function spacedDateEmployment(source: string): EnterpriseEmployment[] {
   });
 }
 
+function datedEmploymentLedger(source: string): EnterpriseEmployment[] {
+  const headings = [...source.matchAll(/\bEMPLOYMENT HISTORY\s*:?\s*/gi)];
+  const month = '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*';
+  const date = `(?:\\d{1,2}\\s+)?${month}\\s+(?:(?:19|20)\\d{2}|\\d{2})`;
+  const pattern = new RegExp(`\\b(${date})\\s*(?:[-–—]|to(?:\\s+date(?=\\s+\\d))?)\\s*(${date}|Present|Current|Now)\\b`, 'gi');
+  const expand = (value: string) => value.replace(/\b(\d{2})$/, (_, year: string) => `${Number(year) <= 30 ? '20' : '19'}${year}`);
+  return headings.flatMap((heading, sectionIndex) => {
+    const section = source.slice((heading.index || 0) + heading[0].length, headings[sectionIndex + 1]?.index)
+      .split(/\b(?:QUALIFICATIONS|EDUCATION|PROJECT EXPERIENCE|PROJECT HISTORY|WORK EXPERIENCE|PROFESSIONAL EXPERIENCE|TECHNICAL SKILLS|REFERENCES)\b/i)[0]
+      .replace(/Page\s+\d+\s+of\s+\d+/gi, ' ');
+    // This is a chronological ledger, not a search across responsibility prose.
+    if (!new RegExp(`^[\\s•▪●-]*${date}\\s*(?:[-–—]|to)`, 'i').test(section)) return [];
+    const rows = [...section.matchAll(pattern)];
+    return rows.flatMap((row, index) => {
+      const body = section.slice((row.index || 0) + row[0].length, rows[index + 1]?.index)
+        .replace(/[\s•▪●]+$/g, '').trim();
+      const pipe = body.match(/^\|\s*([^|]{2,150}?)\s*\|\s*([^|]{2,120})$/);
+      const contract = body.match(/^(.{2,220}?)\s+[-–—]\s+((?:Senior|Junior|Lead|SAP|FICO|FI|Data|Project|Application|Conversion|Solution|Independent|Subject Matter|Assistant|Accounts|Finance|Business|Technical|Functional|Software|System)\b.{1,110}?)\s*\((?:Contract|Permanent)\)$/i);
+      const parsedFields = pipe || contract;
+      if (!parsedFields || /\b(?:Client|Customer|Project Duration|Responsibilities)\b/i.test(parsedFields[1])) return [];
+      const start = expand(row[1]); const end = expand(row[2]); const current = /^(Present|Current|Now)$/i.test(end);
+      if (!supportedRange(start, end, current)) return [];
+      const parsed = entry({company: parsedFields[1], title: parsedFields[2], start, end, current,
+        sourceRef: `resume.datedEmploymentLedger.${sectionIndex + 1}.${index + 1}`, sourceType: 'parsed_resume', confidence: 96, excerpt: row[0] + ' ' + body});
+      return parsed ? [parsed] : [];
+    });
+  });
+}
+
 function resumeEmployment(resumeText: string) {
   const output: EnterpriseEmployment[] = [];
   const source = resumeText
@@ -737,7 +766,7 @@ function resumeEmployment(resumeText: string) {
     })
     .replace(/[\r\n]+/g, " ")
     .replace(/\s+/g, " ");
-  output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source), ...labelledEmployerHistory(source), ...explicitHeadingVariants(source), ...orderedLabelEmployment(source), ...explicitEmploymentStatements(source), ...spacedDateEmployment(source));
+  output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source), ...labelledEmployerHistory(source), ...explicitHeadingVariants(source), ...orderedLabelEmployment(source), ...explicitEmploymentStatements(source), ...spacedDateEmployment(source), ...datedEmploymentLedger(source));
   const monthYear =
     "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[a-z]*[’']?\\s*(?:19|20)\\d{2}";
   const explicitCompanyPositionDate = new RegExp(
