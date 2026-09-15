@@ -7,7 +7,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v26-compact-employment-headings";
+  "candidate-employment-v27-labelled-employer-boundaries";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -591,13 +591,38 @@ function compactEmploymentHeading(source: string): EnterpriseEmployment[] {
   });
 }
 
+// Labelled employment fields are bounded before assignments, so a project's
+// duration cannot be borrowed as the employer's tenure.
+function labelledEmployerHistory(source: string): EnterpriseEmployment[] {
+  const markers = [...source.matchAll(/\b(Employer|Company Name)\s*:\s*/gi)];
+  const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+(?:19|20)\\d{2}";
+  return markers.flatMap((marker, index) => {
+    const prefix = source.slice(0, marker.index);
+    const lastProject = Math.max(prefix.toLowerCase().lastIndexOf('project experience'), prefix.toLowerCase().lastIndexOf('projects/assignments'));
+    const lastEmployment = Math.max(prefix.toLowerCase().lastIndexOf('employment history'), prefix.toLowerCase().lastIndexOf('professional experience'), prefix.toLowerCase().lastIndexOf('working experience'));
+    if (/company name/i.test(marker[1]) && (lastEmployment < 0 || lastProject > lastEmployment)) return [];
+    const block = source.slice((marker.index || 0) + marker[0].length, markers[index + 1]?.index)
+      .split(/\b(?:Projects?|Client|Customer|Job Duties|Job Tasks|Responsibilities|Duties|Work Description|Scope of Work)\s*[:]/i)[0];
+    const company = block.match(/^([\s\S]{2,160}?)(?=\s+(?:(?:Current )?Position(?: Title| Level)?|Designation|Job Title|Job roles|Duration|Period|Start Join date|Holding company|Industry|Co\. official website|Company Industry)\s*:)/i)?.[1];
+    const title = block.match(/\b(?:(?:Current )?Position(?: Title| Level)?|Designation|Job Title|Job roles)\s*:\s*([\s\S]{2,120}?)(?=\s+(?:Duration|Period(?:\s*\([^)]*\))?|Organization|Specialization|Last Drawn Salary|Level|Industry|Date Joined)\s*:|[.;]|$)/i)?.[1];
+    const range = block.match(new RegExp(`(?:\\d{1,2}\\s+)?(${month})\\s*(?:[-–—~]|to)\\s*(?:\\d{1,2}\\s+)?(${month}|Present|Current|Now)\\b`, 'i'));
+    if (!company || !title || !range) return [];
+    const cleanTitle = title.replace(new RegExp(`\\s+${month}[\\s\\S]*$`, 'i'), '').trim();
+    const narrativeRole = /^(?:Act as|Led |Overall |SME for)/i.test(cleanTitle);
+    const parsed = entry({company: company.split(/\s+seconded to\s+/i)[0], title: narrativeRole ? '' : cleanTitle, allowGroundedEmployerOnly: true,
+      responsibilities: narrativeRole ? [cleanTitle] : [], start: range[1], end: range[2], current: /^(present|current|now)$/i.test(range[2]),
+      sourceRef: `resume.labelledEmployerHistory.${index + 1}`, sourceType: 'parsed_resume', confidence: 96, excerpt: marker[0] + block});
+    return parsed ? [parsed] : [];
+  });
+}
+
 function resumeEmployment(resumeText: string) {
   const output: EnterpriseEmployment[] = [];
   const source = resumeText
     .normalize("NFKC")
     .replace(/[\r\n]+/g, " ")
     .replace(/\s+/g, " ");
-  output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source));
+  output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source), ...labelledEmployerHistory(source));
   const monthYear =
     "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[a-z]*[’']?\\s*(?:19|20)\\d{2}";
   const explicitCompanyPositionDate = new RegExp(
