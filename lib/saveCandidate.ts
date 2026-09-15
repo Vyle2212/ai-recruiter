@@ -1,4 +1,5 @@
-﻿import crypto from "crypto";
+﻿import { sanitizeCandidateForPersistence as sanitizeDeep, sanitizeCandidateSourceText } from "./candidateSourcePreservation";
+import crypto from "crypto";
 import { supabase } from "./supabase";
 import { buildCandidateProfile } from "./candidateProfile";
 import { validateCandidateNameV3 } from "./candidateValidationEngine";
@@ -14,30 +15,6 @@ function sanitizeString(value: string): string {
     .replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function sanitizeDeep<T = any>(value: T): T {
-  if (value === null || value === undefined) return value;
-
-  if (typeof value === "string") {
-    return sanitizeString(value) as T;
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((item) => sanitizeDeep(item)) as T;
-  }
-
-  if (typeof value === "object") {
-    const output: AnyRecord = {};
-
-    for (const [key, item] of Object.entries(value as AnyRecord)) {
-      output[key] = sanitizeDeep(item);
-    }
-
-    return output as T;
-  }
-
-  return value;
 }
 
 function normalizeEmail(email: any) {
@@ -1367,7 +1344,7 @@ export async function saveCandidate(candidate: any) {
     raw_text: cleanCandidate.raw_text || cleanCandidate.resume_text || cleanCandidate.raw_cv || cleanCandidate.rawText,
   });
 
-  const rawText = sanitizeString(
+  const rawText = sanitizeCandidateSourceText(
     cleanCandidate.raw_text ||
       cleanCandidate.resume_text ||
       cleanCandidate.raw_cv ||

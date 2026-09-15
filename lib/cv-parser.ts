@@ -1,3 +1,4 @@
+import { sanitizeCandidateSourceText } from "./candidateSourcePreservation";
 /* FINAL SAP CV Parser - recruiter-grade extraction
    Fixes:
    - Prevents headings/skills/project text from becoming candidate name
@@ -741,7 +742,7 @@ export function parseCandidateFromText(input: string, fileName?: string) {
     consultingDNAScore,
     employerReputationScore: Math.min(30, brands.length * 10),
 
-    rawText,
+    rawText: sanitizeCandidateSourceText(input),
   };
 }
 
