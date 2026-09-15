@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { field, type AiExtractionProvider, type AnyRecord, type RawAiCandidateExtraction } from "./cvExtractionSchema";
 
-export const AI_EXTRACTION_PROMPT_VERSION = "primus-ai-cv-extraction-v3.2-full-source";
+export const AI_EXTRACTION_PROMPT_VERSION = "primus-ai-cv-extraction-v3.3-employment-evidence";
 export const AI_EXTRACTION_CACHE_DIR = path.join("reports", "ai-extraction-cache");
 
 export class OpenAiExtractionError extends Error {
@@ -68,6 +68,7 @@ export function buildOpenAiCandidateExtractionPrompt(rawText: string, existingCa
     "Do not treat summary sentences as job titles.",
     "For every field, provide value, confidence, evidence, sourceSection, normalizedValue where useful, and rejectReason when invalid.",
     "Preserve exact evidence snippets from the CV.",
+    "Each employmentHistory row must contain company, title, start, end, current, and evidence: an exact contiguous CV excerpt binding that employer, role and period. Preserve source date strings. Never invent labels or evidence; use null for missing fields.",
     "Return valid JSON only. No markdown.",
     "The JSON must match these top-level keys: identity, contact, location, role, employer, clientProjects, sap, experience, compensation, quality.",
     "Use Not disclosed for currentEmployer only when no explicit employer exists.",

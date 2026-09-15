@@ -1,3 +1,4 @@
+import { validateAiEmploymentEvidence } from "./aiEmploymentEvidence";
 import { extractFullCandidateProfile } from "./fullCandidateExtractionEngine";
 import type { AiExtractionProviderMeta, AnyRecord, RawAiCandidateExtraction, ValidatedAiCandidateExtraction } from "./cvExtractionSchema";
 
@@ -186,6 +187,9 @@ export function validateAiCandidateExtraction(raw: RawAiCandidateExtraction, can
 
   raw = normalizeAiExtractionResult(raw);
   const normalizationWarnings = (raw as any).normalizationWarnings || [];
+  const proposedEmployment = raw.experience.employmentHistory.length ? raw.experience.employmentHistory : raw.employer.employerHistory;
+  const aiUsed = (providerMeta?.providerUsed || raw.providerMeta?.providerUsed || providerMeta?.mode || raw.providerMeta?.mode) === "openai";
+  const employmentEvidence = aiUsed ? validateAiEmploymentEvidence(proposedEmployment, rawText) : {accepted: proposedEmployment, reasons: []};
   const current = currentParser(candidate);
   const nameValue = clean(raw.identity.fullName?.value);
   let nameReason = nameRejectReason(nameValue);
@@ -232,7 +236,7 @@ export function validateAiCandidateExtraction(raw: RawAiCandidateExtraction, can
     !hasContact ? "contact_missing" : "",
     !hasLocation ? "location_missing" : "",
     rawTextQuality ? `raw_text_quality:${rawTextQuality}` : "",
-  ].filter(Boolean).concat(normalizationWarnings);
+  ].filter(Boolean).concat(normalizationWarnings, employmentEvidence.reasons);
   let reviewClassification: ValidatedAiCandidateExtraction["reviewClassification"] = "manual_review_required";
   if (rawTextQuality) reviewClassification = "likely_reupload_required";
   else if (nameReason) reviewClassification = "blocked_identity";
@@ -240,6 +244,7 @@ export function validateAiCandidateExtraction(raw: RawAiCandidateExtraction, can
   else if (!hasSapEvidence || !hasKnownPrimaryModule) reviewClassification = "likely_non_sap_or_low_quality";
   else if (!hasContact && !hasLocation) reviewClassification = "blocked_contact_location";
   else if (employerReason) reviewClassification = "parser_recoverable";
+  else if (employmentEvidence.reasons.length) reviewClassification = "manual_review_required";
   else reviewClassification = "search_ready_after_extraction";
   const searchReadiness = reviewClassification === "search_ready_after_extraction";
   const fieldCompletenessScore = Math.round([!nameReason, !titleReason, modules.length, (raw.sap.sapSkills || []).length, hasContact, hasLocation, Boolean(currentEmployer), raw.experience.totalYearsExperience?.value, raw.compensation.expectedSalary?.value].filter(Boolean).length / 9 * 100);
@@ -294,7 +299,7 @@ export function validateAiCandidateExtraction(raw: RawAiCandidateExtraction, can
     previousCompanyEndDate,
     previousCompanyYearsExperience,
     previousCompanyTenureText,
-    employmentHistory: raw.experience.employmentHistory || raw.employer.employerHistory || [],
+    employmentHistory: employmentEvidence.accepted,
     clientCompanies,
     projectCompanies: raw.clientProjects.projectCompanies || [],
     currentEmployerEvidence: raw.employer.currentEmployer?.evidence,
