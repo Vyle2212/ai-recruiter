@@ -64,3 +64,11 @@ Some employment histories place a parenthesized tenure before the employer, then
 On the same private 277-source review subset, current extraction increased from 74 profiles / 293 employment rows to 75 profiles / 296 rows. Profiles without employment decreased from 203 to 202. Malformed, duplicate and invalid-range diagnostics remain zero; overlap review remains seven profiles and the possible client/employer equality flag remains one. All three recovered rows have explicit company, title and date ranges. No source record or database row was changed, and 693 of the declared 970 sources remain unaudited.
 
 Synthetic regressions cover multiple employer/client/title rows, dotted legal company suffixes, project-section rejection and reversed-date rejection. Existing employment, canonical, source-preservation and OCR regressions plus typecheck must pass before promotion, followed by exact-head GitHub CI. Live OCR, reviewed backfill, full-population audit and authenticated exact-deployment acceptance remain release blockers.
+
+## Continuation checkpoint: organization/duration/designation rows
+
+An additional professional-experience layout repeats explicitly labelled `Organization`, `Duration` and `Designation` fields. The parser now accepts complete rows only inside a bounded employment section, requires an explicit valid month/year range, and stops before project history. It does not promote project organizations to employers or synthesize missing endpoints.
+
+On the unchanged private 277-source review subset, current extraction increased from 75 profiles / 296 employment rows to 76 profiles / 301 rows. Profiles without employment decreased from 202 to 201. Malformed, duplicate and invalid-range diagnostics remain zero; overlap review remains seven profiles and the possible client/employer equality flag remains one. The five recovered rows have explicit company, title and date ranges. No source record or database row was changed, and 693 of the declared 970 sources remain unaudited.
+
+Synthetic regressions cover multiple labelled rows, project-section isolation and reversed-date rejection. This remains a code-only checkpoint: exact-head CI is required before merge, and live OCR, reviewed backfill, full-population audit and authenticated exact-deployment acceptance remain release blockers.
