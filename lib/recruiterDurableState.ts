@@ -52,27 +52,23 @@ export function supabaseStateRepository(
     },
     async compareAndSet(key, revision, payload) {
       if (revision === null) {
-        const { error } = await client
-          .from("recruiter_runtime_state")
-          .insert({
-            ...key,
-            owner_profile_id:
-              key.kind === "copilot_history" ? key.owner_key : null,
-            revision: 1,
-            payload,
-          });
+        const { error } = await client.from("recruiter_runtime_state").insert({
+          ...key,
+          owner_profile_id:
+            key.kind === "copilot_history" ? key.owner_key : null,
+          revision: 1,
+          payload,
+        });
         if (error?.code === "23505") return false;
         if (error) throw new RecruiterStateUnavailable();
         return true;
       }
       const { data, error } = await scoped(
-        client
-          .from("recruiter_runtime_state")
-          .update({
-            payload,
-            revision: revision + 1,
-            updated_at: new Date().toISOString(),
-          }),
+        client.from("recruiter_runtime_state").update({
+          payload,
+          revision: revision + 1,
+          updated_at: new Date().toISOString(),
+        }),
         key,
       )
         .eq("revision", revision)
