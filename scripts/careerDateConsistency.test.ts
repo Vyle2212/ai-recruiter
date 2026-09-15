@@ -47,3 +47,15 @@ assert.equal(companyOnly.title, '');
 assert.equal(companyOnly.end, 'Dec 2022');
 assert.equal(partial.experienceSummary.totalCareerYears, null);
 console.log('Grounded incomplete employment stays visible without invented tenure: passed');
+
+for (const invalidDay of ['31st April 2024', '29th February 2023', '29 February 1900', '00 Jan 2020', '99 Jan 2020']) {
+  assert.equal(careerMonthIndex(invalidDay, false, now), null, invalidDay);
+  assert.equal(calculateTotalCareerYears([{start:invalidDay,end:'Jan 2025'}], now), null, 'Invalid day must not contribute career duration');
+}
+for (const [namedDay, isoDay] of [['29th February 2024','2024-02-29'],['29 Feb 00','2000-02-29'],['30 April 2024','2024-04-30'],['31st January 2020','2020-01-31']]) {
+  assert.equal(careerMonthIndex(namedDay, false, now), careerMonthIndex(isoDay, false, now), namedDay);
+}
+const impossiblePeriod = normalizeActualCandidateSchema({raw_text:'Employment History Senior Systems Engineer Example Services Pte Ltd Period: 31st April 2024 - Jan 2025'}).enterpriseProfile;
+assert.equal(impossiblePeriod.employmentTimeline.length, 0);
+assert.equal(impossiblePeriod.experienceSummary.totalCareerYears, null);
+console.log('Named calendar days reject impossible dates before career calculation: passed');

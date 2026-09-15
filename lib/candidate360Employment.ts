@@ -9,7 +9,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v48-duration-employer";
+  "candidate-employment-v49-calendar-day-validation";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,

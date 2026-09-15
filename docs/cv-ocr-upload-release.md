@@ -35,7 +35,7 @@ No live Google OCR call, database mutation, or production promotion was performe
 
 ## Continuation checkpoint: CI coverage
 
-The precision feature branch previously triggered only the immutable-action-reference workflow. Production Trust CI now includes `codex/precision-*` pushes and pull requests targeting `codex/profile-source-recovery`, retaining all existing security, dependency, secret-history, formatting, build and regression gates. Seven source-layout/OCR tests are included in its security-and-regression job.
+The precision feature branch previously triggered only the immutable-action-reference workflow. Production Trust CI now includes `codex/precision-*` pushes and pull requests targeting `codex/profile-source-recovery`, retaining all existing security, dependency, secret-history, formatting, build and regression gates. Nine source-layout/OCR and career-date tests are included in its security-and-regression job.
 
 Local route-policy coverage found no missing policies across 78 route files and 95 exported methods. The authorization matrix passed, and the client-bundle scan inspected 297 files with zero forbidden-pattern hits. These local checks are not authenticated production acceptance.
 
@@ -104,3 +104,11 @@ A bounded employment-history layout places explicit `Duration` and `Employer` la
 On the unchanged private 277-source subset, extraction increased from 78 profiles / 311 rows to 79 profiles / 313 rows, leaving 198 profiles without employment. Only one profile's employment timeline changed; its two recovered rows have explicit employers and complete historical ranges, and both retain blank titles. All other employment timelines are identical to the preceding checkpoint. Malformed, duplicate and invalid-range counts remain zero. No source or database records were changed; the other 693 sources remain unaudited.
 
 The 15 local employment/canonical regression files and TypeScript typecheck passed. The new negative and positive cases are part of the mandatory source-layout CI group. Exact-head GitHub CI is required before merge. Live OCR, reviewed backfill, full-population audit and authenticated exact-artifact acceptance remain blockers; production remains NO_GO.
+
+## Continuation checkpoint: calendar-day validation
+
+Named dates previously discarded the explicit day before validating month precision, accepting impossible inputs such as `31st April 2024`, `29th February 2023`, and day zero or 99. The shared career-date reader now validates the complete named calendar date with UTC round-tripping before reducing it to month precision. Valid leap days, abbreviated months and two-digit year rules remain supported. Invalid dates cannot contribute to total career duration or a parsed role/company/period range.
+
+The career-date consistency regression is now mandatory in Production Trust CI. Synthetic tests cover invalid month lengths, leap-year century rules, zero/overflow days, equivalence with valid ISO dates and exclusion from canonical career calculations. Local career-date tests, all 15 employment/canonical regression files, typecheck and required formatting checks passed.
+
+Against commit `c12023226c16ebb17c5b4ae5481feceef1d154de`, the private 277-source comparison found zero changed employment timelines and zero changed experience summaries: 79 profiles / 313 rows, 198 unresolved, and zero malformed, duplicate or invalid-range diagnostics. The other 693 sources remain unaudited. This precision fix does not establish live OCR, reviewed backfill or authenticated exact-artifact acceptance. Production remains NO_GO.
