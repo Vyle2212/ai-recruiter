@@ -67,6 +67,7 @@ jobs:
           node-version: "24"
           cache: npm
       - name: Clean dependency installation
+        id: dependencies
         run: npm ci
       - name: Install pinned Chromium runtime
         run: npx playwright install --with-deps chromium
@@ -76,6 +77,8 @@ jobs:
         run: |
           node --import tsx scripts/authenticatedAcceptanceSyntheticPreflight.test.ts
           node --import tsx scripts/authenticatedAcceptanceFixtureLease.test.ts
+          node --import tsx scripts/authenticatedAcceptanceHarness.test.ts
+          node --import tsx scripts/searchV2CandidateDetailCachePrivacy.test.ts
       - name: Create run-owned acceptance metadata
         shell: bash
         run: |
@@ -110,7 +113,7 @@ jobs:
       - name: Run authenticated browser and API acceptance
         run: npm run acceptance:e2e
       - name: Generate pre-cleanup sanitized evidence
-        if: always()
+        if: always() && steps.dependencies.outcome == 'success'
         run: npm run acceptance:report:initial
       - name: Clean identities and controlled mutations
         if: always() && env.ACCEPTANCE_IDENTITY_CLEANUP_ARMED == 'true'
@@ -125,7 +128,7 @@ jobs:
         if: always() && env.ACCEPTANCE_FIXTURE_CLEANUP_ARMED == 'true'
         run: npm run acceptance:synthetic:residue
       - name: Generate final release-truth report
-        if: always()
+        if: always() && steps.dependencies.outcome == 'success'
         run: npm run acceptance:report:final
       - name: Remove temporary browser credentials
         if: always()
@@ -135,12 +138,12 @@ jobs:
             rm -f -- "$ACCEPTANCE_CREDENTIAL_BUNDLE_PATH"
           fi
       - name: Upload sanitized acceptance evidence
-        if: always()
+        if: always() && steps.dependencies.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: authenticated-acceptance-sanitized-${{ github.run_id }}
           path: |
             artifacts/authenticated-acceptance-report.json
-            acceptance-evidence/*.png
+            artifacts/acceptance-evidence/*.png
           if-no-files-found: error
           retention-days: 7

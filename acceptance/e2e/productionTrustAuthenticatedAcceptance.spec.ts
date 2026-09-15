@@ -15,6 +15,7 @@ import {
   installAuthenticatedBrowserState,
   installAcceptanceBrowserBridge,
 } from "./acceptanceHelpers";
+import { ACCEPTANCE_SYNTHETIC_CANDIDATE_ID } from "../../lib/acceptanceSyntheticCandidateFixture";
 import { parseAcceptanceExternalMode } from "../../lib/acceptanceFixtureLease";
 
 const searchPath = "/api/recruiter/search-v2";
@@ -23,10 +24,9 @@ const runToken = String(process.env.ACCEPTANCE_RUN_ID || "ptf1c2-missing");
 const externalMode = parseAcceptanceExternalMode(
   process.env.ACCEPTANCE_EXTERNAL_MODE,
 );
-let internalCandidateId = "";
+const internalCandidateId = ACCEPTANCE_SYNTHETIC_CANDIDATE_ID;
 
-test.describe
-  .serial("Production Trust Foundation authenticated acceptance", () => {
+test.describe("Production Trust Foundation authenticated acceptance", () => {
   test.beforeEach(async ({ context }) => {
     await installAcceptanceBrowserBridge(context);
   });
@@ -136,10 +136,10 @@ test.describe
       }),
       403,
     );
-    expect((await manager.get(reporting)).status()).not.toBe(403);
-    expect((await manager.get(review)).status()).not.toBe(403);
-    expect((await admin.get(reporting)).status()).not.toBe(403);
-    expect((await admin.get(review)).status()).not.toBe(403);
+    expect((await manager.get(reporting)).status()).toBe(200);
+    expect((await manager.get(review)).status()).toBe(200);
+    expect((await admin.get(reporting)).status()).toBe(200);
+    expect((await admin.get(review)).status()).toBe(200);
 
     await attachSanitized(testInfo, "permission-matrix", {
       recruiter: { reporting: 403, dataQualityReview: 403 },
@@ -380,7 +380,7 @@ test.describe
     const bundle = await credentialBundle();
     const identity = bundle.identities.recruiter;
     const api = await authenticatedApi("recruiter");
-    expect((await api.get(searchPath)).status()).toBe(200);
+    await waitForAcceptanceSearchReady(api);
     const admin = await authenticatedAdminDatabaseClient();
     try {
       const deactivate = await admin
@@ -408,7 +408,7 @@ test.describe
       ).toBeNull();
       expect(reactivate.data?.status).toBe("active");
     }
-    expect((await api.get(searchPath)).status()).toBe(200);
+    await waitForAcceptanceSearchReady(api);
     await attachSanitized(testInfo, "deactivation-lifecycle", {
       authorizedBefore: true,
       deniedWhileInactive: true,
@@ -420,7 +420,7 @@ test.describe
   test("server-side session revocation invalidates subsequent API access", async ({}, testInfo) => {
     const session = await authenticatedSession("recruiter");
     const api = await authenticatedApi("recruiter", session.storageState);
-    expect((await api.get(searchPath)).status()).toBe(200);
+    await waitForAcceptanceSearchReady(api);
     const { error } = await acceptanceAdminClient().auth.admin.signOut(
       session.accessToken,
       "global",
@@ -449,9 +449,9 @@ test.describe
       expect(String(candidate.candidateName || candidate.name)).toContain(
         marker,
       );
-    internalCandidateId = String(
-      body.results[0].candidateId || body.results[0].id || "",
-    );
+    expect(
+      String(body.results[0].candidateId || body.results[0].id || ""),
+    ).toBe(internalCandidateId);
     expect(internalCandidateId).toBeTruthy();
     const repeated = await api.post(searchPath, {
       data: { query, talentPool: "internal_profiles" },
@@ -529,10 +529,22 @@ test.describe
     expect(recruiterCold.status()).toBe(200);
     const recruiterWarm = await recruiter.get(target);
     expect(recruiterWarm.status()).toBe(200);
-    expect(recruiterWarm.headers()["x-candidate-detail-cache"]).toBe("hit");
+    // Process-local cache reuse is verified in searchV2CandidateDetailCachePrivacy.test.ts.
+    // Separate serverless requests are not guaranteed to reach the same process.
+    expect(["hit", "miss"]).toContain(
+      recruiterWarm.headers()["x-candidate-detail-cache"],
+    );
+    expect(recruiterWarm.headers()["cache-control"]).toBe("private, no-store");
+    expect(recruiterWarm.headers()["vary"]).toContain("Cookie");
     const managerCold = await manager.get(target);
     expect(managerCold.status()).toBe(200);
     expect(managerCold.headers()["x-candidate-detail-cache"]).toBe("miss");
+    const denied = await authenticatedApi("client");
+    const anonymous = await anonymousAcceptanceApi();
+    await expectPrivateErrorOnly(await denied.get(target), 403);
+    await expectPrivateErrorOnly(await anonymous.get(target), 401);
+    await denied.dispose();
+    await anonymous.dispose();
     const serialized = JSON.stringify(await recruiterWarm.json());
     expect(serialized).not.toMatch(
       /sourceField|sourcePath|workbook|sheetName|rowNumber|linkedSourceId/,

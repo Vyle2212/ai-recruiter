@@ -11,16 +11,7 @@ import {
 } from "../lib/acceptanceFixtureLease";
 import { sanitizedBridgeEvidence } from "../lib/acceptanceDeploymentBridge";
 
-type Attempt = { status?: string; duration?: number };
-type PlaywrightResult = {
-  suites?: Array<{
-    title?: string;
-    specs?: Array<{
-      title?: string;
-      tests?: Array<{ status?: string; results?: Attempt[] }>;
-    }>;
-  }>;
-};
+import { collect, type PlaywrightResult } from "../lib/acceptanceReportResults";
 
 const externalTests = new Set([
   "external continuation tokens fail closed across actor scope and after logout",
@@ -35,24 +26,6 @@ const roleTests = new Set([
   "permission matrix denies privilege escalation and permits mapped roles",
   "controlled reversible role mutations match policy",
 ]);
-
-function collect(result: PlaywrightResult) {
-  return (result.suites || []).flatMap((suite) =>
-    (suite.specs || []).map((spec) => {
-      const attempts = (spec.tests || []).flatMap((item) => item.results || []);
-      return {
-        suite: suite.title || "authenticated acceptance",
-        test: spec.title || "unnamed acceptance",
-        status:
-          attempts.at(-1)?.status || spec.tests?.at(-1)?.status || "unknown",
-        durationMs: attempts.reduce(
-          (sum, attempt) => sum + (attempt.duration || 0),
-          0,
-        ),
-      };
-    }),
-  );
-}
 
 async function main() {
   const phase = process.argv[2];
@@ -91,7 +64,8 @@ async function main() {
     passedNames.has(name),
   );
   const testsPassed =
-    tests.length > 0 &&
+    tests.length === 16 &&
+    new Set(tests.map((test) => test.test)).size === 16 &&
     tests.every(
       (test) =>
         test.status === "passed" ||
@@ -157,6 +131,7 @@ async function main() {
   console.log(
     JSON.stringify({ ok: true, phase, finalDecision, testCount: tests.length }),
   );
+  if (phase === "final" && finalDecision === "NO_GO") process.exitCode = 1;
 }
 
 main().catch(() => {
