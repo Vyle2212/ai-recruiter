@@ -755,15 +755,15 @@ async function bufferToText(buffer: Buffer, fileName = "") {
   const ext = fileName.toLowerCase().split(".").pop();
 
   if (ext === "docx") {
-    const mammoth = await import("mammoth");
-    const res = await mammoth.extractRawText({ buffer });
-    return res.value;
+    const { extractDocxText } = await import("./docxTextLayout");
+    return extractDocxText(buffer);
   }
 
   if (ext === "pdf") {
     const mod: any = await import("pdf-parse");
     const pdfParse = mod.default || mod;
-    const res = await pdfParse(buffer);
+    const { createCvPdfRenderer } = await import("./pdfTextLayout");
+    const res = await pdfParse(buffer, { pagerender: createCvPdfRenderer() });
     return res.text;
   }
 

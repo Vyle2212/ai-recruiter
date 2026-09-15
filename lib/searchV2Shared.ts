@@ -1,9 +1,9 @@
 export const SEARCH_V2_VERSION =
-  "candidate-search-v2-canonical-detail-v98-employer-metadata";
+  "candidate-search-v2-canonical-detail-v99-original-layout";
 export const SEARCH_V2_QUALIFICATION_VERSION =
   "professional-context-segment-v18";
 export const SEARCH_V2_CACHE_VERSION =
-  "recruiter-search-cache-2026-09-14-profile-v98-employer-metadata";
+  "recruiter-search-cache-2026-09-14-profile-v99-original-layout";
 
 export function serializeSearchV2Canonical(value: unknown) {
   return JSON.stringify(value);

@@ -1,4 +1,5 @@
 import { careerMonthIndex } from "./candidateCareerExperience";
+import { layoutEmployment } from "./layoutEmployment";
 import type {
   EnterpriseEmployment,
   EnterpriseProject,
@@ -8,7 +9,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v39-employer-metadata";
+  "candidate-employment-v40-original-layout";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -902,6 +903,13 @@ function employerAssignmentSummary(source: string): EnterpriseEmployment[] {
 
 function resumeEmployment(resumeText: string) {
   const output: EnterpriseEmployment[] = [];
+  for (const [index, row] of layoutEmployment(resumeText).entries()) {
+    const normalizeDate = (input = '') => input.replace(/^(0?[1-9]|1[0-2])\/(\d{4})$/, (_, m, y) => `${monthNames[Number(m) - 1]} ${y}`);
+    const start = normalizeDate(row.start), end = normalizeDate(row.end);
+    if (start && end && !supportedRange(start, end, /^(present|current)$/i.test(end))) continue;
+    const parsed = entry({ ...row, start, end, allowGroundedEmployerOnly: true, sourceRef: `resume.layout.${index + 1}`, sourceType: 'parsed_resume', confidence: 90 });
+    if (parsed) output.push(parsed);
+  }
   const source = resumeText
     .normalize("NFKC")
     .replace(/\b(0?[1-9]|1[0-2])\s*\/\s*(\d{4}|\d{2})\b/g, (_all, month, year) => {
@@ -1301,6 +1309,10 @@ function sameEmployment(
   const rightStart = monthIndex(right.start);
   const leftEnd = monthIndex(left.end, left.current);
   const rightEnd = monthIndex(right.end, right.current);
+  // Separate rows in a source table can be distinct engagements one month apart.
+  // Do not erase an explicitly different start when either end is unknown.
+  if (leftStart !== null && rightStart !== null && leftStart !== rightStart &&
+      (leftEnd === null || rightEnd === null)) return false;
   if (
     leftStart !== null &&
     rightStart !== null &&
