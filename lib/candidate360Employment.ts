@@ -8,7 +8,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v34-numbered-positions";
+  "candidate-employment-v35-functional-application";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -566,7 +566,7 @@ function compactEmploymentHeading(source: string): EnterpriseEmployment[] {
   const headings = [...source.matchAll(/\b(?:PROFESSIONAL EXPERIENCE|EMPLOYMENT HISTORY|WORKING EXPERIENCE)\s*:?\s*/gi)];
   const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+(?:19|20)\\d{2}";
   const range = `(${month})\\s*(?:to|[-–—])\\s*(${month}|Present|Current|Now)`;
-  const role = "(?:SAP\\s+[A-Za-z0-9/&() -]{0,50}?|Business\\s+|Senior\\s+|Functional\\s+|Technical\\s+)?(?:Consultant|Analyst|Engineer|Manager|Director|Developer|Administrator)(?:\\s*\\([^)]{1,60}\\))?";
+  const role = "(?:SAP\\s+[A-Za-z0-9/&() -]{0,50}?|Business\\s+|Senior\\s+|Functional\\s+(?:Application\\s+)?|Technical\\s+)?(?:Consultant|Analyst|Engineer|Manager|Director|Developer|Administrator)(?:\\s*\\([^)]{1,60}\\))?";
   const company = "[A-Z][A-Za-z0-9&.,'() -]{1,100}?";
   const corporate = "(?:Sdn\\.?\\s*Bhd\\.?|Inc\\.?|Ltd\\.?|Limited|Corporation|Consulting|Lawfirm)";
   const patterns = [
