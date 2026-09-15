@@ -72,3 +72,11 @@ An additional professional-experience layout repeats explicitly labelled `Organi
 On the unchanged private 277-source review subset, current extraction increased from 75 profiles / 296 employment rows to 76 profiles / 301 rows. Profiles without employment decreased from 202 to 201. Malformed, duplicate and invalid-range diagnostics remain zero; overlap review remains seven profiles and the possible client/employer equality flag remains one. The five recovered rows have explicit company, title and date ranges. No source record or database row was changed, and 693 of the declared 970 sources remain unaudited.
 
 Synthetic regressions cover multiple labelled rows, project-section isolation and reversed-date rejection. This remains a code-only checkpoint: exact-head CI is required before merge, and live OCR, reviewed backfill, full-population audit and authenticated exact-deployment acceptance remain release blockers.
+
+## Continuation checkpoint: role/company/period rows
+
+One employment-history layout repeats a role, an employer ending in an explicit legal suffix, and a labelled `Period`. The parser now accepts those rows only inside a bounded employment-history section. It requires a short role-shaped title, a legal employer suffix, and a chronologically valid explicit date range. Ordinal day prefixes are retained as source evidence but evaluated at month precision. Project sections and reversed ranges remain excluded.
+
+On the unchanged private 277-source review subset, current extraction increased from 76 profiles / 301 employment rows to 77 profiles / 306 rows. Profiles without employment decreased from 201 to 200. Malformed, duplicate and invalid-range diagnostics remain zero; overlap review remains seven profiles and the possible client/employer equality flag remains one. The five recovered rows have explicit company, title and date ranges. No source record or database row was changed, and 693 of the declared 970 sources remain unaudited.
+
+Synthetic regressions cover multiple legal-employer rows, ordinal dates, project-section isolation and reversed-date rejection. Exact-head CI remains required before merge. Live OCR, reviewed backfill, full-population audit and authenticated exact-deployment acceptance remain release blockers.

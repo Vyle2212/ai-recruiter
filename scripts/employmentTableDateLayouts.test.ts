@@ -54,4 +54,12 @@ assert.deepEqual(organizationDuration.map((item) => item.company), ['Example Adv
 assert.deepEqual(organizationDuration.map((item) => item.title), ['SAP Solution Architect', 'ERP Practice Director']);
 assert.equal(organizationDuration[0].start, 'April 2019');
 assert.equal(jobs('Professional Experience Organization 1: Example Advisory Duration: April 2021 – March 2019 Designation: SAP Architect Responsibilities: Delivery.').length, 0);
+const roleCompanyPeriod = jobs('Employment History Senior Systems Engineer Example Services Pte Limited Period: 2nd Jan 2024 - Current Salary: undisclosed Responsibilities: Delivery. Junior Support Engineer Example Digital Pte Ltd Period: 29th May 2023 – 19th Dec 2023 Salary: undisclosed Responsibilities: Support. Education Example University');
+assert.equal(roleCompanyPeriod.length, 2);
+assert.deepEqual(roleCompanyPeriod.map((item) => item.company), ['Example Services Pte Limited', 'Example Digital Pte Ltd']);
+assert.deepEqual(roleCompanyPeriod.map((item) => item.title), ['Senior Systems Engineer', 'Junior Support Engineer']);
+assert.equal(roleCompanyPeriod[0].start, '2nd Jan 2024');
+assert.equal(roleCompanyPeriod[0].current, true);
+assert.equal(jobs('Project Experience Senior Systems Engineer Example Client Pte Ltd Period: 2nd Jan 2024 - Current').length, 0);
+assert.equal(jobs('Employment History Senior Systems Engineer Example Services Pte Ltd Period: 2nd Jan 2025 - 2nd Jan 2024').length, 0);
 console.log('Employment table dates, role boundaries and spaced-date layouts: passed');
