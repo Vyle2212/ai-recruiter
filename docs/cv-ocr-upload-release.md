@@ -80,3 +80,11 @@ One employment-history layout repeats a role, an employer ending in an explicit 
 On the unchanged private 277-source review subset, current extraction increased from 76 profiles / 301 employment rows to 77 profiles / 306 rows. Profiles without employment decreased from 201 to 200. Malformed, duplicate and invalid-range diagnostics remain zero; overlap review remains seven profiles and the possible client/employer equality flag remains one. The five recovered rows have explicit company, title and date ranges. No source record or database row was changed, and 693 of the declared 970 sources remain unaudited.
 
 Synthetic regressions cover multiple legal-employer rows, ordinal dates, project-section isolation and reversed-date rejection. Exact-head CI remains required before merge. Live OCR, reviewed backfill, full-population audit and authenticated exact-deployment acceptance remain release blockers.
+
+## Continuation checkpoint: located employer history
+
+One employment history lists repeated `Employer (city), country from date to date` rows before a separate project section. The parser now retains those explicit employer tenures, stores the location separately, accepts an explicitly written `till date` as current, and stops before projects. Because the employment rows do not state a role, their titles remain empty; project roles are not borrowed to fill them.
+
+On the unchanged private 277-source review subset, current extraction increased from 77 profiles / 306 employment rows to 78 profiles / 311 rows. Profiles without employment decreased from 200 to 199. Malformed, duplicate and invalid-range diagnostics remain zero; overlap review remains seven profiles and the possible client/employer equality flag remains one. All five recovered rows have explicit employers and date ranges, while all five intentionally retain a missing employment title. No source record or database row was changed, and 693 of the declared 970 sources remain unaudited.
+
+Synthetic regressions cover repeated employer/location rows, an employer suffix after the parenthesized city, project-section isolation, current-status normalization and reversed-date rejection. Exact-head CI remains required before merge. Live OCR, reviewed backfill, full-population audit and authenticated exact-deployment acceptance remain release blockers.
