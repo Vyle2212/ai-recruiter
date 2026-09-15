@@ -341,7 +341,9 @@ test.describe
     await page
       .getByLabel("Password")
       .fill(bundle.identities.recruiter.password);
-    await page.getByRole("button", { name: "Sign in to staging" }).click();
+    await page
+      .getByRole("button", { name: "Sign in to acceptance", exact: true })
+      .click();
     await page.waitForURL(/\/recruiter\//);
     await page.goto(searchPage);
     await expect(page).toHaveURL(new RegExp(searchPage));
@@ -359,8 +361,8 @@ test.describe
       expect(cookie.secure).toBe(true);
       expect(["Lax", "Strict"]).toContain(cookie.sameSite);
     }
-    await page.goto("/auth/staging/runtime");
-    await page.getByRole("button", { name: "Sign out of staging" }).click();
+    await page.getByRole("button", { name: "Sign out", exact: true }).click();
+    await page.waitForURL(/\/auth\/login\?reason=signed_out/);
     await page.goto(searchPage);
     await expect(page).toHaveURL(/\/auth\/login/);
     await page.goBack();
