@@ -1,4 +1,5 @@
 import { careerMonthIndex } from "./candidateCareerExperience";
+import { layoutEmployment } from "./layoutEmployment";
 import type {
   EnterpriseEmployment,
   EnterpriseProject,
@@ -8,7 +9,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v29-grounded-partial-employment";
+  "candidate-employment-v48-duration-employer";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -474,7 +475,7 @@ function resumeCompany(input: string) {
   return validEmploymentCompany(
     clean(input)
       .replace(
-        /^.*\b(?:professional experience|employment history|work(?:\s+and|\s*&)?\s+project experience)\b\s*/i,
+        /^.*\b(?:professional experience|employment history|working experience|work(?:\s+and|\s*&)?\s+project experience)\b\s*/i,
         "",
       )
       .split(/\.\s+/)
@@ -489,7 +490,7 @@ function tabularResumeEmployment(source: string): EnterpriseEmployment[] {
   if (!section) return [];
   const text = section.replace(/Page\s+\d+\s+of\s+\d+/gi, " ");
   const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*";
-  const date = `${month}\\s+(?:\\d{4}|\\d{2})`;
+  const date = `(?:${month}\\s+(?:\\d{4}|\\d{2})|(?:19|20)\\d{2})`;
   const rows = [...text.matchAll(new RegExp(`\\b(${date})\\s*(?:[-–—]|to)\\s*(${date}|Present|Current|Now)\\b`, "gi"))];
   const expand = (value: string) => value.replace(/\b(\d{2})$/, (_, year: string) => `${Number(year) <= 30 ? "20" : "19"}${year}`);
   return rows.flatMap((row, index) => {
@@ -499,7 +500,7 @@ function tabularResumeEmployment(source: string): EnterpriseEmployment[] {
     if (previous && !text.slice((previous.index || 0) + previous[0].length, row.index).trim()) return [];
     const body = text.slice((row.index || 0) + row[0].length, rows[index + 1]?.index ?? text.length).trim().replace(/^\([^)]*\b(?:months?|years?)\)\s*/i, "");
     const clientAt = body.search(/\bClient\s*:/i);
-    const roleAt = body.search(/\b(?:SAP\s|S4\/HANA\s|Senior\s|Junior\s|Technical Consultant|Business & Integration Associate Manager|Managing Consultant|MM Consultant|Business Sys\\. Analyst|HRIT\b|IT Engineer|Lecturer\b|Intern\b|Part Time\b|Web Application|Transition to Support|HSSE Applications|Global SAP|Production (?:Planner|Officer|Coordination))/i);
+    const roleAt = body.search(/\b(?:SAP\s|ABAP\s|Application Developer|S4\/HANA\s|Senior\s|Junior\s|Project Specialist|Special Projects Executive|Assistant Manager|Technical Consultant|Business & Integration Associate Manager|Managing Consultant|MM Consultant|Business Sys\\. Analyst|HRIT\b|IT Engineer|Lecturer\b|Intern\b|Part Time\b|Web Application|Transition to Support|HSSE Applications|Global SAP|Production (?:Planner|Officer|Coordination))/i);
     const company = clientAt >= 0 ? body.slice(0, clientAt) : roleAt > 0 ? body.slice(0, roleAt) : "";
     if (!company) return [];
     // A role-column narrative is retained as evidence, never invented as a title.
@@ -516,10 +517,10 @@ function tabularResumeEmployment(source: string): EnterpriseEmployment[] {
 }
 
 function organizationDesignationEmployment(source: string): EnterpriseEmployment[] {
-  const section = source.match(/\b(?:Employment History\s+)?Organization\s+Designation\s+Duration\s+([\s\S]*?)(?=\b(?:PROJECT\s*#|EDUCATION|QUALIFICATIONS)\b|$)/i)?.[1];
+  const section = source.match(/\b(?:Employment History\s+)?Organization\s+Designation\s+Duration\s+([\s\S]*?)(?=\b(?:PROJECT\s*#|PROJECT EXPERIENCE|SAP EXPERIENCE|TECHNICAL SKILLS?|TECHNICAL SKILL SET|TRAININGS?|EDUCATION|QUALIFICATIONS)\b|$)/i)?.[1];
   if (!section) return [];
-  const date = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+(?:19|20)\\d{2}";
-  const ranges = [...section.matchAll(new RegExp(`(${date})\\s*(?:to|[-–—])\\s*(${date}|Present|Current|Now)\\b`, "gi"))];
+  const date = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[ /]+(?:19|20)\\d{2}";
+  const ranges = [...section.matchAll(new RegExp(`\\(?(${date})\\)?\\s*(?:to|[-–—])\\s*\\(?(${date}|Present|Current|Now)\\)?(?=\\s|[.;]|$)`, "gi"))];
   const result: EnterpriseEmployment[] = [];
   let offset = 0;
   for (const [index, range] of ranges.entries()) {
@@ -527,10 +528,12 @@ function organizationDesignationEmployment(source: string): EnterpriseEmployment
     // A full stop after a completed row ends this compact table. Do not
     // continue into the subsequent project narrative.
     if (prefix.startsWith('.')) break;
-    const boundary = prefix.search(/\b(?:SAP\s|Warehouse\s)/i);
+    // Match the role suffix, not SAP Partner in a parenthesized employer name.
+    const role = prefix.match(/\b((?:(?:APAC|Global)\s+)?SAP\s+(?!Partner\b)[^.;]{1,110}|Warehouse\s+[^.;]{1,100}|(?:Sr\.|Senior|Junior)\s+(?:Functional|ERP|Business)\s+[^;]{1,100}|(?:Customer Relationship|Client Care|Business)\s+(?:Executive|Analyst)|ERP Functional Consultant|Branch Manager|Executive\s*-\s*Accounts|Audit Assistant|Accountant|Consultant)$/i);
+    const boundary = role?.index ?? -1;
     if (boundary < 1) break;
     const parsed = entry({company: prefix.slice(0, boundary), title: prefix.slice(boundary),
-      start: range[1], end: range[2], current: /present|current|now/i.test(range[2]),
+      start: range[1].replace('/', ' '), end: range[2].replace('/', ' '), current: /^(present|current|now)$/i.test(range[2]),
       sourceRef: `resume.organizationDesignationTable.${index + 1}`, sourceType: 'parsed_resume',
       confidence: 96, excerpt: `${prefix} ${range[0]}`});
     if (!parsed) break;
@@ -564,10 +567,13 @@ function compactEmploymentHeading(source: string): EnterpriseEmployment[] {
   const headings = [...source.matchAll(/\b(?:PROFESSIONAL EXPERIENCE|EMPLOYMENT HISTORY|WORKING EXPERIENCE)\s*:?\s*/gi)];
   const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+(?:19|20)\\d{2}";
   const range = `(${month})\\s*(?:to|[-–—])\\s*(${month}|Present|Current|Now)`;
-  const role = "(?:SAP\\s+[A-Za-z0-9/&() -]{0,50}?|Business\\s+|Senior\\s+|Functional\\s+|Technical\\s+)?(?:Consultant|Analyst|Engineer|Manager|Director|Developer|Administrator)(?:\\s*\\([^)]{1,60}\\))?";
+  const role = "(?:SAP\\s+[A-Za-z0-9/&() -]{0,50}?|Business\\s+|Senior\\s+|Functional\\s+(?:Application\\s+)?|Technical\\s+)?(?:Consultant|Analyst|Engineer|Manager|Director|Developer|Administrator)(?:\\s*\\([^)]{1,60}\\))?";
   const company = "[A-Z][A-Za-z0-9&.,'() -]{1,100}?";
   const corporate = "(?:Sdn\\.?\\s*Bhd\\.?|Inc\\.?|Ltd\\.?|Limited|Corporation|Consulting|Lawfirm)";
   const patterns = [
+    // Indonesian corporate prefix and role/date/employer pipe headings.
+    { re: new RegExp(`^(${role})\\s+(PT\\.?\\s+${company})\\s+${range}(?=\\s|$)`, 'i'), fields: [2,1,3,4] },
+    { re: new RegExp(`^((?:(?:Senior|Lead|Principal)\\s+)?SAP\\s+[A-Za-z0-9/&() -]{0,60}?(?:Consultant|Analyst|Engineer|Manager|Developer))\\s+${range}\\s+(${company})\\s*\\|`, 'i'), fields: [4,1,2,3] },
     { re: new RegExp(`^(${company}\\s+${corporate})\\s+(${role})\\s+\\(?${range}\\)?`, 'i'), fields: [1,2,3,4] },
     { re: new RegExp(`^(${role})\\s+(${company}\\s+${corporate})\\s+\\(?${range}\\)?`, 'i'), fields: [2,1,3,4] },
     { re: new RegExp(`^(${company})\\s*\\(${range}\\)\\s+(${role})(?=\\s|$)`, 'i'), fields: [1,4,2,3] },
@@ -578,6 +584,7 @@ function compactEmploymentHeading(source: string): EnterpriseEmployment[] {
     for (const {re, fields} of patterns) {
       const match = section.match(re);
       if (!match || /\b(?:client|customer|project|summary|expertise)\b/i.test(match[fields[0]])) continue;
+      if (!supportedRange(match[fields[2]], match[fields[3]], /^(present|current|now)$/i.test(match[fields[3]]))) continue;
       const parsed = entry({company: match[fields[0]], title: match[fields[1]], start: match[fields[2]], end: match[fields[3]],
         current: /^(present|current|now)$/i.test(match[fields[3]]), sourceRef: `resume.compactEmploymentHeading.${index + 1}`,
         sourceType: 'parsed_resume', confidence: 94, excerpt: match[0]});
@@ -637,8 +644,390 @@ function explicitHeadingVariants(source: string): EnterpriseEmployment[] {
   });
 }
 
+// Explicit field order provides boundaries even when PDF extraction removes lines.
+// Stop before assignments; their dates and customer names are not employment.
+function orderedLabelEmployment(source: string): EnterpriseEmployment[] {
+  const headings = [...source.matchAll(/\b(?:EMPLOYMENT HISTORY|WORKING EXPERIENCE|PROFESSIONAL EXPERIENCE)\s*:?\s*/gi)];
+  const date = "(?:\\d{1,2}(?:st|nd|rd|th)?\\s+)?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+(?:19|20)\\d{2}";
+  const range = `(${date})\\s*(?:[-–—]|to|until)\\s*(${date}|Present|Current|Now|todate)`;
+  return headings.flatMap((heading, index) => {
+    const section = source.slice((heading.index || 0) + heading[0].length, headings[index + 1]?.index)
+      .split(/\b(?:PROJECTS\/ASSIGNMENTS|PROJECT EXPERIENCE|PROJECT HISTORY|PROJECTS|PROJECT\s*:|CLIENT|CUSTOMER|EDUCATION|QUALIFICATIONS|CERTIFICATIONS|PERSONAL DETAILS)\s*:?/i)[0];
+    const yearRows = [...section.matchAll(new RegExp(`\\bYear\\s*:?\\s*${range}\\s+Organization\\s*:?\\s*(.{2,150}?)\\s+Position\\s*:?\\s*(.{2,120}?)(?=\\s+Description\\s*:?|$)`, 'gi'))];
+    const position = section.match(new RegExp(`^(?:Company Name\\s*:\\s*)?(.{2,150}?)\\s+Position Title\\s*:\\s*(.{2,120}?)(?=\\s+(?:Specialization|Industry|Duration)\\s*:)`, 'i'));
+    const duration = position ? section.slice(position[0].length).split(/\b(?:Work Description|Responsibilities|Duties)\b/i)[0].match(new RegExp(`\\bDuration\\s*:\\s*${range}`, 'i')) : null;
+    const fields = yearRows.map(m => ({company: m[3], title: m[4], start: m[1], end: m[2], excerpt: m[0]}));
+    if (position && duration) fields.push({company: position[1], title: position[2], start: duration[1], end: duration[2], excerpt: section.slice(0, section.indexOf(duration[0]) + duration[0].length)});
+    return fields.flatMap((field, row) => {
+      const company = field.company.replace(/\s*\(https?:\/\/[^)]*\)/gi, '').trim();
+      const end = /^todate$/i.test(field.end) ? 'Present' : field.end;
+      const current = /^(?:Present|Current|Now)$/i.test(end);
+      if (!supportedRange(field.start, end, current)) return [];
+      const parsed = entry({...field, company, end, current,
+        sourceRef: `resume.orderedLabels.${index + 1}.${row + 1}`, sourceType: 'parsed_resume', confidence: 94});
+      return parsed ? [parsed] : [];
+    });
+  });
+}
+
+// Some exported CVs flatten an explicitly labelled Date / Company / Role form
+// into one line. It is bounded to employment so project rows cannot become tenure.
+function dateCompanyRoleEmployment(source: string): EnterpriseEmployment[] {
+  const headings = [...source.matchAll(/\b(?:EMPLOYMENT HISTORY|WORKING EXPERIENCE|PROFESSIONAL EXPERIENCE)\s*:?\s*/gi)];
+  const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*";
+  const date = `${month}\\s+(?:19|20)\\d{2}`;
+  const range = `(${date})\\s*(?:[-–—]|to|until)\\s*(${date}|Present|Current|Now)`;
+  const title = /\b(?:consultant|manager|officer|associate|intern|specialist|executive|lead|head|analyst|engineer|developer|contractor|administrator|architect|director|accountant)\b/i;
+  return headings.flatMap((heading, sectionIndex) => {
+    const section = source.slice((heading.index || 0) + heading[0].length, headings[sectionIndex + 1]?.index)
+      .split(/\b(?:PROJECTS?\s*\/\s*ASSIGNMENTS?|PROJECT EXPERIENCE|PROJECT HISTORY|EDUCATION|QUALIFICATIONS|CERTIFICATIONS|PERSONAL DETAILS)\b/i)[0];
+    const rows = [...section.matchAll(new RegExp(`\\bDate\\s*:\\s*${range}\\s+Company\\s*:\\s*(.{2,140}?)\\s+Role\\s*:\\s*(.{2,120}?)(?=\\s+Date\\s*:|$)`, "gi"))];
+    return rows.flatMap((row, index) => {
+      const company = row[3].trim(), role = row[4].trim();
+      const current = /^(?:Present|Current|Now)$/i.test(row[2]);
+      if (/\b(?:client|customer|project|responsibilities|duration)\b/i.test(company) || !title.test(role) || !supportedRange(row[1], row[2], current)) return [];
+      const parsed = entry({company, title: role, start: row[1], end: row[2], current,
+        sourceRef: `resume.dateCompanyRole.${sectionIndex + 1}.${index + 1}`, sourceType: "parsed_resume", confidence: 96, excerpt: row[0]});
+      return parsed ? [parsed] : [];
+    });
+  });
+}
+
+function explicitEmploymentStatements(source: string): EnterpriseEmployment[] {
+  const month = '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*';
+  const date = `(?:\\d{1,2}(?:st|nd|rd|th)?[ -]+)?${month}[ .-]+(?:\\d{1,2}[ -]+)?(?:19|20)\\d{2}`;
+  const end = `(?:${date}|(?:till|to)\\s+(?:date|now)|todate|Present|Current|Now)`;
+  const range = `(${date})\\s*(?:[-–—]|to|until)?\\s*(${end})`;
+  const cleanDate = (value: string) => {
+    if (/^(?:(?:till|to)\s+(?:date|now)|todate|present|current|now)$/i.test(value)) return 'Present';
+    const m = value.match(new RegExp(`(${month})[ .-]+(?:\\d{1,2}[ -]+)?((?:19|20)\\d{2})$`, 'i'));
+    return m ? `${m[1]} ${m[2]}` : value;
+  };
+  const output: EnterpriseEmployment[] = [];
+  // Explicit role + employer + dates; never extract from "for client" narratives.
+  const statement = new RegExp(`\\b(?:Currently\\s+working|Working|Worked)\\s+as\\s+(?:an?\\s+)?([^.;]{2,100}?\\b(?:Consultant|Manager|Lead|Developer|Analyst|Engineer|Officer|Accountant))\\s+(?:in|at|with)\\s+[“\"]([^”\"]{2,140})[”\"](?:,\\s*[^.;]{1,50}?)?\\s+from\\s+${range}(?=[.;]|$)`, 'gi');
+  for (const [index, match] of [...source.matchAll(statement)].entries()) {
+    const start = cleanDate(match[3]); const finish = cleanDate(match[4]);
+    if (!supportedRange(start, finish, finish === 'Present')) continue;
+    const parsed = entry({company: match[2], title: match[1].replace(/^an?\s+/i, ""), start, end: finish, current: finish === 'Present',
+      sourceRef: `resume.quotedEmployment.${index + 1}`, sourceType: 'parsed_resume', excerpt: match[0], confidence: 94});
+    if (parsed) output.push(parsed);
+  }
+  // Employer duration must precede Client / Project, not be borrowed from it.
+  const labelled = new RegExp(`\\bEmployer\\s*:?\\s+(.{2,140}?)\\s+(?:Date of Employment|Duration)\\s*:?\\s*${range}(?=\\s+(?:Position|Client|Project|Role)\\b|[.;]|$)`, 'gi');
+  for (const [index, match] of [...source.matchAll(labelled)].entries()) {
+    if (/\b(?:Client|Customer|Project|Duration|Date of Employment|Position|Role|Responsibilities)\b/i.test(match[1])) continue;
+    const start = cleanDate(match[2]); const finish = cleanDate(match[3]);
+    if (!supportedRange(start, finish, finish === 'Present')) continue;
+    const tail = source.slice((match.index || 0) + match[0].length).split(/\b(?:Client|Project|Presale|Responsibility|Responsibilities|Employer)\b/i)[0];
+    const title = tail.match(/^\s*Position\s*:?\s+(.{2,120}?)(?=\s+Description\b|[.;]|$)/i)?.[1] || '';
+    const parsed = entry({company: match[1], title, start, end: finish, current: finish === 'Present', allowGroundedEmployerOnly: true,
+      sourceRef: `resume.explicitEmployerDuration.${index + 1}`, sourceType: 'parsed_resume', excerpt: match[0], confidence: 94});
+    if (parsed) output.push(parsed);
+  }
+  return output;
+}
+
+function spacedDateEmployment(source: string): EnterpriseEmployment[] {
+  const section = source.match(/\bEmployment History\s*:?\s*([\s\S]*?)(?=\b(?:Education|Project Experience|Project History|Certifications|Technical Skills)\b|$)/i)?.[1];
+  if (!section) return [];
+  // Repair only known date words, locally inside employment. Never join arbitrary
+  // spaced words or identifiers in the source document.
+  let repaired = section;
+  for (const word of ['January','February','March','April','May','June','July','August','September','October','November','December','Present','Current']) {
+    repaired = repaired.replace(new RegExp(`\\b${[...word].join('\\s+')}\\b`, 'gi'), word);
+  }
+  repaired = repaired.replace(/\b([12])\s*([09])\s*(\d)\s*(\d)\b/g, '$1$2$3$4');
+  const month = '(?:January|February|March|April|May|June|July|August|September|October|November|December)';
+  const date = `${month}\\s+(?:19|20)\\d{2}`;
+  const role = '(?:SAP\\s+[^.!?;]{1,65}?(?:Consultant|Analyst|Engineer|Lead)|Inside Sales Representative|Sales Development Associate|Sales Executive|Telesales Representative|Freelancer(?:\\s*\\([^)]{1,40}\\))?)';
+  const pattern = new RegExp(`\\b(${role})\\s+at\\s+([^;!?]{2,150}?)\\s+(${date})\\s*[-–—]\\s*(${date}|Present|Current)(?=\\s|$)`, 'gi');
+  return [...repaired.matchAll(pattern)].flatMap((match, index) => {
+    if (/\b(?:client|customer|project|responsibilities)\b/i.test(match[2])) return [];
+    const current = /^(Present|Current)$/i.test(match[4]);
+    if (!supportedRange(match[3], match[4], current)) return [];
+    // Only recognize the explicit trailing city cell used by these layouts.
+    const location = match[2].match(/,\s*(Kuala Lumpur|Petaling Jaya|Singapore|Jakarta|Bangkok|Ho Chi Minh City)$/i);
+    const company = location ? match[2].slice(0, location.index).trim() : match[2];
+    const parsed = entry({company, location: location?.[1], title: match[1], start: match[3], end: match[4], current,
+      sourceRef: `resume.spacedDateEmployment.${index + 1}`, sourceType: 'parsed_resume', confidence: 94, excerpt: match[0]});
+    return parsed ? [parsed] : [];
+  });
+}
+
+// Numbered employment forms bind the date and employer to an explicit title
+// label. Responsibility prose and project tables cannot supply missing cells.
+function numberedPositionEmployment(source: string): EnterpriseEmployment[] {
+  const section = source.match(/\bEmployment History\s*:?\s*([\s\S]*?)(?=\b(?:Education|Qualifications|References|Personal Details)\b|$)/i)?.[1];
+  if (!section) return [];
+  const month = '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*';
+  const date = `(?:${month}\\s+(?:19|20)\\d{2}|(?:19|20)\\d{2}\\s+${month})`;
+  const range = `(${date})\\s*[-–—]\\s*(${date}|Present|Current|Now)\\b`;
+  const label = '\\s+Position Title\\s*\\(Level\\)\\s*:\\s*(.{2,120}?)(?=\\s+(?:Role|Specialization|Industry|Work Description)\\s*:)';
+  const patterns = [
+    { re: new RegExp(`\\b\\d{1,2}\\.\\s+([^:;!?]{2,150}?)\\s+${range}${label}`, 'gi'), fields: [1, 4, 2, 3] },
+    { re: new RegExp(`\\b${range}\\s+\\d{1,2}\\.\\s+([^:;!?]{2,150}?)${label}`, 'gi'), fields: [3, 4, 1, 2] },
+  ];
+  const normalizeDate = (value: string) => value.replace(new RegExp(`^((?:19|20)\\d{2})\\s+(${month})$`, 'i'), '$2 $1');
+  return patterns.flatMap(({re, fields}, variant) => [...section.matchAll(re)].flatMap((match, index) => {
+    const company = match[fields[0]];
+    if (/\b(?:client|customer|project|responsibilities|duration)\b/i.test(company) || new RegExp(date, 'i').test(company)) return [];
+    const start = normalizeDate(match[fields[2]]), end = normalizeDate(match[fields[3]]);
+    const current = /^(Present|Current|Now)$/i.test(end);
+    if (!supportedRange(start, end, current)) return [];
+    const parsed = entry({company, title: match[fields[1]], start, end, current,
+      sourceRef: `resume.numberedPosition.${variant + 1}.${index + 1}`, sourceType: 'parsed_resume', confidence: 94, excerpt: match[0]});
+    return parsed ? [parsed] : [];
+  }));
+}
+
+function numberedPositionPeriodEmployment(source: string): EnterpriseEmployment[] {
+  const section = source.match(/\bEmployment History\s*:?\s*([\s\S]*?)(?=\b(?:Education|Qualifications|References|Personal Details|Project Experience|Project History)\b|$)/i)?.[1];
+  if (!section) return [];
+  const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*";
+  const date = `${month}\\s*(?:19|20)\\d{2}`;
+  const range = `(${date})\\s*(?:[-–—]|to|until)\\s*(${date}|Present|Current|Now)`;
+  const pattern = new RegExp(`\\b\\d{1,2}\\.\\s+([^:;!?]{2,150}?)\\s+Position Title\\s*:\\s*(.{2,120}?)(?=\\s+(?:Specialization|Working Period)\\s*:)(?:\\s+Specialization\\s*:\\s*(?:(?!\\bWorking Period\\s*:).){0,180})?\\s+Working Period\\s*:\\s*${range}`, "gi");
+  return [...section.matchAll(pattern)].flatMap((match, index) => {
+    const company = match[1].trim(), title = match[2].trim();
+    const start = match[3].replace(/([A-Za-z])(?=\d{4}$)/, "$1 ");
+    const end = match[4].replace(/([A-Za-z])(?=\d{4}$)/, "$1 ");
+    const current = /^(?:Present|Current|Now)$/i.test(end);
+    if (/\b(?:client|customer|project|responsibilities|duration)\b/i.test(company) || !supportedRange(start, end, current)) return [];
+    const parsed = entry({company, title, start, end, current,
+      sourceRef: `resume.numberedPositionPeriod.${index + 1}`, sourceType: "parsed_resume", confidence: 96, excerpt: match[0]});
+    return parsed ? [parsed] : [];
+  });
+}
+
+function datedEmploymentLedger(source: string): EnterpriseEmployment[] {
+  const headings = [...source.matchAll(/\bEMPLOYMENT HISTORY\s*:?\s*/gi)];
+  const month = '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*';
+  const date = `(?:\\d{1,2}\\s+)?${month}\\s+(?:(?:19|20)\\d{2}|\\d{2})`;
+  const pattern = new RegExp(`\\b(${date})\\s*(?:[-–—]|to(?:\\s+date(?=\\s+\\d))?)\\s*(${date}|Present|Current|Now)\\b`, 'gi');
+  const expand = (value: string) => value.replace(/\b(\d{2})$/, (_, year: string) => `${Number(year) <= 30 ? '20' : '19'}${year}`);
+  return headings.flatMap((heading, sectionIndex) => {
+    const section = source.slice((heading.index || 0) + heading[0].length, headings[sectionIndex + 1]?.index)
+      .split(/\b(?:QUALIFICATIONS|EDUCATION|PROJECT EXPERIENCE|PROJECT HISTORY|WORK EXPERIENCE|PROFESSIONAL EXPERIENCE|TECHNICAL SKILLS|REFERENCES)\b/i)[0]
+      .replace(/Page\s+\d+\s+of\s+\d+/gi, ' ');
+    // This is a chronological ledger, not a search across responsibility prose.
+    if (!new RegExp(`^[\\s•▪●-]*${date}\\s*(?:[-–—]|to)`, 'i').test(section)) return [];
+    const rows = [...section.matchAll(pattern)];
+    return rows.flatMap((row, index) => {
+      const body = section.slice((row.index || 0) + row[0].length, rows[index + 1]?.index)
+        .replace(/[\s•▪●]+$/g, '').trim();
+      const pipe = body.match(/^\|\s*([^|]{2,150}?)\s*\|\s*([^|]{2,120})$/);
+      const contract = body.match(/^(.{2,220}?)\s+[-–—]\s+((?:Senior|Junior|Lead|SAP|FICO|FI|Data|Project|Application|Conversion|Solution|Independent|Subject Matter|Assistant|Accounts|Finance|Business|Technical|Functional|Software|System)\b.{1,110}?)\s*\((?:Contract|Permanent)\)$/i);
+      const parsedFields = pipe || contract;
+      if (!parsedFields || /\b(?:Client|Customer|Project Duration|Responsibilities)\b/i.test(parsedFields[1])) return [];
+      const start = expand(row[1]); const end = expand(row[2]); const current = /^(Present|Current|Now)$/i.test(end);
+      if (!supportedRange(start, end, current)) return [];
+      const parsed = entry({company: parsedFields[1], title: parsedFields[2], start, end, current,
+        sourceRef: `resume.datedEmploymentLedger.${sectionIndex + 1}.${index + 1}`, sourceType: 'parsed_resume', confidence: 96, excerpt: row[0] + ' ' + body});
+      return parsed ? [parsed] : [];
+    });
+  });
+}
+
+// Some employment histories repeat Role -> legal employer -> Period rows.
+// Requiring the legal suffix and explicit Period label prevents responsibility
+// prose or later project organizations from being promoted to employment.
+function roleCompanyPeriodEmployment(source: string): EnterpriseEmployment[] {
+  const section = source.match(/\bEmployment History\s*:?\s*([\s\S]*?)(?=\b(?:Project Experience|Project History|Education|Technical Skills|Certifications|Qualifications|References)\b|$)/i)?.[1];
+  if (!section) return [];
+  const month = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
+  const dated = `(?:\\d{1,2}(?:st|nd|rd|th)?\\s+)?${month}\\s+(?:19|20)\\d{2}`;
+  const role = '(?:(?:Senior|Junior|Lead|Principal)\\s+)?(?:[A-Za-z][A-Za-z/&()+-]*\\s+){0,4}(?:Engineer|Specialist|Executive|Consultant|Manager|Analyst|Developer|Administrator|Officer)';
+  const pattern = new RegExp(`\\b(${role})\\s+([A-Z][A-Za-z0-9&.,'() -]{1,120}?\\b(?:Pte\\s+(?:Ltd|Limited)|Sdn\\s+Bhd|Ltd|Limited|Inc))\\s+Period\\s*:\\s*(${dated})\\s*[-–—]\\s*(${dated}|Present|Current|Now)(?![A-Za-z0-9_])`, 'gi');
+  return [...section.matchAll(pattern)].flatMap((match, index) => {
+    const current = /^(?:Present|Current|Now)$/i.test(match[4]);
+    if (!supportedRange(match[3], match[4], current)) return [];
+    const parsed = entry({company: match[2], title: match[1], start: match[3], end: match[4], current,
+      sourceRef: `resume.roleCompanyPeriod.${index + 1}`, sourceType: 'parsed_resume', confidence: 96, excerpt: match[0]});
+    return parsed ? [parsed] : [];
+  });
+}
+
+// Explicit tenure followed by an Employer label and legal name. A following
+// company description can contain an unlabelled role, so do not guess its title.
+function durationEmployerHistory(source: string): EnterpriseEmployment[] {
+  const section = source.match(/\bEmployment History\s*:?\s*([\s\S]*?)(?=\b(?:Project Experience|Project History|Projects?|Education|Technical Skills|Certifications|Qualifications|References)\b|$)/i)?.[1];
+  if (!section) return [];
+  const monthYear = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s+(?:19|20)\\d{2}';
+  const pattern = new RegExp(`\\bDuration\\s*:\\s*(${monthYear})\\s*[-–—]\\s*(${monthYear}|Present|Current|Now)\\s+Employer\\s*:\\s*([A-Z][A-Za-z0-9&.,'() -]{1,120}?\\b(?:Sdn\\.?\\s+Bhd\\.?|Pte\\.?\\s+Ltd\\.?|Limited|Ltd\\.?|Inc\\.?))(?=\\s+[-–—]\\s+)`, 'gi');
+  return [...section.matchAll(pattern)].flatMap((match, index) => {
+    const company = match[3].trim();
+    const current = /^(?:Present|Current|Now)$/i.test(match[2]);
+    if (/\b(?:client|customer|project|responsibilities|duration|employer)\b/i.test(company) || !supportedRange(match[1], match[2], current)) return [];
+    const parsed = entry({company, title: '', start: match[1], end: match[2], current,
+      allowGroundedEmployerOnly: true, sourceRef: `resume.durationEmployerHistory.${index + 1}`,
+      sourceType: 'parsed_resume', confidence: 92, excerpt: match[0]});
+    return parsed ? [parsed] : [];
+  });
+}
+
+// A bounded employment history can list Employer (city), country from/to rows
+// without a role. Preserve the explicit employer tenure while keeping the
+// location separate and stopping before project organizations.
+function locatedEmployerHistory(source: string): EnterpriseEmployment[] {
+  const section = source.match(/\bEmployment History\s*:?\s*([\s\S]*?)(?=\b(?:Project Experience|Project History|Projects?|Education|Technical Skills|Certifications|Qualifications|References)\b|$)/i)?.[1];
+  if (!section) return [];
+  const monthYear = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s+(?:19|20)\\d{2}';
+  const pattern = new RegExp(`(?:^|[.;])\\s*([A-Z][^.;]{1,120}?)\\s*\\(([^();]{1,60})\\)\\s*((?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|(?:[A-Z]{2,8}\\s+)?Ltd\\.?)?)\\s*,\\s*([A-Z][A-Za-z .]{1,40})\\s+from\\s+(${monthYear})\\s+to\\s+(${monthYear}|Present|Current|Now|(?:To|Till)\\s+date)(?![A-Za-z0-9_])`, 'gi');
+  return [...section.matchAll(pattern)].flatMap((match, index) => {
+    const company = `${match[1]} ${match[3]}`.trim();
+    const end = match[6].replace(/^(?:To|Till)\s+date$/i, 'Present');
+    const current = /^(?:Present|Current|Now)$/i.test(end);
+    if (/\b(?:client|customer|project|responsibilities|role)\s*:/i.test(company) || !supportedRange(match[5], end, current)) return [];
+    const parsed = entry({company, title: '', location: `${match[2]}, ${match[4]}`, start: match[5], end, current,
+      allowGroundedEmployerOnly: true, sourceRef: `resume.locatedEmployerHistory.${index + 1}`,
+      sourceType: 'parsed_resume', confidence: 92, excerpt: match[0]});
+    return parsed ? [parsed] : [];
+  });
+}
+
+// Explicit Organization / Duration / Designation blocks bind an employer and
+// employment role. Project organizations outside this bounded section remain
+// assignment evidence only.
+function organizationDurationDesignationEmployment(source: string): EnterpriseEmployment[] {
+  const section = source.match(/\b(?:Professional Experience|Employment History|Working Experience)\s*:?\s*([\s\S]*?)(?=\b(?:Project Experience|Project History|Education|Technical Skills|Certifications|Qualifications|References)\b|$)/i)?.[1];
+  if (!section) return [];
+  const monthYear = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[a-z]*\\s+(?:19|20)\\d{2}';
+  const pattern = new RegExp(`\\bOrganization\\s*\\d*\\s*:\\s*([\\s\\S]{2,160}?)\\s+Duration\\s*:\\s*(?:From\\s+)?(${monthYear})\\s*(?:[-–—]|to|until)\\s*(${monthYear}|Present|Current|To\\s+date)\\s+Designation\\s*:\\s*([\\s\\S]{2,140}?)(?=\\s+(?:Responsibilities?|Organization\\s*\\d*\\s*:|$))`, 'gi');
+  return [...section.matchAll(pattern)].flatMap((match, index) => {
+    const company = match[1].trim();
+    const end = match[3].replace(/^To\s+date$/i, 'Present');
+    const current = /^(?:Present|Current)$/i.test(end);
+    if (/\b(?:client|customer|project|responsibilities|duration|designation)\s*:/i.test(company) || !supportedRange(match[2], end, current)) return [];
+    const parsed = entry({company, title: match[4], start: match[2], end, current,
+      sourceRef: `resume.organizationDurationDesignation.${index + 1}`, sourceType: 'parsed_resume', confidence: 96, excerpt: match[0]});
+    return parsed ? [parsed] : [];
+  });
+}
+
+// Employer/period tables explicitly identify the employer but not the role.
+// Keep that absence visible instead of borrowing titles from later projects.
+function organizationPeriodEmployment(source: string): EnterpriseEmployment[] {
+  const section = source.match(/\b(?:Professional Experience|Employment History|Working Experience)\s*:?\s*Organization\s+Period\s+([\s\S]*?)(?=\b(?:Project Experience|Project History|Education|Technical Skills|Certifications)\b|$)/i)?.[1];
+  if (!section) return [];
+  const date = '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+(?:19|20)\\d{2}';
+  const ranges = [...section.matchAll(new RegExp(`(${date})\\s*(?:to|[-–—])\\s*(${date}|Present|Current|Now)\\b`, 'gi'))];
+  const result: EnterpriseEmployment[] = [];
+  let offset = 0;
+  for (const [index, range] of ranges.entries()) {
+    const company = section.slice(offset, range.index).trim();
+    if (!company || /\b(?:client|customer|project|responsibilities|consultant|manager|engineer)\b/i.test(company)) break;
+    const current = /^(Present|Current|Now)$/i.test(range[2]);
+    if (!supportedRange(range[1], range[2], current)) break;
+    const parsed = entry({company, title: '', start: range[1], end: range[2], current,
+      allowGroundedEmployerOnly: true, sourceRef: `resume.organizationPeriod.${index + 1}`,
+      sourceType: 'parsed_resume', confidence: 90, excerpt: `${company} ${range[0]}`});
+    if (!parsed) break;
+    result.push(parsed);
+    offset = (range.index || 0) + range[0].length;
+  }
+  return result;
+}
+
+// A bounded Career Summary can contain explicit dated role-at-employer
+// statements. Qualifiers describe the role, not part of the employer name.
+function datedCareerSummary(source: string): EnterpriseEmployment[] {
+  const section = source.match(/\bCareer Summary\s*:?\s*([\s\S]*?)(?=\b(?:Professional Experience|Project Experience|Education|Technical Skills)\b|$)/i)?.[1];
+  if (!section) return [];
+  const date = '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+(?:19|20)\\d{2}';
+  const pattern = new RegExp(`\\bFrom\\s+(${date})\\s*(?:to|[-–—])\\s*(${date}|Now|Present|Current)\\s*:\\s*([^:;.!?]{2,100}?)\\s+at\\s+([^:;!?]{2,180}?)(?=\\s+(?:in\\s+[A-Z/ -]+\\s+role|as\\s+[^.;]{1,60}?consultant)\\b|\\.\\s+From\\b|\\.$|$)`, 'gi');
+  return [...section.matchAll(pattern)].flatMap((match, index) => {
+    if (!/\b(?:consultant|analyst|engineer|manager|developer|lead)\b/i.test(match[3])) return [];
+    const company = match[4].replace(/\s+company$/i, '').trim();
+    if (/\b(?:client|customer|project|responsibilities|From)\b/i.test(company) || new RegExp(date, 'i').test(company)) return [];
+    const current = /^(Now|Present|Current)$/i.test(match[2]);
+    if (!supportedRange(match[1], match[2], current)) return [];
+    const parsed = entry({company, title: match[3], start: match[1], end: match[2], current,
+      sourceRef: `resume.datedCareerSummary.${index + 1}`, sourceType: 'parsed_resume', confidence: 94, excerpt: match[0]});
+    return parsed ? [parsed] : [];
+  });
+}
+
+function numberedWorkExperience(source: string): EnterpriseEmployment[] {
+  const month = '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*';
+  const date = `(?:\\d{1,2}(?:st|nd|rd|th)?\\s+)?${month}[ -]+(?:19|20)\\d{2}`;
+  const role = '(?:Data Migration (?:Consultant|Specialist)|Senior Consultant|Associate Consultant|EIM Package Specialist|Application Developer Software Engineer)';
+  const pattern = new RegExp(`\\bWork Experience\\s*[-–—]\\s*\\d+\\s+(.{2,160}?)[,.]\\s+(${role})\\s+from\\s+(${date})\\s+(?:till|to|until)\\s+(${date}|Present|Current|Now)(?=\\.|\\s+Project\\b|$)`, 'gi');
+  return [...source.matchAll(pattern)].flatMap((match, index) => {
+    if (/\b(?:client|customer|project|responsibilities)\b/i.test(match[1])) return [];
+    const company = match[1].replace(/\s+Bangalore,\s*India$/i, '');
+    const normalizeDate = (value: string) => value.replace(/(\d)(st|nd|rd|th)\b/gi, '$1').replace(/-/g, ' ');
+    const start = normalizeDate(match[3]), end = normalizeDate(match[4]);
+    const current = /^(Present|Current|Now)$/i.test(end);
+    if (!supportedRange(start, end, current)) return [];
+    const parsed = entry({company, title: match[2], start, end, current,
+      sourceRef: `resume.numberedWorkExperience.${index + 1}`, sourceType: 'parsed_resume', confidence: 94, excerpt: match[0]});
+    return parsed ? [parsed] : [];
+  });
+}
+
+function locatedRoleEmployment(source: string): EnterpriseEmployment[] {
+  const headings = [...source.matchAll(/\b(?:Employment History|Professional Experience)\s*:?\s*/gi)];
+  const month = '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*';
+  const date = `${month}[. ]+(?:19|20)\\d{2}`;
+  const company = "[A-Z][A-Za-z0-9&.,'() -]{1,100}?\\s+(?:Ltd\\.?|Limited|Inc\\.?|Corporation|Sdn\\.?\\s*Bhd\\.?)";
+  const pattern = new RegExp(`^(${company})\\s+([A-Za-z][A-Za-z ,&-]{1,75}?)\\s+(${date})\\s*[-–—]\\s*(${date}|Present|Current|Now)\\s+Role\\s*:\\s*(.{2,110}?)(?=\\s+(?:Project|Responsibilities|Duties)\\s*:|$)`, 'i');
+  return headings.flatMap((heading, index) => {
+    const section = source.slice((heading.index || 0) + heading[0].length, headings[index + 1]?.index).split(/\b(?:Project Experience|Project History|Education|Personal Details)\b/i)[0];
+    const m = section.match(pattern);
+    if (!m || /\b(?:Client|Customer|Project|Responsibilities|Consultant)\b/i.test(m[1] + ' ' + m[2])) return [];
+    const start = m[3].replace(/\.+/g, ' '), end = m[4].replace(/\.+/g, ' ');
+    const current = /^(Present|Current|Now)$/i.test(end);
+    if (!supportedRange(start, end, current)) return [];
+    const parsed = entry({company: m[1], location: m[2], title: m[5], start, end, current,
+      sourceRef: `resume.locatedRole.${index + 1}`, sourceType: 'parsed_resume', confidence: 94, excerpt: m[0]});
+    return parsed ? [parsed] : [];
+  });
+}
+
+// Parenthesized former names remain employer metadata, not role text.
+function formerNameEmployment(source: string): EnterpriseEmployment[] {
+  const headings = [...source.matchAll(/\bEmployment History\s*:?\s*/gi)];
+  const date = '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+(?:19|20)\\d{2}';
+  const pattern = new RegExp(`^(${date})\\s*[-–—]\\s*(${date}|Present|Current|Now)\\s+(.{2,150}?\\s*\\((?:fka|formerly(?: known as)?)\\s+[^)]{2,120}\\))\\s+(.{2,120}?)\\s+Work Description\\s*:`, 'i');
+  return headings.flatMap((heading, index) => {
+    const section = source.slice((heading.index || 0) + heading[0].length, headings[index + 1]?.index).split(/\b(?:Project Experience|Project History|Education)\b/i)[0];
+    const m = section.match(pattern);
+    if (!m || /\b(?:client|customer|project)\b/i.test(m[3]) || !/\b(?:Consultant|Manager|Engineer|Analyst|Lead|Developer)\b/i.test(m[4])) return [];
+    const current = /^(Present|Current|Now)$/i.test(m[2]);
+    if (!supportedRange(m[1], m[2], current)) return [];
+    const parsed = entry({company: m[3], title: m[4], start: m[1], end: m[2], current,
+      sourceRef: `resume.formerNameEmployment.${index + 1}`, sourceType: 'parsed_resume', confidence: 94, excerpt: m[0]});
+    return parsed ? [parsed] : [];
+  });
+}
+
+// Job Experiences lists describe assignments under a dated employer heading.
+// Recover the employer range without promoting an assignment title to employer role.
+function employerAssignmentSummary(source: string): EnterpriseEmployment[] {
+  const headings = [...source.matchAll(/\b(?:Professional Experience|Employment History)\s*:?\s*/gi)];
+  const date = '(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+)?(?:19|20)\\d{2}';
+  const pattern = new RegExp(`^(${date})\\s*[-–—]\\s*(${date}|Present|Current|Now)\\s+(.{2,140}?)\\s+Job Experiences\\s*:?\\s*[-–—]`, 'i');
+  return headings.flatMap((heading, index) => {
+    const m = source.slice((heading.index || 0) + heading[0].length, headings[index + 1]?.index).match(pattern);
+    if (!m || /\b(?:client|customer|project|consultant|manager)\b/i.test(m[3])) return [];
+    const current = /^(Present|Current|Now)$/i.test(m[2]);
+    if (!supportedRange(m[1], m[2], current)) return [];
+    const parsed = entry({company: m[3], title: '', start: m[1], end: m[2], current, allowGroundedEmployerOnly: true,
+      sourceRef: `resume.employerAssignmentSummary.${index + 1}`, sourceType: 'parsed_resume', confidence: 90, excerpt: m[0]});
+    return parsed ? [parsed] : [];
+  });
+}
+
 function resumeEmployment(resumeText: string) {
   const output: EnterpriseEmployment[] = [];
+  for (const [index, row] of layoutEmployment(resumeText).entries()) {
+    const normalizeDate = (input = '') => input.replace(/^(0?[1-9]|1[0-2])\/(\d{4})$/, (_, m, y) => `${monthNames[Number(m) - 1]} ${y}`);
+    const start = normalizeDate(row.start), end = normalizeDate(row.end);
+    if (start && end && !supportedRange(start, end, /^(present|current)$/i.test(end))) continue;
+    const parsed = entry({ ...row, start, end, allowGroundedEmployerOnly: true, sourceRef: `resume.layout.${index + 1}`, sourceType: 'parsed_resume', confidence: 90 });
+    if (parsed) output.push(parsed);
+  }
   const source = resumeText
     .normalize("NFKC")
     .replace(/\b(0?[1-9]|1[0-2])\s*\/\s*(\d{4}|\d{2})\b/g, (_all, month, year) => {
@@ -647,7 +1036,7 @@ function resumeEmployment(resumeText: string) {
     })
     .replace(/[\r\n]+/g, " ")
     .replace(/\s+/g, " ");
-  output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source), ...labelledEmployerHistory(source), ...explicitHeadingVariants(source));
+  output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source), ...labelledEmployerHistory(source), ...explicitHeadingVariants(source), ...orderedLabelEmployment(source), ...dateCompanyRoleEmployment(source), ...explicitEmploymentStatements(source), ...spacedDateEmployment(source), ...datedEmploymentLedger(source), ...numberedPositionEmployment(source), ...numberedPositionPeriodEmployment(source), ...roleCompanyPeriodEmployment(source), ...locatedEmployerHistory(source), ...durationEmployerHistory(source), ...organizationDurationDesignationEmployment(source), ...organizationPeriodEmployment(source), ...datedCareerSummary(source), ...numberedWorkExperience(source), ...locatedRoleEmployment(source), ...formerNameEmployment(source), ...employerAssignmentSummary(source));
   const monthYear =
     "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[a-z]*[’']?\\s*(?:19|20)\\d{2}";
   const explicitCompanyPositionDate = new RegExp(
@@ -694,6 +1083,7 @@ function resumeEmployment(resumeText: string) {
     const projectSection = Math.max(
       beforeMarker.lastIndexOf("project experience"),
       beforeMarker.lastIndexOf("project experince"),
+      beforeMarker.lastIndexOf("project history"),
       beforeMarker.lastIndexOf("relevant project experience"),
       beforeMarker.lastIndexOf("relevant project experince"),
       beforeMarker.lastIndexOf("projects/assignments involved"),
@@ -704,7 +1094,7 @@ function resumeEmployment(resumeText: string) {
       beforeMarker.lastIndexOf("professional experience"),
       beforeMarker.lastIndexOf("employment & experience"),
     );
-    if (projectSection > employmentSection) return;
+    if (employmentSection < 0 || projectSection > employmentSection) return;
     if (
       /\b(?:Project Experience|Projects?\s*\/\s*Assignments? Involved)\s*\d*\)?\s*$/i.test(
         prefix,
@@ -811,7 +1201,7 @@ function resumeEmployment(resumeText: string) {
   );
   [...source.matchAll(workingAs)].forEach((match, index) => {
     const parsed = entry({
-      title: match[1],
+      title: match[1].replace(/^an?\s+/i, ''),
       company: match[2],
       start: match[3].replace(/[’']/g, " ").replace(/\s+/g, " "),
       end: match[4].replace(/[’']/g, " ").replace(/\s+/g, " "),
@@ -849,17 +1239,21 @@ function resumeEmployment(resumeText: string) {
     if (parsed) output.push(parsed);
   });
 
+  const companyRoleDate = `(?:${looseMonthYear}|(?:19|20)\\d{2})`;
+  const companyRoleEmployer = "(?:PT\\.?|CV\\.?|[A-Z])[A-Za-z0-9.&/', +\\-]{2,120}?";
   const companyRole = new RegExp(
-    `((?:PT\\.?|CV\\.?|[A-Z])[A-Za-z0-9.&/', +\\-]{2,120}?)\\s*\\((${date})\\s*[—–-]\\s*(${date}|Present|Current)\\)\\s*(?:As|Position\\s*:)\\s*([^]{2,120}?)(?=\\s+(?:Summary|Responsibilities?|${date}|(?:PT\\.?|CV\\.?)\\s+[A-Z]|Industry\\s*\\(Project\\)|Education|Project Experience|$))`,
+    `(${companyRoleEmployer})\\s*\\((${companyRoleDate})\\s*[—–-]\\s*(${companyRoleDate}|Present|Current)\\)\\s*(?:As|Position\\s*:)\\s*([^]{2,120}?)(?=\\s+(?:${companyRoleEmployer})\\s*\\(${companyRoleDate}\\s*[—–-]|\\s*(?:Summary|Description|Responsibilities?|${companyRoleDate}|(?:PT\\.?|CV\\.?)\\s+[A-Z]|Industry\\s*\\(Project\\)|Education|Project Experience|$))`,
     "gi",
   );
   const companyMatches = [...source.matchAll(companyRole)];
   companyMatches.forEach((match, index) => {
     const sourceEnd = companyMatches[index + 1]?.index ?? source.length;
+    const normalizeCompanyRoleDate = (value: string) =>
+      value.replace(/^([A-Za-z]+)[’']?\s*((?:19|20)\d{2})$/, "$1 $2");
     const parsed = entry({
       company: resumeCompany(match[1]),
-      start: match[2],
-      end: match[3],
+      start: normalizeCompanyRoleDate(match[2]),
+      end: normalizeCompanyRoleDate(match[3]),
       current: /present|current/i.test(match[3]),
       title: resumeRole(match[4]),
       responsibilities: responsibilitiesBetween(
@@ -892,6 +1286,47 @@ function resumeEmployment(resumeText: string) {
       confidence: 92,
     });
     if (parsed) output.push(parsed);
+  });
+
+  // Employment histories sometimes put the employer between a parenthesized
+  // tenure and an explicit Client label, followed by Current Position Title.
+  // Treat Client as a boundary only: it must never replace the employer or
+  // supply employment dates.
+  const datedEmployerClientTitle = new RegExp(
+    `\\(\\s*(${monthYear})\\s*[-–—]\\s*(${monthYear}|Present|Current)\\s*\\)\\s*([\\s\\S]{2,180}?)\\s*\\(\\s*Client\\s*:\\s*[\\s\\S]{1,180}?\\)\\s*Current\\s+Position\\s+Title\\s*:\\s*([\\s\\S]{2,120}?)(?=\\s+(?:Industry|Work\\s+Description|Projects?)\\s*:|$)`,
+    "gi",
+  );
+  [...source.matchAll(datedEmployerClientTitle)].forEach((match, index) => {
+    const markerIndex = match.index || 0;
+    const beforeMarker = source.slice(0, markerIndex).toLowerCase();
+    const employmentSection = Math.max(
+      beforeMarker.lastIndexOf("employment history"),
+      beforeMarker.lastIndexOf("working experience"),
+      beforeMarker.lastIndexOf("professional experience"),
+    );
+    const projectSection = Math.max(
+      beforeMarker.lastIndexOf("project experience"),
+      beforeMarker.lastIndexOf("project history"),
+    );
+    const current = /^(?:present|current)$/i.test(match[2]);
+    if (
+      employmentSection < 0 ||
+      projectSection > employmentSection ||
+      !supportedRange(match[1], match[2], current)
+    )
+      return;
+    const parsed = entry({
+      company: validEmploymentCompany(match[3]),
+      title: resumeRole(match[4]),
+      start: match[1],
+      end: match[2],
+      current,
+      sourceRef: `resume.datedEmployerClientTitle.${index + 1}`,
+      sourceType: "parsed_resume",
+      excerpt: match[0],
+      confidence: 96,
+    });
+    if (parsed?.company && parsed.title) output.push(parsed);
   });
 
   const labelledCurrent = source.match(
@@ -957,24 +1392,46 @@ function resumeEmployment(resumeText: string) {
   );
   companyMarkers.forEach((marker, index) => {
     const markerIndex = marker.index || 0;
+    const beforeMarker = source.slice(0, markerIndex).toLowerCase();
+    const employmentSection = Math.max(
+      beforeMarker.lastIndexOf("employment history"),
+      beforeMarker.lastIndexOf("working experience"),
+      beforeMarker.lastIndexOf("professional experience"),
+      beforeMarker.lastIndexOf("employment & experience"),
+    );
+    const projectSection = Math.max(
+      beforeMarker.lastIndexOf("project experience"),
+      beforeMarker.lastIndexOf("project experince"),
+      beforeMarker.lastIndexOf("project history"),
+      beforeMarker.lastIndexOf("relevant project experience"),
+      beforeMarker.lastIndexOf("projects/assignments"),
+    );
+    const numberedEmploymentMarker = /\b\d{1,2}\.\s*$/.test(
+      source.slice(Math.max(0, markerIndex - 20), markerIndex),
+    );
+    if (
+      (employmentSection < 0 || projectSection > employmentSection) &&
+      !numberedEmploymentMarker
+    )
+      return;
     const block = source.slice(
       markerIndex,
       companyMarkers[index + 1]?.index ?? source.length,
     );
     const company =
       block.match(
-        /^Company\s+Name\s*:\s*([\s\S]{2,140}?)(?=\s+(?:From\s*\/\s*To|Position(?:\s+Title)?|Industry|Date\s+(?:joined|left))\s*:?\s*)/i,
+        /^Company\s+Name\s*:\s*([\s\S]{2,140}?)(?=\s+(?:From\s*\/\s*To|Position(?:\s+Title)?|Industry|Date\s+(?:join(?:ed)?|left))\s*:?\s*)/i,
       )?.[1] || "";
     const title =
       block.match(
-        /\bPosition(?:\s+Title)?\s*:?\s*([\s\S]{2,120}?)(?=\s+(?:Responsibilities?|Duties|Industry|From\s*\/\s*To|Date\s+(?:joined|left)|Work\s+(?:Description|description)|Support|Handle|Provide|Manage|$))/i,
+        /\bPosition(?:\s+Title)?\s*:?\s*([\s\S]{2,120}?)(?=\s+(?:Responsibilities?|Duties|Industry|From\s*\/\s*To|Date\s+(?:join(?:ed)?|left)|Work\s+(?:Description|description)|Support|Handle|Provide|Manage|$))/i,
       )?.[1] || "";
     const range = block.match(
       /\bFrom\s*\/\s*To\s*:\s*([\s\S]{2,50}?)\s*[-\u2013\u2014]\s*([\s\S]{2,50}?)(?=\s+Position(?:\s+Title)?\s*:|$)/i,
     );
     const joined =
       block.match(
-        /\bDate\s+joined\s*:\s*([\s\S]{2,60}?)(?=\s+Date\s+left\s*:)/i,
+        /\bDate\s+join(?:ed)?\s*:\s*([\s\S]{2,60}?)(?=\s+Date\s+left\s*:)/i,
       )?.[1] || "";
     const left =
       block.match(
@@ -1005,7 +1462,9 @@ function resumeEmployment(resumeText: string) {
       excerpt: block.slice(0, 320),
       confidence: 94,
     });
-    if (parsed?.company && parsed.title && parsed.start && parsed.end)
+    // Preserve one explicitly labelled endpoint; do not convert a missing Date
+    // left value into Present or borrow a project duration.
+    if (parsed?.company && parsed.title && (parsed.start || parsed.end))
       output.push(parsed);
   });
   return output;
@@ -1038,6 +1497,10 @@ function sameEmployment(
   const rightStart = monthIndex(right.start);
   const leftEnd = monthIndex(left.end, left.current);
   const rightEnd = monthIndex(right.end, right.current);
+  // Separate rows in a source table can be distinct engagements one month apart.
+  // Do not erase an explicitly different start when either end is unknown.
+  if (leftStart !== null && rightStart !== null && leftStart !== rightStart &&
+      (leftEnd === null || rightEnd === null)) return false;
   if (
     leftStart !== null &&
     rightStart !== null &&
@@ -1309,12 +1772,11 @@ export function employmentTimelineDiagnostics(
       `${normalized(item.company)}|${normalized(item.title)}|${item.start}|${item.end}`,
   );
   let invalidRanges = 0;
-  for (const item of timeline)
-    if (
-      (item.start || item.end) &&
-      !supportedRange(item.start, item.end, item.current)
-    )
+  for (const item of timeline) {
+    const hasCompleteRange = Boolean(item.start && (item.end || item.current));
+    if (hasCompleteRange && !supportedRange(item.start, item.end, item.current))
       invalidRanges += 1;
+  }
   return {
     records: timeline.length,
     companyComplete: timeline.filter((item) => Boolean(item.company)).length,

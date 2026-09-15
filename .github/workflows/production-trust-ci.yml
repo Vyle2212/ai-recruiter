@@ -3,6 +3,7 @@ name: Production Trust Foundation CI
 on:
   push:
     branches:
+      - "codex/precision-*"
       - "codex/production-trust-*"
       - "codex/recruiter-api-authorization-*"
       - "codex/dependency-security-*"
@@ -10,6 +11,7 @@ on:
       - "codex/acceptance-workflow-*"
   pull_request:
     branches:
+      - "codex/profile-source-recovery"
       - "codex/production-trust-*"
       - "codex/recruiter-api-authorization-*"
       - "codex/dependency-security-*"
@@ -152,6 +154,17 @@ jobs:
 
       - name: Canonical evidence and immutable golden regressions
         run: npm run test:production-trust:canonical
+
+      - name: CV source layout and complete-document OCR regressions
+        run: |
+          node --import tsx scripts/candidateSourcePreservation.test.ts
+          node --import tsx scripts/pdfTextLayout.test.ts
+          node --import tsx scripts/docxTextLayout.test.ts
+          node --import tsx scripts/layoutEmployment.test.ts
+          node --import tsx scripts/dateCompanyRoleEmployment.test.ts
+          node --import tsx scripts/employmentTableDateLayouts.test.ts
+          node --import tsx scripts/cvPdfOcr.test.ts
+          node --import tsx scripts/uploadCvSourceFailure.test.ts
 
       - name: Spreadsheet export and lazy-client regressions
         run: npm run test:production-trust:dependencies

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { field, type AiExtractionProvider, type AnyRecord, type RawAiCandidateExtraction } from "./cvExtractionSchema";
 
-export const AI_EXTRACTION_PROMPT_VERSION = "primus-ai-cv-extraction-v3.1";
+export const AI_EXTRACTION_PROMPT_VERSION = "primus-ai-cv-extraction-v3.3-employment-evidence";
 export const AI_EXTRACTION_CACHE_DIR = path.join("reports", "ai-extraction-cache");
 
 export class OpenAiExtractionError extends Error {
@@ -68,6 +68,7 @@ export function buildOpenAiCandidateExtractionPrompt(rawText: string, existingCa
     "Do not treat summary sentences as job titles.",
     "For every field, provide value, confidence, evidence, sourceSection, normalizedValue where useful, and rejectReason when invalid.",
     "Preserve exact evidence snippets from the CV.",
+    "Each employmentHistory row must contain company, title, start, end, current, and evidence: an exact contiguous CV excerpt binding that employer, role and period. Preserve source date strings. Never invent labels or evidence; use null for missing fields.",
     "Return valid JSON only. No markdown.",
     "The JSON must match these top-level keys: identity, contact, location, role, employer, clientProjects, sap, experience, compensation, quality.",
     "Use Not disclosed for currentEmployer only when no explicit employer exists.",
@@ -76,8 +77,23 @@ export function buildOpenAiCandidateExtractionPrompt(rawText: string, existingCa
     `Prompt version: ${AI_EXTRACTION_PROMPT_VERSION}`,
     `Existing candidate data: ${JSON.stringify(existingCandidateData).slice(0, 3500)}`,
     "",
-    `CV text:\n${rawText.slice(0, 18000)}`,
+    `CV text:\n${rawText}`,
   ].join("\n");
+}
+
+export function parseCompletedAiExtractionResponse(response: { choices?: Array<{ finish_reason?: string | null; message?: { content?: string | null; refusal?: string | null } }> }): RawAiCandidateExtraction {
+  const choice = response.choices?.[0];
+  if (choice?.message?.refusal) throw new OpenAiExtractionError("response_refused", "CV extraction response was refused");
+  if (choice?.finish_reason !== "stop") throw new OpenAiExtractionError("incomplete_response", "CV extraction response did not finish normally");
+  if (!choice.message?.content?.trim()) throw new OpenAiExtractionError("empty_response", "CV extraction returned no content");
+  let value: any;
+  try { value = JSON.parse(choice.message.content); }
+  catch { throw new OpenAiExtractionError("invalid_json", "CV extraction returned invalid JSON"); }
+  const sections = Object.keys(emptyRawAiExtraction());
+  if (!value || typeof value !== "object" || Array.isArray(value) || sections.some(key => !value[key] || typeof value[key] !== "object" || Array.isArray(value[key]))) {
+    throw new OpenAiExtractionError("invalid_shape", "CV extraction response is missing required sections");
+  }
+  return normalizeRawShape(value);
 }
 
 export function createOpenAiCandidateExtractionProvider(): AiExtractionProvider {
@@ -101,13 +117,7 @@ export function createOpenAiCandidateExtractionProvider(): AiExtractionProvider 
       const { default: OpenAI } = await import("openai");
       const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
       const response = await client.chat.completions.create({ model, response_format: { type: "json_object" }, messages: [{ role: "user", content: buildOpenAiCandidateExtractionPrompt(rawText, existingCandidateData) }], temperature: 0 });
-      let parsedJson: any;
-      try {
-        parsedJson = JSON.parse(response.choices[0]?.message?.content || "{}");
-      } catch (error) {
-        throw new OpenAiExtractionError("invalid_json", sanitizeOpenAiError(error).message);
-      }
-      const parsed = normalizeRawShape(parsedJson);
+      const parsed = parseCompletedAiExtractionResponse(response);
       parsed.providerMeta = { mode: "openai", providerUsed: "openai", model, cacheHit: false, openAiExtractionUsed: true, fallbackParserUsed: false, openAiRequestAttempted: true, openAiRequestSucceeded: true };
       if (isCacheEnabled()) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(parsed, null, 2)); }
       return parsed;

@@ -18,7 +18,7 @@ import {
 
 export type CandidateSchemaRecord = Record<string, unknown>;
 export const CANDIDATE_CANONICAL_VERSION =
-  "candidate-canonical-v52-grounded-partial-employment";
+  "candidate-canonical-v63-original-layout";
 export const CANDIDATE_DETAIL_PROJECTION_VERSION =
   "candidate-detail-v24-exact-project-identity";
 export const CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION =
@@ -2085,12 +2085,12 @@ function normalizeEmployment(
   }));
   return canonicalEmploymentTimeline({
     structuredRecords: records,
-    resumeText: firstText(sourceScopes, [
+    resumeText: String(firstValue(sourceScopes, [
       "resume_text",
       "raw_text",
       "cv_text",
       "raw_cv",
-    ]),
+    ]) || ""),
     currentRole: explicitCurrentRoleContext(sourceScopes),
   });
 }

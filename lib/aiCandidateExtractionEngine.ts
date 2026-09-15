@@ -46,7 +46,7 @@ export function buildAiExtractionPrompt(rawText: string, existingCandidateData: 
     "",
     identityEvidenceBlock,
     "",
-    `CV text: ${rawText.slice(0, 12000)}`,
+    `CV text: ${rawText}`,
   ].join("\n");
 }
 export function fallbackRawExtraction(candidate: AnyRecord): RawAiCandidateExtraction {
@@ -174,10 +174,10 @@ export async function extractAiCandidateProfile(candidate: AnyRecord, provider =
     const sanitized = sanitizeOpenAiError(error);
     if (provider.mode === "openai" && options.noFallbackOnError) {
       raw = emptyRawAiExtraction(sanitized.type);
-      raw.providerMeta = { mode: "openai", providerUsed: "openai", model: provider.model || "unknown", cacheHit: false, fallbackParserUsed: false, fallbackReason: "", openAiExtractionUsed: false, openAiRequestAttempted: true, openAiRequestSucceeded: false, openAiErrorType: sanitized.type, openAiErrorMessage: sanitized.message, error: sanitized.message };
+      raw.providerMeta = { mode: "openai", providerUsed: "openai", model: provider.model || "unknown", cacheHit: false, fallbackParserUsed: false, fallbackReason: "", openAiExtractionUsed: false, openAiRequestAttempted: sanitized.type !== "missing_api_key", openAiRequestSucceeded: false, openAiErrorType: sanitized.type, openAiErrorMessage: sanitized.message, error: sanitized.message };
     } else {
       raw = fallbackRawExtraction(candidate);
-      raw.providerMeta = { mode: provider.mode, providerUsed: "fallback", model: provider.model || "unknown", cacheHit: false, fallbackParserUsed: true, fallbackReason: provider.mode === "openai" ? sanitized.type : "forced_fallback", openAiExtractionUsed: false, openAiRequestAttempted: provider.mode === "openai", openAiRequestSucceeded: false, openAiErrorType: provider.mode === "openai" ? sanitized.type : "", openAiErrorMessage: provider.mode === "openai" ? sanitized.message : "", error: sanitized.message };
+      raw.providerMeta = { mode: provider.mode, providerUsed: "fallback", model: provider.model || "unknown", cacheHit: false, fallbackParserUsed: true, fallbackReason: provider.mode === "openai" ? sanitized.type : "forced_fallback", openAiExtractionUsed: false, openAiRequestAttempted: provider.mode === "openai" && sanitized.type !== "missing_api_key", openAiRequestSucceeded: false, openAiErrorType: provider.mode === "openai" ? sanitized.type : "", openAiErrorMessage: provider.mode === "openai" ? sanitized.message : "", error: sanitized.message };
     }
   }
   const meta = raw.providerMeta || { mode: provider.mode, providerUsed: provider.mode, model: provider.model || provider.name, cacheHit: false, fallbackParserUsed: provider.mode === "fallback", fallbackReason: provider.mode === "fallback" ? "forced_fallback" : "", openAiExtractionUsed: provider.mode === "openai", openAiRequestAttempted: false, openAiRequestSucceeded: false };
