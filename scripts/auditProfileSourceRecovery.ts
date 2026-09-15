@@ -10,10 +10,12 @@ import { CANDIDATE_CANONICAL_VERSION, normalizeActualCandidateSchema } from '../
 const arg = (name: string) => { const i = process.argv.indexOf(name); return i < 0 ? undefined : process.argv[i + 1]; };
 async function main() {
 let rows: Record<string, unknown>[] = [];
+let declaredPopulation: number | null = null;
 if (arg('--input')) {
   const bytes = fs.readFileSync(arg('--input')!);
   const parsed = JSON.parse(bytes.toString(bytes[0] === 255 ? 'utf16le' : 'utf8').replace(/^\uFEFF/, ''));
   const records = Array.isArray(parsed) ? parsed : parsed.samples;
+  declaredPopulation = Number.isSafeInteger(parsed.population) && parsed.population >= 0 ? parsed.population : null;
   if (!Array.isArray(records)) throw new Error("Expected a records array or samples export");
   rows = records.map((row: Record<string, unknown>) => {
     const source = row.source || row;
@@ -91,7 +93,10 @@ for (const row of rows) {
     sourceExport.push({token, reasons, source: Object.fromEntries(sourceFields.filter(key => row[key] !== undefined).map(key => [key, row[key]]))});
   }
 }
-const report = {mode:'READ_ONLY', diagnostics, profileChecks, version: CANDIDATE_CANONICAL_VERSION, completeness, profilesWithoutEmployment: rows.length - employmentProfiles, population: rows.length, sourceTextPresent, sourceReferencePresent, employmentProfiles, employmentRecords, educationProfiles, review,
+const scope = {auditedSources: rows.length, declaredPopulation,
+  unauditedSources: declaredPopulation !== null ? Math.max(0, declaredPopulation - rows.length) : null,
+  coverage: declaredPopulation === null ? (arg('--input') ? 'UNKNOWN_POPULATION' : 'DATABASE_SCAN') : declaredPopulation > rows.length ? 'SUBSET_ONLY' : declaredPopulation === rows.length ? 'DECLARED_POPULATION_LOADED' : 'INCONSISTENT_EXPORT_METADATA'};
+const report = {mode:'READ_ONLY', scope, diagnostics, profileChecks, version: CANDIDATE_CANONICAL_VERSION, completeness, profilesWithoutEmployment: rows.length - employmentProfiles, population: rows.length, sourceTextPresent, sourceReferencePresent, employmentProfiles, employmentRecords, educationProfiles, review,
   limits:['Overlap and client/employer equality are review flags, not proof of an error.', 'Direct FICO assignment counts are evidence metrics, not Search V2 scores.', 'A source reference does not prove the original file is accessible.', 'Section detection flags possible omissions; it does not prove extraction completeness.', 'No database records changed. Production UI and scoring distribution remain unverified.']};
 if (arg('--review-sources')) {
   fs.writeFileSync(arg('--review-sources')!, JSON.stringify({mode: 'READ_ONLY', version: CANDIDATE_CANONICAL_VERSION,
