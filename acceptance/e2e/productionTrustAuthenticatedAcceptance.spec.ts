@@ -5,6 +5,7 @@ import {
   acceptanceRequired,
   waitForAcceptanceSearchReady,
   acceptanceAdminClient,
+  authenticatedAdminDatabaseClient,
   anonymousAcceptanceApi,
   attachSanitized,
   authenticatedApi,
@@ -380,20 +381,32 @@ test.describe
     const identity = bundle.identities.recruiter;
     const api = await authenticatedApi("recruiter");
     expect((await api.get(searchPath)).status()).toBe(200);
-    const admin = acceptanceAdminClient();
+    const admin = await authenticatedAdminDatabaseClient();
     try {
       const deactivate = await admin
         .from("user_profiles")
         .update({ status: "inactive" })
-        .eq("auth_user_id", identity.authUserId);
-      expect(deactivate.error).toBeNull();
+        .eq("auth_user_id", identity.authUserId)
+        .select("status")
+        .single();
+      expect(
+        deactivate.error,
+        "Authenticated admin must deactivate the synthetic profile",
+      ).toBeNull();
+      expect(deactivate.data?.status).toBe("inactive");
       await expectPrivateErrorOnly(await api.get(searchPath), 403);
     } finally {
       const reactivate = await admin
         .from("user_profiles")
         .update({ status: "active" })
-        .eq("auth_user_id", identity.authUserId);
-      expect(reactivate.error).toBeNull();
+        .eq("auth_user_id", identity.authUserId)
+        .select("status")
+        .single();
+      expect(
+        reactivate.error,
+        "Authenticated admin must restore the synthetic profile",
+      ).toBeNull();
+      expect(reactivate.data?.status).toBe("active");
     }
     expect((await api.get(searchPath)).status()).toBe(200);
     await attachSanitized(testInfo, "deactivation-lifecycle", {

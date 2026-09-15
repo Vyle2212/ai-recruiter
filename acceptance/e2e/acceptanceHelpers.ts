@@ -182,6 +182,19 @@ export async function installAcceptanceBrowserBridge(context: BrowserContext) {
   });
 }
 
+// Profile lifecycle changes must pass the same authenticated-admin trigger as the UI.
+export async function authenticatedAdminDatabaseClient() {
+  const session = await authenticatedSession("admin");
+  return createClient(
+    acceptanceRequired("ACCEPTANCE_SUPABASE_URL"),
+    acceptanceRequired("ACCEPTANCE_SUPABASE_ANON_KEY"),
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { Authorization: `Bearer ${session.accessToken}` } },
+    },
+  );
+}
+
 export function acceptanceAdminClient() {
   return createClient(
     acceptanceRequired("ACCEPTANCE_SUPABASE_URL"),
