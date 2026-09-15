@@ -161,6 +161,7 @@ jobs:
           node --import tsx scripts/pdfTextLayout.test.ts
           node --import tsx scripts/docxTextLayout.test.ts
           node --import tsx scripts/layoutEmployment.test.ts
+          node --import tsx scripts/dateCompanyRoleEmployment.test.ts
           node --import tsx scripts/cvPdfOcr.test.ts
           node --import tsx scripts/uploadCvSourceFailure.test.ts
 
