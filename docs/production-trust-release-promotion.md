@@ -16,7 +16,7 @@ accepted identity. Branch-only PASS_INTERNAL_ONLY or PASS_FULL_SCOPE means the
 scoped acceptance suite passed; it is not authorization to deploy a different
 commit.
 
-## Latest code-only checkpoint
+## Historical verified code-only checkpoint
 
 Parser commit `d91380801c128d4f9a700131aeab4a87de94ca07` passed the full
 Production Trust push and pull-request workflows, including the mandatory CV
@@ -25,3 +25,5 @@ code, build and preview evidence only: it did not run live OCR, mutate or
 backfill the database, audit the remaining 693 declared sources, or perform
 authenticated acceptance against the exact deployable artifact. The release
 gate therefore remains NO_GO.
+
+Subsequent parser checkpoints and current subset counts are recorded in `cv-ocr-upload-release.md`. Always inspect the latest PR head and its CI results; the historical SHA above is not acceptance evidence for later commits.

@@ -80,4 +80,20 @@ for (const endpoint of ['Jan 20200', 'Nowhere', 'Currently unavailable', 'Presen
   assert.equal(jobs(`Employment History Senior Systems Engineer Example Services Pte Ltd Period: Jan 2019 - ${endpoint}`).length, 0, `Reject truncated period endpoint: ${endpoint}`);
 }
 
+
+
+const durationEmployerRows = 'Duration: January 2020 – December 2022 Employer: Example Advisory (Malaysia) Sdn Bhd – Global consulting services SAP Consultant Scope of Work: Delivery. Duration: February 2017 – December 2019 Employer: Example Systems Pte Ltd – Business services Analyst Scope of Work: Support.';
+const durationEmployers = jobs(`Employment History ${durationEmployerRows} Education`);
+assert.equal(durationEmployers.length, 2);
+assert.deepEqual(durationEmployers.map(item => item.company), ['Example Advisory (Malaysia) Sdn Bhd', 'Example Systems Pte Ltd']);
+assert.ok(durationEmployers.every(item => item.title === ''), 'Unlabelled prose must not supply an employment title');
+assert.equal(durationEmployers[0].start, 'January 2020');
+assert.equal(durationEmployers[0].end, 'December 2022');
+assert.equal(jobs(`Project History ${durationEmployerRows}`).length, 0);
+assert.equal(jobs(`Employment History Project History ${durationEmployerRows}`).length, 0);
+assert.equal(jobs(`Employment History ${durationEmployerRows.replaceAll('Employer:', 'Client:')}`).length, 0);
+assert.equal(jobs(`Employment History ${durationEmployerRows.replaceAll('December 2022', 'December 2010').replaceAll('December 2019', 'December 2010')}`).length, 0);
+assert.equal(jobs('Employment History Duration: January 2020 - Nowhere Employer: Example Systems Ltd - Services').length, 0);
+assert.equal(jobs('Employment History Duration: January 2020 - January 20200 Employer: Example Systems Ltd - Services').length, 0);
+
 console.log('Employment table dates, role boundaries and spaced-date layouts: passed');

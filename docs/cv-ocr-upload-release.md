@@ -96,3 +96,11 @@ The role/company/period and located-employer readers previously accepted prefixe
 The unchanged private 277-source subset still yields 78 profiles / 311 employment rows, with 199 unresolved profiles. Comparing complete employment timelines against the preceding parser produced zero changed profiles. Malformed, duplicate and invalid-range diagnostics remain zero. This is a precision repair, not additional source recovery or backfill. The other 693 sources remain unaudited.
 
 Local employment/canonical regressions and typecheck must pass, followed by exact-head GitHub CI. Live OCR, reviewed backfill, full-population audit and authenticated acceptance of the exact deployable artifact remain required; production remains NO_GO.
+
+## Continuation checkpoint: duration/employer descriptions
+
+A bounded employment-history layout places explicit `Duration` and `Employer` labels before a legal employer name and a dash-separated company description. The parser now retains the employer and valid month/year tenure while leaving the title empty: the later unlabelled role cannot be safely separated from the company description. It rejects project sections, client-labelled substitutes, reversed dates and malformed endpoint prefixes.
+
+On the unchanged private 277-source subset, extraction increased from 78 profiles / 311 rows to 79 profiles / 313 rows, leaving 198 profiles without employment. Only one profile's employment timeline changed; its two recovered rows have explicit employers and complete historical ranges, and both retain blank titles. All other employment timelines are identical to the preceding checkpoint. Malformed, duplicate and invalid-range counts remain zero. No source or database records were changed; the other 693 sources remain unaudited.
+
+The 15 local employment/canonical regression files and TypeScript typecheck passed. The new negative and positive cases are part of the mandatory source-layout CI group. Exact-head GitHub CI is required before merge. Live OCR, reviewed backfill, full-population audit and authenticated exact-artifact acceptance remain blockers; production remains NO_GO.
