@@ -8,7 +8,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v33-dated-ledgers";
+  "candidate-employment-v34-numbered-positions";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -727,6 +727,32 @@ function spacedDateEmployment(source: string): EnterpriseEmployment[] {
   });
 }
 
+// Numbered employment forms bind the date and employer to an explicit title
+// label. Responsibility prose and project tables cannot supply missing cells.
+function numberedPositionEmployment(source: string): EnterpriseEmployment[] {
+  const section = source.match(/\bEmployment History\s*:?\s*([\s\S]*?)(?=\b(?:Education|Qualifications|References|Personal Details)\b|$)/i)?.[1];
+  if (!section) return [];
+  const month = '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*';
+  const date = `(?:${month}\\s+(?:19|20)\\d{2}|(?:19|20)\\d{2}\\s+${month})`;
+  const range = `(${date})\\s*[-–—]\\s*(${date}|Present|Current|Now)\\b`;
+  const label = '\\s+Position Title\\s*\\(Level\\)\\s*:\\s*(.{2,120}?)(?=\\s+(?:Role|Specialization|Industry|Work Description)\\s*:)';
+  const patterns = [
+    { re: new RegExp(`\\b\\d{1,2}\\.\\s+([^:;!?]{2,150}?)\\s+${range}${label}`, 'gi'), fields: [1, 4, 2, 3] },
+    { re: new RegExp(`\\b${range}\\s+\\d{1,2}\\.\\s+([^:;!?]{2,150}?)${label}`, 'gi'), fields: [3, 4, 1, 2] },
+  ];
+  const normalizeDate = (value: string) => value.replace(new RegExp(`^((?:19|20)\\d{2})\\s+(${month})$`, 'i'), '$2 $1');
+  return patterns.flatMap(({re, fields}, variant) => [...section.matchAll(re)].flatMap((match, index) => {
+    const company = match[fields[0]];
+    if (/\b(?:client|customer|project|responsibilities|duration)\b/i.test(company) || new RegExp(date, 'i').test(company)) return [];
+    const start = normalizeDate(match[fields[2]]), end = normalizeDate(match[fields[3]]);
+    const current = /^(Present|Current|Now)$/i.test(end);
+    if (!supportedRange(start, end, current)) return [];
+    const parsed = entry({company, title: match[fields[1]], start, end, current,
+      sourceRef: `resume.numberedPosition.${variant + 1}.${index + 1}`, sourceType: 'parsed_resume', confidence: 94, excerpt: match[0]});
+    return parsed ? [parsed] : [];
+  }));
+}
+
 function datedEmploymentLedger(source: string): EnterpriseEmployment[] {
   const headings = [...source.matchAll(/\bEMPLOYMENT HISTORY\s*:?\s*/gi)];
   const month = '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*';
@@ -766,7 +792,7 @@ function resumeEmployment(resumeText: string) {
     })
     .replace(/[\r\n]+/g, " ")
     .replace(/\s+/g, " ");
-  output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source), ...labelledEmployerHistory(source), ...explicitHeadingVariants(source), ...orderedLabelEmployment(source), ...explicitEmploymentStatements(source), ...spacedDateEmployment(source), ...datedEmploymentLedger(source));
+  output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source), ...labelledEmployerHistory(source), ...explicitHeadingVariants(source), ...orderedLabelEmployment(source), ...explicitEmploymentStatements(source), ...spacedDateEmployment(source), ...datedEmploymentLedger(source), ...numberedPositionEmployment(source));
   const monthYear =
     "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[a-z]*[’']?\\s*(?:19|20)\\d{2}";
   const explicitCompanyPositionDate = new RegExp(
