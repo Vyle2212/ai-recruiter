@@ -9,7 +9,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v41-date-company-role";
+  "candidate-employment-v42-labelled-partial-date";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1007,6 +1007,7 @@ function resumeEmployment(resumeText: string) {
     const projectSection = Math.max(
       beforeMarker.lastIndexOf("project experience"),
       beforeMarker.lastIndexOf("project experince"),
+      beforeMarker.lastIndexOf("project history"),
       beforeMarker.lastIndexOf("relevant project experience"),
       beforeMarker.lastIndexOf("relevant project experince"),
       beforeMarker.lastIndexOf("projects/assignments involved"),
@@ -1017,7 +1018,7 @@ function resumeEmployment(resumeText: string) {
       beforeMarker.lastIndexOf("professional experience"),
       beforeMarker.lastIndexOf("employment & experience"),
     );
-    if (projectSection > employmentSection) return;
+    if (employmentSection < 0 || projectSection > employmentSection) return;
     if (
       /\b(?:Project Experience|Projects?\s*\/\s*Assignments? Involved)\s*\d*\)?\s*$/i.test(
         prefix,
@@ -1274,24 +1275,46 @@ function resumeEmployment(resumeText: string) {
   );
   companyMarkers.forEach((marker, index) => {
     const markerIndex = marker.index || 0;
+    const beforeMarker = source.slice(0, markerIndex).toLowerCase();
+    const employmentSection = Math.max(
+      beforeMarker.lastIndexOf("employment history"),
+      beforeMarker.lastIndexOf("working experience"),
+      beforeMarker.lastIndexOf("professional experience"),
+      beforeMarker.lastIndexOf("employment & experience"),
+    );
+    const projectSection = Math.max(
+      beforeMarker.lastIndexOf("project experience"),
+      beforeMarker.lastIndexOf("project experince"),
+      beforeMarker.lastIndexOf("project history"),
+      beforeMarker.lastIndexOf("relevant project experience"),
+      beforeMarker.lastIndexOf("projects/assignments"),
+    );
+    const numberedEmploymentMarker = /\b\d{1,2}\.\s*$/.test(
+      source.slice(Math.max(0, markerIndex - 20), markerIndex),
+    );
+    if (
+      (employmentSection < 0 || projectSection > employmentSection) &&
+      !numberedEmploymentMarker
+    )
+      return;
     const block = source.slice(
       markerIndex,
       companyMarkers[index + 1]?.index ?? source.length,
     );
     const company =
       block.match(
-        /^Company\s+Name\s*:\s*([\s\S]{2,140}?)(?=\s+(?:From\s*\/\s*To|Position(?:\s+Title)?|Industry|Date\s+(?:joined|left))\s*:?\s*)/i,
+        /^Company\s+Name\s*:\s*([\s\S]{2,140}?)(?=\s+(?:From\s*\/\s*To|Position(?:\s+Title)?|Industry|Date\s+(?:join(?:ed)?|left))\s*:?\s*)/i,
       )?.[1] || "";
     const title =
       block.match(
-        /\bPosition(?:\s+Title)?\s*:?\s*([\s\S]{2,120}?)(?=\s+(?:Responsibilities?|Duties|Industry|From\s*\/\s*To|Date\s+(?:joined|left)|Work\s+(?:Description|description)|Support|Handle|Provide|Manage|$))/i,
+        /\bPosition(?:\s+Title)?\s*:?\s*([\s\S]{2,120}?)(?=\s+(?:Responsibilities?|Duties|Industry|From\s*\/\s*To|Date\s+(?:join(?:ed)?|left)|Work\s+(?:Description|description)|Support|Handle|Provide|Manage|$))/i,
       )?.[1] || "";
     const range = block.match(
       /\bFrom\s*\/\s*To\s*:\s*([\s\S]{2,50}?)\s*[-\u2013\u2014]\s*([\s\S]{2,50}?)(?=\s+Position(?:\s+Title)?\s*:|$)/i,
     );
     const joined =
       block.match(
-        /\bDate\s+joined\s*:\s*([\s\S]{2,60}?)(?=\s+Date\s+left\s*:)/i,
+        /\bDate\s+join(?:ed)?\s*:\s*([\s\S]{2,60}?)(?=\s+Date\s+left\s*:)/i,
       )?.[1] || "";
     const left =
       block.match(
@@ -1322,7 +1345,9 @@ function resumeEmployment(resumeText: string) {
       excerpt: block.slice(0, 320),
       confidence: 94,
     });
-    if (parsed?.company && parsed.title && parsed.start && parsed.end)
+    // Preserve one explicitly labelled endpoint; do not convert a missing Date
+    // left value into Present or borrow a project duration.
+    if (parsed?.company && parsed.title && (parsed.start || parsed.end))
       output.push(parsed);
   });
   return output;
@@ -1630,12 +1655,11 @@ export function employmentTimelineDiagnostics(
       `${normalized(item.company)}|${normalized(item.title)}|${item.start}|${item.end}`,
   );
   let invalidRanges = 0;
-  for (const item of timeline)
-    if (
-      (item.start || item.end) &&
-      !supportedRange(item.start, item.end, item.current)
-    )
+  for (const item of timeline) {
+    const hasCompleteRange = Boolean(item.start && (item.end || item.current));
+    if (hasCompleteRange && !supportedRange(item.start, item.end, item.current))
       invalidRanges += 1;
+  }
   return {
     records: timeline.length,
     companyComplete: timeline.filter((item) => Boolean(item.company)).length,

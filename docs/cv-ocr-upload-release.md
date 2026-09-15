@@ -35,7 +35,7 @@ No live Google OCR call, database mutation, or production promotion was performe
 
 ## Continuation checkpoint: CI coverage
 
-The precision feature branch previously triggered only the immutable-action-reference workflow. Production Trust CI now includes `codex/precision-*` pushes and pull requests targeting `codex/profile-source-recovery`, retaining all existing security, dependency, secret-history, formatting, build and regression gates. Six source-layout/OCR tests are included in its security-and-regression job.
+The precision feature branch previously triggered only the immutable-action-reference workflow. Production Trust CI now includes `codex/precision-*` pushes and pull requests targeting `codex/profile-source-recovery`, retaining all existing security, dependency, secret-history, formatting, build and regression gates. Seven source-layout/OCR tests are included in its security-and-regression job.
 
 Local route-policy coverage found no missing policies across 78 route files and 95 exported methods. The authorization matrix passed, and the client-bundle scan inspected 297 files with zero forbidden-pattern hits. These local checks are not authenticated production acceptance.
 
@@ -48,3 +48,11 @@ The private 277-source review subset exposed three additional employment layouts
 On the unchanged private subset, current extraction increased from 70 profiles / 277 employment rows to 73 profiles / 285 rows. Profiles without employment decreased from 207 to 204. Malformed, duplicate and invalid-range diagnostics remain zero; overlap review remains seven profiles and the possible client/employer equality flag remains one. This is a subset-only parser regression result: 693 of the declared 970 sources remain unaudited, and no source record or database row was changed.
 
 Synthetic regressions cover repeated rows, project-section isolation, client-labelled rejection, invalid ranges, role validation, compact dates and numbered working-period forms. Existing employment, canonical, source-preservation and OCR regressions plus typecheck pass locally. Exact-head GitHub CI must pass again before this checkpoint is considered code-complete; live OCR, reviewed backfill, full-population audit and authenticated exact-deployment acceptance remain release blockers.
+
+## Continuation checkpoint: labelled join/left employment records
+
+Numbered employment records using `Company Name`, `Position Title`, `Date Join` and `Date Left` now remain bounded to employment history even when a nested project/assignment block appears between records. `Date Join` and `Date Joined` are accepted as equivalent explicit labels. A blank or dash-only `Date Left` is preserved as an unknown end rather than being converted to `Present` or filled from a project duration. Project-only copies of the same labels remain excluded.
+
+On the same private 277-source review subset, current extraction increased from 73 profiles / 285 employment rows to 74 profiles / 293 rows. Profiles without employment decreased from 204 to 203. Malformed, duplicate and invalid-range diagnostics remain zero; overlap review remains seven profiles and the possible client/employer equality flag remains one. Two of the recovered rows have an explicitly missing date endpoint; diagnostics treat those as incomplete evidence rather than invalid chronology. No source record or database row was changed, and 693 of the declared 970 sources remain unaudited.
+
+The labelled partial-date regression is now part of the mandatory Production Trust source-layout test group. Local tests and private-subset audit pass; exact-head GitHub CI is still required before this parser checkpoint is code-complete. The release remains NO_GO pending live OCR, reviewed backfill, full-population audit, and authenticated acceptance of the exact deployable artifact.

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { normalizeActualCandidateSchema } from '../lib/candidate360SchemaNormalize';
+import { employmentTimelineDiagnostics } from '../lib/candidate360Employment';
 const jobs = (raw_text: string) => normalizeActualCandidateSchema({raw_text}).enterpriseProfile.employmentTimeline;
 const table = jobs('Employment History Organization Designation Duration Example Systems Ltd. (SAP Partner) Sr. ERP Functional Consultant Aug/2014 – Aug/2024 Example Delivery (SAP Partner) ERP Functional Consultant (01/2008) – (08/2009) Example Services Customer Relationship Executive (12/2002) – (08/2005) Technical Skills Example Project SAP Consultant Jan 2000 – Jan 2001');
 assert.equal(table.length, 3);
@@ -30,4 +31,13 @@ const chronology = jobs('Employment History Sales Executive at Example Services,
 assert.equal(chronology.length, 2);
 assert.equal(chronology[0].start, 'January 2021');
 assert.equal(chronology[1].company, 'Example Bank');
+const missingLeftDate = jobs('Employment History 1. Company Name: Example Consulting Position Title: SAP Senior Consultant Date Join: July 2015 Date Left: - Work Description: Delivery. Projects/Assignments Involved Company: Example Client Project Duration: July 2015 - Present 2. Company Name: Example Systems Position Title: SAP Analyst Date Join: January 2014 Date Left: June 2015 Work Description: Support.');
+assert.equal(missingLeftDate.length, 2);
+assert.equal(missingLeftDate[0].company, 'Example Consulting');
+assert.equal(missingLeftDate[0].start, 'July 2015');
+assert.equal(missingLeftDate[0].end, '');
+assert.equal(missingLeftDate[0].current, false);
+assert.equal(missingLeftDate[1].company, 'Example Systems');
+assert.equal(employmentTimelineDiagnostics(missingLeftDate).invalidRanges, 0);
+assert.equal(jobs('Project History Company Name: Example Client Position Title: SAP Consultant Date joined: July 2015 Date left: -').length, 0);
 console.log('Employment table dates, role boundaries and spaced-date layouts: passed');
