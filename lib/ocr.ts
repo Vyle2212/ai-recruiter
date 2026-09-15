@@ -1,18 +1,7 @@
-import { ImageAnnotatorClient } from "@google-cloud/vision";
+import { googlePdfOcr } from './cvPdfOcr';
 
-const client = new ImageAnnotatorClient({
-  credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS || "{}"),
-});
-
-export async function extractTextFromPDF(buffer: Buffer) {
-  try {
-    const [result] = await client.documentTextDetection({
-      image: { content: buffer },
-    });
-
-    return result.fullTextAnnotation?.text || "";
-  } catch (err) {
-    console.error("OCR ERROR:", err);
-    return "";
-  }
+export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
+  const pdf = (await import('pdf-parse')).default;
+  const metadata = await pdf(buffer, { max: 1 });
+  return googlePdfOcr(buffer, metadata.numpages);
 }

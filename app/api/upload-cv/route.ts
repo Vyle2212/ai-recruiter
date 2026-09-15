@@ -1,5 +1,7 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
 import { parseCv } from "@/lib/cv-parser";
+import { CvSourceError } from "@/lib/cvPdfOcr";
+import type { CvSourceExtraction } from "@/lib/cvPdfExtraction";
 import { saveCandidate } from "@/lib/saveCandidate";
 import { enrichCandidateWithSapTaxonomy } from "@/lib/sapTalentTaxonomy";
 import {
@@ -16,6 +18,8 @@ type UploadResult = {
   ok: boolean;
   candidate?: any;
   error?: string;
+  errorCode?: string;
+  sourceExtraction?: CvSourceExtraction;
   rejected?: boolean;
   reason?: string;
   recordType?: string;
@@ -142,8 +146,13 @@ export async function POST(req: NextRequest) {
           recordType: "SAP_CV",
           reason: classification.reason,
           candidate: saved,
+          sourceExtraction: parsed.sourceExtraction,
         });
       } catch (error: any) {
+        if (error instanceof CvSourceError) {
+          results.push({ fileName, ok: false, recordType: "SOURCE_REVIEW_REQUIRED", errorCode: error.code, error: error.message, reason: error.message, signals: [error.code] });
+          continue;
+        }
         console.error(`Upload CV failed for ${fileName}:`, error);
 
         const message = error?.message || "Failed to parse/save CV.";
@@ -185,6 +194,5 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-
 
 

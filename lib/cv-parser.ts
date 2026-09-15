@@ -759,18 +759,15 @@ async function bufferToText(buffer: Buffer, fileName = "") {
     return extractDocxText(buffer);
   }
 
-  if (ext === "pdf") {
-    const mod: any = await import("pdf-parse");
-    const pdfParse = mod.default || mod;
-    const { createCvPdfRenderer } = await import("./pdfTextLayout");
-    const res = await pdfParse(buffer, { pagerender: createCvPdfRenderer() });
-    return res.text;
-  }
-
   return buffer.toString("utf8");
 }
 
-export async function parseCv(buffer: Buffer, fileName?: string) {
+export async function parseCv(buffer: Buffer, fileName?: string, options: import('./cvPdfExtraction').PdfExtractionOptions = {}) {
+  if (fileName?.toLowerCase().endsWith('.pdf')) {
+    const { extractCvPdf } = await import('./cvPdfExtraction');
+    const { text, sourceExtraction } = await extractCvPdf(buffer, options);
+    return { ...parseCandidateFromText(text, fileName), sourceExtraction };
+  }
   const text = await bufferToText(buffer, fileName || "");
-  return parseCandidateFromText(text, fileName);
+  return { ...parseCandidateFromText(text, fileName), sourceExtraction: {method: 'native' as const, pageCount: 0, reason: ''} };
 }

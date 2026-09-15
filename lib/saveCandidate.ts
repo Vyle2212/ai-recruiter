@@ -1587,7 +1587,8 @@ export async function saveCandidate(candidate: any) {
       recruiterNoiseDecision.action === "REVIEW"
         ? "Needs Review"
         : cleanCandidate.extraction_confidence || signals.extractionConfidence || null,
-    extraction_notes: cleanArray([...(signals.extractionWarnings || []), ...resumeQualityGate.warnings, ...resumeQualityGate.rejectionReasons, ...recruiterNoiseDecision.reasons]),
+    extraction_notes: cleanArray([...(signals.extractionWarnings || []), ...resumeQualityGate.warnings, ...resumeQualityGate.rejectionReasons, ...recruiterNoiseDecision.reasons,
+      ...(cleanCandidate.sourceExtraction?.method === "ocr" ? ["SOURCE_TEXT_RECOVERED_BY_DOCUMENT_OCR"] : [])]),
 
     raw_text: rawText,
     resume_text: rawText,
