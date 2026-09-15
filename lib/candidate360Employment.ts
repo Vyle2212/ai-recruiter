@@ -8,7 +8,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v36-career-statements";
+  "candidate-employment-v37-regional-headings";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -570,6 +570,9 @@ function compactEmploymentHeading(source: string): EnterpriseEmployment[] {
   const company = "[A-Z][A-Za-z0-9&.,'() -]{1,100}?";
   const corporate = "(?:Sdn\\.?\\s*Bhd\\.?|Inc\\.?|Ltd\\.?|Limited|Corporation|Consulting|Lawfirm)";
   const patterns = [
+    // Indonesian corporate prefix and role/date/employer pipe headings.
+    { re: new RegExp(`^(${role})\\s+(PT\\.?\\s+${company})\\s+${range}(?=\\s|$)`, 'i'), fields: [2,1,3,4] },
+    { re: new RegExp(`^((?:(?:Senior|Lead|Principal)\\s+)?SAP\\s+[A-Za-z0-9/&() -]{0,60}?(?:Consultant|Analyst|Engineer|Manager|Developer))\\s+${range}\\s+(${company})\\s*\\|`, 'i'), fields: [4,1,2,3] },
     { re: new RegExp(`^(${company}\\s+${corporate})\\s+(${role})\\s+\\(?${range}\\)?`, 'i'), fields: [1,2,3,4] },
     { re: new RegExp(`^(${role})\\s+(${company}\\s+${corporate})\\s+\\(?${range}\\)?`, 'i'), fields: [2,1,3,4] },
     { re: new RegExp(`^(${company})\\s*\\(${range}\\)\\s+(${role})(?=\\s|$)`, 'i'), fields: [1,4,2,3] },
@@ -580,6 +583,7 @@ function compactEmploymentHeading(source: string): EnterpriseEmployment[] {
     for (const {re, fields} of patterns) {
       const match = section.match(re);
       if (!match || /\b(?:client|customer|project|summary|expertise)\b/i.test(match[fields[0]])) continue;
+      if (!supportedRange(match[fields[2]], match[fields[3]], /^(present|current|now)$/i.test(match[fields[3]]))) continue;
       const parsed = entry({company: match[fields[0]], title: match[fields[1]], start: match[fields[2]], end: match[fields[3]],
         current: /^(present|current|now)$/i.test(match[fields[3]]), sourceRef: `resume.compactEmploymentHeading.${index + 1}`,
         sourceType: 'parsed_resume', confidence: 94, excerpt: match[0]});
