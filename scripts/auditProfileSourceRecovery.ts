@@ -30,6 +30,12 @@ if (arg('--input')) {
   }
 }
 const review: {token: string; reasons: string[]}[] = [];
+const sourceExport: {token: string; reasons: string[]; source: Record<string, unknown>}[] = [];
+// Opt-in diagnostic export. Never include unrelated top-level database fields.
+const sourceFields = ['id', 'name', 'full_name', 'current_title', 'title', 'current_company', 'company',
+  'years_experience', 'experience', 'employment_history', 'professional_history', 'education',
+  'projects', 'project_experience', 'raw_text', 'resume_text', 'cv_text', 'raw_cv'];
+if (arg('--review-sources') && arg('--review-sources') === arg('--output')) throw new Error('Source export and audit output must use different paths');
 let sourceTextPresent = 0, sourceReferencePresent = 0, employmentProfiles = 0, employmentRecords = 0, educationProfiles = 0;
 const completeness = {company: 0, title: 0, dateRange: 0, currentEmployerProfiles: 0, projects: 0, projectsWithoutType: 0, paginationLeaks: 0};
 for (const row of rows) {
@@ -55,10 +61,20 @@ for (const row of rows) {
   if (/\b(?:EXPERINCE|EMPLOYMENT HISTORY|WORKING EXPERIENCE|PROFESSIONAL EXPERIENCE)\b/i.test(text) && !profile.employmentTimeline.length) reasons.push('EMPLOYMENT_SECTION_REQUIRES_REVIEW');
   if (/\b(?:EDUCATION|ACADEMIC QUALIFICATIONS)\b/i.test(text) && !profile.education.length) reasons.push('EDUCATION_SECTION_REQUIRES_REVIEW');
   if (profile.employmentTimeline.some(x => !x.title || !x.start || !x.end)) reasons.push('INCOMPLETE_EMPLOYMENT_FIELDS');
-  if (reasons.length) review.push({token: crypto.createHash('sha256').update(String(row.id || rows.indexOf(row))).digest('hex').slice(0,12), reasons});
+  const token = crypto.createHash('sha256').update(String(row.id || rows.indexOf(row))).digest('hex').slice(0,12);
+  if (reasons.length) review.push({token, reasons});
+  if (arg('--review-sources') && reasons.some(reason => ['EMPLOYMENT_SECTION_REQUIRES_REVIEW', 'INCOMPLETE_EMPLOYMENT_FIELDS'].includes(reason))) {
+    sourceExport.push({token, reasons, source: Object.fromEntries(sourceFields.filter(key => row[key] !== undefined).map(key => [key, row[key]]))});
+  }
 }
 const report = {mode:'READ_ONLY', version: CANDIDATE_CANONICAL_VERSION, completeness, profilesWithoutEmployment: rows.length - employmentProfiles, population: rows.length, sourceTextPresent, sourceReferencePresent, employmentProfiles, employmentRecords, educationProfiles, review,
   limits:['A source reference does not prove the original file is accessible.', 'Section detection flags possible omissions; it does not prove extraction completeness.', 'No database records changed. Production UI and scoring distribution remain unverified.']};
+if (arg('--review-sources')) {
+  fs.writeFileSync(arg('--review-sources')!, JSON.stringify({mode: 'READ_ONLY', version: CANDIDATE_CANONICAL_VERSION,
+    population: rows.length, count: sourceExport.length, selection: 'employment review or incomplete employment',
+    samples: sourceExport}, null, 2), 'utf8');
+  console.log(`Exported ${sourceExport.length} employment review sources to ${arg('--review-sources')}`);
+}
 const output = JSON.stringify(report,null,2);
 if (arg('--output')) fs.writeFileSync(arg('--output')!, output, 'utf8'); else console.log(output);
 
