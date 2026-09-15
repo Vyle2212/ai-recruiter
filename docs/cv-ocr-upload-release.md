@@ -32,3 +32,11 @@ These tests do not prove that Google OCR returns identical text to the local OCR
 4. Complete authenticated acceptance against the exact deployed commit before production promotion.
 
 No live Google OCR call, database mutation, or production promotion was performed in this session. OCR credentials were absent locally; connected Supabase/Vercel plugins still exposed no callable runtime operations. Release remains NO_GO until the outstanding gates are satisfied.
+
+## Continuation checkpoint: CI coverage
+
+The precision feature branch previously triggered only the immutable-action-reference workflow. Production Trust CI now includes `codex/precision-*` pushes and pull requests targeting `codex/profile-source-recovery`, retaining all existing security, dependency, secret-history, formatting, build and regression gates. Six source-layout/OCR tests are included in its security-and-regression job.
+
+Local route-policy coverage found no missing policies across 78 route files and 95 exported methods. The authorization matrix passed, and the client-bundle scan inspected 297 files with zero forbidden-pattern hits. These local checks are not authenticated production acceptance.
+
+Next continuation: inspect the full Production Trust CI run on the latest PR head and fix any failed gates without weakening them. Keep the draft release status until complete data audit and exact-deployment acceptance evidence exist. Continue repository and CI work through the connected GitHub app; runtime configuration and data writes remain blocked by the unavailable runtime operations described above.
