@@ -7,7 +7,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v24-prose-history-headings";
+  "candidate-employment-v25-employment-title-boundaries";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -508,7 +508,7 @@ function tabularResumeEmployment(source: string): EnterpriseEmployment[] {
     const company = clientAt >= 0 ? body.slice(0, clientAt) : roleAt > 0 ? body.slice(0, roleAt) : "";
     if (!company) return [];
     // A role-column narrative is retained as evidence, never invented as a title.
-    const roleText = clientAt < 0 ? body.slice(roleAt).trim() : body.match(/\b((?:SAP|S4\/HANA)\s+[^.]{2,100}?(?:Consultant(?:\s+and\s+(?:Team\s+)?Lead)?|Team\s+Lead))\b/i)?.[1] || "";
+    const roleText = clientAt < 0 ? body.slice(roleAt).trim().split(/\s+for\s+(?:Global\s+)?(?:Implementation|SAP Implementation|production support)\b/i)[0] : body.match(/\b((?:SAP|S4\/HANA)\s+[^.]{2,100}?(?:Consultant(?:\s+and\s+(?:Team\s+)?Lead)?|Team\s+Lead))\b/i)?.[1] || "";
     const parsed = entry({company, title: roleText,
       start: expand(row[1]), end: expand(row[2]), current: /^(Present|Current)$/i.test(row[2]),
       allowGroundedEmployerOnly: true, sourceRef: `resume.employmentTable.${index + 1}`,

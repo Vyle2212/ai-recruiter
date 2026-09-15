@@ -169,14 +169,14 @@ export default function CanonicalProfileOverview({
               </div>
             ) : overview.career.employmentCount ? (
               <div>
-                <dt className={label}>Verified employment history</dt>
+                <dt className={label}>Employment history from profile</dt>
                 <dd className={value}>
                   {years(overview.career.totalExperienceYears)}
                 </dd>
               </div>
             ) : (
               <div>
-                <dt className={label}>Verified employment history</dt>
+                <dt className={label}>Employment history from profile</dt>
                 <dd className={value}>Not provided</dd>
               </div>
             )}

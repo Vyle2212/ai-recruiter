@@ -44,3 +44,7 @@ assert.equal(schoolFirst.length, 1);
 assert.equal(schoolFirst[0].institution, 'Example City University');
 assert.equal(schoolFirst[0].startYear, '2015');
 console.log('School-first boundary: passed');
+const titleBoundaries = normalizeActualCandidateSchema({raw_text: 'Employment History Date Company Name Role Nov 08 – Jul 09 Example Energy SAP FICO Functional Consultant for Global Implementation in multiple countries. Sep 99 – Oct 05 Example Paper SAP COPC Functional Consultant and Team Lead for SAP Implementation project in multiple mills. EDUCATION'}).enterpriseProfile.employmentTimeline;
+assert.equal(titleBoundaries[0].title, 'SAP FICO Functional Consultant');
+assert.equal(titleBoundaries[1].title, 'SAP COPC Functional Consultant and Team Lead');
+console.log('Employment title/responsibility separation: passed');
