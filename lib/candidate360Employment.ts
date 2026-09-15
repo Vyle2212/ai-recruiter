@@ -8,7 +8,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v31-explicit-statements";
+  "candidate-employment-v32-table-date-layouts";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -516,10 +516,10 @@ function tabularResumeEmployment(source: string): EnterpriseEmployment[] {
 }
 
 function organizationDesignationEmployment(source: string): EnterpriseEmployment[] {
-  const section = source.match(/\b(?:Employment History\s+)?Organization\s+Designation\s+Duration\s+([\s\S]*?)(?=\b(?:PROJECT\s*#|EDUCATION|QUALIFICATIONS)\b|$)/i)?.[1];
+  const section = source.match(/\b(?:Employment History\s+)?Organization\s+Designation\s+Duration\s+([\s\S]*?)(?=\b(?:PROJECT\s*#|PROJECT EXPERIENCE|SAP EXPERIENCE|TECHNICAL SKILLS?|TECHNICAL SKILL SET|TRAININGS?|EDUCATION|QUALIFICATIONS)\b|$)/i)?.[1];
   if (!section) return [];
-  const date = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+(?:19|20)\\d{2}";
-  const ranges = [...section.matchAll(new RegExp(`(${date})\\s*(?:to|[-–—])\\s*(${date}|Present|Current|Now)\\b`, "gi"))];
+  const date = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[ /]+(?:19|20)\\d{2}";
+  const ranges = [...section.matchAll(new RegExp(`\\(?(${date})\\)?\\s*(?:to|[-–—])\\s*\\(?(${date}|Present|Current|Now)\\)?(?=\\s|[.;]|$)`, "gi"))];
   const result: EnterpriseEmployment[] = [];
   let offset = 0;
   for (const [index, range] of ranges.entries()) {
@@ -527,10 +527,12 @@ function organizationDesignationEmployment(source: string): EnterpriseEmployment
     // A full stop after a completed row ends this compact table. Do not
     // continue into the subsequent project narrative.
     if (prefix.startsWith('.')) break;
-    const boundary = prefix.search(/\b(?:SAP\s|Warehouse\s)/i);
+    // Match the role suffix, not SAP Partner in a parenthesized employer name.
+    const role = prefix.match(/\b((?:(?:APAC|Global)\s+)?SAP\s+(?!Partner\b)[^.;]{1,110}|Warehouse\s+[^.;]{1,100}|(?:Sr\.|Senior|Junior)\s+(?:Functional|ERP|Business)\s+[^;]{1,100}|(?:Customer Relationship|Client Care|Business)\s+(?:Executive|Analyst)|ERP Functional Consultant|Branch Manager|Executive\s*-\s*Accounts|Audit Assistant|Accountant|Consultant)$/i);
+    const boundary = role?.index ?? -1;
     if (boundary < 1) break;
     const parsed = entry({company: prefix.slice(0, boundary), title: prefix.slice(boundary),
-      start: range[1], end: range[2], current: /present|current|now/i.test(range[2]),
+      start: range[1].replace('/', ' '), end: range[2].replace('/', ' '), current: /^(present|current|now)$/i.test(range[2]),
       sourceRef: `resume.organizationDesignationTable.${index + 1}`, sourceType: 'parsed_resume',
       confidence: 96, excerpt: `${prefix} ${range[0]}`});
     if (!parsed) break;
@@ -698,6 +700,33 @@ function explicitEmploymentStatements(source: string): EnterpriseEmployment[] {
   return output;
 }
 
+function spacedDateEmployment(source: string): EnterpriseEmployment[] {
+  const section = source.match(/\bEmployment History\s*:?\s*([\s\S]*?)(?=\b(?:Education|Project Experience|Project History|Certifications|Technical Skills)\b|$)/i)?.[1];
+  if (!section) return [];
+  // Repair only known date words, locally inside employment. Never join arbitrary
+  // spaced words or identifiers in the source document.
+  let repaired = section;
+  for (const word of ['January','February','March','April','May','June','July','August','September','October','November','December','Present','Current']) {
+    repaired = repaired.replace(new RegExp(`\\b${[...word].join('\\s+')}\\b`, 'gi'), word);
+  }
+  repaired = repaired.replace(/\b([12])\s*([09])\s*(\d)\s*(\d)\b/g, '$1$2$3$4');
+  const month = '(?:January|February|March|April|May|June|July|August|September|October|November|December)';
+  const date = `${month}\\s+(?:19|20)\\d{2}`;
+  const role = '(?:SAP\\s+[^.!?;]{1,65}?(?:Consultant|Analyst|Engineer|Lead)|Inside Sales Representative|Sales Development Associate|Sales Executive|Telesales Representative|Freelancer(?:\\s*\\([^)]{1,40}\\))?)';
+  const pattern = new RegExp(`\\b(${role})\\s+at\\s+([^;!?]{2,150}?)\\s+(${date})\\s*[-–—]\\s*(${date}|Present|Current)(?=\\s|$)`, 'gi');
+  return [...repaired.matchAll(pattern)].flatMap((match, index) => {
+    if (/\b(?:client|customer|project|responsibilities)\b/i.test(match[2])) return [];
+    const current = /^(Present|Current)$/i.test(match[4]);
+    if (!supportedRange(match[3], match[4], current)) return [];
+    // Only recognize the explicit trailing city cell used by these layouts.
+    const location = match[2].match(/,\s*(Kuala Lumpur|Petaling Jaya|Singapore|Jakarta|Bangkok|Ho Chi Minh City)$/i);
+    const company = location ? match[2].slice(0, location.index).trim() : match[2];
+    const parsed = entry({company, location: location?.[1], title: match[1], start: match[3], end: match[4], current,
+      sourceRef: `resume.spacedDateEmployment.${index + 1}`, sourceType: 'parsed_resume', confidence: 94, excerpt: match[0]});
+    return parsed ? [parsed] : [];
+  });
+}
+
 function resumeEmployment(resumeText: string) {
   const output: EnterpriseEmployment[] = [];
   const source = resumeText
@@ -708,7 +737,7 @@ function resumeEmployment(resumeText: string) {
     })
     .replace(/[\r\n]+/g, " ")
     .replace(/\s+/g, " ");
-  output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source), ...labelledEmployerHistory(source), ...explicitHeadingVariants(source), ...orderedLabelEmployment(source), ...explicitEmploymentStatements(source));
+  output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source), ...labelledEmployerHistory(source), ...explicitHeadingVariants(source), ...orderedLabelEmployment(source), ...explicitEmploymentStatements(source), ...spacedDateEmployment(source));
   const monthYear =
     "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[a-z]*[’']?\\s*(?:19|20)\\d{2}";
   const explicitCompanyPositionDate = new RegExp(
