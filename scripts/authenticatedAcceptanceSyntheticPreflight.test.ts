@@ -19,7 +19,7 @@ assert.ok(valid.canonical.projectRecords >= 1);
 assert.equal(valid.canonical.currentEmploymentRecords, 1);
 assert.ok((valid.canonical.totalCareerYears || 0) >= 7);
 
-assert.equal(ACCEPTANCE_SYNTHETIC_FIXTURE_VERSION, "ptf1c2a-candidate-v1");
+assert.equal(ACCEPTANCE_SYNTHETIC_FIXTURE_VERSION, "ptf1c2a-candidate-v2");
 
 for (const mutation of [
   { name: "Real Person" },
@@ -42,3 +42,12 @@ assert.doesNotMatch(
 assert.match(serialized, /acceptance\.invalid/);
 
 console.log("Authenticated acceptance synthetic candidate tests passed.");
+
+// The selected database schema stores these columns as TEXT, not JSONB.
+for (const field of ["experience", "education", "extraction_confidence", "confidence"] as const) {
+  assert.equal(typeof fixture[field], "string", field);
+}
+assert.equal(JSON.parse(fixture.experience).length, 2);
+const databaseRoundTrip = JSON.parse(JSON.stringify(fixture));
+assert.equal(validateAcceptanceSyntheticCandidate(databaseRoundTrip).valid, true);
+assert.equal(validateAcceptanceSyntheticCandidate({...fixture, experience: "[]"}).valid, false);

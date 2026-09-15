@@ -65,19 +65,19 @@ assert.doesNotMatch(
   /passwordReturned:\s*true|tokenReturned:\s*true/,
 );
 
-const previewLoginSource = readFileSync(
+const loginSource = readFileSync(
   "app/auth/login/page.tsx",
   "utf8",
 );
 
 assert.match(
-  previewLoginSource,
-  /StagingSignInPreviewForm/,
+  loginSource,
+  /StagingRuntimeSignInForm/,
 );
 
 assert.doesNotMatch(
-  previewLoginSource,
-  /StagingRuntimeSignInForm|stagingRuntimeSignInAction/,
+  loginSource,
+  /StagingSignInPreviewForm|previewStagingSignInAction/,
 );
 
 console.log("stagingAuthRuntimeUi.test.ts passed");

@@ -1,3 +1,4 @@
+import { acceptanceAuthConfigured } from "./lib/acceptanceAuthConfiguration";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
@@ -9,6 +10,17 @@ import {
 } from "./utils/supabase/proxy";
 
 export async function proxy(request: NextRequest) {
+  if (
+    process.env.APP_ENV === "acceptance" &&
+    !acceptanceAuthConfigured() &&
+    (shouldProtectPortal(request.nextUrl.pathname) ||
+      request.nextUrl.pathname.startsWith("/api/recruiter/"))
+  ) {
+    return new NextResponse("Acceptance authentication is not configured.", {
+      status: 503,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
   if (request.nextUrl.pathname.startsWith("/api/recruiter/")) {
     return updateRecruiterApiSession(request);
   }
@@ -17,10 +29,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  /*
-   * The real route guard is staging-only.
-   * Production authentication remains blocked.
-   */
+  if (process.env.APP_ENV === "acceptance") {
+    return updateStagingSession(request);
+  }
+
+  // Preserve the existing staging approval gate for other environments.
   if (!isStagingPortalGuardEnabled()) {
     return NextResponse.next();
   }

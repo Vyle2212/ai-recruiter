@@ -1,7 +1,7 @@
 import { normalizeActualCandidateSchema } from "./candidate360SchemaNormalize";
 import { isDeepStrictEqual } from "node:util";
 
-export const ACCEPTANCE_SYNTHETIC_FIXTURE_VERSION = "ptf1c2a-candidate-v1";
+export const ACCEPTANCE_SYNTHETIC_FIXTURE_VERSION = "ptf1c2a-candidate-v2";
 export const ACCEPTANCE_SYNTHETIC_CANDIDATE_ID =
   "a11ce000-0000-4000-8000-00000000012a";
 export const ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER = "PTF Synthetic Tester";
@@ -42,7 +42,7 @@ export function acceptanceSyntheticCandidateRecord() {
     secondary_modules: ["FI", "CO"],
     skills: ["FICO", "FI", "CO"],
     sap_modules: ["FICO", "FI", "CO"],
-    experience: [
+    experience: JSON.stringify([
       {
         id: "ptf-current-employment",
         company: "PTF Synthetic Consulting Ltd",
@@ -63,7 +63,7 @@ export function acceptanceSyntheticCandidateRecord() {
         location: "Malaysia",
         responsibilities: ["Supported SAP FI and CO operations."],
       },
-    ],
+    ]),
     resume_text: [
       "PROFESSIONAL EXPERIENCE",
       "PTF Synthetic Consulting Ltd | SAP FICO Consultant | January 2022 - Present",
@@ -72,13 +72,13 @@ export function acceptanceSyntheticCandidateRecord() {
       "Project: PTF Synthetic S/4HANA Finance Implementation Employer: PTF Synthetic Consulting Ltd Client: PTF Synthetic Manufacturing Client Duration: January 2023 - December 2023 Role: SAP FICO Consultant Responsibilities: Implemented SAP S/4HANA FICO design, configuration, testing, go-live and hypercare.",
     ].join("\n"),
     raw_text: "",
-    education: [],
+    education: "[]",
     status: "ACTIVE",
     implementation_project_count: 1,
     s4hana_project_count: 1,
-    extraction_confidence: 1,
+    extraction_confidence: "1",
     profile_quality_score: 100,
-    confidence: 1,
+    confidence: "1",
   };
 }
 

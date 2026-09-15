@@ -20,19 +20,19 @@ import {
 
 import { StagingRuntimeAuthResultPanel } from "./StagingRuntimeAuthResultPanel";
 
-const card =
-  "rounded-2xl border border-slate-800 bg-[#0B0F16] p-6";
+const card = "rounded-2xl border border-slate-800 bg-[#0B0F16] p-6";
 
-const input =
-  "mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 p-3";
+const input = "mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 p-3";
 
 const button =
   "mt-5 w-full rounded-lg bg-cyan-300 px-4 py-3 font-semibold text-slate-950 disabled:opacity-50";
 
 export function StagingRuntimeSignInForm({
+  acceptance = false,
   redirectOnSuccess = false,
   requestedNext,
 }: {
+  acceptance?: boolean;
   redirectOnSuccess?: boolean;
   requestedNext?: string | null;
 } = {}) {
@@ -59,9 +59,9 @@ export function StagingRuntimeSignInForm({
   return (
     <section className={card}>
       <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-100">
-        Staging runtime only. Credentials are submitted to the
-        approved Supabase staging project only when the execution
-        gate is fully approved.
+        {acceptance
+          ? "Sign in with your Acceptance test account."
+          : "Staging runtime only. Credentials are submitted to the approved Supabase staging project only when the execution gate is fully approved."}
       </div>
 
       <form action={action} ref={formRef}>
@@ -88,7 +88,11 @@ export function StagingRuntimeSignInForm({
         </label>
 
         <button className={button} disabled={pending}>
-          {pending ? "Signing inâ€¦" : "Sign in to staging"}
+          {pending
+            ? "Signing inâ€¦"
+            : acceptance
+              ? "Sign in to acceptance"
+              : "Sign in to staging"}
         </button>
       </form>
 
@@ -122,11 +126,7 @@ function DiagnosticButton({
   action,
 }: {
   label: string;
-  operation:
-    | "get_session"
-    | "get_user"
-    | "get_profile"
-    | "refresh_session";
+  operation: "get_session" | "get_user" | "get_profile" | "refresh_session";
   action: (
     previousState: StagingAuthRuntimeActionResult | null,
     formData: FormData,
@@ -140,10 +140,7 @@ function DiagnosticButton({
   return (
     <article className={card}>
       <form action={formAction}>
-        <button
-          className={button + " mt-0"}
-          disabled={pending}
-        >
+        <button className={button + " mt-0"} disabled={pending}>
           {pending ? "Runningâ€¦" : label}
         </button>
       </form>
@@ -156,13 +153,11 @@ function DiagnosticButton({
 export function StagingRuntimeAuthDiagnostics() {
   return (
     <section>
-      <h2 className="text-xl font-semibold">
-        Staging session diagnostics
-      </h2>
+      <h2 className="text-xl font-semibold">Staging session diagnostics</h2>
 
       <p className="mt-2 text-sm text-slate-400">
-        Results are sanitized. Tokens, passwords, full emails and
-        stack traces are never returned to the client.
+        Results are sanitized. Tokens, passwords, full emails and stack traces
+        are never returned to the client.
       </p>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
