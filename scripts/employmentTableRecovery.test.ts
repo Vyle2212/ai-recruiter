@@ -48,3 +48,8 @@ const titleBoundaries = normalizeActualCandidateSchema({raw_text: 'Employment Hi
 assert.equal(titleBoundaries[0].title, 'SAP FICO Functional Consultant');
 assert.equal(titleBoundaries[1].title, 'SAP COPC Functional Consultant and Team Lead');
 console.log('Employment title/responsibility separation: passed');
+const assignments = normalizeActualCandidateSchema({raw_text: 'RELEVANT PROJECT EXPERIENCE Company client: Example Customer Company: Example Consultancy Duration: Feb 2021 – Mar 2022 Position: Finance Team Responsibilities (Electronic bank statement implementation) Configure the system and conduct testing. ' + 'Gather business requirements and document configuration. '.repeat(30) + 'EDUCATION'}).enterpriseProfile;
+assert.equal(assignments.projects.length, 1);
+assert.equal(assignments.projects[0].client, 'Example Customer');
+assert.equal(assignments.employmentTimeline.length, 0);
+console.log('Intact labelled assignment boundary: passed');

@@ -18,13 +18,13 @@ import {
 
 export type CandidateSchemaRecord = Record<string, unknown>;
 export const CANDIDATE_CANONICAL_VERSION =
-  "candidate-canonical-v46-employment-title-boundaries";
+  "candidate-canonical-v47-labelled-assignment-blocks";
 export const CANDIDATE_DETAIL_PROJECTION_VERSION =
   "candidate-detail-v24-exact-project-identity";
 export const CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION =
   CANDIDATE_EMPLOYMENT_TIMELINE_VERSION;
 export const CANDIDATE_PROJECT_EXTRACTOR_VERSION =
-  "candidate-projects-v22-exact-project-identity";
+  "candidate-projects-v23-labelled-assignment-blocks";
 
 type NormalizedCandidateProjection = ReturnType<
   typeof normalizeActualCandidateSchemaFresh
@@ -2657,12 +2657,19 @@ function narrativeProjects(
       groupedSegments[groupedSegments.length - 1] += ` ${fragment}`;
     else groupedSegments.push(fragment);
   }
+  // Keep explicitly labelled assignment blocks intact. Sentence splitting can
+  // detach their delivery evidence from the client/role/date header.
+  const labelledAssignments = [...resumeText.matchAll(/\bCompany\s+client\s*:\s*[\s\S]*?(?=\bCompany\s+client\s*:|$)/gi)]
+    .map(match => clean(match[0].split(/\bEDUCATION(?: AND PERSONAL DETAIL)?\b/i)[0]))
+    .filter(block => /\bDuration\s*:/i.test(block) && /\bPosition\s*:/i.test(block));
+  groupedSegments.push(...labelledAssignments);
+  const hasDelivery = (value: string) => delivery.test(value) || (labelledAssignments.includes(value) && /\b(?:implement(?:ing|ation)?|configur(?:e|ing|ation)|testing|go.?live|support)\b/i.test(value));
   const segments = groupedSegments.filter((value) => {
     if (
       value.length < 24 ||
-      value.length > 1200 ||
+      (value.length > 1200 && !labelledAssignments.includes(value)) ||
       !lifecycle.test(value) ||
-      !delivery.test(value) ||
+      !hasDelivery(value) ||
       excludedSection.test(value)
     )
       return false;
@@ -2675,7 +2682,7 @@ function narrativeProjects(
   const unique = [
     ...new Map(segments.map((value) => [value.toLowerCase(), value])).values(),
   ]
-    .filter((excerpt) => lifecycle.test(excerpt) && delivery.test(excerpt))
+    .filter((excerpt) => lifecycle.test(excerpt) && hasDelivery(excerpt))
     .slice(0, 40);
   const stableAssignmentId = (value: string) => {
     let hash = 2166136261;
