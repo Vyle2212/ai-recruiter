@@ -158,8 +158,8 @@ const assignments = [project(),project({id:'project-last',start:'Jan 2023',end:'
 const estimated = estimateEmploymentFromProjects([job()],assignments,now)[0];
 assert.deepEqual([estimated.start,estimated.end],['','']);
 assert.deepEqual(estimated.estimatedTenure, {start:'Jan 2020',end:'Jan 2024',projectIds:['project-first','project-last'],basis:'project_envelope'});
-assert.match(formatProjectTenureEstimate(estimated.estimatedTenure),/estimated.*gaps/);
-assert.equal(supportedSapYears([estimated],assignments,now),2,'four-year envelope does not count a two-year project gap');
+assert.match(formatProjectTenureEstimate(estimated.estimatedTenure),/estimated.*including time between projects/);
+assert.equal(supportedSapYears([estimated],assignments,now),4,'same-employer SAP period includes time between projects');
 assert.equal(estimateEmploymentFromProjects([job({start:'Jan 2019',end:'Jan 2025'})],assignments,now)[0].estimatedTenure,undefined,'exact employment tenure takes priority');
 assert.equal(estimateEmploymentFromProjects([job()], [project({employer:'Other Ltd',client:'Example Systems Ltd'})],now)[0].estimatedTenure,undefined,'client matching is not employer ownership');
 assert.equal(estimateEmploymentFromProjects([job()], [project({employer:''})],now)[0].estimatedTenure,undefined,'role similarity is not ownership');
@@ -189,3 +189,70 @@ assert.equal(supportedSapYears([job({title:'SAP Sales and Distribution Consultan
 import { ownedProjectRangesFromResume } from '../lib/projectEmploymentEstimate';
 assert.equal(ownedProjectRangesFromResume([job()], 'Example Systems Ltd SAP Consultant Project Involvement: Undated work. Other Ltd SAP Consultant Project Involvement: SAP Upgrade 01/20 - 01/21').length,0,'next employer range cannot fill an undated assignment');
 assert.equal(ownedProjectRangesFromResume([job()], 'Example Systems Ltd SAP Consultant Project Involvement: Responsibilities delivered support 01/20 - 01/21').length,0,'dates buried in duties are not a project heading');
+
+assert.equal(
+  supportedSapYears([], assignments, now),
+  4,
+  "explicit same-employer projects establish a continuous SAP period",
+);
+assert.equal(
+  supportedSapYears(
+    [],
+    [
+      assignments[0],
+      project({
+        id: "different-employer",
+        employer: "Other Employer Ltd",
+        start: "Jan 2023",
+        end: "Jan 2024",
+      }),
+    ],
+    now,
+  ),
+  2,
+  "do not bridge the gap between different employers",
+);
+assert.equal(
+  supportedSapYears(
+    [],
+    assignments.map((p) => ({ ...p, employer: "", client: "Same Client" })),
+    now,
+  ),
+  2,
+  "same client does not establish a common employer",
+);
+assert.equal(
+  supportedSapYears(
+    [
+      job({ id: "first-spell", start: "Jan 2020", end: "Jan 2021" }),
+      job({ id: "return-spell", start: "Jan 2023", end: "Jan 2024" }),
+    ],
+    assignments,
+    now,
+  ),
+  2,
+  "explicitly separate employment spells are not bridged",
+);
+assert.equal(
+  supportedSapYears(
+    [
+      job({
+        id: "accounting",
+        title: "Accountant",
+        start: "Jan 2015",
+        end: "Jan 2019",
+      }),
+      job({ id: "sap-role", start: "Jan 2020", end: "Jan 2024" }),
+    ],
+    assignments,
+    now,
+  ),
+  4,
+  "retain non-SAP role exclusion and overlap deduplication",
+);
+
+assert.equal(supportedSapYears([job({title:'Vendor & SAP Material Management (Supply Chain Management)',start:'Jan 2020',end:'Jan 2021'})],[],now),null,'operational SAP usage is not a delivery role');
+assert.equal(supportedSapYears([job({title:'FI Consultant',start:'Jan 2020',end:'Jan 2021'})],[],now),1,'explicit SAP module consulting qualifies without repeating SAP in title');
+
+assert.equal(supportedSapYears([job({title:'Senior Associate - SAP MM',start:'Jan 2020',end:'Jan 2021'})],[],now),1,'SAP associate delivery remains eligible');
+assert.equal(supportedSapYears([job({title:'SAP Sales and Distribution Consultant'})],assignments,now),4,'SAP SD consulting may own a continuous project period');

@@ -1,5 +1,7 @@
 # CV upload OCR integration
 
+> Current checkpoint (2026-09-16): [full 970-source audit and reviewed backfill](precision-full-population-audit-20260916.md). All 970 stored sources have now been audited automatically; original-file verification is a separate gate. The recruiter authorized runtime backfill and continuous same-employer SAP periods, including time between projects. The nine-source backfill is prepared but was blocked by automatic approval review; no database write occurred. Historical scope/count/policy statements below do not override this checkpoint.
+
 ## Behavior
 
 PDF CV uploads use positioned native extraction first. OCR is requested for very short/empty text, repeated replacement characters, or an explicitly labelled employment section for which the canonical parser finds no employment. The last condition is a review signal, not proof that a PDF is corrupted; unsupported layouts can trigger it too.

@@ -11,7 +11,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v74-owned-fields-batch";
+  "candidate-employment-v75-continuous-sap-tenure";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,

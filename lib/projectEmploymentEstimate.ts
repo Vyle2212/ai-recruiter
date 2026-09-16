@@ -87,17 +87,25 @@ const sap =
   /\bsap\b|\babap\b|\bhana\b|\b(?:s\/?4\s*hana|s4hana|successfactors|fico)\b/i;
 const nonDelivery =
   /\b(?:accountant|bookkeeper|sales(?:person|man|woman|\s+(?:executive|representative|manager))?|end[ -]?user|data\s+entry)\b/i;
-function sapDelivery(role: string, modules: readonly string[], scope = "") {
-  // Operational use of SAP and general sales/accounting work are not SAP delivery.
-  if (
+function operationalRole(role: string) {
+  return (
     nonDelivery.test(role) &&
     !/\bsap\b.*\bsales\s*(?:and|&|\/)\s*distribution\b.*\bconsultant\b/i.test(
       role,
     )
-  )
-    return false;
+  );
+}
+function sapDelivery(role: string, modules: readonly string[], scope = "") {
+  // Operational use of SAP and general sales/accounting work are not SAP delivery.
+  if (operationalRole(role)) return false;
   return (
-    sap.test(role) ||
+    (sap.test(role) &&
+      /\b(?:consultant|developer|analyst|architect|engineer|lead|manager|specialist|administrator|associate|advisor)\b/i.test(
+        role,
+      )) ||
+    /\b(?:FI(?:\/CO)?|CO|MM|SD|PP|PS|BW|HCM|BASIS|BTP)\s+(?:(?:functional|technical)\s+)?consultant\b/i.test(
+      role,
+    ) ||
     ((modules.some((m) =>
       /^(?:SAP\b|FI(?:CO)?$|CO$|MM$|SD$|PP$|PS$|BW$|ABAP$|HCM$|SuccessFactors$|Ariba$|TRM$|BASIS$|BTP$)/i.test(
         m.trim(),
@@ -110,7 +118,9 @@ function sapDelivery(role: string, modules: readonly string[], scope = "") {
   );
 }
 
-/** Actual SAP-supported interval union. Project envelope gaps never become SAP experience. */
+/** Recruiter policy: count a continuous SAP period between the first and last
+ * assignment at the same employer, including internal work between projects.
+ * Known separate employment spells and non-SAP roles are not bridged. */
 export function supportedSapYears(
   timeline: readonly EnterpriseEmployment[],
   projects: readonly EnterpriseProject[],
@@ -122,14 +132,69 @@ export function supportedSapYears(
   const assignments = projects.filter(
     (p) => sapDelivery(p.role, p.modules, p.name) && validRange(p, now),
   );
-  return calculateTotalCareerYears([...jobs, ...assignments], now);
+  const groups = new Map<string, EnterpriseProject[]>();
+  for (const project of assignments) {
+    const employer = organization(project.employer || "");
+    const employerJobs = employer
+      ? timeline.filter((j) => organization(j.company) === employer)
+      : [];
+    let group: string | null = null;
+    if (employer && !employerJobs.length) group = `employer:${employer}`;
+    else if (
+      employerJobs.length === 1 &&
+      !operationalRole(employerJobs[0].title)
+    ) {
+      const job = employerJobs[0];
+      const start = careerMonthIndex(job.start, false, now);
+      const end = careerMonthIndex(job.end, job.current, now);
+      if (
+        (!job.start || start !== null) &&
+        (!job.end || end !== null) &&
+        (start === null ||
+          careerMonthIndex(project.start, false, now)! >= start) &&
+        (end === null || careerMonthIndex(project.end, false, now)! <= end)
+      )
+        group = `employment:${job.id}`;
+    } else if (employerJobs.length > 1) {
+      const owners = employerJobs.filter(
+        (job) =>
+          !operationalRole(job.title) &&
+          validRange(job, now) &&
+          careerMonthIndex(project.start, false, now)! >=
+            careerMonthIndex(job.start, false, now)! &&
+          careerMonthIndex(project.end, false, now)! <=
+            careerMonthIndex(job.end, job.current, now)!,
+      );
+      if (owners.length === 1) group = `employment:${owners[0].id}`;
+    }
+    // An unknown employer, ambiguous role or out-of-tenure project keeps only
+    // its own range. Never bridge companies by client name or title similarity.
+    const key = group ?? `assignment:${groups.size}:${project.id}`;
+    groups.set(key, [...(groups.get(key) || []), project]);
+  }
+  const continuousPeriods = [...groups.values()].map((group) => {
+    const first = group.reduce((a, b) =>
+      careerMonthIndex(a.start, false, now)! <=
+      careerMonthIndex(b.start, false, now)!
+        ? a
+        : b,
+    );
+    const last = group.reduce((a, b) =>
+      careerMonthIndex(a.end, false, now)! >=
+      careerMonthIndex(b.end, false, now)!
+        ? a
+        : b,
+    );
+    return { start: first.start, end: last.end };
+  });
+  return calculateTotalCareerYears([...jobs, ...continuousPeriods], now);
 }
 
 export function formatProjectTenureEstimate(
   estimate?: ProjectTenureEstimate,
 ): string {
   if (!estimate) return "";
-  return `${estimate.start} – ${estimate.end} (estimated from first to last project; gaps may exist)`;
+  return `${estimate.start} – ${estimate.end} (estimated from first to last project, including time between projects)`;
 }
 
 /** Recover dated assignment groups only under an already-established employer/role
