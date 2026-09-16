@@ -2,6 +2,7 @@ import { careerMonthIndex } from "./candidateCareerExperience";
 import { formatEmploymentTenure } from "./employmentTenure";
 import { layoutEmployment } from "./layoutEmployment";
 import { flattenedEmployment } from "./flattenedEmployment";
+import { boundedEmploymentBatch } from "./boundedEmploymentBatch";
 import { anchoredEmployment } from "./anchoredEmployment";
 import { exportedCareerEmployment } from "./exportedCareerEmployment";
 import type {
@@ -13,7 +14,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v77-anchored-employer-tenures";
+  "candidate-employment-v78-bounded-employment-batch";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1862,6 +1863,32 @@ function resumeEmployment(resumeText: string) {
     if (parsed?.company && parsed.title && (parsed.start || parsed.end))
       output.push(parsed);
   });
+  const priorEmployment = [...output];
+  for (const [index, row] of boundedEmploymentBatch(source).entries()) {
+    const parsed = entry({...row, allowGroundedEmployerOnly: true, sourceRef: `resume.bounded.${row.group}.${index + 1}`, sourceType: 'parsed_resume', confidence: 94});
+    if (!parsed) continue;
+    // A new prose/field reader must not resolve conflicting source assertions
+    // over a more explicit company/position record or a granular employer history.
+    // Keep the existing projection and the untouched source for review.
+    const competing = priorEmployment.some(known => {
+      const a = monthIndex(known.start), b = monthIndex(known.end, known.current);
+      const start = monthIndex(parsed.start), end = monthIndex(parsed.end, parsed.current);
+      if (a === null || b === null || start === null || end === null) return false;
+      const exactPeriod = a === start && b === end && known.current === parsed.current;
+      const differentAssertion = normalized(known.company) !== normalized(parsed.company) || normalized(known.title) !== normalized(parsed.title);
+      if (exactPeriod && differentAssertion && known.provenance?.some(ref => ref.sourceRef?.startsWith('resume.labelledCompany'))) return true;
+      return row.group === 'named-employer-fields' && normalized(known.company) === normalized(parsed.company) &&
+        !exactPeriod && a >= start && b <= end;
+    });
+    if (competing) continue;
+    const owned = output.find(known => monthIndex(known.start) === monthIndex(parsed.start) &&
+      monthIndex(known.end, known.current) === monthIndex(parsed.end, parsed.current) &&
+      known.current === parsed.current && known.provenance?.some(ref =>
+        (clean(ref.excerpt).toLowerCase().includes(clean(row.excerpt).toLowerCase()) ||
+          (normalized(known.title) === normalized(parsed.title) && clean(row.excerpt).toLowerCase().includes(clean(ref.excerpt).toLowerCase())))));
+    if (owned) owned.provenance = [...(owned.provenance || []), ...(parsed.provenance || [])];
+    else output.push(parsed);
+  }
   return output;
 }
 
