@@ -1,6 +1,6 @@
 # CV upload OCR integration
 
-> Latest code batch: [v81 labelled career records](precision-labelled-career-batch-20260916.md). All 970 sources compared: 33 previously empty records recovered, 77 net additional employment rows, and one consulting-client row corrected using the explicit employer table. The other 1,718 prior tuples are unchanged. Local totals: 623 records / 1,796 rows, with 347 sources unresolved. Malformed, duplicate and invalid-range counts remain zero; overlap flags remain 55 and client/employer equality flags remain two. No additional production data write.
+> Latest code batch: [v82 interleaved career records](precision-interleaved-career-batch-20260916.md). All 970 sources compared: 27 previously empty sources recover 61 employment rows; all 1,796 prior tuples remain unchanged. Local totals: 650 sources / 1,857 rows, with 320 sources unresolved. Malformed, duplicate and invalid-range counts remain zero; overlap flags remain 55 and client/employer equality flags remain two. Plural project-section boundaries now prevent project dates from leaking into employment. No additional production data write.
 
 > Previous code batch: [v76 career export recovery](precision-career-export-batch-20260916.md), checked against all 970 sources: 74 additional records recovered, 224 net additional employment rows, 484 sources still unresolved locally. This batch does not add production database writes; the verified nine-original backfill below remains the last data change.
 

@@ -107,9 +107,15 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
   const source = input
     .normalize("NFKC")
     .replace(/\b(?:W\s*O\s*R\s*K\s+)?E X P E R I E N C E\b/g, "WORK EXPERIENCE")
+    .replace(/\b(?:WorkingExperiences?|WorkExperiences?)\b/g, "Work Experience")
+    .replace(/\bRelevantExperiences?\b/g, "Relevant Experience")
     .replace(/\s+/g, " ")
     .replace(
-      new RegExp(`\\b(${month})[’'‘](\\d{2})\\b`, "gi"),
+      new RegExp(`\\b(\\d{1,2})(${month})\\s+(${year})\\b`, "gi"),
+      "$1 $2 $3",
+    )
+    .replace(
+      new RegExp(`\\b(${month})\\s*[’'‘]\\s*(\\d{2})\\b`, "gi"),
       (_, m, y) =>
         `${m} ${Number(y) <= 30 ? 2000 + Number(y) : 1900 + Number(y)}`,
     )
@@ -127,6 +133,11 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
     group: string,
   ) {
     company = company.trim().replace(/[, ]+$/, "");
+    if (
+      group.startsWith("compact-") &&
+      /^(?:Client|Customer|Project)/i.test(company)
+    )
+      return;
     title = title.trim().replace(/^[aA]n?\s+/, "");
     if (!validCompany(company) || (title && !validRole(title))) return;
     start = cleanDate(start);
@@ -251,7 +262,7 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
   ].sort((a, b) => a.index! - b.index!);
   for (const h of sectionHeadings) {
     if (
-      /\b(?:project|client|customer|detailed)\s*$/i.test(
+      /\b(?:projects?|clients?|customers?|detailed)\s*$/i.test(
         source.slice(Math.max(0, h.index! - 40), h.index),
       )
     )
@@ -259,13 +270,13 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
     const tail = source
       .slice(h.index! + h[0].length)
       .split(
-        /\b(?:Education|Qualifications|Certifications|References|Referees|Technical Skills|Project (?:Experience|History|Details))\b/i,
+        /\b(?:Education|Qualifications|Certifications|References|Referees|Technical Skills|Projects? (?:Experience|History|Details))\b/i,
       )[0];
     const rest = tail.replace(/^\d+[.)]\s*/, "");
     // Named employer blocks are parsed as fields, independent of label order.
     // Nested projects terminate this reader before their companies/dates.
     const form = tail.split(
-      /\b(?:Project(?:s| Experience| History| Details| Description)?|Education|References|Referees)\s*[:#]/i,
+      /\b(?:Projects?(?: Experience| History| Details| Description)?|Education|References|Referees)\s*[:#]/i,
     )[0];
     const labels = [
       ...form.matchAll(
@@ -418,7 +429,7 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
   // lost. Only read immediately after a career heading, never resynchronize in
   // unlabelled duty or project prose.
   const separatorHeadings =
-    /\b(?:Work(?:ing)? Experiences?|Professional Experiences?|Employment(?: and Achievement)? History|Employment Experience|Career History|Work History|Experiences?|Employment(?= [A-Z]))\s*:?\s*/gi;
+    /\b(?:Work(?:ing)? Experi[ae]nces?|Professional Experiences?|Employment(?: and Achievement)? History|Employment Experience|Employment Chronicle|Professional Background|Relevant Experience|Career Summary|Career History|Work History|Experiences?|Employment(?= [A-Z]))\s*:?\s*/gi;
   let acceptedLength = 0;
   const balanced = (value: string) =>
     (value.match(/\(/g)?.length || 0) === (value.match(/\)/g)?.length || 0);
@@ -474,25 +485,220 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
     )
       continue;
     if (
-      /\b(?:project|client|customer|detailed|technical|implementation|support|years?(?: of)?|summary of)\s*$/i.test(
+      /\b(?:projects?|clients?|customers?|detailed|technical|implementation|support|years?(?: of)?)\s*$/i.test(
         source.slice(Math.max(0, h.index! - 50), h.index),
+      )
+    )
+      continue;
+    if (
+      /^Career Summary/i.test(h[0]) &&
+      /^(?:Manager|Director|Consultant),/i.test(
+        source.slice(h.index! + h[0].length),
+      )
+    )
+      continue;
+    if (
+      !/^Employment/i.test(h[0]) &&
+      /\bsummary of\s*$/i.test(
+        source.slice(Math.max(0, h.index! - 30), h.index),
       )
     )
       continue;
     const tail = source
       .slice(h.index! + h[0].length)
       .split(
-        /\b(?:Education|Qualifications|Certifications|References|Referees|Technical Skills|Personal Projects?|Project (?:Experience|History|Details|Involvement))\b/i,
+        /\b(?:Education|Qualifications|Certifications|References|Referees|Technical Skills|Personal Projects?|Projects? (?:Experience|History|Details|Involvement))\b/i,
       )[0];
     const labelledLedger = /^Role Company Duration\b/i.test(tail);
     let rest = tail
       .replace(/^and Project\s*/i, "")
       .replace(/^(?:SUMMARY|Details)\s*/i, "")
+      .replace(/^ABOUT ME\s+(?=[A-Za-z]+ \d{4})/i, "")
       .replace(/^[-–—]\s*\d+\+?\s*Years?\s+in\s+SAP\s*/i, "")
       .replace(/^Role Company Duration\s*/i, "")
       .replace(/^(?:[_–—-]{3,}\s*|[•]\s*|\d+[.)]+\s*)/, "");
     for (let adjacent = 0; adjacent < 30; adjacent++) {
       acceptedLength = 0;
+
+      // Explicit field delimiters and legal suffixes support interleaved date
+      // columns. Dates are reordered only within one complete heading; reversed
+      // chronology is still rejected by add(). Never pair separate job records.
+      const suffix =
+        "(?:Sdn\\.?\\s*Bhd\\.?|SND\\s+BHD\\.?|Pte\\.?\\s*Ltd\\.?|Ltd\\.?|Limited|Inc\\.?|Berhad)";
+      const legalField = `(${org}${suffix})`;
+      const headedRole = `(?:[A-Za-z0-9/&.+-]+\\s+|\\([A-Za-z /&]+\\)\\s+){0,9}${job}(?:\\s*\\([^)]{1,35}\\))?`;
+      const headingStop = `(?=\\s+(?:${duty}\\b|Duties\\b|Respond\\b|Involving\\b|Name of the software\\b|[•·\\uF0A7*])|\\s*$)`;
+      const interleavedSchemas = [
+        {
+          re: new RegExp(
+            `^${range}\\s+(${role})\\s+at\\s+${legalField}(?=\\s|$)`,
+            "i",
+          ),
+          f: [4, 3, 1, 2],
+          group: "dated-role-at-employer",
+        },
+        {
+          re: new RegExp(
+            `^${range}\\s+(${role})\\s*\\|\\s*(${org})\\s*\\|\\s*[^|:;]{2,70}?${headingStop}`,
+            "i",
+          ),
+          f: [4, 3, 1, 2],
+          group: "dated-role-employer-city",
+        },
+        {
+          re: new RegExp(
+            `^(${date})\\s*[-–—]\\s*(${role})\\s+(${date}|${ongoing})\\s+${legalField}${headingStop}`,
+            "i",
+          ),
+          f: [4, 2, 1, 3],
+          group: "split-date-role-employer",
+        },
+        {
+          re: new RegExp(
+            `^(${date})\\s*[-–—]\\s*${legalField}(?:,\\s*[A-Za-z .,\\-]{2,70})?\\s+(${date}|${ongoing})\\s+(${role})${headingStop}`,
+            "i",
+          ),
+          f: [2, 4, 1, 3],
+          group: "split-date-employer-role",
+        },
+        {
+          re: new RegExp(
+            `^(${role}(?:\\s+(?:FICO|MM|SD|ABAP))?)\\s*:\\s*${range}\\s+(${org})${headingStop}`,
+            "i",
+          ),
+          f: [4, 1, 2, 3],
+          group: "role-colon-tenure-employer",
+        },
+        {
+          re: new RegExp(
+            `^(${role})\\s*\\(\\d+(?:\\.\\d+)?\\s+years?\\)\\s*\\(${range}\\)\\s+${legalField}(?=\\s|$)`,
+            "i",
+          ),
+          f: [4, 1, 2, 3],
+          group: "role-duration-tenure-employer",
+        },
+        {
+          re: new RegExp(
+            `^${range}\\s+(${headedRole})\\s*[-–—]\\s*${legalField}${headingStop}`,
+            "i",
+          ),
+          f: [4, 3, 1, 2],
+          group: "dated-role-dash-legal-employer",
+        },
+        {
+          re: new RegExp(
+            `^${range}\\s+(${org})\\s+(SAP (?:Senior )?Consultant(?:\\s*\\([A-Za-z/& ]{1,25}\\))?)(?=\\s+${range}|\\s*[-–—]|\\s*$)`,
+            "i",
+          ),
+          f: [3, 4, 1, 2],
+          group: "date-company-sap-role-ledger",
+        },
+      ];
+
+      interleavedSchemas.push({
+        re: new RegExp(
+          `^${range}\\s+(${org})\\s+(SAP [A-Za-z/& ]{1,50}?Consultant\\s*[-–—]\\s*Internship)(?=\\s+(?:PROFILE|EDUCATION)\\b|$)`,
+          "i",
+        ),
+        f: [3, 4, 1, 2],
+        group: "dated-sap-internship-ledger",
+      });
+      interleavedSchemas.push(
+        {
+          re: new RegExp(
+            `^${range}\\s*\\(${year}\\)\\s+${legalField}(?=\\s+${range})`,
+            "i",
+          ),
+          f: [3, 0, 1, 2],
+          group: "current-year-employer-ledger",
+        },
+        {
+          re: new RegExp(
+            `^PERIOD\\s*:\\s*${range}\\s+COMPANY\\s*:\\s*(${org})\\s+POSITION\\s*:\\s*([^:;]{2,100}?)\\s+EXPERIANCE\\b`,
+            "i",
+          ),
+          f: [3, 4, 1, 2],
+          group: "period-company-position-card",
+        },
+      );
+      interleavedSchemas.push(
+        {
+          re: new RegExp(
+            `^${range}\\s+([A-Za-z&().]{3,100})\\s+Projects\\s*:`,
+            "i",
+          ),
+          f: [3, 0, 1, 2],
+          group: "compact-employer-tenure-projects",
+        },
+        {
+          re: new RegExp(
+            `^([A-Za-z&().]{3,100})\\s+${range}\\s+\\d+\\.\\s*(AssociateConsultant|SAPConsultant)-(SuccessFactors|ABAP|FICO)\\s+(?=Joined|Worked|Working)`,
+            "i",
+          ),
+          f: [1, 4, 2, 3],
+          group: "compact-numbered-role-heading",
+        },
+        {
+          re: new RegExp(
+            `^${range}\\s+(${org})\\s+SAP Application Maintenance\\s+Client\\s*:`,
+            "i",
+          ),
+          f: [3, 0, 1, 2],
+          group: "employer-before-client-service",
+        },
+      );
+
+      interleavedSchemas.push(
+        {
+          re: new RegExp(
+            `^(${role}(?:\\s+(?:III|II|IV))?)\\s*:\\s*(${org})\\s*,\\s*${range}${headingStop}`,
+            "i",
+          ),
+          f: [2, 1, 3, 4],
+          group: "role-colon-employer-tenure",
+        },
+        {
+          re: new RegExp(
+            `^(${org})\\s*\\|\\s*${range}(?=\\s+\\d+\\.\\s*(?:Training|Projects?)\\b)`,
+            "i",
+          ),
+          f: [1, 0, 2, 3],
+          group: "employer-pipe-tenure-projects",
+        },
+        {
+          re: new RegExp(
+            `^${range}\\s*\\(\\d+\\s+years?(?:\\s+\\d+\\s+months?)?\\)\\s+((?:SAP|Senior SAP)\\s+[^:;|]{2,100}?${job})\\s+(${org})\\s*\\|`,
+            "i",
+          ),
+          f: [4, 3, 1, 2],
+          group: "export-duration-role-employer",
+        },
+      );
+
+      for (const schema of interleavedSchemas) {
+        const m = rest.match(schema.re);
+        if (!m) continue;
+        const [c, t, a, b] = schema.f;
+        if (
+          schema.group === "dated-role-dash-legal-employer" &&
+          !/^(?:Work|Professional|Employment)/i.test(h[0])
+        )
+          continue;
+        if (schema.group === "compact-numbered-role-heading")
+          m[t] = m[t].replace(/([a-z])([A-Z])/g, "$1 $2") + " - " + m[5];
+        if (schema.group === "period-company-position-card") {
+          const n = output.length;
+          add(m[c], m[t], m[a], m[b], m[0], schema.group);
+          if (output.length > n)
+            acceptedLength = Math.max(acceptedLength, m[0].length);
+        } else if (t) addHeader(m[c], m[t], m[a], m[b], m[0], schema.group);
+        else {
+          const n = output.length;
+          add(m[c], "", m[a], m[b], m[0], schema.group);
+          if (output.length > n)
+            acceptedLength = Math.max(acceptedLength, m[0].length);
+        }
+      }
 
       // These schemas keep title/company/date ownership at the heading. They
       // never scan ahead through a duty paragraph to find a convenient date.
@@ -1485,8 +1691,247 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
       rest = rest.slice(m[0].length).trimStart();
     }
   }
+
+  // Repeated labelled employment cards retain field ownership across job
+  // descriptions. Each card must provide Date, Company and Position in order.
+  for (const h of source.matchAll(
+    /\bWork(?:ing)? Experiences?\s*:?\s*(?=Date\s*:)/gi,
+  )) {
+    const section = source
+      .slice(h.index! + h[0].length)
+      .split(
+        /\b(?:EDUCATION|QUALIFICATIONS|PROJECT EXPERIENCE|REFERENCES)\b/i,
+      )[0];
+    for (const m of section.matchAll(
+      new RegExp(
+        `(?:^|\\s)Date\\s*:\\s*${range}\\s+Company\\s*:\\s*([^:;]{2,160}?)\\s+Position\\s*:\\s*([^:;]{2,100}?)\\s+Job Descriptions?\\s*:`,
+        "gi",
+      ),
+    )) {
+      const company = m[3].replace(/\s*[–—]\s*[A-Za-z, ]+$/, "");
+      add(company, m[4], m[1], m[2], m[0], "date-company-position-cards");
+    }
+  }
+
+  // Dense employment summaries have adjacent date/company/SAP-role rows. The
+  // entire intervening text must be a row; never search through responsibilities.
+  for (const h of source.matchAll(/\bSUMMARY OF EMPLOYMENT\s*/gi)) {
+    const section = source
+      .slice(h.index! + h[0].length)
+      .split(
+        /\b(?:PROJECTS?|EDUCATION|TRAINING|CERTIFICATIONS?|REFERENCES)\b/i,
+      )[0];
+    const ranges = [...section.matchAll(new RegExp(range, "gi"))];
+    for (let i = 0; i < ranges.length; i++) {
+      const text = section
+        .slice(
+          ranges[i].index! + ranges[i][0].length,
+          ranges[i + 1]?.index ?? section.length,
+        )
+        .trim();
+      const m = text.match(
+        new RegExp(
+          `^(${org})\\s+(SAP (?:Senior )?Consultant(?:\\s*\\([A-Za-z/& ]{1,25}\\))?(?:\\s*[-–—]\\s*[A-Za-z/& ]{2,30}Team Lead)?)$`,
+          "i",
+        ),
+      );
+      if (m)
+        add(
+          m[1],
+          m[2],
+          ranges[i][1],
+          ranges[i][2],
+          ranges[i][0] + text,
+          "summary-employment-sap-ledger",
+        );
+    }
+  }
+  // Chronological company/title/date ledgers have no duty paragraphs. A whole
+  // cell between adjacent ranges must match; narrative fragments stay rejected.
+  for (const h of source.matchAll(/\bEMPLOYMENT CHRONICLE\s*/gi)) {
+    const section = source
+      .slice(h.index! + h[0].length)
+      .split(
+        /\b(?:Academic|Professional Qualifications|Personal|Projects)\b/i,
+      )[0];
+    let priorEnd = 0;
+    for (const m of section.matchAll(new RegExp(range, "gi"))) {
+      const fields = section
+        .slice(priorEnd, m.index)
+        .trim()
+        .replace(/\b(Sr|Jr)\.(?=[A-Z])/g, "$1. ");
+      const parts = fields.match(
+        new RegExp(
+          `^(${org})\\s+((?:(?:Sr\\.?|Jr\\.?|Senior|Junior|Project|Application|ERP|EDP)\\s+${role}|PM\\b[^:;]{1,90}))$`,
+          "i",
+        ),
+      );
+      if (parts)
+        add(
+          parts[1],
+          parts[2],
+          m[1],
+          m[2],
+          fields + " " + m[0],
+          "employment-chronicle-ledger",
+        );
+      priorEnd = m.index! + m[0].length;
+    }
+  }
+
+  // Numbered employment tables may have a final free-text Comments column.
+  // Every row must carry both dates before comments. Row numbering restarts no
+  // schema outside this explicit header, and notes cannot supply missing dates.
+  for (const h of source.matchAll(
+    /\bOrganization Name Designation From Date To Date Comments\s*/gi,
+  )) {
+    if (
+      !/\bEMPLOYMENT\b/i.test(
+        source.slice(Math.max(0, h.index! - 100), h.index),
+      )
+    )
+      continue;
+    const section = source
+      .slice(h.index! + h[0].length)
+      .split(
+        /\b(?:PERSONAL DETAILS|EDUCATION|PROJECT DETAILS|REFERENCES)\b/i,
+      )[0];
+    const rows = [
+      ...section.matchAll(
+        new RegExp(`(?:^|\\s)(\\d{1,2})\\s+(?!${month}\\b)(?=[A-Z])`, "g"),
+      ),
+    ];
+    let expected = 1;
+    for (let i = 0; i < rows.length; i++) {
+      if (+rows[i][1] !== expected) continue;
+      const offset = rows[i].index! + rows[i][0].length;
+      const text = section.slice(offset, rows[i + 1]?.index ?? section.length);
+      const m = text.match(
+        new RegExp(
+          `^(${org})\\s+((?:Sr\\.?|Jr\\.?|Senior|Junior|Consultant|Executive)\\b[^:;]{0,65}?)\\s+(${date})\\s*(?:[-–—]\\s*)?(${date}|${ongoing})(?=\\s|$)`,
+          "i",
+        ),
+      );
+      if (!m || !roleStart.test(m[2])) break;
+      const n = output.length;
+      add(m[1], m[2], m[3], m[4], m[0], "organization-date-comments-ledger");
+      if (output.length === n) break;
+      expected++;
+    }
+  }
+  // Joined Date/Company Name/Role headers occur in text exports. The next date
+  // is the row boundary, so company/title fields never absorb project prose.
+  for (const h of source.matchAll(
+    /\bEMPLOYMENT HISTORY\s+DateCompany NameRole\s*/gi,
+  )) {
+    const section = source
+      .slice(h.index! + h[0].length)
+      .split(/\b(?:EDUCATION|PROJECTS|REFERENCES)\b/i)[0];
+    const rows = [...section.matchAll(new RegExp(`${range}\\s*`, "gi"))];
+    for (let i = 0; i < rows.length; i++) {
+      const text = section
+        .slice(
+          rows[i].index! + rows[i][0].length,
+          rows[i + 1]?.index ?? section.length,
+        )
+        .trim();
+      const m = text.match(
+        new RegExp(
+          `^(${org})\\s+((?:Senior|Junior|SAP|Software)\\s+${role})$`,
+          "i",
+        ),
+      );
+      if (m)
+        add(
+          m[1],
+          m[2],
+          rows[i][1],
+          rows[i][2],
+          rows[i][0] + text,
+          "joined-date-company-role-table",
+        );
+    }
+  }
+  // Whitespace-free source still needs explicit heading/duty boundaries. Decode
+  // only recognized role words and printed date tokens; keep employer literal.
+  for (const h of source.matchAll(/\bWork Experience\s*:\s*/gi)) {
+    const text = source.slice(h.index! + h[0].length);
+    const compactDate = `(${month})((?:19|20)\\d{2})`;
+    const m = text.match(
+      new RegExp(
+        `^${compactDate}to${compactDate}\\s+(SAPConsultant|SAPDeveloper|SAPAnalyst)\\s+([A-Za-z&().]{3,100})\\s+Duties\\s*:`,
+        "i",
+      ),
+    );
+    if (m)
+      add(
+        m[6],
+        m[5].replace(/^SAP/i, "SAP "),
+        `${m[1]} ${m[2]}`,
+        `${m[3]} ${m[4]}`,
+        m[0],
+        "compact-career-heading",
+      );
+  }
+
+  for (let i = output.length - 1; i >= 0; i--) {
+    const row = output[i];
+    if (
+      row.group === "summary-employment-sap-ledger" ||
+      row.group === "dated-sap-internship-ledger"
+    )
+      continue;
+    if (
+      output.some(
+        (other) =>
+          other.group === "dated-sap-internship-ledger" &&
+          other.company === row.company &&
+          other.start === row.start &&
+          other.end === row.end &&
+          other.title.startsWith(row.title + " - "),
+      )
+    ) {
+      output.splice(i, 1);
+      continue;
+    }
+    if (
+      output.some(
+        (other) =>
+          other.group === "summary-employment-sap-ledger" &&
+          other.company === row.company &&
+          other.start === row.start &&
+          other.end === row.end &&
+          other.title.startsWith(row.title + " – "),
+      )
+    )
+      output.splice(i, 1);
+  }
+
   // Keep established readers first when another schema repeats the same job.
   const addedSchemas = new Set([
+    "dated-sap-internship-ledger",
+    "dated-role-at-employer",
+    "dated-role-employer-city",
+    "split-date-role-employer",
+    "split-date-employer-role",
+    "role-colon-tenure-employer",
+    "role-duration-tenure-employer",
+    "dated-role-dash-legal-employer",
+    "date-company-sap-role-ledger",
+    "role-colon-employer-tenure",
+    "employer-pipe-tenure-projects",
+    "export-duration-role-employer",
+    "compact-employer-tenure-projects",
+    "compact-numbered-role-heading",
+    "employer-before-client-service",
+    "date-company-position-cards",
+    "summary-employment-sap-ledger",
+    "employment-chronicle-ledger",
+    "organization-date-comments-ledger",
+    "joined-date-company-role-table",
+    "compact-career-heading",
+    "current-year-employer-ledger",
+    "period-company-position-card",
     "explicit-start-end-title",
     "numbered-dated-position",
     "dated-company-position-client",
