@@ -12,7 +12,9 @@ export type FlattenedEmployment = {
   group: string;
 };
 const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*";
-const date = `(?:\\d{1,2}(?:st|nd|rd|th)?\\s+)?${month}[. -]*[’']?\\s*(?:19|20)\\d{2}`;
+const day = "\\d{1,2}(?:\\s*(?:st|nd|rd|th))?";
+const year = "(?:19|20)\\d{2}";
+const date = `(?:(?:${day}\\s+)?${month}[. -]*[’']?\\s*${year}|${month}\\s+${day}[ ,.-]+${year}|${year}\\s+${month}\\.?)`;
 const ongoing =
   "(?:(?:till|until|to)\\s+(?:date|now|today|present)|present|current|now|ongoing)";
 const range = `(${date})\\s*(?:[-–—]|to|until|till)\\s*(${date}|${ongoing})`;
@@ -22,15 +24,23 @@ const title = `[^:;|]{0,110}?\\b${job}(?:\\s*\\([^)]{1,40}\\))?`;
 const company = "[^:;|]{2,120}?";
 const forbidden =
   /\b(?:client|customer|project|responsibilities|duties|summary|education|skills|references|referrals|confidential|unknown)\b/i;
-const cleanDate = (value: string) =>
-  new RegExp(`^${ongoing}$`, "i").test(value)
-    ? "Present"
-    : value
-        .replace(/(\d)(?:st|nd|rd|th)\b/i, "$1")
-        .replace(/[.’'-]/g, " ")
-        .replace(/([A-Za-z])((?:19|20)\d{2})\b/g, "$1 $2")
-        .replace(/\s+/g, " ")
-        .trim();
+const cleanDate = (value: string) => {
+  if (new RegExp(`^${ongoing}$`, "i").test(value)) return "Present";
+  const cleaned = value
+    .replace(/(\d)\s*(?:st|nd|rd|th)\b/i, "$1")
+    .replace(/[.’'-]/g, " ")
+    .replace(/([A-Za-z])((?:19|20)\d{2})\b/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+  const yearFirst = cleaned.match(new RegExp(`^(${year})\\s+(${month})$`, "i"));
+  if (yearFirst) return `${yearFirst[2]} ${yearFirst[1]}`;
+  const monthFirst = cleaned.match(
+    new RegExp(`^(${month})\\s+(\\d{1,2})[, ]+(${year})$`, "i"),
+  );
+  return monthFirst
+    ? `${monthFirst[2]} ${monthFirst[1]} ${monthFirst[3]}`
+    : cleaned;
+};
 
 export function flattenedEmployment(source: string): FlattenedEmployment[] {
   const result: FlattenedEmployment[] = [];
@@ -42,9 +52,14 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
     excerpt: string,
     group: string,
     labelledRole = false,
+    allowPartial = false,
   ) => {
     employer = employer.trim().replace(/[, ]+$/, "");
     role = role.trim().replace(/\s+\((?:promoted|contract|permanent)\)$/i, "");
+    if (labelledRole) role = role.replace(/^\(([^()]+)\)(?=\s*[-–—/]|$)/, "$1");
+    // Quoted employment statements are handled by the dedicated canonical
+    // reader, which separates the trailing location from the employer.
+    if (group === "employment-statement" && /^[“\"]/.test(employer)) return;
     start = cleanDate(start);
     end = cleanDate(end);
     const current = end === "Present";
@@ -56,13 +71,19 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
           role,
         )) ||
       a === null ||
-      b === null ||
-      b < a ||
+      (b === null && !(allowPartial && !end && role)) ||
+      (b !== null && b < a) ||
       forbidden.test(employer) ||
       new RegExp(date, "i").test(employer) ||
       employer.length > 120 ||
       /\b(?:worked|working|from|since|as|at)\b/i.test(employer) ||
-      new RegExp(`\\b${job}\\b`, "i").test(employer) ||
+      (new RegExp(`\\b${job}\\b`, "i").test(employer) &&
+        !(
+          labelledRole &&
+          /\b(?:Sdn\.?\s*Bhd|Pte\.?\s*Ltd|Pvt\.?\s*Ltd|Limited|Ltd|Inc|Corporation)\.?$/i.test(
+            employer,
+          )
+        )) ||
       (role &&
         (new RegExp(date, "i").test(role) ||
           (!labelledRole && !new RegExp(`\\b${job}\\b`, "i").test(role)) ||
@@ -367,6 +388,73 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
       add(m[1], m[2], d[1], d[2], d[0] + cell, "dated-ledger");
       if (next < 0) break;
       ledger = rest.slice(next).trim();
+    }
+  }
+  // Date Joined / Date Left belong to one Company Name form. Duties may
+  // intervene, but another company or a project-history heading ends the form.
+  const privateCareer = source.split(/\b(?:references|referrals)\b/i)[0];
+  const companyForms = [...privateCareer.matchAll(/\bCompany Name\s*:\s*/gi)];
+  for (const [i, marker] of companyForms.entries()) {
+    const block = privateCareer
+      .slice((marker.index || 0) + marker[0].length, companyForms[i + 1]?.index)
+      .split(
+        /\b(?:working experiences?|project experience|project history|education|qualifications)\b/i,
+      )[0];
+    const fields = block.match(
+      /^([^:;]{2,120}?)\s+(?:Position\s+)?Title\s*:\s*([^:;]{2,120}?)(?=\s+(?:Level|Industry|Date Joined)\s*:)/i,
+    );
+    if (!fields) continue;
+    const joins = [
+      ...block.matchAll(
+        new RegExp(`\\bDate Joined\\s*:\\s*(${date})(?=\\s|[.;]|$)`, "gi"),
+      ),
+    ];
+    const leaves = [...block.matchAll(/\bDate Left\s*:\s*/gi)];
+    if (joins.length !== 1 || leaves.length > 1) continue;
+    const endText = leaves[0]
+      ? block.slice((leaves[0].index || 0) + leaves[0][0].length)
+      : "";
+    const end =
+      endText.match(
+        new RegExp(`^(${date}|${ongoing})(?=\\s|[.;]|$)`, "i"),
+      )?.[1] || "";
+    add(
+      fields[1],
+      fields[2],
+      joins[0][1],
+      end,
+      marker[0] + block,
+      "joined-left-form",
+      true,
+      true,
+    );
+  }
+  // Career Profile uses explicitly labelled employer/title fields. Parenthetical
+  // duration counts are allowed; a second date in parentheses is ambiguous and
+  // is not silently discarded to associate the range with an employer.
+  const career = privateCareer.match(/\bCareer Profile\s+([\s\S]*)/i)?.[1];
+  if (career) {
+    const careerRows = new RegExp(
+      `${range}\\s+(?:\\(\\d+(?:\\.\\d+)?\\s+years?\\)\\s+)?Employer\\s*:\\s*(${company})\\s+Job Title\\s*:\\s*([^:;]{2,150}?)\\s+Job Tasks?\\b`,
+      "gi",
+    );
+    for (const m of career.matchAll(careerRows))
+      add(m[3], m[4], m[1], m[2], m[0], "career-profile-labels", true);
+  }
+  // Professional Profile forms state organization, role and their own duration
+  // contiguously. Project/Client fields between them invalidate the association.
+  const professional = privateCareer.match(
+    /\bProfessional Profile\b[^:]{0,60}:\s*([\s\S]*)/i,
+  )?.[1];
+  if (professional) {
+    const rows = new RegExp(
+      `\\bOrgani[sz]ation\\s*:\\s*(${company})\\s+Role\\s*:\\s*([^:;]{2,120}?)\\s+Duration\\s*:\\s*${range}(?=\\s|[.;]|$)`,
+      "gi",
+    );
+    for (const m of professional.matchAll(rows)) {
+      if (/\b(?:migration|implementation|rollout)\s+project\b/i.test(m[2]))
+        continue;
+      add(m[1], m[2], m[3], m[4], m[0], "professional-profile-labels", true);
     }
   }
   // Explicit Employer plus its own parenthesized tenure is valid even when

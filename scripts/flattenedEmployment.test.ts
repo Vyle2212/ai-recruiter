@@ -235,3 +235,87 @@ assert.deepEqual(
   ).map((j) => j.company),
   ["Example Complete"],
 );
+
+const joinedForms =
+  "Current Employment Company Name: Example Systems Title: CRM Functional Consultant Level: Executive Industry: Software Date Joined: 14 st Sept 2015 Duties: Application delivery. Date Left: 5 th Feb 2017 Reason for leaving: Change. Working Experience Project: Buyer Jan 2010 - Dec 2020 Company Name: Example Associate Ltd Title: Application Support Level: Executive Date Joined: 01 st April 1997 Date Left: End of September Duties: Support.";
+assert.deepEqual(
+  read(joinedForms).map((j) => [j.company, j.title, j.start, j.end, j.current]),
+  [
+    [
+      "Example Systems",
+      "CRM Functional Consultant",
+      "14 Sept 2015",
+      "5 Feb 2017",
+      false,
+    ],
+    [
+      "Example Associate Ltd",
+      "Application Support",
+      "01 April 1997",
+      "",
+      false,
+    ],
+  ],
+);
+const careerForms =
+  "Career Profile 2021 Sep. - Current Employer: Example Systems Job Title: SAP ABAP Analyst Job Tasks: Support. 2012 Jan. – 2012 Jul. (0.5 years) Employer: Example Labs Job Title: Project Manager / Lead Job Tasks: Manage delivery.";
+assert.deepEqual(
+  read(careerForms).map((j) => [j.company, j.start, j.end]),
+  [
+    ["Example Systems", "Sep 2021", "Present"],
+    ["Example Labs", "Jan 2012", "Jul 2012"],
+  ],
+);
+const professionalForms =
+  "Professional Profile in chronological order: Organization: Example Systems Role: (Senior Tech Lead) -SD/LE Duration: Jan 23 rd 2023 – Till Date Organization: Example Labs Role: Principal Consultant Duration: August 18 th - 2021 – 23 rd Jan 2023. Work Profile: Delivery.";
+assert.deepEqual(
+  read(professionalForms).map((j) => [j.company, j.start, j.end]),
+  [
+    ["Example Systems", "23 Jan 2023", "Present"],
+    ["Example Labs", "18 August 2021", "23 Jan 2023"],
+  ],
+);
+assert.equal(extractCanonicalEmploymentFromResume(joinedForms).length, 2);
+assert.equal(extractCanonicalEmploymentFromResume(joinedForms)[1].end, "");
+assert.equal(extractCanonicalEmploymentFromResume(careerForms).length, 2);
+assert.equal(extractCanonicalEmploymentFromResume(professionalForms).length, 2);
+for (const text of [
+  "Company Name: Example Systems Title: Consultant Date Joined: 31 st February 2020 Date Left: Jan 2021",
+  "Company Name: Example Systems Title: Consultant Date Joined: Jan 2020 Date Left: 30 th February 2021",
+  "Company Name: Example Systems Title: Consultant Date Joined: Jan 2022 Date Left: Dec 2021",
+  "Company Name: Example Systems Title: Consultant Date Joined: Jan 2020 Date Joined: Feb 2020 Date Left: Dec 2021",
+  "Company Name: Example Systems Title: Consultant Date Joined: Jan 2020 Date Left: Dec 2020 Date Left: Dec 2021",
+  "Career Profile 2020 Feb. - 2021 Mar. (1 year) (2020 Sep.) Employer: Example Systems Job Title: Analyst Job Tasks: Delivery",
+  "Career Profile 2021 Sep. - Current Client: Example Buyer Job Title: Analyst Job Tasks: Delivery",
+  "Professional Profile in chronological order: Organization: Example Services Role: Consultant Project: Migration Duration: Jan 2020 - Present",
+  "Professional Profile in chronological order: Organization: Example Services Role: Consultant (S4 Hana Migration project) Duration: Jan 2020 - Present",
+  "Project Profile: Organization: Example Services Role: Consultant Duration: Jan 2020 - Present",
+])
+  assert.equal(read(text).length, 0, text);
+const isolatedJoined = read(
+  "Company Name: Example Systems Title: Consultant Date Joined: Jan 2020 Working Experience Project: Buyer Date Left: Dec 2021 Company Name: Example Labs Title: Consultant Date Joined: Jan 2022 Date Left: Dec 2022",
+);
+assert.deepEqual(
+  isolatedJoined.map((j) => [j.company, j.start, j.end]),
+  [
+    ["Example Systems", "Jan 2020", ""],
+    ["Example Labs", "Jan 2022", "Dec 2022"],
+  ],
+);
+console.log(
+  "Career forms: explicit day precision, year-first dates and missing-end isolation pass",
+);
+
+assert.equal(read(professionalForms)[0].title, "Senior Tech Lead -SD/LE");
+assert.equal(
+  extractCanonicalEmploymentFromResume(professionalForms)[0].title,
+  "Senior Tech Lead -SD/LE",
+);
+const quotedDates =
+  "Working Experience Worked as a SAP Consultant in “Example Systems”, Example City from October 2017 to 31st May 2021.";
+assert.equal(
+  read(quotedDates).length,
+  0,
+  "dedicated quoted-employer reader owns location separation",
+);
+assert.equal(extractCanonicalEmploymentFromResume(quotedDates).length, 1);

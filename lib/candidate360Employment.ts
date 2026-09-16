@@ -10,7 +10,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v61-labelled-forms-batch";
+  "candidate-employment-v62-explicit-career-dates-batch";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
