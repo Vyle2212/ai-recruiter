@@ -263,13 +263,101 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
     // Legal suffixes and explicit field labels supply boundaries lost when a
     // PDF is flattened. Never continue searching inside responsibility prose.
     const legal =
-      "[A-Z0-9][A-Za-z0-9&.,'() /-]{1,100}?\\b(?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Pvt\\.?\\s*Ltd\\.?|Private Limited|Corporation|Berhad|Limited|Ltd\\.?|Inc\\.?)";
+      "[A-Z0-9][A-Za-z0-9&.,'() /-]{1,100}?\\b(?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Pvt\\.?\\s*Ltd\\.?|Private Limited|Corporation|Berhad|S/B|Limited|Ltd\\.?|Inc\\.?)";
     const roleEnd =
       "(?=\\s+(?:Job (?:Functions|responsibilities)|Responsibilities|Main Duties|Task\\s*[/]|[•●◼➢⮚]|Hands-on)|$)";
     const boundedRole = `([^:;]{2,110}?)${roleEnd}`;
     const labelledHeading = enumerated.has(i)
       ? section.replace(/^(?:I1|[IVX]+)\s+/, "")
       : section.replace(/^\d{1,2}[.)]\s*/, "");
+    // A legal suffix or a comma directly before tenure supplies the missing
+    // employer/role boundary. These readers never search within duty prose.
+    const legalRoleHeadings = [
+      {
+        re: new RegExp(
+          `^(${legal})\\s+(${title})\\s+${range}(?=\\s|[.;]|$)`,
+          "i",
+        ),
+        f: [1, 2, 3, 4],
+      },
+      {
+        re: new RegExp(
+          `^(${title})\\s+(${legal})\\s+${range}(?=\\s|[.;]|$)`,
+          "i",
+        ),
+        f: [2, 1, 3, 4],
+      },
+      {
+        re: new RegExp(
+          `^(${title})\\s+([^,:;|]{2,80}),\\s*${range}(?=\\s|[.;]|$)`,
+          "i",
+        ),
+        f: [2, 1, 3, 4],
+      },
+      {
+        re: new RegExp(
+          `^(${title}),\\s*(${legal})(?:\\s*,\\s*([A-Za-z .,-]{2,45}?))?\\s+${range}(?=\\s|[.;]|$)`,
+          "i",
+        ),
+        f: [2, 1, 4, 5],
+        location: 3,
+      },
+    ];
+    for (const { re, f, location } of legalRoleHeadings) {
+      const m = labelledHeading.match(re);
+      if (
+        m &&
+        /^[A-Za-z0-9]/.test(m[f[1]]) &&
+        !(
+          location &&
+          (forbidden.test(m[location] || "") ||
+            new RegExp(`\\b${job}\\b`, "i").test(m[location] || ""))
+        )
+      )
+        add(m[f[0]], m[f[1]], m[f[2]], m[f[3]], m[0], "legal-role-heading");
+    }
+    // Employer tenure is independent of a later numbered promotion or project.
+    // Pipe and labelled Project Description boundaries do not supply a title.
+    const employerHeadings = [
+      {
+        re: new RegExp(`^(${legal})\\s*\\|\\s*${range}(?=\\s|[.;]|$)`, "i"),
+        f: [1, 2, 3],
+      },
+      {
+        re: new RegExp(
+          `^(${legal}(?:\\s+\\([^:;]{2,70}\\))?)\\s+${range}(?=\\s+\\d+[.)]\\s+)`,
+          "i",
+        ),
+        f: [1, 2, 3],
+      },
+      {
+        re: new RegExp(
+          `^(${legal}),\\s*([A-Za-z .,-]{2,45}?)\\s+\\(?${range}\\)?(?=\\s+(?:Involved|Served|[-–—]\\s*\\d+\\s+years?\\s+Served)\\b)`,
+          "i",
+        ),
+        f: [1, 3, 4],
+        location: 2,
+      },
+      {
+        re: new RegExp(
+          `^${range}\\s+(${company})\\s+Project Description\\s*:`,
+          "i",
+        ),
+        f: [3, 1, 2],
+      },
+    ];
+    for (const { re, f, location } of employerHeadings) {
+      const m = labelledHeading.match(re);
+      if (
+        m &&
+        !(
+          location &&
+          (forbidden.test(m[location] || "") ||
+            new RegExp(`\\b${job}\\b`, "i").test(m[location] || ""))
+        )
+      )
+        add(m[f[0]], "", m[f[1]], m[f[2]], m[0], "bounded-employer-tenure");
+    }
     const fieldHeadings = [
       {
         re: new RegExp(

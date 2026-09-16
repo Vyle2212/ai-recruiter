@@ -280,3 +280,26 @@ Read-only audit: 450 employers, 397 titles and 447 supported date ranges. Malfor
 Twenty-four regression files, typecheck, formatting and whitespace checks passed locally. Synthetic fixtures cover day precision, year-first dates, invalid dates, missing years, competing labels, cross-company/project isolation and coexistence with the existing quoted-employer reader. These extend the mandatory flattened-employment CI regression. Verify exact-head CI/status results after publishing and start future work from the latest PR head. Remaining work should focus on the actual boundary/table queues and partial-history coverage, without inferring dates or converting project-only text to employment.
 
 Scope remains **SUBSET_ONLY: 277 / 970**, with 693 unaudited. Production remains **NO_GO** pending live OCR with saved provenance, reviewed/version-matched backfill, full-population audit and authenticated acceptance on the exact deployed artifact. No runtime configuration, Supabase/Vercel writes, source mutation, backfill or production promotion occurred.
+
+## Batch checkpoint: bounded legal-employer headings (2026-09-16)
+
+Baseline: `981a00a3d65c4657bdd0adb18f5a61383136cbbb`; parser now `candidate-employment-v63-legal-heading-batch`. The full 170-record unresolved inventory was rerun before editing: 112 heading-boundary cases, 46 project/client narrative cases, four labelled-field cases, six table cases and two other cases. This batch targets recurring heading-boundary layouts with explicit legal suffixes or delimiters, rather than arbitrary date proximity.
+
+At the start of an employment section, a legal-employer boundary supports employer/role/date and role/employer/date orders. Comma-delimited location text is excluded from the employer when the legal suffix is explicit, and project/client or role text cannot act as location. Separate employer-tenure readers handle a pipe before dates, numbered roles/promotions after employer tenure, a bounded location heading, and employer tenure before an explicit Project Description. These retain blank titles rather than copying later project or promotion roles. The existing prose reader retains ownership of dash-separated employer/title headings to avoid duplicate role variants. Invalid dates, reversed ranges, missing endpoints and project-only contexts remain excluded.
+
+Private comparison across all 277 available sources: **107 → 116 sources with employment**, **450 → 460 rows**, **170 → 161 sources without employment**. Exactly nine previously unresolved sources gain ten rows: four role-bearing heading sources gain four rows; five employer-tenure sources gain six rows. Six added rows intentionally have no title; source review remains necessary to establish title/tenure associations. All ten added ranges are explicit, and all 450 previous company/title/start/end/current tuples remain unchanged and retained. New rows were checked against private source excerpts. These are source-record counts, not unique people or complete CV acceptance.
+
+Read-only audit: 460 employers, 401 titles and 457 supported date ranges. Malformed, duplicate, invalid-range and pagination-leak counts remain zero. Seven overlap flags and one possible employer/client equality flag are unchanged. Newly retained employer-only rows still require incomplete-field review; diagnostic PASS is not complete-profile acceptance.
+
+| Remaining review queue | Before | After | Continuing reason |
+| --- | ---: | ---: | --- |
+| Date near employment heading | 112 | 103 | Missing delimiters, mixed narrative or lost reading order |
+| Project/client narrative | 46 | 46 | Assignment dates do not establish employer tenure |
+| Explicit employer labels | 4 | 4 | Missing tenure or mixed assignment fields |
+| Headed tables | 6 | 6 | Original layout or bounded column reconstruction needed |
+| Other narrative/layout | 2 | 2 | No supported extraction added |
+| **Total** | **170** | **161** | Heuristic queues, not adjudicated causes |
+
+Twenty-four local regression files, typecheck, formatting and whitespace checks pass. The mandatory flattened-employment regression now covers each new heading order, location exclusion, distinct promotion/project dates, missing/reversed endpoints and coexistence with the older prose parser. A duplicate identified by the existing prose regression was repaired locally before publishing; no regression expectations or release gates were weakened. Verify CI and commit statuses on this revision, and always inspect the latest PR head before continuing. Prioritize evidence-backed heading/table groups and missing historical rows; keep original-source requests private and avoid requesting available files.
+
+Scope remains **SUBSET_ONLY: 277 / 970**, with 693 unaudited. Production remains **NO_GO** pending live OCR and saved provenance, reviewed/version-matched backfill, full-population audit and authenticated acceptance on the exact artifact to promote. No source mutation, runtime configuration, Supabase/Vercel writes, backfill or production promotion occurred.

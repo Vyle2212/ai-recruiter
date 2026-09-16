@@ -319,3 +319,62 @@ assert.equal(
   "dedicated quoted-employer reader owns location separation",
 );
 assert.equal(extractCanonicalEmploymentFromResume(quotedDates).length, 1);
+
+const legalHeadings = [
+  "Working Experience Example Systems Ltd Senior Test Automation Engineer Lead Sep 2021 to Present Duties: Delivery",
+  "Working Experience Recruitment Executive Example Systems Sdn Bhd May 2022 – Present Performed recruitment.",
+  "Professional Experience SAP FI/CO Consultant Example Systems, Jan 2023 - Present Perform configuration.",
+  "Working Experience Functional Consultant, Example Systems S/B, Example City May 2021 – Present Responsible for delivery.",
+];
+for (const text of legalHeadings) {
+  assert.equal(read(text).length, 1, text);
+  assert.match(read(text)[0].company, /^Example Systems/);
+  assert.ok(read(text)[0].title);
+  assert.equal(extractCanonicalEmploymentFromResume(text).length, 1, text);
+}
+assert.equal(
+  read(legalHeadings[0])[0].title,
+  "Senior Test Automation Engineer Lead",
+);
+assert.equal(read(legalHeadings[3])[0].company, "Example Systems S/B");
+const independentTenure = [
+  "Professional Experience Example Systems Ltd | July 2010 – Present Example City Technical Project Lead | July 2015 – Present Project: Buyer June 2019 – August 2019",
+  "Professional Experience Example Systems Sdn Bhd Jul 2018 - Present 1. Senior Executive, SAP MM Consultant, Jan 2023 - Present 2. Analyst Jan 2020 - Dec 2022",
+  "Professional Experience Example Systems Sdn Bhd (A SUBSIDIARY OF Example Holdings Berhad) Feb 2016 – May 2016 1. Designer Intern Design website.",
+  "Professional Experience Example Corporation, Example City JUNE 2018 TO PRESENT Involved with projects.",
+  "Professional Experience Example Systems Ltd, City (dec 2016 to present) – 1 YEAR Served as Senior Consultant.",
+  "Employment History Feb 2022 – Present Example Services Project Description: ERP delivery Jan 2023 – Dec 2023 Role: Consultant",
+];
+for (const text of independentTenure) {
+  const rows = read(text);
+  assert.equal(rows.length, 1, text);
+  assert.equal(rows[0].title, "", text);
+  assert.equal(extractCanonicalEmploymentFromResume(text).length, 1, text);
+}
+assert.equal(read(independentTenure[0])[0].start, "July 2010");
+assert.equal(read(independentTenure[1])[0].start, "Jul 2018");
+assert.equal(read(independentTenure[5])[0].start, "Feb 2022");
+for (const text of [
+  "Project Professional Experience Example Systems Ltd Senior Consultant Jan 2020 - Present",
+  "Professional Experience Project: Example Systems Ltd Senior Consultant Jan 2020 - Present",
+  "Professional Experience Example Systems Ltd Client: Buyer Senior Consultant Jan 2020 - Present",
+  "Professional Experience Consultant Client Buyer, Jan 2020 - Present",
+  "Professional Experience Functional Consultant, Example Systems Ltd, Client Buyer Jan 2020 - Present",
+  "Professional Experience Functional Consultant, Example Systems Ltd, Project Manager Jan 2020 - Present",
+  "Professional Experience Example Systems Ltd, Project Client Jan 2020 - Present Involved with delivery.",
+  "Professional Experience Example Systems Ltd Jan 2020 - 1. Consultant Jan 2021 - Present",
+  "Professional Experience Jan 2022 - Dec 2021 Example Systems Project Description: Delivery",
+  "Professional Experience Example Systems Ltd Senior Consultant Jan 2024 - Dec 2023",
+])
+  assert.equal(read(text).length, 0, text);
+console.log(
+  "Legal headings: bounded roles and separate employer/promotion/project tenure pass",
+);
+
+assert.equal(
+  extractCanonicalEmploymentFromResume(
+    "Professional Experience Example Systems, Inc. – Package Consultant March 2022 – Present Delivered training. Example Services Inc. – Senior Consultant February 2017 – February 2020 Education",
+  ).length,
+  2,
+  "existing prose reader owns dash-separated headings without duplicate roles",
+);
