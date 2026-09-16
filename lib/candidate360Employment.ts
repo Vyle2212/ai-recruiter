@@ -14,7 +14,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v80-career-heading-batch";
+  "candidate-employment-v81-labelled-career-batch";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1876,6 +1876,12 @@ function resumeEmployment(resumeText: string) {
       if (a === null || b === null || start === null || end === null) return false;
       const exactPeriod = a === start && b === end && known.current === parsed.current;
       const differentAssertion = normalized(known.company) !== normalized(parsed.company) || normalized(known.title) !== normalized(parsed.title);
+      if (exactPeriod && !differentAssertion) return true;
+      // A second reader may retain the location after the same explicit legal
+      // employer. Do not duplicate a grounded worked-for statement as a new job.
+      if (row.group === 'explicit-sentence' && exactPeriod && normalized(known.title) === normalized(parsed.title) &&
+        parsed.company.toLowerCase().startsWith(known.company.toLowerCase() + ',') &&
+        known.provenance?.some(ref => ref.sourceRef?.startsWith('resume.flattened.worked-for-legal-employer.'))) return true;
       if (exactPeriod && differentAssertion && known.provenance?.some(ref => (ref.sourceRef?.startsWith('resume.labelledCompany') || ref.sourceRef?.startsWith('resume.labelledEmployerHistory.') || (normalized(known.title) === normalized(parsed.title) && ref.sourceRef?.startsWith('resume.flattened.period-company-designation.'))))) return true;
       return row.group === 'named-employer-fields' && normalized(known.company) === normalized(parsed.company) &&
         !exactPeriod && a >= start && b <= end;

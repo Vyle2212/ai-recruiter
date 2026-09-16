@@ -1,6 +1,6 @@
 # Original CV layout verification — 2026-09-15
 
-> Latest code batch: [v80 career headings and tables](precision-career-heading-batch-20260916.md). All 970 sources compared: 33 additional records and 82 net rows recovered; two suffix-only employers corrected, with the other 1,635 prior tuples retained. Local totals are 590 records / 1,719 rows, with 380 sources unresolved. Malformed, duplicate and invalid-range counts remain zero; overlap flags remain 55 and client/employer equality flags remain two. No additional production data write.
+> Latest code batch: [v81 labelled career records](precision-labelled-career-batch-20260916.md). All 970 sources compared: 33 previously empty records recovered, 77 net additional employment rows, and one consulting-client row corrected using the explicit employer table. The other 1,718 prior tuples are unchanged. Local totals: 623 records / 1,796 rows, with 347 sources unresolved. Malformed, duplicate and invalid-range counts remain zero; overlap flags remain 55 and client/employer equality flags remain two. No additional production data write.
 
 > Previous code batch: [v76 career export recovery](precision-career-export-batch-20260916.md), checked against all 970 sources: 74 additional records recovered, 224 net additional employment rows, 484 sources still unresolved locally. This batch does not add production database writes; the verified nine-original backfill below remains the last data change.
 
