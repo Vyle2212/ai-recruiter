@@ -569,3 +569,92 @@ for (const source of [
 console.log(
   "Compact histories: adjacent job ownership, precision and prose boundaries pass",
 );
+
+const periodTable =
+  "Professional History Period Position Company Duration Jun’24 - Aug’24 SAP MM Consultant Example Electric 2 months Sep’23 - Jan’24 SAP SD Consultant Example Services Pte Ltd 5 months Jul’14 - May’18 School Program Executive Example Academy 4 years 10 months Areas of Expertise SAP";
+assert.deepEqual(
+  read(periodTable).map((r) => [r.company, r.title, r.start, r.end]),
+  [
+    ["Example Electric", "SAP MM Consultant", "Jun 2024", "Aug 2024"],
+    ["Example Services Pte Ltd", "SAP SD Consultant", "Sep 2023", "Jan 2024"],
+    ["Example Academy", "School Program Executive", "Jul 2014", "May 2018"],
+  ],
+);
+assert.equal(extractCanonicalEmploymentFromResume(periodTable).length, 3);
+const fieldForms =
+  "Employment History Time Duration: Jun 2016 – 2022 Position: PM / Solution Architect Company’s Name: Example Systems Field of Work: ERP Main Duties: Project Implementation: Buyer Duration: Jan 2021 - Dec 2021 Customer References on vendor site. Time Duration: Jun 2015 – Jun 2016 Position: ERP Freelancer Company’s Name: Example Services Field of Work: Software Main Duties: Delivery Time Duration: Dec 2012 – Jun 2015 Position: CEO Company’s Name: Example Software Ltd Field of Work: Software EDUCATIONAL HISTORY Time Duration: Jan 2010 - Jan 2012 Position: Student Company’s Name: Example College Field of Work: IT";
+const formRows = read(fieldForms);
+assert.deepEqual(
+  formRows.map((r) => [r.company, r.title, r.start, r.end]),
+  [
+    ["Example Systems", "PM / Solution Architect", "Jun 2016", "2022"],
+    ["Example Services", "ERP Freelancer", "Jun 2015", "Jun 2016"],
+    ["Example Software Ltd", "CEO", "Dec 2012", "Jun 2015"],
+  ],
+);
+assert.equal(extractCanonicalEmploymentFromResume(fieldForms).length, 3);
+assert.equal(
+  extractCanonicalEmploymentFromResume(
+    fieldForms.replace("Jun 2016 – 2022", "06/2016 – 2022"),
+  ).length,
+  3,
+);
+const currentRole =
+  "Professional Experience Example Software Feb 2023 (current) Role: Project Manager Deliver new implementation projects.";
+assert.deepEqual(
+  read(currentRole).map((r) => [r.company, r.title, r.start, r.end, r.current]),
+  [["Example Software", "Project Manager", "Feb 2023", "Present", true]],
+);
+const locatedDesignation =
+  "Professional Experience Example Consulting Sdn Bhd – Example City, COUNTRY Nov 2021 – Till Date Designation: SAP SuccessFactors – Lead Consultant Project - 15 Client Name: Example Buyer Project Duration: Feb 2023 – Present";
+assert.deepEqual(
+  read(locatedDesignation).map((r) => [r.company, r.title, r.start, r.end]),
+  [
+    [
+      "Example Consulting Sdn Bhd",
+      "SAP SuccessFactors – Lead Consultant",
+      "Nov 2021",
+      "Present",
+    ],
+  ],
+);
+for (const source of [
+  "Project " + periodTable,
+  "Professional History Period Position Company Duration Jun’24 - Aug’23 SAP MM Consultant Example Electric 2 months",
+  "Professional History Period Position Company Duration Jun’24 SAP MM Consultant Example Electric 2 months",
+  "Professional History Period Position Company Duration Jun’24 - Aug’24 Client Consultant Example Buyer 2 months",
+  "Professional History Period Position Company Duration Jun’24 - Aug’24 Jan’20 - Aug’23 SAP Consultant Example Services 2 months",
+  "Project " + fieldForms,
+  "Employment History Time Duration: Jun 2016 – Position: Consultant Company’s Name: Example Systems Field of Work: ERP Project Duration: Jan 2020 - Dec 2021",
+  "Employment History Time Duration: Jun 2016 – 2022 Position: Consultant Client: Example Buyer Company’s Name: Example Systems Field of Work: ERP",
+  "Employment History Time Duration: Jun 2022 – 2021 Position: Consultant Company’s Name: Example Systems Field of Work: ERP",
+  currentRole.replace("(current)", ""),
+  currentRole.replace("Example Software", "Client Example Software"),
+  locatedDesignation.replace("Nov 2021 – Till Date", ""),
+  locatedDesignation.replace("Example City, COUNTRY", "Client Example Buyer"),
+])
+  assert.equal(read(source).length, 0, source);
+const tableStops =
+  "Professional History Period Position Company Duration Jan’20 - Jan’21 SAP Consultant Example Systems 1 year Responsibilities: Delivered systems Jun’22 - Jun’23 SAP Consultant Example Buyer 1 year";
+assert.equal(
+  read(tableStops).length,
+  1,
+  "a table cannot restart in duty prose",
+);
+console.log(
+  "Explicit forms and tables: complete field ownership, current markers and precision pass",
+);
+for (const boundary of [
+  "References:",
+  "Project History",
+  "Project Experience",
+]) {
+  const source =
+    "Employment History Time Duration: Jun 2016 – 2022 Position: Consultant Company’s Name: Example Systems Field of Work: ERP " +
+    boundary +
+    " Time Duration: Jun 2010 – Jun 2012 Position: Consultant Company’s Name: Example Buyer Field of Work: Software";
+  assert.deepEqual(
+    read(source).map((r) => r.company),
+    ["Example Systems"],
+  );
+}

@@ -107,6 +107,44 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
       /\b(?:employment history|career history|working experiences?|work experience|professional experience)\s*:?\s*/gi,
     ),
   ];
+  // A declared Period / Position / Company / Duration table provides row
+  // boundaries even when PDF whitespace is flattened. Duration is a boundary,
+  // never a way to manufacture an endpoint. Short years use the established
+  // resume date convention, only inside this explicitly headed table.
+  const shortDate = `${month}[. ]*[’']?\\s*(?:${year}|\\d{2})`;
+  const tableDate = (value: string) =>
+    value.replace(/(?<!\d)(\d{2})$/, (v) =>
+      String(Number(v) + (Number(v) <= 30 ? 2000 : 1900)),
+    );
+  for (const header of source.matchAll(
+    /\bProfessional History\s+Period\s+Position\s+Company\s+Duration\s+/gi,
+  )) {
+    if (
+      /\b(?:project|client|customer)\s+$/i.test(source.slice(0, header.index))
+    )
+      continue;
+    let rest = source.slice((header.index || 0) + header[0].length);
+    const cell = new RegExp(
+      `^(${shortDate})\\s*[-–—]\\s*(${shortDate}|${ongoing})\\s+(${title})\\s+([^:;|]{2,100}?)\\s+\\d+\\s+(?:years?|months?)(?:\\s+\\d+\\s+months?)?(?=\\s|$)`,
+      "i",
+    );
+    for (;;) {
+      const m = rest.match(cell);
+      if (!m) break;
+      if (new RegExp(shortDate, "i").test(`${m[3]} ${m[4]}`)) break;
+      const before = result.length;
+      add(
+        m[4],
+        m[3],
+        tableDate(m[1]),
+        tableDate(m[2]),
+        m[0],
+        "period-position-company-duration-table",
+      );
+      if (result.length === before) break;
+      rest = rest.slice(m[0].length).trimStart();
+    }
+  }
   // Roman prefixes are ambiguous company initials unless repeated headings
   // establish an ordered I / II / III sequence. "I1" is retained only as the
   // first enumerator in that sequence (a common flattened/OCR list artifact).
@@ -137,6 +175,37 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
     const section = fullSection.split(
       /\b(?:project experience|project history|project details|projects\/assignments|education|qualifications|certifications|technical skills|references|referrals)\b|\b(?:Projects?|Client|Customer)\s*:/i,
     )[0];
+    // Repeated employment forms delimit all fields explicitly. Projects may
+    // follow Main Duties, but their Duration/Position fields cannot complete
+    // an incomplete employment form. Preserve year-only ends as written.
+    if (/^Time Duration\s*:/i.test(section)) {
+      const form = new RegExp(
+        `\\bTime Duration\\s*:\\s*(${date})\\s*[-–—]\\s*(${date}|${year}|${ongoing})\\s+Position\\s*:\\s*([^:;]{2,120}?)\\s+Company[’']s Name\\s*:\\s*([^:;]{2,120}?)\\s+Field of Work\\s*:`,
+        "gi",
+      );
+      const employmentForms = source
+        .slice((heading.index || 0) + heading[0].length, headings[i + 1]?.index)
+        .split(
+          /\b(?:(?:educational|education|academic) history\b|project (?:history|experience)\b|references\s*:|referrals\s*:)/i,
+        )[0];
+      for (const m of employmentForms.matchAll(form)) {
+        if (
+          /\b(?:project|client|customer)\s*:?\s*$/i.test(
+            employmentForms.slice(0, m.index),
+          )
+        )
+          continue;
+        add(
+          m[4],
+          m[3],
+          m[1],
+          m[2],
+          m[0],
+          "duration-position-company-form",
+          true,
+        );
+      }
+    }
     // Repeated uppercase form labels survive flattened PDF page furniture.
     // All three fields must be adjacent; dates in an intervening project are
     // never used to complete a partial employment form.
@@ -603,6 +672,21 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
         add(m[f[0]], "", m[f[1]], m[f[2]], m[0], "bounded-employer-tenure");
     }
     const fieldHeadings = [
+      {
+        re: new RegExp(
+          `^(${company})\\s+(${date})\\s+\\((current|present)\\)\\s+Role\\s*:\\s*(${title})(?=\\s+(?:Deliver|Manage|Responsibilities|Main Duties)\\b|$)`,
+          "i",
+        ),
+        f: [1, 4, 2, 3],
+      },
+      {
+        re: new RegExp(
+          `^(${legal})\\s*[-–—]\\s*([A-Za-z .,-]{2,55}?)\\s+${range}\\s+Designation\\s*:\\s*(${title})(?=\\s+Project\\s*[-–—#:]|$)`,
+          "i",
+        ),
+        f: [1, 5, 3, 4],
+        location: 2,
+      },
       {
         re: new RegExp(
           `^(${legal})(?:\\s+([^:()]{1,45}?))?\\s+Position\\s*:\\s*([^:;]{2,110}?)\\s+\\(${range}\\)${roleEnd}`,

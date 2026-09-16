@@ -380,3 +380,34 @@ Twenty-four regression files, typecheck, scoped formatting and whitespace checks
 Continuation: start from the latest head, prioritize remaining evidence-backed source groups and partially recovered histories, and keep comparing all 277 sources. The 144 unresolved records are separate from the 693 sources not yet audited. Consolidate any original-CV requests privately from actual metadata and do not request available files again.
 
 Scope remains **SUBSET_ONLY: 277 / 970**. Production remains **NO_GO** pending live OCR with saved provenance, reviewed/version-matched backfill, full-population audit and authenticated acceptance on the exact artifact to promote. No CVs or private identifiers are committed; no runtime configuration, Supabase/Vercel writes, source mutation, backfill or promotion occurred.
+
+
+## Batch checkpoint: explicit forms, duration tables and private review inventory (2026-09-16)
+
+Baseline: `099c18bdac42bf67624b13e8d2fb45ec29dcfcd2`; parser now `candidate-employment-v67-explicit-form-table-batch`. Before edits, all 144 unresolved source records were classified: 88 heading/date-boundary, 45 project/client narratives, four explicit-label, five table and two other cases. This batch addresses four source-backed layouts without company dictionaries or personal fixtures.
+
+- Explicit Professional History / Period / Position / Company / Duration tables consume consecutive complete rows. The trailing duration marks the row boundary, never supplies a missing endpoint. Quoted short years use the existing date convention only inside this table. Embedded extra dates, incomplete cells and duty prose stop parsing; the reader does not restart later in a narrative.
+- Time Duration / Position / Company's Name / Field of Work forms bind complete adjacent fields. Nested project Duration and Position cannot complete missing employer fields. Repeated employment forms retain their own dates and titles, including year-only endpoints. Educational history, project-history sections and labelled references stop the form reader. A customer-reference mention within duties does not prematurely discard later employment forms.
+- A literal `(current)` or `(present)` beside the employer start establishes the current endpoint only when followed by an explicit Role field.
+- Legal-employer / location / tenure / Designation headings keep the location outside the employer and stop before the following numbered project. Project dates never supply employer tenure.
+
+All 277 private sources were compared: **133 → 137 source records with employment**, **522 → 539 employment rows**, **144 → 140 without employment**. Repeated forms recover nine rows, the duration-headed table recovers six rows, and two explicit headings recover one each. All 522 previous company/title/start/end/current tuples are unchanged and retained. Every added tuple was checked against private excerpts. These are source-record counts, not unique people or complete histories: the table still contains an unsupported older role, and one newly recovered heading has older jobs awaiting bounded extraction.
+
+Read-only audit: 539 employers, 477 titles and 536 supported date ranges. Malformed, duplicate, invalid-range and pagination-leak counts remain zero. The possible client/employer equality flag stays at one. Overlap flags increase **seven → eight** because the newly recovered form explicitly includes a part-time job overlapping another job. Both source-supported ranges are retained and the review flag remains visible; this is not counted as a new erroneous range or silently resolved.
+
+| Remaining review queue | Before | After | Continuing reason |
+| --- | ---: | ---: | --- |
+| Date near employment heading | 88 | 85 | Lost order, missing delimiters or malformed dates |
+| Project/client narrative | 45 | 45 | Assignment dates alone cannot establish employer tenure |
+| Explicit employer labels | 4 | 4 | Incomplete or mixed assignment fields |
+| Headed tables | 5 | 4 | Column-major order, missing endpoints or ambiguous column ownership |
+| Other narrative/layout | 2 | 2 | No supported extraction added |
+| **Total** | **144** | **140** | Heuristic review queues, not adjudicated causes |
+
+A separate private inventory consolidates seven requests for original/layout evidence, two requests for date confirmation and two apparent non-candidate records (a JD and an empty template) requiring classification review. No deletion or data correction occurred. Eight original-CV identities already accessible were excluded from re-upload requests; this is an availability check, not a claim that all those originals passed extraction or backfill. Names, metadata, contact details, source tokens and private file links are deliberately absent from this repository.
+
+Twenty-four regression files and typecheck pass locally. Sanitized fixtures cover all four new layouts, short/year-only date precision, explicit current markers, project/client isolation, incomplete/reversed dates, consecutive-cell ownership and stopping at education/references. A column-major negative fixture caught an extra date inside a role cell; the parser now rejects it. Scoped formatting and whitespace checks pass. Verify exact-head CI and commit statuses after this single batch push; no release or test gates were lowered.
+
+Continuation: start from the latest PR head. Prioritize remaining source-backed groups and partially recovered histories while the private request list is being answered. Keep the **140 unresolved subset sources** separate from **693 unaudited sources**; do not invent names for the latter. The nine-profile request list is a priority evidence list, not an exhaustive list of all unresolved sources.
+
+Scope remains **SUBSET_ONLY: 277 / 970**. Production remains **NO_GO** pending real OCR with saved provenance, reviewed/version-matched backfill, full-population audit and authenticated acceptance on the exact artifact to promote. No runtime configuration, Supabase/Vercel writes, source mutation, backfill or promotion occurred.
