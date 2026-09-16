@@ -211,3 +211,26 @@ The full subset audit reports 336 employers, 295 titles and 334 supported date r
 Next coverage work should examine the remaining 125 near-heading-date sources in groups; these include mixed project/employment sections and lost column boundaries, so a nearby date alone is not sufficient. Six table sources require layout-aware review; seven labelled sources require field-boundary review. Do not infer a missing end, copy client dates, or increase coverage by converting project-only evidence to employment. Recover originals through existing private access where possible; keep any original-source request list private and consolidated.
 
 Validation: 24 employment/calendar/canonical/source-layout/OCR/upload regression files and TypeScript typecheck pass locally. The new batch regression is required in Production Trust CI (the source-layout/audit/OCR group now has twelve scripts). Exact-head GitHub CI and commit statuses must be checked after publishing this commit; local checks do not establish deployment acceptance. Production remains **NO_GO** pending live Google OCR with saved provenance, reviewed/version-matched backfill, audit of all 970 sources, and authenticated acceptance on the exact deployment artifact. No runtime configuration, Supabase/Vercel writes, source mutation or production promotion occurred.
+
+## Batch checkpoint: bounded heading fields (2026-09-16)
+
+Baseline: `23430b903c71706cf14688850c3461523325adee`; parser now `candidate-employment-v60-heading-fields-batch`. The complete unresolved inventory was rerun before editing: 187 source records, including 125 with a date near an employment heading. This queue was prioritized because several recurring layouts retain explicit employer/role boundaries despite flattened whitespace.
+
+The batch supports legal-employer headings with tenure before or after the employer, labelled Position fields with intervening location text, consecutive employer/tenure/parenthesized-role rows, and COMPANY/POSITION/DURATION fields with explicit current endpoints. Roman numbering is removed only when repeated headings establish an ordered I/II sequence; company initials such as X or IV remain intact. A date-first pipe ledger with no title column and a numbered employer tenure before a project section retain blank titles. Invalid dates, date-only cells, project/client substitutions, narrative-as-title text and unbounded continuations remain excluded.
+
+Private source comparison: **90 → 100 profiles with employment**, **336 → 357 rows**, **187 → 177 without employment** across the unchanged 277-source subset. Exactly ten previously unresolved source records gained employment; no existing employer/title/date/current tuples were removed or changed. Eight sources gained fourteen rows from bounded heading fields; one gained six employer-only ledger rows; one gained a single employer tenure before a project block. The seven employer-only rows intentionally have no title. All added tuples were checked against their private source excerpts. These counts describe source records, not deduplicated people or fully recovered CVs.
+
+The full read-only audit reports 357 employers, 309 titles and 355 supported date ranges. Malformed, duplicate, invalid-range and pagination-leak counts remain zero. The seven overlap review flags and one possible employer/client equality flag are unchanged. No dates were inferred, source records mutated or database rows backfilled.
+
+| Remaining review queue | Before | After | Continuing reason |
+| --- | ---: | ---: | --- |
+| Date near employment heading | 125 | 115 | Mixed narrative, missing delimiters or lost column order; proximity alone is insufficient |
+| Project/client narrative | 47 | 47 | Employer tenure cannot be established from assignment dates |
+| Explicit employer labels | 7 | 7 | Labels remain separated from their own dates or roles by mixed content |
+| Headed tables | 6 | 6 | Original layout or bounded row reconstruction still needed |
+| Other narrative/layout | 2 | 2 | No supported extraction added in this batch |
+| **Total** | **187** | **177** | Heuristic review queues, not adjudicated causes |
+
+Twenty-four local regression files, TypeScript typecheck and formatting checks pass. Representative positive and negative fixtures extend the existing mandatory flattened-employment CI regression; no release gate was relaxed. Before another batch, inspect the current PR head and exact-head CI/status results rather than reusing the baseline SHA. Continue grouping the 115 boundary-review records, and review the six remaining table layouts together. Original-source requests must use actual private metadata and exclude files still accessible locally.
+
+Scope remains **SUBSET_ONLY: 277 / 970**, with 693 unaudited. Production remains **NO_GO** pending live OCR with saved provenance, reviewed/version-matched backfill, full-population audit and authenticated acceptance of the exact deployment artifact. No runtime configuration, Supabase/Vercel writes or production promotion occurred. Exact-head GitHub CI is required for this revision.

@@ -10,7 +10,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v59-flattened-evidence-batch";
+  "candidate-employment-v60-heading-fields-batch";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,

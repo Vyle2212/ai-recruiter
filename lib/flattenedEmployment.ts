@@ -17,7 +17,7 @@ const ongoing =
   "(?:(?:till|until|to)\\s+(?:date|now|today|present)|present|current|now|ongoing)";
 const range = `(${date})\\s*(?:[-–—]|to|until|till)\\s*(${date}|${ongoing})`;
 const job =
-  "(?:Consultant|Manager|Lead|Developer|Analyst|Engineer|Officer|Accountant|Architect|Specialist|Administrator|Director|Executive|Associate|Expert)";
+  "(?:Consultant|Manager|Lead|Developer|Analyst|Engineer|Officer|Accountant|Architect|Specialist|Administrator|Director|Executive|Associate|Expert|Controller|Coordinator)";
 const title = `[^:;|]{0,110}?\\b${job}(?:\\s*\\([^)]{1,40}\\))?`;
 const company = "[^:;|]{2,120}?";
 const forbidden =
@@ -53,13 +53,16 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
       b === null ||
       b < a ||
       forbidden.test(employer) ||
+      new RegExp(date, "i").test(employer) ||
       employer.length > 120 ||
       /\b(?:worked|working|from|since|as|at)\b/i.test(employer) ||
       new RegExp(`\\b${job}\\b`, "i").test(employer) ||
       (role &&
         (new RegExp(date, "i").test(role) ||
           !new RegExp(`\\b${job}\\b`, "i").test(role) ||
-          /\b(?:client|customer|responsibilities|duties)\b/i.test(role)))
+          /\b(?:client|customer|responsibilities|duties|being|worked|working|responsible|involved|performed|handled|about)\b/i.test(
+            role,
+          )))
     )
       return;
     result.push({
@@ -77,6 +80,23 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
       /\b(?:employment history|career history|working experiences?|work experience|professional experience)\s*:?\s*/gi,
     ),
   ];
+  // Roman prefixes are ambiguous company initials unless repeated headings
+  // establish an ordered I / II / III sequence. "I1" is retained only as the
+  // first enumerator in that sequence (a common flattened/OCR list artifact).
+  const enumerated = new Set<number>();
+  const roman = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+  const markerAt = (i: number) =>
+    headings[i] &&
+    source
+      .slice((headings[i].index || 0) + headings[i][0].length)
+      .match(/^(I1|[IVX]+)\s+/)?.[1];
+  for (let i = 0; i < headings.length - 1; i++) {
+    if (!/^(?:I|I1)$/.test(markerAt(i) || "") || markerAt(i + 1) !== "II")
+      continue;
+    enumerated.add(i);
+    for (let j = 1; j < roman.length && markerAt(i + j) === roman[j]; j++)
+      enumerated.add(i + j);
+  }
   for (const [i, heading] of headings.entries()) {
     if (
       /\b(?:project|client|customer)\s+$/i.test(source.slice(0, heading.index))
@@ -130,6 +150,110 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
     for (const { re, f } of headingPatterns) {
       const m = section.match(re);
       if (m) add(m[f[0]], m[f[1]], m[f[2]], m[f[3]], m[0], "delimited-heading");
+    }
+    // Legal suffixes and explicit field labels supply boundaries lost when a
+    // PDF is flattened. Never continue searching inside responsibility prose.
+    const legal =
+      "[A-Z0-9][A-Za-z0-9&.,'() /-]{1,100}?\\b(?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Pvt\\.?\\s*Ltd\\.?|Private Limited|Corporation|Berhad|Limited|Ltd\\.?|Inc\\.?)";
+    const roleEnd =
+      "(?=\\s+(?:Job (?:Functions|responsibilities)|Responsibilities|Main Duties|Task\\s*[/]|[•●◼➢⮚]|Hands-on)|$)";
+    const boundedRole = `([^:;]{2,110}?)${roleEnd}`;
+    const labelledHeading = enumerated.has(i)
+      ? section.replace(/^(?:I1|[IVX]+)\s+/, "")
+      : section.replace(/^\d{1,2}[.)]\s*/, "");
+    const fieldHeadings = [
+      {
+        re: new RegExp(
+          `^(${legal})(?:\\s+([^:()]{1,45}?))?\\s+Position\\s*:\\s*([^:;]{2,110}?)\\s+\\(${range}\\)${roleEnd}`,
+          "i",
+        ),
+        f: [1, 3, 4, 5],
+        location: 2,
+      },
+      {
+        re: new RegExp(
+          `^(${legal})\\s+${range}\\s+(?:Position\\s*:\\s*)?${boundedRole}`,
+          "i",
+        ),
+        f: [1, 4, 2, 3],
+      },
+      {
+        re: new RegExp(
+          `^${range}\\s+(?:\\(\\d+\\s+(?:months?|years?)\\)\\s+)?(${legal})\\s+${boundedRole}`,
+          "i",
+        ),
+        f: [3, 4, 1, 2],
+      },
+      {
+        re: new RegExp(
+          `^COMPANY\\s+(${company})\\s+POSITION\\s+([^:;]{2,110}?)\\s+DURATION\\s+${range}(?=\\s|[.;]|$)`,
+          "i",
+        ),
+        f: [1, 2, 3, 4],
+      },
+    ];
+    for (const { re, f, location } of fieldHeadings) {
+      const m = labelledHeading.match(re);
+      if (
+        m &&
+        !(
+          location &&
+          (forbidden.test(m[location] || "") ||
+            new RegExp(date, "i").test(m[location] || ""))
+        )
+      )
+        add(m[f[0]], m[f[1]], m[f[2]], m[f[3]], m[0], "bounded-heading-fields");
+    }
+    // Consecutive employer — tenure — (role) rows form a compact ledger.
+    let parenthesizedLedger = labelledHeading;
+    const parenthesizedRow = new RegExp(
+      `^(${legal})\\s*[-–—]\\s*${range}\\s+\\(([^:;()]{2,100})\\)(?=\\s|$)`,
+      "i",
+    );
+    for (;;) {
+      const m = parenthesizedLedger.match(parenthesizedRow);
+      if (!m) break;
+      const before = result.length;
+      add(m[1], m[4], m[2], m[3], m[0], "bounded-heading-fields");
+      if (before === result.length) break;
+      parenthesizedLedger = parenthesizedLedger.slice(m[0].length).trim();
+    }
+    const employerTenure = labelledHeading.match(
+      new RegExp(`^(${legal})\\s+\\(${range}\\)\\s*$`, "i"),
+    );
+    if (employerTenure)
+      add(
+        employerTenure[1],
+        "",
+        employerTenure[2],
+        employerTenure[3],
+        employerTenure[0],
+        "heading-employer-tenure",
+      );
+
+    // Date | Employer compact ledgers contain no title column. A role from a
+    // later narrative must not fill it. Parse every cell consecutively and stop
+    // at the first incomplete or unbounded cell.
+    let employerLedger = section;
+    const employerDate = new RegExp(`^${range}\\s*\\|\\s*`, "i");
+    for (;;) {
+      const d = employerLedger.match(employerDate);
+      if (!d) break;
+      const rest = employerLedger.slice(d[0].length);
+      const next = rest.search(new RegExp(`\\s+${date}`, "i"));
+      const cell = (next < 0 ? rest : rest.slice(0, next)).trim();
+      if (!/^[A-Za-z0-9][A-Za-z0-9&.,'() -]{1,100}$/.test(cell)) break;
+      const before = result.length;
+      add(
+        cell.replace(/\s+\((?:contracting|contract)\)$/i, ""),
+        "",
+        d[1],
+        d[2],
+        d[0] + cell,
+        "employer-only-ledger",
+      );
+      if (next < 0 || result.length === before) break;
+      employerLedger = rest.slice(next).trim();
     }
     // Compact date-first ledgers must parse consecutively from the heading.
     // Never skip failed cells or resume in the project narrative that follows.

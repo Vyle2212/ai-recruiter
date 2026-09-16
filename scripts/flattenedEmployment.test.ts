@@ -84,3 +84,86 @@ assert.equal(employmentTimelineDiagnostics(canonical).duplicateRecords, 0);
 console.log(
   "Flattened employment batch: explicit tenure, section/cell isolation, precision and deduplication pass",
 );
+
+const headingFields = [
+  [
+    "Working Experience October 2016 to Present (10 months) Example Aviation Pte Ltd Quality Manager Responsibilities: Delivery.",
+    "Example Aviation Pte Ltd",
+    "Quality Manager",
+  ],
+  [
+    "Employment History Example Services Sdn Bhd May 2023 – Jan 2024 Senior Manager, ERP Delivery  Task / Job Scopes: Delivery.",
+    "Example Services Sdn Bhd",
+    "Senior Manager, ERP Delivery",
+  ],
+  [
+    "Working Experience May 2017 – Current Example Consulting Sdn Bhd SAP MDO Consultant Hands-on delivery.",
+    "Example Consulting Sdn Bhd",
+    "SAP MDO Consultant",
+  ],
+  [
+    "Professional Experience COMPANY Example Manufacturing POSITION REGIONAL MASTER DATA CONTROLLER DURATION JANUARY 2024 TILL PRESENT Responsible for delivery.",
+    "Example Manufacturing",
+    "REGIONAL MASTER DATA CONTROLLER",
+  ],
+  [
+    "Employment History Example Systems Ltd Position: SAP Consultant (Jan 2020 – Dec 2021) Job Functions: Delivery.",
+    "Example Systems Ltd",
+    "SAP Consultant",
+  ],
+  [
+    "Employment History X Systems Ltd Position: SAP Consultant (Jan 2020 – Dec 2021) Job Functions: Delivery.",
+    "X Systems Ltd",
+    "SAP Consultant",
+  ],
+  [
+    "Employment History IV Systems Ltd Position: SAP Consultant (Jan 2020 – Dec 2021) Job Functions: Delivery.",
+    "IV Systems Ltd",
+    "SAP Consultant",
+  ],
+];
+for (const [text, company, title] of headingFields) {
+  const rows = read(text);
+  assert.equal(rows.length, 1, text);
+  assert.deepEqual([rows[0].company, rows[0].title], [company, title]);
+}
+const numbered =
+  "Employment History I1 7 Example Systems Sdn Bhd Metro City Position: SAP Consultant (Jan 2022 – Present) Job Functions: Delivery. Employment History II Example Labs Ltd Harbor City Position: SAP Analyst (Jan 2020 – Dec 2021) Responsibilities: Delivery.";
+assert.deepEqual(
+  read(numbered).map((j) => j.company),
+  ["7 Example Systems Sdn Bhd", "Example Labs Ltd"],
+);
+const parenthetical =
+  "Professional Experience Example Systems Pvt. Ltd – May 2021 to June 2025 (Senior Manager) Example Labs Private Limited – April 2019 to May 2021 (Senior Consultant) Project Experience Example Buyer – Jan 2023 to Dec 2024 (Project Lead)";
+assert.equal(read(parenthetical).length, 2);
+assert.equal(extractCanonicalEmploymentFromResume(parenthetical).length, 2);
+const employerLedger =
+  "Employment History Jan 2025 - Present | Example Healthcare (Contracting) Oct 2024 - Jan 2025 | Example Labs Dec 2021 - Dec 2023 | Example Systems";
+assert.equal(read(employerLedger).length, 3);
+assert.ok(read(employerLedger).every((j) => j.title === ""));
+assert.equal(read(employerLedger)[0].company, "Example Healthcare");
+const beforeProject =
+  "Employment History 1)Example Group Berhad (May 2022 – Present) Project: Migration Role: Senior SAP Analyst Duration: Sep 2023 – Jan 2024";
+assert.deepEqual(
+  read(beforeProject).map((j) => [j.company, j.title, j.start]),
+  [["Example Group Berhad", "", "May 2022"]],
+);
+const headingNegatives = [
+  "Project Experience Example Services Sdn Bhd May 2023 – Jan 2024 SAP Consultant Responsibilities: Delivery.",
+  "Employment History Client: Example Services Sdn Bhd May 2023 – Jan 2024 SAP Consultant Responsibilities: Delivery.",
+  "Employment History Example Systems Ltd Client Example Buyer Position: SAP Consultant (Jan 2020 – Dec 2021) Job Functions: Delivery.",
+  "Employment History Example Systems Ltd Jan 2015 – Dec 2016 Position: SAP Consultant (Jan 2020 – Dec 2021) Job Functions: Delivery.",
+  "Employment History Example Systems Ltd Position: SAP Consultant (Jan 2020) Job Functions: Delivery. Project: Rollout Duration: Jan 2020 – Present",
+  "Employment History COMPANY Example Systems POSITION SAP Consultant DURATION Jan 2022 – Dec 2021",
+  "Employment History COMPANY Example Systems POSITION SAP Consultant DURATION Jan 2020 – Jan 20200",
+  "Employment History Example Systems Ltd 31 April 2020 – Dec 2021 SAP Consultant Responsibilities: Delivery.",
+  "Employment History Example Systems Ltd Jan 2020 – Dec 2021 Worked as a consultant",
+  "Employment History Jan 2025 - Present | Example Client (Contracting)",
+  "Employment History Jan 2025 - Present | Example Systems SAP Consultant",
+  "Employment History Jan 2025 - Present | Jan 2020 - Dec 2021 | Example Systems",
+  "Employment History Example Systems Ltd – Jan 2022 to Dec 2021 (Consultant) Example Labs Ltd – Jan 2020 to Dec 2021 (Consultant)",
+];
+for (const text of headingNegatives) assert.deepEqual(read(text), [], text);
+console.log(
+  "Bounded heading fields: order, enumeration, employer-only ledgers and assignment isolation pass",
+);
