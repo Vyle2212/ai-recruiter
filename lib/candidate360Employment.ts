@@ -1,5 +1,6 @@
 import { careerMonthIndex } from "./candidateCareerExperience";
 import { layoutEmployment } from "./layoutEmployment";
+import { flattenedEmployment } from "./flattenedEmployment";
 import type {
   EnterpriseEmployment,
   EnterpriseProject,
@@ -9,7 +10,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v58-evidence-deduplication";
+  "candidate-employment-v59-flattened-evidence-batch";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1056,6 +1057,11 @@ function resumeEmployment(resumeText: string) {
     .replace(/[\r\n]+/g, " ")
     .replace(/\s+/g, " ");
   output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source), ...labelledEmployerHistory(source), ...explicitHeadingVariants(source), ...orderedLabelEmployment(source), ...dateCompanyRoleEmployment(source), ...explicitEmploymentStatements(source), ...spacedDateEmployment(source), ...datedEmploymentLedger(source), ...headingDurationPositionEmployment(source), ...numberedPositionEmployment(source), ...numberedPositionPeriodEmployment(source), ...roleCompanyPeriodEmployment(source), ...locatedEmployerHistory(source), ...durationEmployerHistory(source), ...organizationDurationDesignationEmployment(source), ...organizationPeriodEmployment(source), ...datedCareerSummary(source), ...numberedWorkExperience(source), ...locatedRoleEmployment(source), ...formerNameEmployment(source), ...employerAssignmentSummary(source));
+  for (const [index, row] of flattenedEmployment(source).entries()) {
+    const parsed = entry({...row, allowGroundedEmployerOnly: true,
+      sourceRef: `resume.flattened.${row.group}.${index + 1}`, sourceType: "parsed_resume", confidence: 94});
+    if (parsed) output.push(parsed);
+  }
   const monthYear =
     "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[a-z]*[’']?\\s*(?:19|20)\\d{2}";
   const explicitCompanyPositionDate = new RegExp(
