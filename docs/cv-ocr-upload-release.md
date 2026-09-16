@@ -330,3 +330,28 @@ Twenty-four local regression files, typecheck, scoped formatting and whitespace 
 Continuation: prioritize remaining source-backed layout groups and partial-history coverage. Five table cases still need bounded reconstruction or original-layout evidence; do not pair columns or infer tenure from duration counts. Consolidate any original-CV requests privately from actual metadata and do not request accessible files again.
 
 Scope remains **SUBSET_ONLY: 277 / 970**, with 693 unaudited. Production remains **NO_GO** pending live OCR with saved provenance, reviewed/version-matched backfill, all-source audit and authenticated acceptance on the exact artifact to promote. No runtime configuration, Supabase/Vercel writes, source mutation, backfill or production promotion occurred.
+
+## Batch checkpoint: dated legal-employer headings and numbered history (2026-09-16)
+
+Baseline: `2999d0eb2df658d93d898974402253acb7c886d5`; parser now `candidate-employment-v65-dated-legal-heading-batch`. Before editing, all 157 unresolved sources were classified: 100 heading/date-boundary cases, 46 project/client narratives, four labelled-field cases, five headed tables and two other cases. Private source review selected dated legal-employer headings, role/date/employer headings with an explicit following field, and consecutive numbered employment histories. No company-name dictionaries or per-person rules were added.
+
+The parser recognizes date/role/legal-employer and role/date/legal-employer orders only at a section start or an established numbered history. Numbering must begin at one and continue sequentially with the same delimiter; project-history/details sections terminate that enumeration. Explicit day precision is retained. A role/date/employer reader requires a following Skills/Responsibilities/Job Duties field to avoid linking a previous role's dates to the next employer. Legal-employer headings with location or alias text can retain independently supported tenure with a blank title. Existing readers retain ownership of already-supported headings, and an employer alias cannot become a title.
+
+Comparison across all 277 private sources: **120 → 127 sources with employment**, **483 → 503 rows**, **157 → 150 sources without employment**. Two numbered-history sources gain 15 rows, a role/date/employer source gains one row, and four dated-employer sources gain four rows. Three added rows intentionally retain blank titles. All 483 prior company/title/start/end/current tuples remain unchanged and retained. Every added row was checked against private source excerpts. These source-record counts do not establish distinct-person counts or full-history completeness.
+
+Read-only audit: 503 employers, 441 titles and 500 supported date ranges. Malformed, duplicate, invalid-range and pagination-leak counts remain zero. Seven overlap flags and one possible employer/client equality flag remain unchanged. Blank titles and other incomplete fields still need source review; diagnostic PASS is not complete-profile acceptance.
+
+| Remaining review queue | Before | After | Continuing reason |
+| --- | ---: | ---: | --- |
+| Date near employment heading | 100 | 94 | Unbounded role/company text, missing dates or lost reading order |
+| Project/client narrative | 46 | 45 | Most assignment dates still do not establish employer tenure |
+| Explicit employer labels | 4 | 4 | Missing tenure or mixed assignment fields |
+| Headed tables | 5 | 5 | Column-major text, ambiguous column ownership or duration-only dates |
+| Other narrative/layout | 2 | 2 | No supported extraction added |
+| **Total** | **157** | **150** | Heuristic review queues, not adjudicated causes |
+
+Twenty-four local regression files and typecheck passed, with scoped formatting and whitespace checks. Sanitized fixtures cover numbered history, day precision, contract annotations, role/date order, location/alias exclusion, missing or reversed dates, project isolation and adjacent-job ownership. Full-source comparison caught duplicate reader output and a potential cross-employer role/date association; both were corrected locally before publishing. No regression expectations or release gates were lowered. Verify exact-head CI and statuses after the batch push.
+
+Continuation: inspect the latest PR head, prioritize remaining evidence-backed layout groups and partial-history coverage, and compare all sources before publishing. Keep requests for original CVs private and consolidated from actual metadata; do not ask for files still accessible. The remaining 150 unresolved sources and 693 unaudited sources are separate populations.
+
+Production remains **NO_GO**. Scope is still **SUBSET_ONLY: 277 / 970**. Live OCR with saved provenance, reviewed/version-matched backfill, full-population audit and authenticated acceptance on the exact artifact to promote remain required. No private source identifiers or CV text are committed; no runtime configuration, Supabase/Vercel writes, backfill or promotion occurred.

@@ -264,6 +264,123 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
     // PDF is flattened. Never continue searching inside responsibility prose.
     const legal =
       "[A-Z0-9][A-Za-z0-9&.,'() /-]{1,100}?\\b(?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Pvt\\.?\\s*Ltd\\.?|Private Limited|Corporation|Berhad|S/B|Limited|Ltd\\.?|Inc\\.?)";
+    // A dated legal-employer heading can put role before or after tenure.
+    // Read only the section start, or an established 1 / 2 / 3 employment
+    // enumeration. Dates embedded in duties never introduce new jobs.
+    const datedHeadingRows = [section];
+    const numberedSection = fullSection
+      .replace(/^PROFILE\s+/i, "")
+      .split(
+        /\b(?:project experience|project history|project details|projects\/assignments)\b|\bProjects\s*:/i,
+      )[0];
+    const numbers = [
+      ...numberedSection.matchAll(
+        new RegExp(`(?:^|\\s)(\\d{1,2})([.)])\\s+(?=${date})`, "gi"),
+      ),
+    ];
+    if (
+      numbers[0]?.index === 0 &&
+      numbers[0][1] === "1" &&
+      numbers[1]?.[1] === "2"
+    ) {
+      datedHeadingRows.length = 0;
+      for (const [n, marker] of numbers.entries()) {
+        if (Number(marker[1]) !== n + 1 || marker[2] !== numbers[0][2]) break;
+        datedHeadingRows.push(
+          numberedSection.slice(
+            (marker.index || 0) + marker[0].length,
+            numbers[n + 1]?.index,
+          ),
+        );
+      }
+    }
+    let datedEmployerHeadingOwned = false;
+    for (const candidate of datedHeadingRows) {
+      const datedRole = candidate.match(
+        new RegExp(
+          `^${range}\\s*[,–—-]?\\s*(?:Contract\\s+)?(${title})\\s*,?\\s+(${legal})(?=\\s|[.,]|$)`,
+          "i",
+        ),
+      );
+      const datedLabelledRole = candidate.match(
+        new RegExp(
+          `^${range}\\s*[,–—-]?\\s*(?:Contract\\s+)?([^:;]{2,110}),\\s*(${legal})(?=\\s|[.,]|$)`,
+          "i",
+        ),
+      );
+      const roleDated = candidate.match(
+        new RegExp(
+          `^(${title})\\s+${range}\\s+(${legal})(?=\\s+(?:Skills|Responsibilities|Job Duties)\\s*:|$)`,
+          "i",
+        ),
+      );
+      const roleStart =
+        /^(?:Senior|Junior|SAP|HCM|Reporting|Functional|Technical|Application|Software|System|Business|Consultant|Manager|Analyst|Engineer|Intern)\b/i;
+      const m =
+        datedLabelledRole ||
+        (datedRole && roleStart.test(datedRole[3]) ? datedRole : null);
+      if (m && !new RegExp(`\\b${job}\\b`, "i").test(m[4])) {
+        add(m[4], m[3], m[1], m[2], m[0], "dated-legal-role-heading", true);
+        continue;
+      }
+      if (
+        roleDated &&
+        roleStart.test(roleDated[1]) &&
+        !/[,.–—|]/.test(roleDated[1])
+      ) {
+        add(
+          roleDated[4],
+          roleDated[1],
+          roleDated[2],
+          roleDated[3],
+          roleDated[0],
+          "role-dated-legal-heading",
+        );
+        continue;
+      }
+      const employerFirst = candidate.match(
+        new RegExp(`^${range}\\s*[:,]?\\s+(${legal})(?=\\s|[.,]|$)`, "i"),
+      );
+      if (!employerFirst) continue;
+      // Keep tenure even when location/narrative prevents a grounded title.
+      // Only a complete role followed by an explicit duty boundary is eligible.
+      const tail = candidate.slice(employerFirst[0].length);
+      const boundedTitle = tail.match(
+        new RegExp(
+          `^\\s+(${title})(?:,\\s*[A-Za-z ]{2,35})?\\s+(?=Completed\\b|Responsibilities\\b|Job Duties\\b)`,
+          "i",
+        ),
+      );
+      if (
+        candidate === section &&
+        !boundedTitle &&
+        !tail.trimStart().startsWith("(") &&
+        /^\s+[^:;]{2,110}?(?=\s+(?:Job (?:Functions|responsibilities)|Responsibilities|Main Duties|Task\s*[/]|[•●◼➢⮚]|Hands-on)|$)/i.test(
+          tail,
+        )
+      )
+        continue;
+      if (
+        /^\d+[.)]/.test(employerFirst[3]) ||
+        (!boundedTitle &&
+          !/^,\s*[A-Za-z]|^\s+\((?!fka\b|formerly\b)[^)]{2,40}\)\s+SAP\b/i.test(
+            tail,
+          ))
+      )
+        continue;
+      const previousCount = result.length;
+      add(
+        employerFirst[3],
+        boundedTitle?.[1] || "",
+        employerFirst[1],
+        employerFirst[2],
+        employerFirst[0] + (boundedTitle?.[0] || ""),
+        "dated-legal-employer-heading",
+        true,
+      );
+      if (candidate === section && result.length > previousCount)
+        datedEmployerHeadingOwned = true;
+    }
     // Explicit Position / Company / Period columns: consume complete cells
     // from the start, never align separated column-major lists by position.
     const yearTable = section.match(
@@ -466,6 +583,12 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
       const m = labelledHeading.match(re);
       if (
         m &&
+        // An alias after a dated employer is company metadata, not a role.
+        !(
+          f[0] === 3 &&
+          f[1] === 4 &&
+          (datedEmployerHeadingOwned || /^\(/.test(m[f[1]]))
+        ) &&
         !(
           location &&
           (forbidden.test(m[location] || "") ||

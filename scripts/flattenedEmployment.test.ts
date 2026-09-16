@@ -423,3 +423,71 @@ for (const text of [
 ])
   assert.equal(read(text).length, 0, text);
 console.log("Bounded year tables and consecutive dated ledgers: passed");
+
+// Date-first numbered employment headings retain explicit day precision and
+// role boundaries while keeping embedded assignment dates out of tenure.
+const numberedJobs =
+  "Working Experience PROFILE 1. 27 March 2023 – 28 Jan 2025 HCM Functional Consultant, Example Digital Sdn Bhd Project A Delivery Jan 2024 - Dec 2024. 2. 08 Jan 2020 – 15 June 2022 HCM Functional Consultant, Example Delivery Sdn Bhd Project 1 – Buyer Rollout. 3. 20 March 2019 – 18 September 2019 – Contract SAP Senior Consultant, Example Services Sdn Bhd. Provide support. 4. April 2016 – Oct 2016 SAP Functional Specialist, Example Offshore Sdn Bhd Provide support. 5. March 2011 – May 2014 SAP HCM, Senior Business Analyst, Example Electronics Berhad Provide support. Education";
+const numberedRows = read(numberedJobs);
+assert.equal(numberedRows.length, 5);
+assert.equal(numberedRows[0].start, "27 March 2023");
+assert.equal(numberedRows[1].end, "15 June 2022");
+assert.equal(numberedRows[2].title, "SAP Senior Consultant");
+assert.equal(numberedRows[4].title, "SAP HCM, Senior Business Analyst");
+assert.equal(extractCanonicalEmploymentFromResume(numberedJobs).length, 5);
+const numberedNoComma =
+  "Working Experiences 1) April 2018-Present, Senior BI Consultant Example Analytics Sdn. Bhd. Internally act as capability lead. 2) September 2016-March 2018, Reporting Specialist Example Mining Sdn. Bhd. Introduced delivery standards. 3) Jun 2009-Dec 2009, Intern Data Centre Platform & IT Support, Example Infrastructure Sdn Bhd Implemented systems.";
+assert.deepEqual(
+  read(numberedNoComma).map((r) => r.title),
+  [
+    "Senior BI Consultant",
+    "Reporting Specialist",
+    "Intern Data Centre Platform & IT Support",
+  ],
+);
+const roleBeforeDate =
+  "Professional Experience SAP Consultant September2021 – current Example Consulting (M) Sdn. Bhd. Skills: SAP PP Product: ERP Client: Buyer";
+assert.equal(
+  read(roleBeforeDate)[0].company,
+  "Example Consulting (M) Sdn. Bhd.",
+);
+assert.equal(
+  extractCanonicalEmploymentFromResume(roleBeforeDate)[0].start,
+  "September 2021",
+);
+const datedCompany = [
+  "Career History April 2023 – Current Example Delivery Sdn Bhd, Country SAP FICO Consultant FICO consultant for Buyer.",
+  "Professional Experience Dec 2021 To Till date Example Manufacturing Pvt.Ltd., City, Country. Solution Consultant – SAP Analytics Requirement analysis.",
+  "Working Experience Dec 2013 till Jun 2015 Example Services Sdn Bhd (Example Group) SAP Data Migration Consultant Project delivery.",
+];
+for (const source of datedCompany) {
+  const rows = read(source);
+  assert.equal(rows.length, 1, source);
+  assert.equal(rows[0].title, "", "unbounded role must remain blank");
+  assert.ok(!/Country|City/.test(rows[0].company));
+}
+assert.equal(
+  read(
+    "Working Experience Aug 2021 – present Example Services PVT LTD SAP FICO Lead Consultant, Country Completed implementation projects.",
+  )[0].title,
+  "SAP FICO Lead Consultant",
+);
+for (const source of [
+  "Employment History Example Technologies Software Developer Jun 2010 – Nov 2012 Example Consulting Sdn Bhd SAP FICO Consultant Feb 2017 – Mar 2018",
+  "Employment History Software Developer Jun 2010 – Nov 2012 Example Consulting Sdn Bhd SAP FICO Consultant Feb 2017 – Mar 2018",
+  "Project Working Experience 1) Jan 2020 - Present SAP Consultant, Example Services Ltd 2) Jan 2018 - Dec 2019 SAP Consultant, Example Delivery Ltd",
+  "Working Experience PROFILE Projects: 1. Jan 2020 - Present SAP Consultant, Example Services Ltd 2. Jan 2018 - Dec 2019 SAP Consultant, Example Delivery Ltd",
+  "Working Experience Jan 2020 - Dec 2019 SAP Consultant, Example Services Ltd",
+  "Working Experience Jan 2020 - Present SAP Consultant, Example Client Ltd",
+  "Working Experience SAP Consultant Jan 2020 - Present Client Example Services Ltd Skills: SAP",
+  "Working Experience Jan 2020 - Present Example Services Ltd Client: Buyer Role: Consultant",
+])
+  assert.equal(read(source).length, 0, source);
+const nestedAssignments =
+  "Working Experience 1. Jan 2020 - Present SAP Consultant, Example Services Ltd Project Experience 2. Jan 2018 - Dec 2019 SAP Consultant, Example Buyer Ltd";
+assert.ok(
+  read(nestedAssignments).every((r) => r.company !== "Example Buyer Ltd"),
+);
+console.log(
+  "Dated legal headings: numbered history, role order and project isolation pass",
+);
