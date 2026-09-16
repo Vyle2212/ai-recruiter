@@ -1791,6 +1791,45 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
   const legalSuffix =
     "(?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Pvt\\.?\\s*Ltd\\.?|Co\\.?\\s*,?\\s*Ltd\\.?|Limited|Ltd\\.?|Inc\\.?|Berhad|Corporation)";
   const legalEmployer = `(${org}${legalSuffix})`;
+  // Explicit From/To/Description tables carry the date at the start of each
+  // row. Split periods first; a preceding row can never supply the next title.
+  for (const header of source.matchAll(
+    /\bCareer History\s+\(From\)\s+\(To\)\s+\(Description\)\s*/gi,
+  )) {
+    const section = source
+      .slice(header.index! + header[0].length)
+      .split(
+        /\b(?:Project Experience|Project History|Project Details|Education|References|Technical Skills)\b/i,
+      )[0];
+    const periods = [...section.matchAll(new RegExp(range, "gi"))];
+    for (let i = 0; i < periods.length; i++) {
+      const period = periods[i];
+      const fields = section
+        .slice(
+          period.index! + period[0].length,
+          periods[i + 1]?.index ?? section.length,
+        )
+        .trim();
+      const row = fields.match(
+        /^(.{2,120}?)\s+((?:SAP|Senior|Junior|Project|Technical|Functional|Software|IT|Business|Systems?)\b.{2,110})$/i,
+      );
+      if (!row) continue;
+      // A comma-delimited location is not part of the employer. Keep commas
+      // belonging to a legal suffix (Example, Inc.) intact.
+      const company = row[1].replace(
+        /,\s*(?!(?:Inc|Ltd|Limited)\b)[A-Za-z][A-Za-z ,.'-]*$/i,
+        "",
+      );
+      add(
+        company,
+        row[2],
+        period[1],
+        period[2],
+        period[0] + " " + fields,
+        "from-to-description-ledger",
+      );
+    }
+  }
   // A labelled positions ledger owns the period, employer and activity/title
   // within EACH date-delimited row. Never borrow the previous row's title.
   for (const header of source.matchAll(
@@ -1842,6 +1881,42 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
         /\b(?:Education|Academic Qualifications|Certifications|References|Referees|Personal Details)\b/i,
       )[0]
       .slice(0, 24000);
+    // Labelled position cards own the first employer and both tenure endpoints.
+    // Labels must precede project/client fields; nested project dates are never
+    // a fallback. System/tool descriptions bound the complete position title.
+    const positionCard = section.match(
+      new RegExp(
+        `^(${org})\\s+Duration\\s*:\\s*${range}\\s*(?:\\([^)]{1,100}\\)\\s*)?Position(?: Title(?: \\(level\\))?)?\\s*:\\s*([^:;]{2,120}?)\\s+(?:Tools?\\s*&\\s*Systems?|Modules|Responsibilities|Work Descriptions?)\\s*:`,
+        "i",
+      ),
+    );
+    if (positionCard)
+      add(
+        positionCard[1],
+        positionCard[4],
+        positionCard[2],
+        positionCard[3],
+        positionCard[0],
+        "heading-duration-position-tools",
+      );
+    // Former legal names are annotations on an explicitly dated employer,
+    // not a second employer. A multi-role summary does not establish one title
+    // for its whole tenure, so preserve that tenure with an unknown title.
+    const formerHeading = section.match(
+      new RegExp(
+        `^(${org})\\s*[([](?:formerly(?: known as)?|previously known as)\\s+[^)\\]]{2,100}[)\\]]\\s*(?:[–—-]\\s*[A-Za-z][A-Za-z .'-]{1,50},\\s*[A-Za-z][A-Za-z ]{1,40}?\\s+)?\\(?${range}\\)?(?=\\s+(?:Held multiple roles|Team Project Description)|$)`,
+        "i",
+      ),
+    );
+    if (formerHeading)
+      add(
+        formerHeading[1],
+        "",
+        formerHeading[2],
+        formerHeading[3],
+        formerHeading[0],
+        "former-employer-tenure-summary",
+      );
     // Column-major tables have their own ownership-aware reader. Reading the
     // flattened row order here would pair one row's period with the next row.
     const columnMajorHeader =

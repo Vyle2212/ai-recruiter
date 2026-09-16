@@ -14,7 +14,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v84-career-row-ownership";
+  "candidate-employment-v85-labelled-career-records";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -259,7 +259,7 @@ export function validEmploymentCompany(input: unknown) {
     .replace(/\s+(?:form|from)\s*$/i, "")
     .replace(/\s+/g, " ")
     .trim();
-  if (!company || company.length > 140 || narrativeEmployment.test(company))
+  if (!company || company.length > 140 || narrativeEmployment.test(company) || /^(?:worked|working|employed)\s+(?:as|at|with|for)\b/i.test(company))
     return "";
   if (
     /^(?:client|customer|project|role|position|not established|unknown|n\/?a)(?:\b|\s*:)/i.test(
@@ -1259,7 +1259,7 @@ function structuredEmploymentTables(source: string): EnterpriseEmployment[] {
 
   // Year / Designation tables repeat legal employer, year tenure and role.
   const yearTable = source.match(
-    /\bProfessional Experience\s+Year\s+Designation\s+([\s\S]*?)(?=\b(?:Projects?|Project Experience|Education|Qualifications|Technical Skills)\b|$)/i,
+    /\bProfessional Experience\s+Year\s+Designation\s+([\s\S]*?)(?=\b(?:Projects|Project (?:Experience|History|Details)|Education|Qualifications|Technical Skills)\b|$)/i,
   )?.[1];
   if (yearTable) {
     const rows = [
@@ -1270,7 +1270,10 @@ function structuredEmploymentTables(source: string): EnterpriseEmployment[] {
         ),
       ),
     ];
-    for (const [index, row] of rows.entries())
+    for (const [index, row] of rows.entries()) {
+      // A trailing scope phrase cannot become the next legal employer, and a
+      // title followed by that phrase is not complete enough to emit yet.
+      if (/^(?:for|with|and)\b/i.test(row[1]) || /^\s+(?:for|with)\b/i.test(yearTable.slice(row.index! + row[0].length))) continue;
       add(
         row[1],
         row[4],
@@ -1279,6 +1282,7 @@ function structuredEmploymentTables(source: string): EnterpriseEmployment[] {
         row[0],
         `resume.structuredTable.yearDesignation.${index + 1}`,
       );
+    }
   }
 
   // Numbered organisation forms own Duration and Role Played labels.
@@ -1375,6 +1379,9 @@ function structuredEmploymentTables(source: string): EnterpriseEmployment[] {
 
 function resumeEmployment(resumeText: string) {
   const output: EnterpriseEmployment[] = [];
+  const namedMonth = "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
+  const abbreviatedTenure = new RegExp(`\\b(${namedMonth})\\s+(\\d{2})\\s*([-–—]|to)\\s*(${namedMonth})\\s+(\\d{2})(?![\\da-z])`, "gi");
+  const expandYear = (year: string) => `${Number(year) <= 30 ? '20' : '19'}${year}`;
   for (const [index, row] of layoutEmployment(resumeText).entries()) {
     const normalizeDate = (input = '') => input.replace(/^(0?[1-9]|1[0-2])[/.]\s*(\d{4})$/, (_, m, y) => `${monthNames[Number(m) - 1]} ${y}`).replace(/^Curr$/i, 'Current');
     const start = normalizeDate(row.start), end = normalizeDate(row.end);
@@ -1384,6 +1391,12 @@ function resumeEmployment(resumeText: string) {
   }
   const source = resumeText
     .normalize("NFKC")
+    // Quotes/articles are typography in explicit employment statements. Keep
+    // role/employer ownership and both literal date endpoints unchanged.
+    .replace(/\b(as)\s+(?:a\s+)?[“"']([^”"']{2,100})[”"'](?=\s+(?:at|in|for)\b)/gi, "$1 $2")
+    // Expand abbreviated years only in an explicit worked-as sentence. Global
+    // expansion can change row ownership in unrelated flattened date tables.
+    .replace(/\bWorked as\b[^;\n]{2,220}?\bfrom\s+[^.;\n]{2,60}/gi, statement => statement.replace(abbreviatedTenure, (_all, startMonth, startYear, separator, endMonth, endYear) => `${startMonth} ${expandYear(startYear)} ${separator} ${endMonth} ${expandYear(endYear)}`))
     .replace(/\b(0?[1-9]|1[0-2])\s*\/\s*(\d{4}|\d{2})\b/g, (_all, month, year) => {
       const value = Number(year); const full = value < 100 ? value + (value <= 30 ? 2000 : 1900) : value;
       return `${monthNames[Number(month) - 1]} ${full}`;
@@ -1483,6 +1496,7 @@ function resumeEmployment(resumeText: string) {
       beforeMarker.lastIndexOf("working experience"),
       beforeMarker.lastIndexOf("professional experience"),
       beforeMarker.lastIndexOf("employment & experience"),
+      beforeMarker.lastIndexOf("career snapshot"),
     );
     if (employmentSection < 0 || projectSection > employmentSection) return;
     if (
@@ -1493,15 +1507,15 @@ function resumeEmployment(resumeText: string) {
       return;
     const company =
       block.match(
-        /^Company\s*:\s*([\s\S]{2,140}?)(?=\s+(?:Duration|(?:Job\s+)?Position)\s*:)/i,
+        /^Company\s*:\s*([\s\S]{2,140}?)(?=\s+(?:Clients?|Duration|(?:Job\s+)?Position)\s*:)/i,
       )?.[1] || "";
     const title =
       block.match(
-        /\b(?:Job\s+)?Position\s*:\s*([\s\S]{2,140}?)(?=\s+(?:Speciali[sz]ation|Duration|Job\s+Scopes?|Specific\s+Responsibilities|Responsibilities|Tasks?|Background|Project|Client)\s*:?\s|\s*\(|[.;]|$)/i,
+        /\b(?:Job\s+)?Position\s*:\s*([\s\S]{2,140}?)(?=\s+(?:Speciali[sz]ation|Duration|Job\s+Scopes?|Specific\s+Responsibilities|Responsibilities|Tasks?|Background|Project(?!\s+(?:Manager|Lead|Director|Coordinator|Management)\b)|Client)\s*:?\s|\s*\(|[.;]|$)/i,
       )?.[1] || "";
     const durationRange = block.match(
       new RegExp(
-        `\\bDuration\\s*:\\s*(${looseMonthYear})\\s*(?:[-\\u2013\\u2014]|to|until)\\s*(${looseMonthYear}|Present|Current)`,
+        `\\bDuration\\s*:\\s*(${looseMonthYear})\\s*(?:[-\\u2013\\u2014]|to|until|till)\\s*(${looseMonthYear}|Present|Current|date)`,
         "i",
       ),
     );
@@ -1542,9 +1556,11 @@ function resumeEmployment(resumeText: string) {
     )
       return;
     const start = normalizeDate(range[1]);
-    const end = normalizeDate(range[2]);
+    const end = /^date$/i.test(range[2]) ? "Present" : normalizeDate(range[2]);
+    const locatedCompany = company.match(/^(.+?)[–—-]\s+([A-Za-z][A-Za-z .'-]{1,50},\s*(?!(?:Inc|Ltd|Limited|Bhd)\b)[A-Za-z][A-Za-z ]{1,40})$/i);
     const parsed = entry({
-      company,
+      company: locatedCompany?.[1]?.trim() || company,
+      location: locatedCompany?.[2] || "",
       title,
       start,
       end,
