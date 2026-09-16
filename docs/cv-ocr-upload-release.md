@@ -303,3 +303,30 @@ Read-only audit: 460 employers, 401 titles and 457 supported date ranges. Malfor
 Twenty-four local regression files, typecheck, formatting and whitespace checks pass. The mandatory flattened-employment regression now covers each new heading order, location exclusion, distinct promotion/project dates, missing/reversed endpoints and coexistence with the older prose parser. A duplicate identified by the existing prose regression was repaired locally before publishing; no regression expectations or release gates were weakened. Verify CI and commit statuses on this revision, and always inspect the latest PR head before continuing. Prioritize evidence-backed heading/table groups and missing historical rows; keep original-source requests private and avoid requesting available files.
 
 Scope remains **SUBSET_ONLY: 277 / 970**, with 693 unaudited. Production remains **NO_GO** pending live OCR and saved provenance, reviewed/version-matched backfill, full-population audit and authenticated acceptance on the exact artifact to promote. No source mutation, runtime configuration, Supabase/Vercel writes, backfill or production promotion occurred.
+
+## Batch checkpoint: bounded employment tables and dated ledgers (2026-09-16)
+
+Baseline: `c13c672971f7596c5be5d76dfc8a6ad9587c2591`; parser now `candidate-employment-v64-bounded-table-batch`. The entire 161-source unresolved inventory was classified before edits: 103 heading/date-boundary cases, 46 project/client narratives, four labelled-field cases, six headed tables and two other cases. Three source-backed layout families were selected, including historical rows in an already partially recovered source.
+
+- Explicit Date / Company Name / Role tables now recognize the literal current endpoint "Till date" and bounded generic role cells. Generic titles must occupy the complete trailing cell; role words inside an employer name cannot create a split. Academic and Skills headings terminate the table. The existing two-digit-year convention is unchanged.
+- Explicit Position / Company / Period tables retain year-only tenure exactly as written, without inventing months. Complete cells must be consecutive and contain one legal-employer boundary; separated column-major lists and concatenated employers are rejected.
+- Compact date-range / employer / location / role ledgers consume adjacent complete cells only. Location stays out of the employer, seniority stays in the title, and a project/client boundary or incomplete cell stops the ledger rather than restarting in later narrative.
+
+All 277 private sources were compared: **116 → 120 sources with employment**, **460 → 483 rows**, and **161 → 157 sources without employment**. The two date/company/role table sources gain ten rows (seven from a previously unresolved source and three older jobs from a partially recovered source); the year-only table gains three rows; two source versions with dated ledgers gain ten rows. All 460 previous company/title/start/end/current tuples are unchanged and retained. All 23 added rows were checked against private excerpts. Source versions are not unique people, and these gains do not establish complete-CV acceptance.
+
+Read-only audit: 483 employers, 424 titles and 480 supported date ranges. Malformed, duplicate, invalid-range and pagination-leak counts remain zero. Seven overlap flags and one possible employer/client equality flag are unchanged; these are review signals, not adjudicated errors. Missing fields and original layout ambiguity still require source review.
+
+| Remaining review queue | Before | After | Continuing reason |
+| --- | ---: | ---: | --- |
+| Date near employment heading | 103 | 100 | Mixed narrative, missing delimiters or lost reading order |
+| Project/client narrative | 46 | 46 | Assignment dates do not prove employer tenure |
+| Explicit employer labels | 4 | 4 | Missing tenure or mixed assignment fields |
+| Headed tables | 6 | 5 | Column-major text, ambiguous column ownership or duration-only dates |
+| Other narrative/layout | 2 | 2 | No supported extraction added |
+| **Total** | **161** | **157** | Heuristic review queues, not adjudicated causes |
+
+Twenty-four local regression files, typecheck, scoped formatting and whitespace checks passed. Sanitized tests cover each new family, year precision, current endpoints, seniority, title words in employer names, column-major rejection, reversed dates and project/narrative isolation. A role split and a concatenated-employer case were caught and corrected locally before publishing. No private source identifiers/text are committed and no release/test requirements were weakened. Verify exact-head CI and commit statuses after the single batch push; start subsequent work from the latest PR head.
+
+Continuation: prioritize remaining source-backed layout groups and partial-history coverage. Five table cases still need bounded reconstruction or original-layout evidence; do not pair columns or infer tenure from duration counts. Consolidate any original-CV requests privately from actual metadata and do not request accessible files again.
+
+Scope remains **SUBSET_ONLY: 277 / 970**, with 693 unaudited. Production remains **NO_GO** pending live OCR with saved provenance, reviewed/version-matched backfill, all-source audit and authenticated acceptance on the exact artifact to promote. No runtime configuration, Supabase/Vercel writes, source mutation, backfill or production promotion occurred.

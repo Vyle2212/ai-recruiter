@@ -10,7 +10,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v63-legal-heading-batch";
+  "candidate-employment-v64-bounded-table-batch";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -487,13 +487,13 @@ function resumeCompany(input: string) {
 // Only enter this parser through an explicit Date / Company Name / Role table.
 // Flattened PDF rows keep date boundaries even when column layout is lost.
 function tabularResumeEmployment(source: string): EnterpriseEmployment[] {
-  const section = source.match(/\b(?<!PROJECT )(?:EXPERIENCE|EXPERINCE|EMPLOYMENT HISTORY|WORKING EXPERIENCE)\s*:?\s+Date\s+Company Name\s+Role\s+([\s\S]*?)(?=\b(?:RELEVANT PROJECT|PROJECT EXPERIENCE|PROJECT EXPERINCE|EDUCATION|QUALIFICATIONS|SAP EXPERIENCE|PROFESSIONAL EXPERIENCE|SELECTED PROJECT|SKILL|HONOURS|TRAINING)\b|$)/i)?.[1];
+  const section = source.match(/\b(?<!PROJECT )(?:EXPERIENCE|EXPERINCE|EMPLOYMENT HISTORY|WORKING EXPERIENCE)\s*:?\s+Date\s+Company Name\s+Role\s+([\s\S]*?)(?=\b(?:RELEVANT PROJECT|PROJECT EXPERIENCE|PROJECT EXPERINCE|EDUCATION|ACADEMIC|QUALIFICATIONS|SAP EXPERIENCE|PROFESSIONAL EXPERIENCE|SELECTED PROJECT|SKILLS?|HONOURS|TRAINING)\b|$)/i)?.[1];
   if (!section) return [];
   const text = section.replace(/Page\s+\d+\s+of\s+\d+/gi, " ");
   const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*";
   const date = `(?:${month}\\s+(?:\\d{4}|\\d{2})|(?:19|20)\\d{2})`;
-  const rows = [...text.matchAll(new RegExp(`\\b(${date})\\s*(?:[-–—]|to)\\s*(${date}|Present|Current|Now)\\b`, "gi"))];
-  const expand = (value: string) => value.replace(/\b(\d{2})$/, (_, year: string) => `${Number(year) <= 30 ? "20" : "19"}${year}`);
+  const rows = [...text.matchAll(new RegExp(`\\b(${date})\\s*(?:[-–—]|to)\\s*(${date}|Till date|Present|Current|Now)\\b`, "gi"))];
+  const expand = (value: string) => /^Till date$/i.test(value) ? "Present" : value.replace(/\b(\d{2})$/, (_, year: string) => `${Number(year) <= 30 ? "20" : "19"}${year}`);
   return rows.flatMap((row, index) => {
     // Consecutive date-only cells indicate column-major PDF text. Do not pair
     // the following concatenated employer cells with the last date by guesswork.
@@ -501,14 +501,17 @@ function tabularResumeEmployment(source: string): EnterpriseEmployment[] {
     if (previous && !text.slice((previous.index || 0) + previous[0].length, row.index).trim()) return [];
     const body = text.slice((row.index || 0) + row[0].length, rows[index + 1]?.index ?? text.length).trim().replace(/^\([^)]*\b(?:months?|years?)\)\s*/i, "");
     const clientAt = body.search(/\bClient\s*:/i);
-    const roleAt = body.search(/\b(?:SAP\s|ABAP\s|Application Developer|S4\/HANA\s|Senior\s|Junior\s|Project Specialist|Special Projects Executive|Assistant Manager|Technical Consultant|Business & Integration Associate Manager|Managing Consultant|MM Consultant|Business Sys\\. Analyst|HRIT\b|IT Engineer|Lecturer\b|Intern\b|Part Time\b|Web Application|Transition to Support|HSSE Applications|Global SAP|Production (?:Planner|Officer|Coordination))/i);
+    const specializedRoleAt = body.search(/\b(?:SAP\s|ABAP\s|Application Developer|S4\/HANA\s|Senior\s|Junior\s|Project Specialist|Special Projects Executive|Assistant Manager|Technical Consultant|Business & Integration Associate Manager|Managing Consultant|MM Consultant|Business Sys\\. Analyst|HRIT\b|IT Engineer|Lecturer\b|Intern\b|Part Time\b|Web Application|Transition to Support|HSSE Applications|Global SAP|Production (?:Planner|Officer|Coordination))/i);
+    // Generic titles qualify only as a complete trailing role cell, not as
+    // words inside an employer name or a later responsibility paragraph.
+    const roleAt = specializedRoleAt >= 0 ? specializedRoleAt : body.search(/\b(?:Servicedesk (?:Lead(?:\s*\/\s*Analyst)?|Analyst)|Customer (?:Support|Service (?:Supervisor|Executive|Representative))|Admin\.? (?:Executive|Assistant)|Assistant Operations Manager|Functional Expert|System Analyst|Lead Consultant|Consultant)(?:\s*\([^)]*\))?$/i);
     const company = clientAt >= 0 ? body.slice(0, clientAt) : roleAt > 0 ? body.slice(0, roleAt) : "";
     if (!company) return [];
     // A role-column narrative is retained as evidence, never invented as a title.
     const roleText = clientAt < 0 ? body.slice(roleAt).trim().split(/\s+for\s+(?:Global\s+)?(?:Implementation|SAP Implementation|production support)\b/i)[0] : body.match(/\b((?:SAP|S4\/HANA)\s+[^.]{2,100}?(?:Consultant(?:\s+and\s+(?:Team\s+)?Lead)?|Team\s+Lead))\b/i)?.[1] || "";
     const employer = company.replace(/\s*\([^)]*\bProject\)\s*$/i, "").trim();
     const parsed = entry({company: employer, title: roleText,
-      start: expand(row[1]), end: expand(row[2]), current: /^(Present|Current)$/i.test(row[2]),
+      start: expand(row[1]), end: expand(row[2]), current: /^(Till date|Present|Current|Now)$/i.test(row[2]),
       allowGroundedEmployerOnly: true, sourceRef: `resume.employmentTable.${index + 1}`,
       sourceType: "parsed_resume", confidence: roleText ? 96 : 90,
       excerpt: `${row[0]} ${body}`, responsibilities: [body.slice(company.length).trim()],

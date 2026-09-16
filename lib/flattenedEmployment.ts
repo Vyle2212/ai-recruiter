@@ -264,6 +264,79 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
     // PDF is flattened. Never continue searching inside responsibility prose.
     const legal =
       "[A-Z0-9][A-Za-z0-9&.,'() /-]{1,100}?\\b(?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Pvt\\.?\\s*Ltd\\.?|Private Limited|Corporation|Berhad|S/B|Limited|Ltd\\.?|Inc\\.?)";
+    // Explicit Position / Company / Period columns: consume complete cells
+    // from the start, never align separated column-major lists by position.
+    const yearTable = section.match(
+      /^Position\s+Company\s+Period\s+([\s\S]*)/i,
+    );
+    if (yearTable) {
+      let rest = yearTable[1];
+      const cell = new RegExp(
+        `^(${title})\\s+(${legal})\\s+(${year})\\s*[-–—]\\s*(${year}|${ongoing})(?=\\s|$)`,
+        "i",
+      );
+      while (rest.trim()) {
+        const m = rest.trimStart().match(cell);
+        if (!m) break;
+        // Multiple legal endings in one company cell indicate lost column
+        // order; do not concatenate employers to manufacture a complete row.
+        if (
+          (
+            m[2].match(
+              /\b(?:Sdn\.?\s*Bhd\.?|Pte\.?\s*Ltd\.?|Pvt\.?\s*Ltd\.?|Private Limited|Corporation|Berhad|S\/B|Limited|Ltd\.?|Inc\.?)/gi,
+            ) || []
+          ).length !== 1
+        )
+          break;
+        const previousCount = result.length;
+        add(
+          m[2],
+          m[1],
+          m[3],
+          m[4],
+          m[0],
+          "position-company-period-table",
+          true,
+        );
+        if (result.length === previousCount) break;
+        rest = rest.trimStart().slice(m[0].length);
+      }
+    }
+    // Compact employment ledger: date : employer, location role. Each cell
+    // must be complete and adjacent; a project/narrative breaks the ledger.
+    const ledgerDates = [
+      ...section.matchAll(new RegExp(`${range}\\s*:`, "gi")),
+    ];
+    if (ledgerDates[0]?.index === 0) {
+      const ledgerRole =
+        "(?:(?:Senior|Associate|Assistant|Technical|SAP)\\s+)*(?:Manager|Lead|Consultant|Developer|Engineer|Analyst)|[A-Z]{2,5}\\s*&\\s*Technical Lead";
+      for (const [cellIndex, m] of ledgerDates.entries()) {
+        const body = section
+          .slice(
+            m[0].length + (m.index || 0),
+            ledgerDates[cellIndex + 1]?.index,
+          )
+          .trim();
+        const fields = body.match(
+          new RegExp(
+            `^([^,:;]{2,100}),\\s*([A-Za-z][A-Za-z .'-]{1,50}?)\\s+(${ledgerRole})$`,
+            "i",
+          ),
+        );
+        if (!fields || /\b(?:project|client|customer)\b/i.test(fields[2]))
+          break;
+        const previousCount = result.length;
+        add(
+          fields[1],
+          fields[3],
+          m[1],
+          m[2],
+          `${m[0]} ${body}`,
+          "dated-location-role-ledger",
+        );
+        if (result.length === previousCount) break;
+      }
+    }
     const roleEnd =
       "(?=\\s+(?:Job (?:Functions|responsibilities)|Responsibilities|Main Duties|Task\\s*[/]|[•●◼➢⮚]|Hands-on)|$)";
     const boundedRole = `([^:;]{2,110}?)${roleEnd}`;

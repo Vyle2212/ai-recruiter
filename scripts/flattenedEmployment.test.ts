@@ -378,3 +378,48 @@ assert.equal(
   2,
   "existing prose reader owns dash-separated headings without duplicate roles",
 );
+
+// Sanitized representatives of the remaining explicit table/ledger queues.
+const yearColumns =
+  "Employment History Position Company Period SD Consultant Example Services Sdn Bhd 2011 – Present Team Lead Example Manufacturing Sdn Bhd 2006 – 2011 Model Engineer Example Design Sdn Bhd 2004 – 2006 Qualification Level University Year";
+const yearRows = read(yearColumns);
+assert.equal(yearRows.length, 3);
+assert.deepEqual(
+  yearRows.map((r) => [r.title, r.start, r.end]),
+  [
+    ["SD Consultant", "2011", "Present"],
+    ["Team Lead", "2006", "2011"],
+    ["Model Engineer", "2004", "2006"],
+  ],
+);
+assert.equal(extractCanonicalEmploymentFromResume(yearColumns).length, 3);
+const datedLedger =
+  "Work Experience Dec 2021 – Present: Example Technologies, Example City Manager June 2020 – June 2021: Example Delivery, Example City Senior Manager Aug 2015 – June 2020: Example Systems, Example City Associate Manager May 2011 – Aug 2015: Example Services, Example City Technical Lead April 2006 – May 2011: Example Hardware (EH), Example City SSE & Technical Lead Professional Experience: Since Mar 2024 – Healthcare Client, Example City as Lead/Developer";
+const ledgerRows = read(datedLedger);
+assert.equal(ledgerRows.length, 5);
+assert.deepEqual(
+  ledgerRows.map((r) => r.title),
+  [
+    "Manager",
+    "Senior Manager",
+    "Associate Manager",
+    "Technical Lead",
+    "SSE & Technical Lead",
+  ],
+);
+assert.ok(ledgerRows.every((r) => !/City|Client/.test(r.company)));
+assert.equal(extractCanonicalEmploymentFromResume(datedLedger).length, 5);
+for (const text of [
+  yearColumns.replace("Employment History", "Project Employment History"),
+  "Employment History Position Company Period Consultant Team Lead Example Services Ltd Example Systems Ltd 2010 - Present 2005 - 2010",
+  "Employment History Position Company Period Consultant Example Services Ltd 2022 - 2020",
+  "Employment History Position Company Period Consultant Example Client Ltd 2020 - Present",
+  "Employment History Position Company Period Consultant Example Services Ltd 2020 - Project: Delivery 2021 - Present",
+  "Work Experience Jan 2020 - Present: Example Client, Example City Manager",
+  "Work Experience Jan 2020 - Present: Example Services, Client City Manager",
+  "Work Experience Jan 2020 - Present: Example Services, Example City Manager for delivery",
+  "Work Experience Jan 2022 - Jan 2020: Example Services, Example City Manager",
+  "Work Experience Jan 2020 - Present: Example Services, Example City Manager Responsibilities: Delivery. Jan 2010 - Dec 2019: Example Systems, Example City Manager",
+])
+  assert.equal(read(text).length, 0, text);
+console.log("Bounded year tables and consecutive dated ledgers: passed");
