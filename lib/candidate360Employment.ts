@@ -9,7 +9,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v56-partial-date-merge";
+  "candidate-employment-v57-partial-end-preservation";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1526,6 +1526,9 @@ function sameEmployment(
   // Do not erase an explicitly different start when either end is unknown.
   if (leftStart !== null && rightStart !== null && leftStart !== rightStart &&
       (leftEnd === null || rightEnd === null)) return false;
+  // Apply the same protection to explicit ends when either start is unknown.
+  if (leftEnd !== null && rightEnd !== null && leftEnd !== rightEnd &&
+      (leftStart === null || rightStart === null)) return false;
   if (
     leftStart !== null &&
     rightStart !== null &&

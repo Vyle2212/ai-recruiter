@@ -104,3 +104,27 @@ const sharedStart = normalizeActualCandidateSchema({employment_history:[
 assert.equal(sharedStart.employmentTimeline.length, 1, 'a shared start still allows a supported duplicate merge');
 assert.equal(sharedStart.employmentTimeline[0].end, 'Dec 2022');
 console.log('Complementary partial employment dates do not manufacture a tenure: passed');
+
+for (const start of ['', 'Jan 2019']) {
+  const records = [
+    {company:'Example Services', title:'Analyst', end_date:'Jan 2020'},
+    {company:'Example Services', title:'Analyst', start_date:start, end_date:'Feb 2020'},
+  ];
+  for (const rows of [records, [...records].reverse()]) {
+    const profile = normalizeActualCandidateSchema({employment_history:rows}).enterpriseProfile;
+    assert.equal(profile.employmentTimeline.length, 2, 'different explicit ends remain separate when a start is missing');
+    assert.deepEqual(profile.employmentTimeline.map(job => job.end).sort(), ['Feb 2020', 'Jan 2020']);
+    assert.ok(profile.employmentTimeline.some(job => !job.start && job.end === 'Jan 2020'));
+    assert.equal(profile.experienceSummary.totalCareerYears, start ? 1.1 : null);
+  }
+}
+for (const start of ['', 'Jan 2019']) {
+  const profile = normalizeActualCandidateSchema({employment_history:[
+    {company:'Example Services', title:'Analyst', end_date:'Jan 2020'},
+    {company:'Example Services', title:'Analyst', start_date:start, end_date:'Jan 2020'},
+  ]}).enterpriseProfile;
+  assert.equal(profile.employmentTimeline.length, 1, 'equal known ends still permit a supported duplicate merge');
+  assert.equal(profile.employmentTimeline[0].start, start);
+  assert.equal(profile.employmentTimeline[0].end, 'Jan 2020');
+}
+console.log('Distinct partial employment endpoints survive deduplication in either order: passed');

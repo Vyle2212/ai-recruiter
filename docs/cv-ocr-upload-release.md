@@ -168,3 +168,11 @@ Employment deduplication merged a start-only row with an end-only row at the sam
 Synthetic regressions cover chronological and reversed endpoints, current employment, both input orders and a supported shared-start duplicate. All 16 local employment/calendar/canonical regression files and typecheck passed. Against commit `e53a610eca4aab8f98c3561fc9f9fe3e234cf7a3`, the private 277-source comparison found zero changed employment timelines or experience summaries: 80 profiles / 315 rows, 197 unresolved, and zero malformed, duplicate or invalid-range employment diagnostics. No source or database records were changed.
 
 The preceding revision passed Production Trust run `35041621805`, immutable-action run `35041621793` and both previews. This revision requires its own exact-head CI. Live OCR, reviewed backfill, the remaining 693 sources and authenticated exact-artifact acceptance remain release blockers (NO_GO).
+
+## Continuation checkpoint: distinct partial end dates
+
+Deduplication already preserved different starts when an end was missing, but lacked the corresponding protection for different ends when a start was missing. Two partial jobs ending one month apart could collapse to the first endpoint; a partial row could also overwrite the end of a complete row. Distinct known ends now remain separate whenever either start is unknown. Equal-end duplicates retain their existing merge behavior, and missing starts are not inferred. The canonical employment cache version is incremented.
+
+Synthetic tests cover two end-only records, a partial/complete pair, both input orders, preservation of every explicit end and supported equal-end duplicates. All 16 local employment/calendar/canonical regression files and typecheck passed. Against commit `bce15bee2cf9aa10f91ce9d8b9e47a12abaa97e0`, the private 277-source comparison found zero changed employment timelines or experience summaries: 80 profiles / 315 rows, 197 unresolved, and zero malformed, duplicate or invalid-range employment diagnostics. No source or database records were changed.
+
+The preceding revision passed Production Trust run `35042774606`, immutable-action run `35042774603` and both previews. This revision requires its own exact-head CI. Live OCR, reviewed backfill, the remaining 693 sources and authenticated exact-artifact acceptance remain release blockers (NO_GO).
