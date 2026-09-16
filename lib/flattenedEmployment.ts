@@ -11,7 +11,7 @@ export type FlattenedEmployment = {
   excerpt: string;
   group: string;
 };
-const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*";
+const month = "(?:Jan|Feb|Mar|Mac|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*";
 const day = "\\d{1,2}(?:\\s*(?:st|nd|rd|th))?";
 const year = "(?:19|20)\\d{2}";
 const date = `(?:(?:${day}\\s+)?${month}[. -]*[’']?\\s*${year}|${month}\\s+${day}[ ,.-]+${year}|${year}\\s+${month}\\.?)`;
@@ -27,6 +27,7 @@ const forbidden =
 const cleanDate = (value: string) => {
   if (new RegExp(`^${ongoing}$`, "i").test(value)) return "Present";
   const cleaned = value
+    .replace(/\bMac\b/gi, "Mar")
     .replace(/(\d)\s*(?:st|nd|rd|th)\b/i, "$1")
     .replace(/[.’'-]/g, " ")
     .replace(/([A-Za-z])((?:19|20)\d{2})\b/g, "$1 $2")
@@ -53,6 +54,7 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
     group: string,
     labelledRole = false,
     allowPartial = false,
+    allowUndated: boolean | "current" = false,
   ) => {
     employer = employer.trim().replace(/[, ]+$/, "");
     role = role.trim().replace(/\s+\((?:promoted|contract|permanent)\)$/i, "");
@@ -62,7 +64,7 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
     if (group === "employment-statement" && /^[“\"]/.test(employer)) return;
     start = cleanDate(start);
     end = cleanDate(end);
-    const current = end === "Present";
+    const current = end === "Present" || allowUndated === "current";
     const a = careerMonthIndex(start),
       b = careerMonthIndex(end, current);
     if (
@@ -70,9 +72,11 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
         /\b(?:research student|doctoral student|phd student|undergraduate|bachelor|master of|degree)\b/i.test(
           role,
         )) ||
-      a === null ||
-      (b === null && !(allowPartial && !end && role)) ||
-      (b !== null && b < a) ||
+      (a === null && !(allowUndated && !start && !end && role)) ||
+      (b === null &&
+        !(allowPartial && !end && role) &&
+        !(allowUndated && !start && !end && role)) ||
+      (a !== null && b !== null && b < a) ||
       forbidden.test(employer) ||
       new RegExp(date, "i").test(employer) ||
       employer.length > 120 ||
@@ -106,6 +110,36 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
       group,
     });
   };
+  // The declared employer-summary table owns the date column. The Total
+  // column ends each row but is never used to manufacture missing endpoints.
+  for (const header of source.matchAll(
+    /\b(?:SAP Experience\s*[-–—]\s*Summary|Employment(?: History)?\s*(?:[-–—]\s*)?Summary|Career Summary)\s+Company\s*\/\s*Organi[sz]ation\s+Duration\s+Total\s+/gi,
+  )) {
+    const before = source.slice(
+      Math.max(0, (header.index || 0) - 100),
+      header.index,
+    );
+    if (/\b(?:project|client|customer)\b/i.test(before)) continue;
+    const table = source
+      .slice((header.index || 0) + header[0].length)
+      .split(
+        /\b(?:SAP Skill Set|Skills|Project Experience|SAP Project|Education|Qualifications)\b/i,
+      )[0];
+    const total =
+      "\\d+\\s+Years?(?:\\s+(?:and\\s+)?\\d+\\s+months?)?(?:\\s+and\\s+\\d+\\s+months?)?";
+    const row = new RegExp(
+      `^([^:;|]{2,110}?)\\s+${range}\\s+${total}(?=\\s|$)`,
+      "i",
+    );
+    let tail = table.trim();
+    while (tail) {
+      const m = tail.match(row);
+      if (!m) break; // never resynchronize inside a broken/ambiguous row
+      add(m[1], "", m[2], m[3], m[0], "employer-duration-total-table");
+      tail = tail.slice(m[0].length).trim();
+    }
+  }
+
   const headings = [
     ...source.matchAll(
       /\b(?:employment history|career history|working experiences?|work experience|professional experience)\s*:?\s*/gi,
@@ -289,6 +323,189 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
     );
     for (const m of headingRow.matchAll(repeatedComma))
       add(m[2], m[1], m[3], m[4], m[0], "heading-comma-glued-tenure", true);
+
+    // Duration and Role Played are independent employer fields in numbered
+    // career forms. Client annotations between them make the row ambiguous.
+    const careerForm = new RegExp(
+      `(?:^|\\s)\\d+\\s*[.)]\\s*(${legalRow})(?:\\s+\\((?:Now|Formerly)[^()]{2,55}\\))?\\s+Duration\\s*:\\s*${range}\\.?\\s*(?:\\([^()]{2,45}\\))?\\s*Role Played\\s*:\\s*([^:;]{2,100}?)\\s*(?:\\([^()]{1,25}\\))?\\s*Skills Used\\s*:`,
+      "gi",
+    );
+    for (const m of rowSection.matchAll(careerForm))
+      add(m[1], m[4], m[2], m[3], m[0], "numbered-duration-role-form", true);
+
+    // Worked-for statements identify legal employers independently of project
+    // roles. Two-digit years use the same bounded convention as headed tables.
+    const statementDate = `${month}[. '-]*[’']?\\s*(?:${year}|\\d{2})(?!\\d)`;
+    const workedFor = new RegExp(
+      `(?:^|[.!?]\\s+)(?:Currently working|Worked)\\s+for\\s+(${legalRow}),\\s*(?:Malaysia|India|Singapore|United Kingdom),\\s*from\\s+(${statementDate})\\s*[-–—]\\s*(${statementDate}|${ongoing})(?=[.;]|\\s+(?:Worked|Currently)|\\s*$)`,
+      "gi",
+    );
+    for (const m of section.matchAll(workedFor))
+      add(
+        m[1],
+        "",
+        tableDate(m[2]),
+        tableDate(m[3]),
+        m[0],
+        "worked-for-legal-employer",
+      );
+
+    // Position-labelled career rows own their dates even when surrounding
+    // responsibilities contain project dates. A misspelling of the label is
+    // accepted only in the same complete employer/position/role-heading form.
+    const positioned = new RegExp(
+      `${range}\\s*[-–—]?\\s*(${legalRow})\\.?\\s+(?:POSITION|POSTION)\\s*:\\s*([^:;]{2,110}?)\\s+Role\\s*&\\s*Responsibilities\\b`,
+      "gi",
+    );
+    for (const m of rowSection.matchAll(positioned))
+      add(m[3], m[4], m[1], m[2], m[0], "dated-employer-position-label", true);
+    const occupational = new RegExp(
+      `${range}\\s+([^,:;]{2,100}?),\\s*[A-Za-z][A-Za-z ,.'-]{1,65}\\s+Occupation or position held\\s+([^:;]{2,90}?)\\s+Main activities and responsibilities\\b`,
+      "gi",
+    );
+    for (const m of rowSection.matchAll(occupational)) {
+      const occupation = m[4].split(
+        /\s+Page\s+\d+\s*\/\s*\d+\s*[-–—]\s*Curriculum vitae\b/i,
+      )[0];
+      if (/\b(?:Page|Curriculum vitae)\b/i.test(occupation)) continue;
+      add(
+        m[3],
+        occupation,
+        m[1],
+        m[2],
+        m[0],
+        "occupation-held-career-form",
+        true,
+      );
+    }
+
+    // A standalone year in a bounded employer/title heading is partial
+    // evidence. Neither a current marker nor an end year is implied.
+    const singleYear = headingRow.match(
+      new RegExp(
+        `^(${legalRow})\\s+(${year})\\s+(${shortRole})\\s*[-–—]\\s+(?=Setting|Responsible|Managed|Supported)`,
+        "i",
+      ),
+    );
+    if (singleYear)
+      add(
+        singleYear[1],
+        singleYear[3],
+        singleYear[2],
+        "",
+        singleYear[0],
+        "partial-year-employment-heading",
+        true,
+        true,
+      );
+
+    // The employer's current status is stated explicitly, but its dates are
+    // absent. Keep both dates unknown even when dated client assignments follow.
+    const currentTitle = headingRow.match(
+      new RegExp(
+        `^Current\\s+(${legalRow}(?:\\s+\\([^()]{2,70}\\))?)\\s+Position Title\\s*:\\s*(${shortRole})\\s+(?=[a-z]\\)\\s+)`,
+        "i",
+      ),
+    );
+    if (currentTitle)
+      add(
+        currentTitle[1],
+        currentTitle[2],
+        "",
+        "",
+        currentTitle[0],
+        "current-employer-undated-title",
+        true,
+        false,
+        "current",
+      );
+
+    // Explicit Location / Duration fields preserve the employer boundary.
+    const locationForm = headingRow.match(
+      new RegExp(
+        `^(${shortRole})\\s+([^:;|]{2,100}?)\\s+Location\\s*:\\s*[^:;]{2,130}?\\s+Duration\\s*:\\s*${range}\\s+Key Role\\s*:`,
+        "i",
+      ),
+    );
+    if (locationForm)
+      add(
+        locationForm[2],
+        locationForm[1],
+        locationForm[3],
+        locationForm[4],
+        locationForm[0],
+        "location-duration-heading",
+        true,
+      );
+
+    // Employment titles can be explicit before project narratives while their
+    // tenure is absent. Retain that evidence without copying assignment dates.
+    const sentenceLegal =
+      "[A-Z0-9][A-Za-z0-9&'() /-]{1,100}?\\b(?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Pvt\\.?\\s*Ltd\\.?|Limited|Ltd\\.?)";
+    const ownedUndated = new RegExp(
+      `(?:^|[.!?]\\s+)(${sentenceLegal})\\s+(${shortRole})\\s+Projects? Involvement\\s*:`,
+      "gi",
+    );
+    for (const m of rowSection.matchAll(ownedUndated)) {
+      if (
+        /\b(?:help|assist|provide|develop|prepare|client|project|customer)\b/i.test(
+          m[1],
+        )
+      )
+        continue;
+      add(
+        m[1],
+        m[2],
+        "",
+        "",
+        m[0],
+        "undated-employment-before-projects",
+        true,
+        false,
+        true,
+      );
+    }
+
+    // Explicit Role: after employer tenure supplies title ownership. Restrict
+    // this family to the first heading; later SAP Projects remain assignments.
+    const ownedRange = `(${date})\\s*(?:(?:[-–—]|to|until|till)\\s*)?(${date}|${ongoing})`;
+    const ownedRoleHeading = headingRow.match(
+      new RegExp(
+        `^([^:;|]{2,100}?)\\s+${ownedRange}\\s+Role\\s*:\\s*([^:;|]{2,100}?\\b${job})\\s+(?=[A-Z][A-Za-z0-9&.' -]{1,55}\\s+is\\b)`,
+        "i",
+      ),
+    );
+    if (ownedRoleHeading)
+      add(
+        ownedRoleHeading[1],
+        ownedRoleHeading[4],
+        ownedRoleHeading[2],
+        ownedRoleHeading[3],
+        ownedRoleHeading[0],
+        "employer-tenure-role-label",
+        true,
+      );
+
+    // Unicode employer letters and a parenthesized year range are retained as
+    // written. The comma-country field cannot become part of the legal firm.
+    const unicodeLegal =
+      "[\\p{L}0-9][\\p{L}0-9&.'() /-]{1,100}?\\b(?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Limited|Ltd\\.?)";
+    const unicodeYear = headingRow.match(
+      new RegExp(
+        `^(${shortRole})\\s+(${unicodeLegal}),\\s*(?:Malaysia|Singapore|Vietnam)\\s*\\(\\s*(${year})\\s*[-–—]\\s*(${year})\\s*\\)\\s+(?=Designing|Responsible|Managed|Developed)`,
+        "iu",
+      ),
+    );
+    if (unicodeYear)
+      add(
+        unicodeYear[2],
+        unicodeYear[1],
+        unicodeYear[3],
+        unicodeYear[4],
+        unicodeYear[0],
+        "unicode-employer-year-heading",
+        true,
+      );
 
     // A malformed month in an otherwise explicit current employment row still
     // establishes the year. Preserve the original token in excerpt; never guess it.

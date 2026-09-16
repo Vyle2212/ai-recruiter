@@ -1063,3 +1063,206 @@ for (const text of [
 console.log(
   "Heading boundary batch: field ownership, glued dates, numeric normalization and negative layouts pass",
 );
+
+{
+  // Explicit employer fields can remain trustworthy even when titles or dates
+  // are absent. Incomplete evidence must not be completed from client projects.
+  const summaryLedger =
+    "SAP Experience – Summary Company / Organization Duration Total Example Alpha Sdn. Bhd August 2018 to Present 6 Years 6 months Example Beta Pte. Ltd. October 2016 to July 2018 1 Year and 9 Months Example Gamma April 2011 to October 2016 5 Years and 6 Months SAP Skill Set – Summary SAP Project Experience – Detail Employer Example Client Duration Jan 2020 - Dec 2020 Role Consultant";
+  const ledgerRows = extractCanonicalEmploymentFromResume(summaryLedger);
+  assert.equal(ledgerRows.length, 3);
+  assert.ok(ledgerRows.every((j) => j.title === ""));
+  assert.deepEqual(
+    ledgerRows.map((j) => j.company).sort(),
+    [
+      "Example Alpha Sdn. Bhd",
+      "Example Beta Pte. Ltd.",
+      "Example Gamma",
+    ].sort(),
+  );
+  assert.equal(
+    read(
+      summaryLedger.replace("SAP Experience – Summary", "Project Experience"),
+    ).filter((j) => j.group === "employer-duration-total-table").length,
+    0,
+  );
+  assert.equal(
+    read(
+      summaryLedger.replace(
+        "October 2016 to July 2018",
+        "October 2016 to July 2015",
+      ),
+    ).filter((j) => j.company === "Example Beta Pte. Ltd.").length,
+    0,
+  );
+  assert.equal(
+    read(
+      "Company / Organization Duration Total Example Alpha Sdn Bhd Jan 2020 3 Years",
+    ).length,
+    0,
+  );
+
+  const ownedCareer =
+    "Work Experience) (職歴) 1.Example Alpha Pvt. Ltd. Duration: Aug 2021 – till today. (Example City)Role Played: Management Consultant (正社員)Skills Used: Japanese. 2 . Example Beta pvt ltd Duration: Sep 2013 – July 2021. (Example City)Role Played: Enterprise Operations (正社員)Skills Used: Japanese. 3.Example Client Ltd [Client Buyer]Duration: Jan 2011 - Aug 2013 (Example City)Role Played: Consultant Skills Used: SAP.";
+  const careerRows = read(ownedCareer).filter(
+    (j) => j.group === "numbered-duration-role-form",
+  );
+  assert.equal(careerRows.length, 2);
+  assert.equal(careerRows[0].end, "Present");
+  assert.equal(careerRows[1].title, "Enterprise Operations");
+  assert.equal(
+    read(ownedCareer.replace("Work Experience", "Project History")).filter(
+      (j) => j.group === "numbered-duration-role-form",
+    ).length,
+    0,
+  );
+  assert.equal(
+    read(
+      ownedCareer.replace("Aug 2021 – till today", "Aug 2021 – Aug 2020"),
+    ).filter((j) => j.group === "numbered-duration-role-form").length,
+    1,
+  );
+
+  const workedStatements =
+    "Professional Experience: Currently working for Example Alpha SDN. BHD, Malaysia, from Jan’ 2024 -Till Present. Worked for Example Beta SDN. BHD, Malaysia, from April 2021 -Dec’23. Worked for Example Buyer, a client services from Example Agency, India, from Feb’18 – April’19. Projects Profile Client: Example Customer Role: SAP Lead";
+  const workedRows = extractCanonicalEmploymentFromResume(workedStatements);
+  assert.equal(workedRows.length, 2);
+  assert.ok(workedRows.every((j) => !j.title));
+  assert.ok(
+    workedRows.some((j) => j.start === "April 2021" && j.end === "Dec 2023"),
+  );
+  assert.ok(workedRows.every((j) => !/Buyer|Agency|Customer/.test(j.company)));
+
+  const explicitForms = [
+    [
+      "Professional Experience SAP BPC Consultant Example Group Location: Global (UK, Malaysia) Duration: October 2019 – Present Key Role: Delivered solutions.",
+      "Example Group",
+      "SAP BPC Consultant",
+      "October 2019",
+      "Present",
+    ],
+    [
+      "Professional Experience Example Advisory Jun-2012 till Date Role: Team Lead SAP SD/MM Consultant Example is a consulting company. SAP Projects Example Client 01-Apr-2014 till date Role: Lead Consultant",
+      "Example Advisory",
+      "Team Lead SAP SD/MM Consultant",
+      "Jun 2012",
+      "Present",
+    ],
+    [
+      "Professional Experience SENIOR SAP CONSULTANT ØEXAMPLE SDN BHD, MALAYSIA ( 2019 - 2020 ) Designing solutions.",
+      "ØEXAMPLE SDN BHD",
+      "SENIOR SAP CONSULTANT",
+      "2019",
+      "2020",
+    ],
+    [
+      "Working Experience AUGUST 2008 – 27 JUNE 2011 EXAMPLE BERHAD. POSTION : IT EXECUTIVE Role & Responsibilities Manage service desk.",
+      "EXAMPLE BERHAD",
+      "IT EXECUTIVE",
+      "AUGUST 2008",
+      "27 JUNE 2011",
+    ],
+    [
+      "Working Experience June 2011 – September 2011 Example Sdn Bhd, Kuala Lumpur Occupation or position held Junior System Analyst Main activities and responsibilities Project: Client Web Portal",
+      "Example Sdn Bhd",
+      "Junior System Analyst",
+      "June 2011",
+      "September 2011",
+    ],
+  ];
+  for (const [text, company, title, start, end] of explicitForms) {
+    const rows = read(text);
+    assert.ok(
+      rows.some(
+        (j) =>
+          j.company === company &&
+          j.title === title &&
+          j.start === start &&
+          j.end === end,
+      ),
+      text,
+    );
+    assert.equal(
+      read(
+        text.replace(
+          /^(?:Professional Experience|Working Experience)/,
+          "Project History",
+        ),
+      ).filter((j) =>
+        /location-duration-heading|employer-tenure-role-label|unicode-employer-year-heading|dated-employer-position-label|occupation-held-career-form/.test(
+          j.group,
+        ),
+      ).length,
+      0,
+    );
+  }
+  const undatedProjects =
+    "Professional Experience Example Alpha Sdn Bhd Manager Project Involvement: Client Buyer Jan 2019 - Dec 2020 Role SAP Lead. Example Beta Pte Ltd SAP HCM Consultant Project Involvement: Buyer Jan 2015 - Dec 2017.";
+  const undatedRows = extractCanonicalEmploymentFromResume(undatedProjects);
+  assert.equal(undatedRows.length, 2);
+  assert.ok(
+    undatedRows.every((j) => !j.start && !j.end && !j.current && !j.duration),
+  );
+  assert.deepEqual(undatedRows.map((j) => j.title).sort(), [
+    "Manager",
+    "SAP HCM Consultant",
+  ]);
+  assert.equal(
+    read(undatedProjects.replace("Professional Experience", "Project History"))
+      .length,
+    0,
+  );
+  const partialYear = extractCanonicalEmploymentFromResume(
+    "Working Experience Example Sdn Bhd 2016 SAP Security Consultant - Setting up controls.",
+  );
+  assert.equal(partialYear.length, 1);
+  assert.equal(partialYear[0].start, "2016");
+  assert.equal(partialYear[0].end, "");
+  assert.equal(partialYear[0].current, false);
+  assert.equal(partialYear[0].duration, "");
+  const currentUndated = extractCanonicalEmploymentFromResume(
+    "Employment History Current Example Pte Ltd (Example MY Sdn Bhd) Position Title: Senior Consultant a) Client Buyer (Dec 2016 – Current) Project Manager of migration.",
+  );
+  assert.equal(currentUndated.length, 1);
+  assert.equal(currentUndated[0].current, true);
+  assert.equal(currentUndated[0].start, "");
+  assert.equal(currentUndated[0].end, "");
+  assert.equal(currentUndated[0].duration, "");
+  assert.equal(currentUndated[0].title, "Senior Consultant");
+  console.log(
+    "Owned employer fields: tables, explicit forms, source current status and incomplete-date isolation pass",
+  );
+}
+
+{
+  const footer = read(
+    "Working Experience March 2010 – July 2010 Example AG, Example City, Germany Occupation or position held Internship Page 5/7 - Curriculum vitae of Example Person Main activities and responsibilities Develop software.",
+  );
+  assert.equal(footer.length, 1);
+  assert.equal(footer[0].title, "Internship");
+  assert.ok(!footer[0].company.includes("Example Person"));
+}
+
+assert.equal(
+  read(
+    "Professional Experience Project History Employer Summary. Example Sdn Bhd Manager Project Involvement: Buyer Jan 2020 - Dec 2021",
+  ).filter((j) => j.group === "undated-employment-before-projects").length,
+  0,
+);
+
+// Malay month abbreviation already used by the layout reader also survives
+// in flattened tenure cells; do not accept an arbitrary word beginning Mac.
+{
+  const text =
+    "Working Experience OTC Analyst | Example Services | MAC 2021 - OCT 2021 Managed accounts receivable.";
+  const rows = extractCanonicalEmploymentFromResume(text);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].start, "Mar 2021");
+  assert.equal(rows[0].end, "OCT 2021");
+  assert.equal(
+    extractCanonicalEmploymentFromResume(
+      text.replace("MAC 2021", "MACARON 2021"),
+    ).length,
+    0,
+  );
+}

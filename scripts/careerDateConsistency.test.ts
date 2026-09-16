@@ -148,3 +148,44 @@ for (const start of ['', 'Jan 2019']) {
   assert.equal(profile.employmentTimeline[0].end, 'Jan 2020');
 }
 console.log('Distinct partial employment endpoints survive deduplication in either order: passed');
+
+// Recruiter-authorized project envelope, separate from factual employment dates.
+import { estimateEmploymentFromProjects, supportedSapYears, formatProjectTenureEstimate } from '../lib/projectEmploymentEstimate';
+import type { EnterpriseEmployment, EnterpriseProject } from '../lib/candidate360SchemaNormalize';
+const job = (overrides: Partial<EnterpriseEmployment> = {}): EnterpriseEmployment => ({id:'employment-fixture',company:'Example Systems Ltd',title:'SAP Consultant',location:'',companyType:'',modules:[],achievements:[],start:'',end:'',duration:'',current:false,...overrides});
+const project = (overrides: Partial<EnterpriseProject> = {}): EnterpriseProject => ({id:'project-first',name:'Delivery',employer:'Example Systems Ltd',client:'Example Buyer',role:'SAP Consultant',start:'Jan 2020',end:'Jan 2021',industry:'',country:'',modules:[],projectType:'',implementationType:'',duration:null,responsibilities:[],teamSize:null,environment:'',evidenceState:'source_extracted',fieldEvidence:{},...overrides});
+const assignments = [project(),project({id:'project-last',start:'Jan 2023',end:'Jan 2024'})];
+const estimated = estimateEmploymentFromProjects([job()],assignments,now)[0];
+assert.deepEqual([estimated.start,estimated.end],['','']);
+assert.deepEqual(estimated.estimatedTenure, {start:'Jan 2020',end:'Jan 2024',projectIds:['project-first','project-last'],basis:'project_envelope'});
+assert.match(formatProjectTenureEstimate(estimated.estimatedTenure),/estimated.*gaps/);
+assert.equal(supportedSapYears([estimated],assignments,now),2,'four-year envelope does not count a two-year project gap');
+assert.equal(estimateEmploymentFromProjects([job({start:'Jan 2019',end:'Jan 2025'})],assignments,now)[0].estimatedTenure,undefined,'exact employment tenure takes priority');
+assert.equal(estimateEmploymentFromProjects([job()], [project({employer:'Other Ltd',client:'Example Systems Ltd'})],now)[0].estimatedTenure,undefined,'client matching is not employer ownership');
+assert.equal(estimateEmploymentFromProjects([job()], [project({employer:''})],now)[0].estimatedTenure,undefined,'role similarity is not ownership');
+assert.equal(estimateEmploymentFromProjects([job(),job({id:'second-role',title:'Accountant'})],assignments,now)[0].estimatedTenure,undefined,'same-employer promotions cannot inherit all projects');
+assert.equal(estimateEmploymentFromProjects([job()], [project({start:'Jan 2024',end:'Jan 2020'})],now)[0].estimatedTenure,undefined);
+assert.equal(estimateEmploymentFromProjects([job({start:'Jan 2022'})],assignments,now)[0].estimatedTenure?.start,'Jan 2023','source endpoint constrains eligible projects');
+assert.equal(estimateEmploymentFromProjects([job({current:true})],assignments,now)[0].estimatedTenure?.end,'Jan 2024','current employer does not extend a finished project to today');
+assert.equal(supportedSapYears([
+ job({title:'Accountant',start:'Jan 2000',end:'Jan 2010',modules:['FI']}),
+ job({title:'Sales Manager',start:'Jan 2010',end:'Jan 2015',modules:['SD']}),
+ job({start:'Jan 2020',end:'Jan 2024'}),
+],assignments,now),4,'only SAP delivery years; duplicate project coverage counted once');
+assert.equal(supportedSapYears([job({title:'SAP end user',start:'Jan 2020',end:'Jan 2024'})],[],now),null);
+const sapProfile = normalizeActualCandidateSchema({id:'synthetic-sap-duration-review',sap_experience_years:20,employment_history:[
+ {company:'Example Finance Ltd',title:'Accountant',start:'Jan 2000',end:'Jan 2010'},
+ {company:'Example Systems Ltd',title:'SAP Consultant',start:'Jan 2020',end:'Jan 2024'},
+]}).enterpriseProfile;
+assert.equal(sapProfile.experienceSummary.sapExperienceYears,4,'actual supported SAP ranges outrank a larger declared total');
+assert.equal(sapProfile.experienceSummary.totalCareerYears,14,'career history retained separately from SAP');
+const nestedProjectProfile = normalizeActualCandidateSchema({id:'synthetic-owned-assignment-range',raw_text:'Professional Experience Example Systems Sdn Bhd SAP Consultant Project Involvement: Example Buyer SAP Upgrade 01/20 - 01/21 Responsible to configure delivery. Example Other Sdn Bhd SAP Consultant Project Involvement: Example Client SAP Rollout 01/23 - 01/24 Responsible to configure delivery.'}).enterpriseProfile;
+assert.equal(nestedProjectProfile.employmentTimeline.length,2);
+assert.equal(nestedProjectProfile.employmentTimeline.filter(j=>j.estimatedTenure).length,2);
+assert.equal(nestedProjectProfile.experienceSummary.sapExperienceYears,2);
+assert.ok(nestedProjectProfile.employmentTimeline.every(j=>!j.start&&!j.end));
+assert.equal(supportedSapYears([job({title:'Analyst',modules:['Excel'],start:'Jan 2020',end:'Jan 2024'})],[],now),null,'non-SAP skills cannot qualify a generic title');
+assert.equal(supportedSapYears([job({title:'SAP Sales and Distribution Consultant',start:'Jan 2020',end:'Jan 2024'})],[],now),4,'SAP SD consulting is delivery, not a sales job');
+import { ownedProjectRangesFromResume } from '../lib/projectEmploymentEstimate';
+assert.equal(ownedProjectRangesFromResume([job()], 'Example Systems Ltd SAP Consultant Project Involvement: Undated work. Other Ltd SAP Consultant Project Involvement: SAP Upgrade 01/20 - 01/21').length,0,'next employer range cannot fill an undated assignment');
+assert.equal(ownedProjectRangesFromResume([job()], 'Example Systems Ltd SAP Consultant Project Involvement: Responsibilities delivered support 01/20 - 01/21').length,0,'dates buried in duties are not a project heading');

@@ -5,6 +5,7 @@ import {
   type CompletenessComponent,
   type ProfileSectionState,
 } from "./candidate360Completeness";
+import { estimateEmploymentFromProjects, ownedProjectRangesFromResume, supportedSapYears, type ProjectTenureEstimate } from "./projectEmploymentEstimate";
 import { calculateTotalCareerYears } from "./candidateCareerExperience";
 import {
   CANDIDATE_EMPLOYMENT_TIMELINE_VERSION,
@@ -57,6 +58,7 @@ export type EnterpriseEmployment = {
   evidenceState?: EvidenceState;
   evidenceConfidence?: number;
   linkedProjectIds?: string[];
+  estimatedTenure?: ProjectTenureEstimate;
   provenance?: EvidenceRef[];
 };
 
@@ -811,6 +813,7 @@ function buildExperienceSummary(
   timeline: EnterpriseEmployment[],
   primaryModule: string,
   currentEmployer: string,
+  projects: EnterpriseProject[],
 ): CandidateExperienceSummary {
   const current = timeline.find((item) => item.current && item.start) || null;
   const explicitSap = maximumNumeric(sourceScopes, [
@@ -820,9 +823,7 @@ function buildExperienceSummary(
   ]);
   const datedCapabilityEvidence = (item: EnterpriseEmployment) =>
     item.title + " " + item.modules.join(" ");
-  const sapRoles = timeline.filter((item) =>
-    /\bsap\b|s\/4|hana|abap/i.test(datedCapabilityEvidence(item)),
-  );
+  const actualSapYears = supportedSapYears(timeline, projects);
   const modulePattern = primaryModule
     ? new RegExp(primaryModule.replace(/[.*+?^()|[\]\\]/g, "\\$&"), "i")
     : null;
@@ -843,9 +844,7 @@ function buildExperienceSummary(
     currentRoleTenureYears:
       current?.title && current.start ? currentTenure : null,
     sapExperienceYears:
-      explicitSap && explicitSap > 0
-        ? explicitSap
-        : nonOverlappingYears(sapRoles),
+      actualSapYears ?? (timeline.length || projects.length ? null : explicitSap && explicitSap > 0 ? explicitSap : null),
     primaryModuleExperienceYears: moduleRoles.length
       ? nonOverlappingYears(moduleRoles)
       : null,
@@ -4188,16 +4187,16 @@ function normalizeActualCandidateSchemaFresh(
     stageTimings.employmentMs = performance.now() - stageStartedAt;
   stageStartedAt = performance.now();
   const projects = removeEmploymentOnlyProjectDuplicates(
-    normalizeProjects(raw, sourceScopes),
+    [...normalizeProjects(raw, sourceScopes), ...ownedProjectRangesFromResume(normalizedEmployment, firstText(sourceScopes, ["resume_text", "raw_text", "cv_text", "raw_cv"]))],
     normalizedEmployment,
   );
   if (stageTimings)
     stageTimings.projectConstructionMs = performance.now() - stageStartedAt;
   stageStartedAt = performance.now();
-  const employmentTimeline = linkProjectsToEmployment(
+  const employmentTimeline = estimateEmploymentFromProjects(linkProjectsToEmployment(
     normalizedEmployment,
     projects,
-  );
+  ), projects);
   if (stageTimings)
     stageTimings.projectLinkingMs = performance.now() - stageStartedAt;
   stageStartedAt = performance.now();
@@ -4492,6 +4491,7 @@ function normalizeActualCandidateSchemaFresh(
     employmentTimeline,
     primarySapModule,
     currentCompany,
+    projects,
   );
   const consultingYears = experienceSummary.consultingExperienceYears;
   const leadershipYears =

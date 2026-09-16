@@ -531,3 +531,30 @@ The complete 277-source comparison gives **156 -> 164 source records with employ
 All 13 available original-file representations remain unchanged at 57 tuples. No original was substituted into the export and no new CV request is established by this batch. Local validation covers 31 source/parser/acceptance-harness regression files, typecheck, scoped formatting, whitespace checks, full-subset comparison and original-file comparison. Sanitized fixtures include each supported heading and negative project/client, training, malformed-range and location cases. Verify CI and commit statuses on the resulting head before merge.
 
 Production remains **NO_GO**: live OCR with persisted provenance, reviewed/version-matched backfill, all-970-source audit (693 not audited here) and authenticated acceptance of the exact promotion artifact remain outstanding. No runtime configuration, Supabase/Vercel write, backfill or production promotion occurred.
+
+## Owned fields and recruiter-authorized project estimates — 2026-09-16
+
+Baseline `b71d84baf3d65263f9f1752eae68c7132f975bab`; parser `candidate-employment-v74-owned-fields-batch`. Before editing, all 113 unresolved sources were grouped into 58 heading/date-boundary, 45 project/client-heavy, four explicit-label, four headed-table and two other cases. This batch repairs employer summary tables, numbered Duration / Role Played forms, explicit worked-for statements, labelled POSITION/occupation rows, year-only headings, current employer/title statements and undated employer/role headings before Project Involvement. Malay `Mac` is normalized to March, consistent with the existing layout reader. A PDF page footer is stripped from a role field. Negative fixtures retain project/client boundaries, reject malformed dates and avoid filling titles from assignments.
+
+Full 277-source comparison: **164 -> 176 sources with employment**, **595 -> 627 rows**, **113 -> 101 without employment**. Twelve previously unresolved source records gain 32 rows; all 595 previous employer/title/start/end/current tuples are retained. Malformed, duplicate and invalid-range diagnostics stay zero. Overlap review flags stay nine; possible client/employer equality stays one. Of the 627 rows, 554 have titles and 618 have complete source date ranges; these are partial source histories, not complete CVs or unique people.
+
+| Remaining review queue | Before | After | Continuing reason |
+| --- | ---: | ---: | --- |
+| Heading/date boundary | 58 | 48 | Lost layout, incomplete or malformed dates and unsupported boundaries |
+| Project/client narrative | 45 | 43 | Employer identity or assignment ownership is not sufficiently established |
+| Explicit employer labels | 4 | 4 | Ambiguous fields or missing assignment ownership |
+| Headed tables | 4 | 4 | Existing originals require reviewed source replacement/backfill; not a request to resend files |
+| Other narrative/layout | 2 | 2 | Insufficient supported employment evidence |
+| **Total** | **113** | **101** | Heuristic review queues, not adjudicated causes |
+
+### Recruiter-requested estimate policy
+
+The recruiter explicitly authorized estimating missing employer tenure from the first and last project at that employer. This supersedes earlier statements prohibiting *all* project-based tenure estimates; it does not authorize rewriting source dates as fact. `estimatedTenure` retains its own start/end, project IDs and `project_envelope` basis. Both employment views label it as estimated and warn that gaps may exist. Explicit employer ownership is required. Client matching and title similarity alone are insufficient. Multiple roles at the same employer remain unresolved unless ownership is disambiguated. Complete source tenure takes priority, partial source endpoints constrain eligible projects, invalid/future/reversed project dates are excluded, and a current employer does not extend a finished project to today.
+
+For source-backed Project Involvement headings, the established employer and role own the following assignment range only before another employer or duties. Multiple named projects sharing one range remain one assignment group. This adds **four estimated employer ranges on one source record** without changing its blank source endpoints. No database write occurs.
+
+SAP experience now counts the union of supported SAP delivery intervals from dated roles and assignments. Accounting, sales and SAP end-user roles do not qualify merely because SAP/module skills are present. SAP Sales and Distribution consulting remains eligible. Non-SAP skills do not qualify generic titles. Project-envelope gaps are not SAP experience; overlapping employment/project months count once. Dated evidence takes precedence over a larger declared SAP total. General career years remain separate. In the 277-source comparison, SAP duration changes on 16 records: 13 previously unestablished values gain supported durations and three increase; none decrease or become unknown. This is an evidence-based subset calculation, not a reviewed full-history certification.
+
+All 13 available original-file representations retain the same 57 employment tuples. Original cohorts remain separate from the export; no substitution/backfill occurred. Local verification: 33 regression files, focused negative ownership checks, typecheck, required formatting, whitespace checks and full-subset/original comparisons pass. Verify exact-head CI and statuses after the batch push. Synthetic tests and this checkpoint contain no candidate identities, contacts or private source IDs.
+
+Production remains **NO_GO** pending live OCR/provenance, reviewed version-matched backfill, all-970-source audit (693 still unaudited) and authenticated acceptance of the exact promotion artifact. No runtime configuration, Supabase/Vercel write or production promotion occurred.
