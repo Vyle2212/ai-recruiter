@@ -9,7 +9,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v53-project-range-validation";
+  "candidate-employment-v54-link-phrase-boundaries";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1724,6 +1724,11 @@ function rangeContains(
   );
 }
 
+function containsNormalizedPhrase(text: string, phrase: string) {
+  const key = normalized(phrase);
+  return Boolean(key && ` ${normalized(text)} `.includes(` ${key} `));
+}
+
 export function linkProjectsToEmployment(
   timeline: readonly EnterpriseEmployment[],
   projects: readonly EnterpriseProject[],
@@ -1746,14 +1751,15 @@ export function linkProjectsToEmployment(
           project.environment,
           ...project.responsibilities,
         ].join(" ");
-        const explicitlyNamesEmployer = normalized(projectText).includes(
-          normalized(employment.company),
+        const explicitlyNamesEmployer = containsNormalizedPhrase(
+          projectText,
+          employment.company,
         );
         const compatibleRole = Boolean(
           employment.title &&
           project.role &&
-          (normalized(project.role).includes(normalized(employment.title)) ||
-            normalized(employment.title).includes(normalized(project.role))),
+          (containsNormalizedPhrase(project.role, employment.title) ||
+            containsNormalizedPhrase(employment.title, project.role)),
         );
         const employmentSourceIndexes = new Set(
           (employment.provenance || []).flatMap(

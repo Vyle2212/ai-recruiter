@@ -556,6 +556,68 @@ assert.deepEqual(
   "reversed employment and project ranges cannot produce a link",
 );
 
+// Substrings inside another word do not establish employer or role evidence.
+for (const [company, title, name, role] of [
+  [
+    "Example Alpha",
+    "SAP Consultant",
+    "Example Alphabet delivery",
+    "Delivery Manager",
+  ],
+  ["Example Alpha", "Architect", "Delivery", "Architecture Analyst"],
+  ["Ltd", "SAP Consultant", "Unrelated delivery", "Delivery Manager"],
+]) {
+  assert.deepEqual(
+    linkProjectsToEmployment(
+      [{ ...alphaEmployment, company, title }],
+      [
+        {
+          ...explicitProject,
+          employer: "",
+          name,
+          role,
+          responsibilities: [],
+          environment: "",
+          fieldEvidence: {},
+        },
+      ],
+    )[0].linkedProjectIds,
+    [],
+    "partial words or empty normalized company names must not establish a link",
+  );
+}
+assert.deepEqual(
+  linkProjectsToEmployment(
+    [alphaEmployment],
+    [
+      {
+        ...explicitProject,
+        employer: "",
+        name: "Delivery for Example Alpha, regional rollout",
+        role: "Delivery Manager",
+        fieldEvidence: {},
+      },
+    ],
+  )[0].linkedProjectIds,
+  [explicitProject.id],
+  "a complete employer phrase in narrative remains supported",
+);
+assert.deepEqual(
+  linkProjectsToEmployment(
+    [alphaEmployment],
+    [
+      {
+        ...explicitProject,
+        employer: "",
+        role: "Senior SAP Consultant",
+        fieldEvidence: {},
+      },
+    ],
+  )[0].linkedProjectIds,
+  [explicitProject.id],
+  "complete role phrases remain compatible",
+);
+
 const drawer = fs.readFileSync(
   path.join(
     process.cwd(),
