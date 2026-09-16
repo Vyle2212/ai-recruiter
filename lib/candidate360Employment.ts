@@ -9,7 +9,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v52-explicit-project-employer";
+  "candidate-employment-v53-project-range-validation";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1717,6 +1717,8 @@ function rangeContains(
     employmentEnd !== null &&
     projectStart !== null &&
     projectEnd !== null &&
+    employmentStart <= employmentEnd &&
+    projectStart <= projectEnd &&
     projectStart >= employmentStart &&
     projectEnd <= employmentEnd
   );

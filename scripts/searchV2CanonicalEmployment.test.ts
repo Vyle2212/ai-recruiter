@@ -489,6 +489,73 @@ assert.deepEqual(
   "a partial company-name match does not establish the same employer",
 );
 
+for (const [start, end] of [
+  ["Dec 2021", "Jan 2021"],
+  ["Dec 2025", "Jan 2019"],
+  ["Jan 2021", ""],
+  ["", "Dec 2021"],
+  ["31 Apr 2021", "Dec 2021"],
+]) {
+  const profile = normalizeActualCandidateSchema({
+    employment_history: [
+      {
+        company: "Example Alpha",
+        title: "SAP Consultant",
+        start_date: "Jan 2020",
+        end_date: "Dec 2022",
+      },
+    ],
+    projects: [
+      {
+        name: "Delivery",
+        employer: "Example Alpha",
+        role: "SAP Consultant",
+        start_date: start,
+        end_date: end,
+      },
+    ],
+  }).enterpriseProfile;
+  assert.deepEqual(
+    profile.employmentTimeline[0].linkedProjectIds,
+    [],
+    `invalid or incomplete project dates cannot establish employment links: ${start} / ${end}`,
+  );
+}
+assert.deepEqual(
+  linkProjectsToEmployment(
+    [alphaEmployment],
+    [
+      {
+        ...explicitProject,
+        start: "Jan 2021",
+        end: "Jan 2021",
+      },
+    ],
+  )[0].linkedProjectIds,
+  [explicitProject.id],
+  "a valid same-month project can still link to its employer",
+);
+assert.deepEqual(
+  linkProjectsToEmployment(
+    [
+      {
+        ...alphaEmployment,
+        start: "Dec 2022",
+        end: "Jan 2020",
+      },
+    ],
+    [
+      {
+        ...explicitProject,
+        start: "Dec 2025",
+        end: "Jan 2019",
+      },
+    ],
+  )[0].linkedProjectIds,
+  [],
+  "reversed employment and project ranges cannot produce a link",
+);
+
 const drawer = fs.readFileSync(
   path.join(
     process.cwd(),
