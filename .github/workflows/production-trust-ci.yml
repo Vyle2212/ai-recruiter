@@ -164,6 +164,8 @@ jobs:
           node --import tsx scripts/dateCompanyRoleEmployment.test.ts
           node --import tsx scripts/employmentTableDateLayouts.test.ts
           node --import tsx scripts/careerDateConsistency.test.ts
+          node --import tsx scripts/employmentEvidenceDeduplication.test.ts
+          node --import tsx scripts/profileSourceAuditEvidence.test.ts
           node --import tsx scripts/cvPdfOcr.test.ts
           node --import tsx scripts/uploadCvSourceFailure.test.ts
 

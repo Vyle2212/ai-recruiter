@@ -1,3 +1,4 @@
+import { auditSourceText, auditEmploymentDateComplete, auditEmploymentIncomplete, auditPopulationScope } from '../lib/profileSourceAuditEvidence';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { employmentTimelineDiagnostics } from '../lib/candidate360Employment';
@@ -46,7 +47,7 @@ const diagnostics = {malformedNarrativeRecords: 0, duplicateRecords: 0, invalidR
 const profileChecks: Record<string, unknown>[] = [];
 const completeness = {company: 0, title: 0, dateRange: 0, currentEmployerProfiles: 0, projects: 0, projectsWithoutType: 0, paginationLeaks: 0};
 for (const row of rows) {
-  const text = ['raw_text','resume_text','raw_cv'].map(key => typeof row[key] === 'string' ? row[key] : '').join('\n');
+  const text = auditSourceText(row);
   const hasText = text.trim().length > 0;
   const hasReference = Boolean(row.source_file);
   sourceTextPresent += Number(hasText); sourceReferencePresent += Number(hasReference);
@@ -57,7 +58,7 @@ for (const row of rows) {
   for (const job of profile.employmentTimeline) {
     completeness.company += Number(Boolean(job.company));
     completeness.title += Number(Boolean(job.title));
-    completeness.dateRange += Number(Boolean(job.start && job.end));
+    completeness.dateRange += Number(auditEmploymentDateComplete(job));
   }
   completeness.currentEmployerProfiles += Number(profile.employmentTimeline.some(job => job.current && job.company));
   completeness.projects += profile.projects.length;
@@ -67,7 +68,7 @@ for (const row of rows) {
   if (!hasText) reasons.push(hasReference ? 'SOURCE_TEXT_MISSING_RETRIEVE_REFERENCED_FILE' : 'SOURCE_TEXT_AND_REFERENCE_MISSING');
   if (/\b(?:EXPERINCE|EMPLOYMENT HISTORY|WORKING EXPERIENCE|PROFESSIONAL EXPERIENCE)\b/i.test(text) && !profile.employmentTimeline.length) reasons.push('EMPLOYMENT_SECTION_REQUIRES_REVIEW');
   if (/\b(?:EDUCATION|ACADEMIC QUALIFICATIONS)\b/i.test(text) && !profile.education.length) reasons.push('EDUCATION_SECTION_REQUIRES_REVIEW');
-  if (profile.employmentTimeline.some(x => !x.company || !x.title || !x.start || !x.end)) reasons.push('INCOMPLETE_EMPLOYMENT_FIELDS');
+  if (profile.employmentTimeline.some(auditEmploymentIncomplete)) reasons.push('INCOMPLETE_EMPLOYMENT_FIELDS');
   const token = crypto.createHash('sha256').update(String(row.id || rows.indexOf(row))).digest('hex').slice(0,12);
   const timeline = profile.employmentTimeline;
   const check = employmentTimelineDiagnostics(timeline);
@@ -82,25 +83,23 @@ for (const row of rows) {
   diagnostics.possibleClientEmployerConflicts += Number(possibleClientEmployerConflict);
   const delivery = targetModuleDeliveryEvidence({lifecycleEvidence: canonicalLifecycleEvidence(token, profile.projects)}, 'FICO');
   profileChecks.push({token, employmentRecords: timeline.length, missingTitleRecords: timeline.filter(job => !job.title).length, missingCompanyRecords: timeline.filter(job => !job.company).length,
-    missingDateRecords: timeline.filter(job => !job.start || !job.end).length,
+    missingDateRecords: timeline.filter(job => !auditEmploymentDateComplete(job)).length,
     totalCareerYears: profile.experienceSummary.totalCareerYears, currentRoleTenureYears: profile.experienceSummary.currentRoleTenureYears,
     projects: profile.projects.length, directFicoAssignments: delivery.directTargetAssignments.length,
     overlappingEmployment: overlaps, possibleClientEmployerConflict,
-    status: timeline.length ? (timeline.some(job => !job.company || !job.title || !job.start || !job.end) ? 'INCOMPLETE_EMPLOYMENT' : 'EXTRACTED_REQUIRES_SOURCE_REVIEW') : 'UNRESOLVED_SOURCE_REVIEW_REQUIRED'});
+    status: timeline.length ? (timeline.some(auditEmploymentIncomplete) ? 'INCOMPLETE_EMPLOYMENT' : 'EXTRACTED_REQUIRES_SOURCE_REVIEW') : 'UNRESOLVED_SOURCE_REVIEW_REQUIRED'});
 
   if (reasons.length) review.push({token, reasons});
   if (arg('--review-sources') && reasons.some(reason => ['EMPLOYMENT_SECTION_REQUIRES_REVIEW', 'INCOMPLETE_EMPLOYMENT_FIELDS'].includes(reason))) {
     sourceExport.push({token, reasons, source: Object.fromEntries(sourceFields.filter(key => row[key] !== undefined).map(key => [key, row[key]]))});
   }
 }
-const scope = {auditedSources: rows.length, declaredPopulation,
-  unauditedSources: declaredPopulation !== null ? Math.max(0, declaredPopulation - rows.length) : null,
-  coverage: declaredPopulation === null ? (arg('--input') ? 'UNKNOWN_POPULATION' : 'DATABASE_SCAN') : declaredPopulation > rows.length ? 'SUBSET_ONLY' : declaredPopulation === rows.length ? 'DECLARED_POPULATION_LOADED' : 'INCONSISTENT_EXPORT_METADATA'};
+const scope = auditPopulationScope(rows.length, declaredPopulation, Boolean(arg('--input')));
 const report = {mode:'READ_ONLY', scope, diagnostics, profileChecks, version: CANDIDATE_CANONICAL_VERSION, completeness, profilesWithoutEmployment: rows.length - employmentProfiles, population: rows.length, sourceTextPresent, sourceReferencePresent, employmentProfiles, employmentRecords, educationProfiles, review,
   limits:['Overlap and client/employer equality are review flags, not proof of an error.', 'Direct FICO assignment counts are evidence metrics, not Search V2 scores.', 'A source reference does not prove the original file is accessible.', 'Section detection flags possible omissions; it does not prove extraction completeness.', 'No database records changed. Production UI and scoring distribution remain unverified.']};
 if (arg('--review-sources')) {
   fs.writeFileSync(arg('--review-sources')!, JSON.stringify({mode: 'READ_ONLY', version: CANDIDATE_CANONICAL_VERSION,
-    population: rows.length, count: sourceExport.length, selection: 'employment review or incomplete employment',
+    population: declaredPopulation ?? (arg('--input') ? null : rows.length), auditedSources: rows.length, count: sourceExport.length, selection: 'employment review or incomplete employment',
     samples: sourceExport}, null, 2), 'utf8');
   console.log(`Exported ${sourceExport.length} employment review sources to ${arg('--review-sources')}`);
 }

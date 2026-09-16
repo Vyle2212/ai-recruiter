@@ -35,7 +35,7 @@ No live Google OCR call, database mutation, or production promotion was performe
 
 ## Continuation checkpoint: CI coverage
 
-The precision feature branch previously triggered only the immutable-action-reference workflow. Production Trust CI now includes `codex/precision-*` pushes and pull requests targeting `codex/profile-source-recovery`, retaining all existing security, dependency, secret-history, formatting, build and regression gates. Nine source-layout/OCR and career-date tests are included in its security-and-regression job.
+The precision feature branch previously triggered only the immutable-action-reference workflow. Production Trust CI now includes `codex/precision-*` pushes and pull requests targeting `codex/profile-source-recovery`, retaining all existing security, dependency, secret-history, formatting, build and regression gates. Eleven source-layout/OCR, career-date, deduplication and audit tests are included in its security-and-regression job.
 
 Local route-policy coverage found no missing policies across 78 route files and 95 exported methods. The authorization matrix passed, and the client-bundle scan inspected 297 files with zero forbidden-pattern hits. These local checks are not authenticated production acceptance.
 
@@ -176,3 +176,15 @@ Deduplication already preserved different starts when an end was missing, but la
 Synthetic tests cover two end-only records, a partial/complete pair, both input orders, preservation of every explicit end and supported equal-end duplicates. All 16 local employment/calendar/canonical regression files and typecheck passed. Against commit `bce15bee2cf9aa10f91ce9d8b9e47a12abaa97e0`, the private 277-source comparison found zero changed employment timelines or experience summaries: 80 profiles / 315 rows, 197 unresolved, and zero malformed, duplicate or invalid-range employment diagnostics. No source or database records were changed.
 
 The preceding revision passed Production Trust run `35042774606`, immutable-action run `35042774603` and both previews. This revision requires its own exact-head CI. Live OCR, reviewed backfill, the remaining 693 sources and authenticated exact-artifact acceptance remain release blockers (NO_GO).
+
+## Consolidated precision and audit review
+
+The employment deduplication rule now preserves conflicting explicit month endpoints, different normalized titles, undated records alongside dated engagements, and current versus historical assertions. The old one-month and title-token similarity tolerances could erase short jobs or promotion boundaries. Matching month representations and consistent partial records with a shared date still merge. The existing complementary-partial protections remain. The canonical employment version is incremented.
+
+The read-only source audit now includes `cv_text`, uses validated canonical date ranges (including current jobs with known starts) for completeness and review status, and preserves the declared full population when re-exporting a subset. Previously it could incorrectly label current jobs incomplete or shrink the declared population on a second export. Two new mandatory CI regressions cover the consolidated deduplication contract and an actual synthetic audit/export/re-import round trip. The source-layout/audit/OCR CI group now contains eleven test scripts.
+
+Local validation: 18 employment/calendar/canonical/audit regression scripts, six source-layout/OCR/upload scripts (one overlaps the employment group), TypeScript typecheck, scoped formatting and whitespace checks passed. The deduplication comparison against `820649a8e12104c33960f2b92e4600de38d299d7` changed zero employment timelines or experience summaries in the private 277-source subset.
+
+The full read-only audit of the available subset reports 80 profiles / 315 employment rows and 197 unresolved employment sections. Of those rows, 315 have employers, 276 have titles and 313 have supported date ranges. Seven profiles have overlapping ranges and one has an employer/client equality flag; these are review signals, not adjudicated errors. Nine profiles have incomplete employment fields. Malformed employment, duplicates, invalid ranges and project pagination leakage remain zero. Scope is explicitly SUBSET_ONLY: 277 of a declared 970 sources, with 693 unaudited. Original-file recovery is not added to these counts.
+
+This checkpoint completes the reproduced code defects in this review, not production acceptance. The remaining work is concrete: resolve the 197 source-review cases, inspect the seven overlap and one employer/client flags, audit the remaining 693 sources, run live Google OCR and verify saved provenance, apply only reviewed/version-matched backfill, then run authenticated acceptance on the exact artifact to promote. No runtime configuration, source mutation, database writes or production promotion were performed. Production remains NO_GO; exact-head CI is required for this revision.

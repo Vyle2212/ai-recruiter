@@ -9,7 +9,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v57-partial-end-preservation";
+  "candidate-employment-v58-evidence-deduplication";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1522,40 +1522,17 @@ function sameEmployment(
     (leftStart !== null && leftEnd === null && rightStart === null && rightEnd !== null) ||
     (rightStart !== null && rightEnd === null && leftStart === null && leftEnd !== null)
   ) return false;
-  // Separate rows in a source table can be distinct engagements one month apart.
-  // Do not erase an explicitly different start when either end is unknown.
-  if (leftStart !== null && rightStart !== null && leftStart !== rightStart &&
-      (leftEnd === null || rightEnd === null)) return false;
-  // Apply the same protection to explicit ends when either start is unknown.
-  if (leftEnd !== null && rightEnd !== null && leftEnd !== rightEnd &&
-      (leftStart === null || rightStart === null)) return false;
-  if (
-    leftStart !== null &&
-    rightStart !== null &&
-    Math.abs(leftStart - rightStart) > 1
-  )
-    return false;
-  if (leftEnd !== null && rightEnd !== null && Math.abs(leftEnd - rightEnd) > 1)
-    return false;
-  if (sameTitle) return true;
-  const leftTitleTokens = new Set(
-    normalized(left.title).split(" ").filter(Boolean),
-  );
-  const rightTitleTokens = new Set(
-    normalized(right.title).split(" ").filter(Boolean),
-  );
-  const overlap =
-    [...leftTitleTokens].filter((item) => rightTitleTokens.has(item)).length /
-    Math.max(1, Math.min(leftTitleTokens.size, rightTitleTokens.size));
-  return (
-    leftStart !== null &&
-    rightStart !== null &&
-    leftEnd !== null &&
-    rightEnd !== null &&
-    Math.abs(leftStart - rightStart) <= 1 &&
-    Math.abs(leftEnd - rightEnd) <= 1 &&
-    overlap >= 0.7
-  );
+  // Explicitly different dates or titles are conflicting evidence, not duplicates.
+  // A one-month tolerance can erase short engagements and promotion boundaries.
+  if (leftStart !== null && rightStart !== null && leftStart !== rightStart) return false;
+  if (leftEnd !== null && rightEnd !== null && leftEnd !== rightEnd) return false;
+  // An undated record cannot identify which dated engagement it belongs to.
+  const leftDated = leftStart !== null || leftEnd !== null;
+  const rightDated = rightStart !== null || rightEnd !== null;
+  if (leftDated !== rightDated) return false;
+  // Current and historical assertions must not silently overwrite each other.
+  if (left.current !== right.current) return false;
+  return sameTitle;
 }
 
 function mergeEmployment(
