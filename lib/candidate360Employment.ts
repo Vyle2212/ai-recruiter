@@ -2,6 +2,7 @@ import { careerMonthIndex } from "./candidateCareerExperience";
 import { formatEmploymentTenure } from "./employmentTenure";
 import { layoutEmployment } from "./layoutEmployment";
 import { flattenedEmployment } from "./flattenedEmployment";
+import { exportedCareerEmployment } from "./exportedCareerEmployment";
 import type {
   EnterpriseEmployment,
   EnterpriseProject,
@@ -11,7 +12,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v75-continuous-sap-tenure";
+  "candidate-employment-v76-exported-career-cards";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1380,6 +1381,14 @@ function resumeEmployment(resumeText: string) {
     })
     .replace(/[\r\n]+/g, " ")
     .replace(/\s+/g, " ");
+  const ownedCareerSpans: {sourceStart: number; sourceEnd: number}[] = [];
+  for (const [index, row] of exportedCareerEmployment(source).entries()) {
+    const parsed = entry({ ...row, sourceRef: `resume.exportedCareer.${index + 1}`, sourceType: 'parsed_resume', confidence: 94 });
+    if (parsed) {
+      output.push(parsed);
+      ownedCareerSpans.push(row);
+    }
+  }
   output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source), ...labelledEmployerHistory(source), ...explicitHeadingVariants(source), ...orderedLabelEmployment(source), ...dateCompanyRoleEmployment(source), ...explicitEmploymentStatements(source), ...spacedDateEmployment(source), ...datedEmploymentLedger(source), ...headingDurationPositionEmployment(source), ...numberedPositionEmployment(source), ...numberedPositionPeriodEmployment(source), ...roleCompanyPeriodEmployment(source), ...locatedEmployerHistory(source), ...durationEmployerHistory(source), ...organizationDurationDesignationEmployment(source), ...organizationPeriodEmployment(source), ...datedCareerSummary(source), ...numberedWorkExperience(source), ...locatedRoleEmployment(source), ...formerNameEmployment(source), ...employerAssignmentSummary(source), ...chronologicalEmploymentLedgers(source), ...numericFromToEmployment(source), ...structuredEmploymentTables(source));
   for (const [index, row] of flattenedEmployment(source).entries()) {
     const parsed = entry({...row, allowGroundedEmployerOnly: true,
@@ -1633,7 +1642,13 @@ function resumeEmployment(resumeText: string) {
     `([^.!?]{2,100}?\\b(?:Consultant|Manager|Lead|Developer|Analyst|Engineer|Officer|Accountant))\\s+at\\s+(.{2,140}?)\\s+((${date})\\s*[—–-]\\s*(${date}|Present|Current))`,
     "gi",
   );
+  // Explicit cards own their text span. The older prose reader otherwise
+  // crosses card boundaries or clips dotted company names to "Bhd."/"Ltd".
+  // Match original offsets, not text replacement: identical text may also
+  // occur in a separately supported, more specific role later in the source.
   [...source.matchAll(titleAtCompany)].forEach((match, index) => {
+    const end = (match.index || 0) + match[0].length;
+    if (ownedCareerSpans.some(span => end > span.sourceStart && end <= span.sourceEnd)) return;
     const parsed = entry({
       title: resumeRole(match[1]),
       company: resumeCompany(match[2]),

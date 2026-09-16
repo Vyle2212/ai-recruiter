@@ -1,5 +1,7 @@
 # Full-population source audit and reviewed backfill checkpoint
 
+> Subsequent code checkpoint: [exported career history batch](precision-career-export-batch-20260916.md). v76 locally reads 486 records / 1,491 rows from the same 970-source snapshot, leaving 484 unresolved. This is a parser result; the nine-original production backfill documented below is the last database write.
+
 ## Current status
 
 On 2026-09-16 the recruiter explicitly expanded the earlier GitHub-only scope to request the remaining 693-source audit, database backfill and verification, then confirmed the sensitive nine-CV payload and production destination. A private snapshot of all **970 candidate source records** was retained before writing. The reviewed backfill is now **APPLIED AND READBACK VERIFIED**: nine candidates and their nine search-index rows were updated atomically. The other 961 candidate records retain their exact pre-write fingerprint.
