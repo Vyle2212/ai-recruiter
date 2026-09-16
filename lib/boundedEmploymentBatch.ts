@@ -13,7 +13,8 @@ const month =
   "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
 const year = "(?:19|20)\\d{2}";
 const day = "\\d{1,2}(?:st|nd|rd|th)?";
-const date = `(?:(?:${day}[ -]+)?${month}[., -]*${year}|${month}[. ]*${day}[ ,]+${year}|${year}[ |]+${month}|${year})`;
+const numericMonth = "(?:0?[1-9]|1[0-2])";
+const date = `(?:(?<![\\d/])${year}-${numericMonth}(?![-\\d])|(?<![\\d/])${numericMonth}/${year}(?![\\d/])|(?:${day}[ -]+)?${month}[., -]*${year}|${month}[. ]*${day}[ ,]+${year}|${year}[ |]+${month}|${year})`;
 const ongoing =
   "(?:(?:till|until|to|at)\\s+(?:date|now|present)|present|current|now|continuing)";
 const range = `(${date})\\s*(?:[-–—]|to|until|till)\\s*(${date}|${ongoing})`;
@@ -31,6 +32,12 @@ const forbidden =
 const hasJob = new RegExp(`\\b${job}\\b`, "i");
 function cleanDate(value: string) {
   if (new RegExp(`^${ongoing}$`, "i").test(value)) return "Present";
+  const numeric = value.match(/^(?:(\d{4})-(\d{1,2})|(\d{1,2})\/(\d{4}))$/);
+  if (numeric) {
+    const m = Number(numeric[2] || numeric[3]);
+    if (m < 1 || m > 12) return value;
+    return `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m - 1]} ${numeric[1] || numeric[4]}`;
+  }
   return value
     .replace(new RegExp(`^(${year})[ |]+(${month})$`, "i"), "$2 $1")
     .replace(new RegExp(`^(${month})(?=\\d)`, "i"), "$1 ")
@@ -1791,6 +1798,35 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
   const legalSuffix =
     "(?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Pvt\\.?\\s*Ltd\\.?|Co\\.?\\s*,?\\s*Ltd\\.?|Limited|Ltd\\.?|Inc\\.?|Berhad|Corporation)";
   const legalEmployer = `(${org}${legalSuffix})`;
+  // A contract heading explicitly distinguishes the contracting employer from
+  // the organisation served. Keep the client annotation as evidence only.
+  // Require the contract marker, legal employer and literal "for" relation;
+  // ordinary project/client/date cards must never enter this reader.
+  const contractingHeading = new RegExp(
+    `\\b((?:SAP|Senior|Junior|Technical|Functional|Solution|Solutions)\\s+${role}\\s*\\(Contract\\))\\s+${legalEmployer}\\s+\\(for\\s+[^()]{2,130}\\)\\s+${range}(?=\\s|$)`,
+    "gi",
+  );
+  for (const m of source.matchAll(contractingHeading)) {
+    if (/\b(?:Client|Customer|Project)\s*:\s*$/i.test(source.slice(Math.max(0, m.index! - 30), m.index))) continue;
+    add(m[2], m[1], m[3], m[4], m[0], "contract-employer-client-annotation");
+  }
+  // Year/Description career summaries put role and employer before duty text.
+  // Only the explicitly named table supplies row boundaries. Detailed project
+  // sections terminate the table even when they repeat employer names.
+  for (const header of source.matchAll(/\bWork Experience\s+Year\s+Description\s*/gi)) {
+    const section = source.slice(header.index! + header[0].length).split(
+      /\b(?:Key Projects|Projects?\s*(?:&\s*Assignments|Experience|Details|History)|Education|References)\b/i,
+    )[0];
+    const periods = [...section.matchAll(new RegExp(range, "gi"))];
+    for (let i = 0; i < periods.length; i++) {
+      const period = periods[i];
+      const fields = section.slice(period.index! + period[0].length, periods[i + 1]?.index ?? section.length).trim();
+      const m = fields.match(new RegExp(
+        `^((?:SAP|Senior|Junior|Technical|Functional)\\s+${role})\\s+(${org})(?=\\s+(?:Responsible\\b|(?:MM|SD|FI|CO|SAP|Functional)\\s+(?:consultants?|Lead)\\b))`, "i",
+      ));
+      if (m) add(m[2], m[1], period[1], period[2], period[0] + " " + m[0], "year-description-career-table");
+    }
+  }
   // Explicit From/To/Description tables carry the date at the start of each
   // row. Split periods first; a preceding row can never supply the next title.
   for (const header of source.matchAll(

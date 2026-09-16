@@ -176,6 +176,7 @@ jobs:
           node --import tsx scripts/interleavedCareerBatch.test.ts
           node --import tsx scripts/careerLedgerBatch.test.ts
           node --import tsx scripts/labelledCareerRecords.test.ts
+          node --import tsx scripts/numericContractCareer.test.ts
           node --import tsx scripts/cvPdfOcr.test.ts
           node --import tsx scripts/uploadCvSourceFailure.test.ts
 

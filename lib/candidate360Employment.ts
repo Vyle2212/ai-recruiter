@@ -14,7 +14,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v85-labelled-career-records";
+  "candidate-employment-v86-numeric-contract-career";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,

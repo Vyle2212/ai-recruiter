@@ -30,9 +30,20 @@ const review = readFileSync(
 const sourceReadiness = readFileSync("lib/searchV2SourceReadiness.ts", "utf8");
 
 assert.match(route, /fetchCandidateSourceByIdentityToken/);
+const postRoute = route.slice(route.indexOf("export async function POST("));
 assert.match(
-  route,
-  /if \(lightweightIdentityLookup\)[\s\S]*authorizeRecruiterJobsRead\(\)[\s\S]*!authorization\.allowed/,
+  postRoute,
+  /requireRecruiterSearchAuthorization\(\{\s*permission: "search:read"/,
+);
+assert.match(
+  postRoute,
+  /if \(!authorization\.allowed\)\s*return recruiterSearchAuthorizationDenied\(authorization\)/,
+);
+assert.ok(
+  postRoute.indexOf(
+    "return recruiterSearchAuthorizationDenied(authorization)",
+  ) < postRoute.indexOf("if (lightweightIdentityLookup)"),
+  "central authorization must reject requests before identity retrieval",
 );
 assert.ok(
   route.indexOf("if (lightweightIdentityLookup)") <

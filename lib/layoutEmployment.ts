@@ -106,6 +106,9 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
         !company ||
         !role.test(title) ||
         forbidden.test(company) ||
+        // PDF bullet glyphs can disappear. A following imperative duty must
+        // not become the employer in a date/title/company layout.
+        /^(?:Conduct(?:ed|ing)?|Perform(?:ed|ing)?|Maintain(?:ed|ing)?|Provide[ds]?|Ensure[ds]?|Develop(?:ed|ing)?|Prepare[ds]?)\s+[a-z]/.test(company) ||
         forbidden.test(title)
       )
         return;

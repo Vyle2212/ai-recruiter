@@ -2120,6 +2120,9 @@ export function resolveCurrentEmployer(
     (item) => item.company && /present|current|now/i.test(item.end),
   );
   if (openEndedRecord) return openEndedRecord.company;
+  // Undated employment cannot be chronologically placed behind a completed
+  // role. Do not present that older role as the current employer.
+  if (timeline.some((item) => item.company && !item.start && !item.end)) return "";
   return timeline.find((item) => item.company)?.company || "";
 }
 
@@ -2158,7 +2161,8 @@ function plausiblePersonName(value: string) {
   )
     return "";
   if (
-    /[,;:]$|[!?]$|(?:\.$)/.test(name) ||
+    /[,;:]$|[!?]$/.test(name) ||
+    (/\.$/.test(name) && !/\b[A-Z]\.$/.test(name)) ||
     /^(?:and|driving)\b/i.test(name) ||
     /\b(?:and|or|of|for|with)$/i.test(name) ||
     /\b(?:framework|hobbies|high-impact outcomes?)\b/i.test(name)
@@ -2260,6 +2264,12 @@ function resolveCandidateName(sourceScopes: CandidateSchemaRecord[]) {
       : "";
   const explicit = boundedExplicit || plausiblePersonName(explicitValue);
   if (explicit) return explicit;
+  const layoutHeader = String(firstValue(sourceScopes, ["resume_text", "raw_text", "cv_text", "raw_cv"]) || "")
+    .split(/\r?\n/).map(line => line.trim()).find(Boolean) || "";
+  if (/^[A-Z][A-Z'’ -]+,\s+[A-Z][A-Z .'-]+$/.test(layoutHeader)) {
+    const headerName = plausiblePersonName(layoutHeader);
+    if (headerName) return headerName;
+  }
   const first = firstText(sourceScopes, [
     "first_name",
     "firstName",
@@ -4956,7 +4966,7 @@ export function normalizeActualCandidateSchema(
   // fixtures and ad-hoc objects deliberately bypass this process cache.
   const cacheKey =
     candidateId && updatedAt
-      ? `${CANDIDATE_CANONICAL_VERSION}:${candidateId}:${updatedAt}`
+      ? `${CANDIDATE_CANONICAL_VERSION}:${CANDIDATE_DETAIL_PROJECTION_VERSION}:${CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION}:${CANDIDATE_PROJECT_EXTRACTOR_VERSION}:${candidateId}:${updatedAt}`
       : null;
   const cached = cacheKey ? normalizedProjectionCache.get(cacheKey) : null;
   if (cached) return cached;
