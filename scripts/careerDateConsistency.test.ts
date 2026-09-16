@@ -83,3 +83,24 @@ assert.equal(currentWithoutStart.employmentTimeline[0].current, true);
 assert.equal(currentWithoutStart.employmentTimeline[0].start, '');
 assert.equal(currentWithoutStart.experienceSummary.totalCareerYears, null);
 console.log('Structured boolean current flags retain explicit evidence without inventing dates: passed');
+
+for (const end of ['Dec 2022', 'Dec 2018', 'Present']) {
+  const records = [
+    {company:'Example Services', title:'Analyst', start_date:'Jan 2020'},
+    {company:'Example Services', title:'Analyst', end_date:end},
+  ];
+  for (const rows of [records, [...records].reverse()]) {
+    const profile = normalizeActualCandidateSchema({employment_history:rows}).enterpriseProfile;
+    assert.equal(profile.employmentTimeline.length, 2, 'opposite partial dates cannot prove a shared employment');
+    assert.equal(profile.experienceSummary.totalCareerYears, null, 'do not manufacture tenure from unrelated partial records');
+    assert.ok(profile.employmentTimeline.every(job => !(job.start && job.end)));
+    assert.ok(profile.employmentTimeline.every(job => !job.duration));
+  }
+}
+const sharedStart = normalizeActualCandidateSchema({employment_history:[
+  {company:'Example Services', title:'Analyst', start_date:'Jan 2020'},
+  {company:'Example Services', title:'Analyst', start_date:'Jan 2020', end_date:'Dec 2022'},
+]}).enterpriseProfile;
+assert.equal(sharedStart.employmentTimeline.length, 1, 'a shared start still allows a supported duplicate merge');
+assert.equal(sharedStart.employmentTimeline[0].end, 'Dec 2022');
+console.log('Complementary partial employment dates do not manufacture a tenure: passed');

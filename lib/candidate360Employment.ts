@@ -9,7 +9,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v55-boolean-current";
+  "candidate-employment-v56-partial-date-merge";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1516,6 +1516,12 @@ function sameEmployment(
   const rightStart = monthIndex(right.start);
   const leftEnd = monthIndex(left.end, left.current);
   const rightEnd = monthIndex(right.end, right.current);
+  // Opposite partial endpoints do not establish that two rows are the same job.
+  // Combining them would manufacture a complete tenure without a shared date.
+  if (
+    (leftStart !== null && leftEnd === null && rightStart === null && rightEnd !== null) ||
+    (rightStart !== null && rightEnd === null && leftStart === null && leftEnd !== null)
+  ) return false;
   // Separate rows in a source table can be distinct engagements one month apart.
   // Do not erase an explicitly different start when either end is unknown.
   if (leftStart !== null && rightStart !== null && leftStart !== rightStart &&
