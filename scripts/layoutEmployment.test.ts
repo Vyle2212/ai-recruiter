@@ -238,3 +238,15 @@ assert.equal(
   jobs(`Project History\nHousekeeper at Example Resort, City, Country.`).length,
   0,
 );
+assert.deepEqual(
+  jobs(`PROFESSIONAL EXPERIENCE
+Example Consulting Ltd | SAP FICO Consultant | January 2022 - Present
+Earlier Services Ltd | SAP Finance Analyst | January 2018 - December 2021`).map(
+    (j) => [j.company, j.title],
+  ),
+  [
+    ["Example Consulting Ltd", "SAP FICO Consultant"],
+    ["Earlier Services Ltd", "SAP Finance Analyst"],
+  ],
+  "A complete pipe-delimited job must never become the title of the next employer",
+);

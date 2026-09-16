@@ -289,7 +289,8 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
     if (
       role.test(line) &&
       line.length <= 120 &&
-      !/[.\t:]/.test(line) &&
+      !/[.|\t:]/.test(line) &&
+      !range.test(line) &&
       employerDates &&
       employerDates.index! > 0 &&
       !next.slice(employerDates.index! + employerDates[0].length).trim()
@@ -317,7 +318,12 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
       continue;
     }
     const followingCompany = next.match(/^([^|\t]{2,140})\s*\|\s*(.+)$/);
-    if (role.test(line) && !line.includes("\t") && followingCompany) {
+    if (
+      role.test(line) &&
+      !/[|\t]/.test(line) &&
+      !range.test(line) &&
+      followingCompany
+    ) {
       const dates = followingCompany[2].match(range);
       if (dates?.[0] === followingCompany[2])
         add(followingCompany[1], line, dates, 2);
@@ -363,7 +369,16 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
       const dates =
         line.match(range) ||
         next.match(new RegExp(`(?:^|\\t)${range.source}\\s*$`, "i"));
-      if (dates) add(pipe[1], pipe[2].replace(range, "").trim(), dates, 2);
+      if (dates)
+        add(
+          pipe[1],
+          pipe[2]
+            .replace(range, "")
+            .trim()
+            .replace(/\s*\|$/, ""),
+          dates,
+          2,
+        );
       continue;
     }
     // Right-aligned end years sometimes wrap alongside the employer on the next row.
