@@ -9,7 +9,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v51-heading-duration-position";
+  "candidate-employment-v52-explicit-project-employer";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1730,6 +1730,14 @@ export function linkProjectsToEmployment(
     const linkedProjectIds = projects
       .filter((project) => {
         if (!rangeContains(employment, project)) return false;
+        // An explicit employer takes precedence over role or narrative similarity.
+        // Client names and nested-project provenance cannot override this boundary.
+        if (clean(project.employer)) {
+          const projectEmployer = normalized(project.employer);
+          return Boolean(
+            projectEmployer && projectEmployer === normalized(employment.company),
+          );
+        }
         const projectText = [
           project.name,
           project.role,
