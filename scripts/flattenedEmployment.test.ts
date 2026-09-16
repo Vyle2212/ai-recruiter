@@ -938,3 +938,128 @@ for (const source of [
 console.log(
   "Chronological employment batch: explicit boundaries, repeated rows and project isolation pass",
 );
+
+// Lost separators at explicit employment headings. Fixtures preserve structure
+// only; no real employers, candidates or source identifiers are included.
+const headingBoundaries = [
+  [
+    "Work Experience/s SAP FICO SENIOR CONSULTANT Example Advisory January 2025 - Present SAP Support/consultants handle tickets.",
+    "Example Advisory",
+    "SAP FICO SENIOR CONSULTANT",
+    "January 2025",
+    "Present",
+  ],
+  [
+    "Professional Experience SAP FICO Consultant, Example WorksJanuary 2019 — September 2025 Currently serving on the support team. Accounts Payable Accountant, Example WorksSeptember 2017 — January 2019 In the capacity of accountant, processed invoices.",
+    "Example Works",
+    "SAP FICO Consultant",
+    "January 2019",
+    "September 2025",
+  ],
+  [
+    "Professional Experience Example Pte Ltd SAP Senior ISU-DM/ABAP Techno-Functional ConsultantMay 2024 – PresentClient: Example Buyer Tool: SAP Role: Project Lead Duration: Jan 2020 - Dec 2020",
+    "Example Pte Ltd",
+    "SAP Senior ISU-DM/ABAP Techno-Functional Consultant",
+    "May 2024",
+    "Present",
+  ],
+  [
+    "Working Experience Feb 2020 – Aug 2020 SAP Business One Junior Functional Consultant (Trainee) Example Consulting, Kuala Lumpur  Complete training.",
+    "Example Consulting",
+    "SAP Business One Junior Functional Consultant (Trainee)",
+    "Feb 2020",
+    "Aug 2020",
+  ],
+  [
+    "Working Experience Nov 2018- Current: Example Minerals o Assigned as support team.",
+    "Example Minerals",
+    "",
+    "Nov 2018",
+    "Present",
+  ],
+  [
+    "Employment History July 2023 – Present | Example Advisory Makati City, Philippines SAP FICO Associate Manager AMS offshore lead for finance.",
+    "Example Advisory",
+    "SAP FICO Associate Manager",
+    "July 2023",
+    "Present",
+  ],
+  [
+    "Working Experience 2020 Nov – Present Example Consulting Group, Kuala Lumpur, Malaysia Sales Manager (B2B) ➔ In charge of sales.",
+    "Example Consulting Group",
+    "Sales Manager (B2B)",
+    "Nov 2020",
+    "Present",
+  ],
+  [
+    "Employment History 03/2015 – Present SAP Security Specialist Example Chemicals More than six years of security experience.",
+    "Example Chemicals",
+    "SAP Security Specialist",
+    "Mar 2015",
+    "Present",
+  ],
+];
+for (const [text, company, title, start, end] of headingBoundaries) {
+  const rows = extractCanonicalEmploymentFromResume(text);
+  assert.ok(
+    rows.some(
+      (j) =>
+        j.company === company &&
+        j.title === title &&
+        j.start.toLowerCase() === start.toLowerCase() &&
+        j.end === end,
+    ),
+    text,
+  );
+  assert.ok(
+    rows.every(
+      (j) => !/Example Buyer|Makati City|Kuala Lumpur/.test(j.company),
+    ),
+    text,
+  );
+}
+const commaHistory = extractCanonicalEmploymentFromResume(
+  headingBoundaries[1][0],
+);
+assert.equal(commaHistory.length, 2);
+assert.ok(
+  commaHistory.some(
+    (j) =>
+      j.title === "Accounts Payable Accountant" &&
+      j.start === "September 2017" &&
+      j.end === "January 2019",
+  ),
+);
+for (const [text] of headingBoundaries) {
+  const withoutEmployment = text.replace(
+    /^(?:Work Experience\/s|Working Experience|Professional Experience|Employment History)/,
+    "Project History",
+  );
+  assert.equal(
+    read(withoutEmployment).filter((j) => j.group.startsWith("heading-"))
+      .length,
+    0,
+    withoutEmployment,
+  );
+}
+for (const text of [
+  "Work Experience/s SAP FICO CONSULTANT Example Advisory January 2025 - January 2024 SAP Support/consultants handle tickets.",
+  "Work Experience/s SAP FICO CONSULTANT Example Advisory January 2025 SAP Support/consultants handle tickets.",
+  "Professional Experience Client: Example Pte Ltd SAP ConsultantMay 2024 – PresentClient: Example Buyer",
+  "Professional Experience Example Pte Ltd SAP ConsultantMay 2024 – Presently unavailable",
+  "Professional Experience Example Pte Ltd SAP ConsultantMay 2024 – PresentProject: Example Migration Duration: Jan 2020 - Dec 2020",
+  "Working Experience Feb 2020 – Aug 2020 SAP Consultant (Trainee) Project Example, Kuala Lumpur  Complete training.",
+  "Working Experience Nov 2018- Current: Example Training Programme o Assigned as participant.",
+  "Employment History July 2023 – Present | Example Advisory Unknown Place SAP FICO Associate Manager AMS offshore lead.",
+  "Employment History Education 2020 Nov – Present Example Group, Kuala Lumpur, Malaysia Sales Manager ➔ In charge of sales.",
+]) {
+  assert.equal(
+    read(text).filter((j) => j.group.startsWith("heading-")).length,
+    0,
+    text,
+  );
+}
+
+console.log(
+  "Heading boundary batch: field ownership, glued dates, numeric normalization and negative layouts pass",
+);

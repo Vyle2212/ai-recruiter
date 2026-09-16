@@ -510,3 +510,24 @@ All 277 private sources were compared against the baseline: **148 -> 156 source 
 Sanitized regressions cover every new family plus project/client isolation, reversed dates, missing endpoints, duty-prose boundaries, location exclusion and concurrent-current-role handling. The complete local gate includes 31 source/parser/acceptance-harness regression files, typecheck, scoped formatting, full-subset comparison, original-file comparison and whitespace checks. Verify exact-head CI and commit statuses after the single batch push.
 
 Scope remains **SUBSET_ONLY: 277 / 970**. Production remains **NO_GO** pending live OCR with persisted provenance, reviewed/version-matched backfill, audit of all 970 sources and authenticated acceptance on the exact artifact to promote. No runtime configuration, Supabase/Vercel write, source mutation, backfill or promotion occurred.
+
+## Heading-boundary recovery batch — 2026-09-16
+
+Baseline `3522e2533d731c344f5f62d2ac6fdf7221730b6e`; parser `candidate-employment-v73-heading-boundary-batch`. The complete unresolved inventory was reviewed before editing: 121 source records, comprising 66 heading/date-boundary, 45 project/client-heavy, four explicit-label, four headed-table and two other cases.
+
+This batch recovers employment headings whose field boundaries survive as a role keyword, legal company suffix, comma, pipe, location or bullet even when spaces next to dates disappear. It supports the `Work Experience/s` heading, attached employer/month and title/month tokens, year-first and already-normalized numeric month dates, and explicit trainee role annotations. A following client label terminates an employer row; its contents and dates are never borrowed. Repeated comma-delimited headings are accepted only at sentence boundaries. An employer-only heading keeps its title empty. Training programmes, missing or reversed endpoints, unsupported location boundaries and project-only copies remain excluded.
+
+The complete 277-source comparison gives **156 -> 164 source records with employment**, **586 -> 595 rows**, and **121 -> 113 records without employment**. Eight previously unresolved source records gain nine rows. All 586 existing employer/title/start/end/current tuples are retained. Malformed, duplicate and invalid-range counts remain zero; overlap review remains nine and possible client/employer equality remains one. These counts establish partial source recovery, not complete histories or unique-person totals.
+
+| Remaining review queue | Before | After | Continuing reason |
+| --- | ---: | ---: | --- |
+| Date near employment heading | 66 | 58 | Missing boundaries, corrupted tokens, partial dates or reading-order loss |
+| Project/client narrative | 45 | 45 | Assignment ranges do not establish employer tenure |
+| Explicit employer labels | 4 | 4 | Missing own tenure or mixed assignment context |
+| Headed tables | 4 | 4 | Column ownership requires source-layout evidence |
+| Other narrative/layout | 2 | 2 | Insufficient supported employment evidence |
+| **Total** | **121** | **113** | Heuristic queues, not adjudicated root causes |
+
+All 13 available original-file representations remain unchanged at 57 tuples. No original was substituted into the export and no new CV request is established by this batch. Local validation covers 31 source/parser/acceptance-harness regression files, typecheck, scoped formatting, whitespace checks, full-subset comparison and original-file comparison. Sanitized fixtures include each supported heading and negative project/client, training, malformed-range and location cases. Verify CI and commit statuses on the resulting head before merge.
+
+Production remains **NO_GO**: live OCR with persisted provenance, reviewed/version-matched backfill, all-970-source audit (693 not audited here) and authenticated acceptance of the exact promotion artifact remain outstanding. No runtime configuration, Supabase/Vercel write, backfill or production promotion occurred.

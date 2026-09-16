@@ -190,6 +190,106 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
       "[A-Z0-9][A-Za-z0-9&.,'() /-]{1,100}?\\b(?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Pvt\\.?\\s*Ltd\\.?|Private Limited|Corporation|Berhad|S/B|Limited|Ltd\\.?|Inc\\.?)";
     const legalRow =
       "[A-Z0-9][A-Za-z0-9&.,'() /-]{1,100}?\\b(?:Corporation\\s+Berhad|Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Pvt\\.?\\s*Ltd\\.?|Private Limited|Corporation|Berhad|S/B|Limited|Ltd\\.?|Inc\\.?)";
+    // Heading-anchored rows retain field ownership even when PDF extraction
+    // removes spaces at a month/current marker. Do not search responsibility
+    // prose: each family must begin immediately after the employment heading.
+    const headingRow = section.replace(/^\/s\s+/i, "");
+    const shortRole = `(?:[A-Za-z0-9/&-]+\\s+){0,8}${job}(?:\\s*\\((?:Trainee|B2B|Contract)\\))?`;
+    const org = "[A-Z0-9][A-Za-z0-9&.'’() /-]{1,100}?";
+    const dutyStart =
+      "(?=\\s+(?:Currently serving|In the capacity|SAP Support/consultants|Conducted|Worked|AMS offshore|More than|[•➔])|\\s*$)";
+    const headed = [
+      {
+        // Role / employer / tenure; explicit role keyword bounds employer.
+        re: new RegExp(
+          `^(${shortRole})\\s+(${org})\\s+${range}${dutyStart}`,
+          "i",
+        ),
+        fields: [2, 1, 3, 4],
+        group: "heading-role-employer-tenure",
+      },
+      {
+        // Legal employer / roleMonth YYYY - PresentClient: next label is
+        // a boundary only. No client text or project date is consumed.
+        re: new RegExp(
+          `^(${legalRow})\\s+(${shortRole})${range}(?=\\s*(?:Clients?|Tool)\\s*:|\\s*$)`,
+          "i",
+        ),
+        fields: [1, 2, 3, 4],
+        group: "heading-legal-glued-tenure",
+      },
+      {
+        // Dated trainee heading with a comma-delimited location and bullet.
+        re: new RegExp(
+          `^${range}\\s+(${shortRole})\\s+(${org}),\\s*[A-Za-z][A-Za-z .'-]{1,45}\\s+[•➔]`,
+          "i",
+        ),
+        fields: [4, 3, 1, 2],
+        group: "heading-dated-role-location",
+      },
+      {
+        // Dated employer ledger with no employment title. Duty text does
+        // not supply an employment role or replace the explicitly named firm.
+        re: new RegExp(
+          `^${range}\\s*:\\s*(${org})\\s+(?:o|[•➔])\\s+(?:Assigned|Managed|Supported|Provided)\\b`,
+          "i",
+        ),
+        fields: [3, 0, 1, 2],
+        group: "heading-dated-employer-bullet",
+      },
+      {
+        // A pipe and recognized city/country separate employer from title.
+        re: new RegExp(
+          `^${range}\\s*\\|\\s*(${org})\\s+(?:Makati City|Taguig City|Kuala Lumpur|Singapore),\\s*(?:Philippines|Malaysia|Singapore)\\s+(${shortRole}(?:\\s+(?:II|III))?)${dutyStart}`,
+          "i",
+        ),
+        fields: [3, 4, 1, 2],
+        group: "heading-dated-pipe-location",
+      },
+      {
+        // Year-first dates plus employer, city, country, role and a bullet.
+        re: new RegExp(
+          `^${range}\\s+(${org}),\\s*(?:Kuala Lumpur|Selangor|Singapore),\\s*(?:Malaysia|Singapore)\\s+(${shortRole})\\s+[•➔]`,
+          "i",
+        ),
+        fields: [3, 4, 1, 2],
+        group: "heading-year-first-location",
+      },
+    ];
+    for (const { re, fields: f, group } of headed) {
+      // The client label was removed from `section`; inspect the unsplit
+      // beginning only for the legal/glued family which explicitly ends there.
+      const m = (
+        group === "heading-legal-glued-tenure" ? fullSection : headingRow
+      ).match(re);
+      if (
+        m &&
+        !(
+          group === "heading-dated-employer-bullet" &&
+          /\b(?:programme?|course|training|workshop)\b/i.test(m[f[0]])
+        )
+      )
+        add(m[f[0]], f[1] ? m[f[1]] : "", m[f[2]], m[f[3]], m[0], group, true);
+    }
+    const summarizedHeading = headingRow.match(
+      new RegExp(
+        `^${range}\\s+(${shortRole})\\s+(${org})\\s+(?=More than\\s+\\w+\\s+years?\\b)`,
+        "i",
+      ),
+    );
+    if (summarizedHeading) {
+      const m = summarizedHeading;
+      add(m[4], m[3], m[1], m[2], m[0], "heading-tenure-role-employer", true);
+    }
+    // The same comma/glued-date form can recur after a completed sentence.
+    // A full stop owns the left edge, so duty prose cannot become the title.
+    const repeatedComma = new RegExp(
+      `(?:^|[.!?]\\s+)(${shortRole})\\s*,\\s*(${org})${range}${dutyStart}`,
+      "gi",
+    );
+    for (const m of headingRow.matchAll(repeatedComma))
+      add(m[2], m[1], m[3], m[4], m[0], "heading-comma-glued-tenure", true);
+
     // A malformed month in an otherwise explicit current employment row still
     // establishes the year. Preserve the original token in excerpt; never guess it.
     const partialCurrent = new RegExp(

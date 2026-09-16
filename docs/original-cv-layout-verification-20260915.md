@@ -72,3 +72,9 @@ Some newly recovered histories still contain unsupported partial/ambiguous rows;
 Parser `candidate-employment-v72-chronological-ledger-batch` adds 19 source-supported rows across nine export records using bounded chronological layouts. The 277-source export now contains **156 records with employment / 586 rows**, with 121 records still without employment. All 567 tuples from the prior export checkpoint remain unchanged. Overlap and possible client/employer equality review flags remain at nine and one respectively; malformed, duplicate and invalid-range counts remain zero.
 
 The 13 available original-file representations still produce the same 57 employer/title/start/end/current tuples as the prior checkpoint. They were compared independently and were not written into the export. This batch does not alter the original-file cohort, replace a supplied source, or constitute database backfill. Production remains **NO_GO** for live OCR/provenance, reviewed/version-matched backfill, the other 693 population sources and authenticated exact-artifact acceptance.
+
+## Heading-boundary flattened-source batch — 2026-09-16
+
+Parser `candidate-employment-v73-heading-boundary-batch` recovers nine employment rows across eight previously unresolved export records. The unchanged 277-source export now yields **164 records / 595 rows**, with 113 records without employment. All 586 prior tuples are retained, with no additional malformed, duplicate, invalid-range, overlap or client/employer-equality flags.
+
+The 13 currently available original-file representations remain unchanged at 57 tuples, independently of the export. This result does not close incomplete histories, substitute original files, backfill data or satisfy production acceptance. The live OCR/provenance, reviewed/version-matched backfill, full 970-source audit and authenticated exact-artifact gates remain **NO_GO**.

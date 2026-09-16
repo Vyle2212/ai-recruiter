@@ -11,7 +11,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v72-chronological-ledger-batch";
+  "candidate-employment-v73-heading-boundary-batch";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
