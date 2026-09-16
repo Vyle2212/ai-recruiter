@@ -179,6 +179,7 @@ jobs:
           node --import tsx scripts/numericContractCareer.test.ts
           node --import tsx scripts/nativeProjectCards.test.ts
           node --import tsx scripts/employerPromotionSpells.test.ts
+          node --import tsx scripts/explicitEmployerFieldFamilies.test.ts
           node --import tsx scripts/cvPdfOcr.test.ts
           node --import tsx scripts/uploadCvSourceFailure.test.ts
 

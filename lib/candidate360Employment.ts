@@ -14,7 +14,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v87-employer-promotion-spells";
+  "candidate-employment-v88-explicit-employer-fields";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,

@@ -16,7 +16,7 @@ const day = "\\d{1,2}(?:st|nd|rd|th)?";
 const numericMonth = "(?:0?[1-9]|1[0-2])";
 const date = `(?:(?<![\\d/])${year}-${numericMonth}(?![-\\d])|(?<![\\d/])${numericMonth}/${year}(?![\\d/])|(?:${day}[ -]+)?${month}[., -]*${year}|${month}[. ]*${day}[ ,]+${year}|${year}[ |]+${month}|${year})`;
 const ongoing =
-  "(?:(?:till|until|to|at)\\s+(?:date|now|present)|present|current|now|continuing)";
+  "(?:(?:till|until|to|at|still)\\s+(?:date|now|present)|present|current|now|continuing)";
 const range = `(${date})\\s*(?:[-–—]|to|until|till)\\s*(${date}|${ongoing})`;
 const job =
   "(?:Consultant|Manager|Leader|Lead|Developer|Analyst|Engineer|Officer|Accountant|Architect|Specialist|Administrator|Director|Executive|Associate|Expert|Controller|Coordinator|Intern|Trainee|Supervisor|Advisor|Programmer|Counsellor|Clerk|Head|Therapist)";
@@ -158,6 +158,175 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
       b = careerMonthIndex(end, current);
     if (a === null || b === null || a > b) return;
     output.push({ company, title, start, end, current, excerpt, group });
+  }
+  // Some exports retain explicit field labels but flatten every record into a
+  // paragraph. Employer ownership comes only from Company, never Client or
+  // Project. These readers deliberately require a distinctive surrounding
+  // heading/label sequence so ordinary project cards cannot enter employment.
+  for (const m of source.matchAll(
+    new RegExp(
+      `\\bExperience Profile\\s+Client\\s*:\\s*[^:;]{2,150}\\s+Company\\s*:\\s*(${org})\\s+Duration\\s*:\\s*${range}\\s+Environment\\s*:\\s*[^:;]{2,180}\\s+(?:Project\\s+)?Role\\s*:\\s*(${role})(?=\\s+(?:Team Size|Project Description|Roles? &?Responsibilities|Responsibilities)\\s*:|\\s|$)`,
+      "gi",
+    ),
+  ))
+    add(m[1], m[4], m[2], m[3], m[0], "profile-client-employer-duration-role");
+
+  for (const m of source.matchAll(
+    new RegExp(
+      `\\bCURRENT ASSIGNMENT\\s+Company\\s*:\\s*(${org})\\s+Role\\s*:\\s*(${role})\\s+Designation\\s*:\\s*[^:;]{2,120}\\s+Duration\\s*:\\s*(?:From\\s+)?${range}`,
+      "gi",
+    ),
+  ))
+    add(m[1], m[2], m[3], m[4], m[0], "current-assignment-labelled-employer");
+
+  for (const m of source.matchAll(
+    new RegExp(
+      `\\bJob Experience\\s+Company\\s*:\\s*(${org})\\s+Duration\\s*:\\s*(${date})\\s+up\\s+to\\s+(${ongoing})(?=\\s+Company\\s*:|\\s|$)`,
+      "gi",
+    ),
+  ))
+    add(m[1], "", m[2], m[3], m[0], "job-experience-labelled-employer-tenure");
+
+  // A profile overview may print "Date" as the endpoint of an explicitly
+  // labelled current employer. It means "to date" only in this exact grammar.
+  for (const m of source.matchAll(
+    new RegExp(
+      `\\bPROFESSIONAL OVERVIEW\\s+Company\\s*:\\s*(${org})\\s+(${month})\\s+(${day})\\s*(${year})\\s*[-–—]\\s*Date\\s*[-–—]?\\s*(${role})(?=\\s|$)`,
+      "gi",
+    ),
+  ))
+    add(
+      m[1],
+      m[5],
+      `${m[3]} ${m[2]} ${m[4]}`,
+      "Present",
+      m[0],
+      "professional-overview-labelled-employer",
+    );
+
+  // Tilde is a range separator in a reviewed employer/role summary family.
+  // The following Projects Involved label is a boundary, not an employer.
+  for (const m of source.matchAll(
+    new RegExp(
+      `(?:^|[.!?])\\s*([A-Z][A-Za-z0-9&,'() -]{1,100}?(?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Pvt\\.?\\s*Ltd\\.?|Limited|Ltd\\.?|Inc\\.?|Berhad|Corporation))\\s+((?:Senior\\s+)?SAP\\s+[^.;:]{1,80}?${job})\\s+(${date})\\s*~\\s*(${date}|${ongoing})(?=\\s+Projects? Involved\\s*:)`,
+      "gi",
+    ),
+  ))
+    add(
+      m[1],
+      m[2],
+      m[3],
+      m[4],
+      m[0],
+      "employer-role-tilde-tenure-project-boundary",
+    );
+
+  // A reason-for-leaving section can only describe the immediately preceding
+  // explicitly parenthesized employer role. Later project companies are out.
+  for (const m of source.matchAll(
+    new RegExp(
+      `\\bKey experience in [^:]{2,80}:\\s*(${org})\\s*\\(\\s*(${role})\\s*\\)\\s*${range}(?=\\s+REASON FOR LEAVING\\b)`,
+      "gi",
+    ),
+  ))
+    add(
+      m[1],
+      m[2],
+      m[3],
+      m[4],
+      m[0],
+      "reason-for-leaving-employer-role-tenure",
+    );
+
+  // ISO year-month is unambiguous in this Work History row. Do not normalize
+  // isolated ISO dates (education/certifications) or project-only sections.
+  const isoMonths = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  for (const m of source.matchAll(
+    /\bWork History\s+((?:19|20)\d{2})-(0?[1-9]|1[0-2])\s*[-–—]\s*(?:(Current|Present|Now)|((?:19|20)\d{2})-(0?[1-9]|1[0-2]))\s+([^:;]{2,100}?\b(?:Consultant|Manager|Lead|Developer|Analyst|Engineer|Officer|Accountant|Architect|Specialist|Administrator|Director|Executive|Associate|Expert))\s+([^:;]{2,120}?)(?=\s+Role\s*:|\s+Responsibilities\s*:|$)/gi,
+  )) {
+    const projectPrefixed = /\b(?:Project|Client|Customer)\s*$/i.test(
+      source.slice(Math.max(0, m.index! - 35), m.index),
+    );
+    if (projectPrefixed) continue;
+    const start = `${isoMonths[Number(m[2]) - 1]} ${m[1]}`;
+    const end = m[3] || `${isoMonths[Number(m[5]) - 1]} ${m[4]}`;
+    add(m[7], m[6], start, end, m[0], "work-history-iso-role-employer");
+  }
+
+  // A small family of export headers uses no field label for the range, but
+  // preserves a distinctive section-start order. Keep each grammar anchored
+  // at the heading so later project rows cannot be reinterpreted as jobs.
+  for (const m of source.matchAll(
+    new RegExp(
+      `\\bWork Experience\\s+(?:Credentials\\s+)?(${org})\\s+${range}\\s+Permanent Position\\s*:\\s*(${role})(?=\\s+(?:Field of Expertise|Job Details|Responsibilities)\\s*:|\\s|$)`,
+      "gi",
+    ),
+  )) {
+    const projectPrefixed = /\b(?:Project|Client|Customer)\s*$/i.test(
+      source.slice(Math.max(0, m.index! - 35), m.index),
+    );
+    if (projectPrefixed) continue;
+    add(
+      m[1],
+      m[4],
+      m[2],
+      m[3],
+      m[0],
+      "work-heading-company-tenure-permanent-role",
+    );
+  }
+
+  for (const m of source.matchAll(
+    new RegExp(
+      `\\bEMPLOYMENT HISTORY\\s+([A-Z][A-Z0-9&.,'() /-]{2,100}?)\\s*[–—]\\s*([^:;]{2,115}?${job})\\s+${range}(?=\\s+Key highlight|\\s+Responsibilities|\\s|$)`,
+      "gi",
+    ),
+  )) {
+    const projectPrefixed = /\b(?:Project|Client|Customer)\s*$/i.test(
+      source.slice(Math.max(0, m.index! - 35), m.index),
+    );
+    if (projectPrefixed) continue;
+    add(
+      m[1],
+      m[2],
+      m[3],
+      m[4],
+      m[0],
+      "employment-heading-employer-dash-role-tenure",
+    );
+  }
+
+  for (const m of source.matchAll(
+    new RegExp(
+      `\\bWORK EXPERIENCE\\s+(${org})\\s+(${year})\\s*[-–—]\\s*(${ongoing})\\s*[-–—]\\s*(${role})(?=\\s*[-–—.]|\\s|$)`,
+      "gi",
+    ),
+  )) {
+    const projectPrefixed = /\b(?:Project|Client|Customer)\s*$/i.test(
+      source.slice(Math.max(0, m.index! - 35), m.index),
+    );
+    if (projectPrefixed || !m[1].match(legal)?.length) continue;
+    add(
+      m[1],
+      m[4],
+      m[2],
+      m[3],
+      m[0],
+      "work-heading-legal-employer-year-current-role",
+    );
   }
   // Explicit employment sentences establish their own employer/date ownership.
   // Numbered employer descriptions explicitly bound employment and promotions.
