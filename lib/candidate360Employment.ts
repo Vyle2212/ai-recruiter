@@ -1,4 +1,5 @@
 import { careerMonthIndex } from "./candidateCareerExperience";
+import { formatEmploymentTenure } from "./employmentTenure";
 import { layoutEmployment } from "./layoutEmployment";
 import { flattenedEmployment } from "./flattenedEmployment";
 import type {
@@ -10,7 +11,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v69-original-layout-batch";
+  "candidate-employment-v70-review-time-tenure";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -293,19 +294,7 @@ function supportedRange(start: string, end: string, current: boolean) {
 }
 
 function duration(start: string, end: string, current: boolean) {
-  const from = monthIndex(start);
-  const to = monthIndex(end, current);
-  if (from === null || to === null || to < from) return "";
-  const months = to - from;
-  if (months < 1) return "Less than 1 month";
-  const years = Math.floor(months / 12);
-  const remainder = months % 12;
-  return [
-    years ? `${years} year${years === 1 ? "" : "s"}` : "",
-    remainder ? `${remainder} month${remainder === 1 ? "" : "s"}` : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  return formatEmploymentTenure(start, end, current);
 }
 
 const normalized = (input: unknown) =>

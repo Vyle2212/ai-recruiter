@@ -532,7 +532,16 @@ for (const [source, expectedRole] of [
   assert.equal(read(source)[0].title, expectedRole);
 const atHistory =
   "Employment History 2013 SEPT – 2014 FEB Internship as Software Engineer at Example Technology, Example City, Example Country. 2014 APR – 2015 DEC Application consultant, junior programmer at Example Systems Sdn Bhd 2016 JAN – 2019 MAR Senior consultant at Example Systems Sdn Bhd 2019 MAY – 2019 DEC Senior system analyst at Example Health Pte Ltd 2020 JAN – 2021 MAR Applications consultant at Example Software Pte Ltd 2021 ARIL – CURR Applications consultant at Example Delivery Pte Ltd";
-const atRows = read(atHistory);
+const allAtRows = read(atHistory);
+assert.equal(allAtRows.length, 6);
+const estimatedRow = allAtRows.find(
+  (r) => r.company === "Example Delivery Pte Ltd",
+)!;
+assert.equal(estimatedRow.start, "2021");
+assert.equal(estimatedRow.end, "Present");
+assert.equal(estimatedRow.current, true);
+assert.match(estimatedRow.excerpt, /ARIL/);
+const atRows = allAtRows.filter((r) => r !== estimatedRow);
 assert.equal(atRows.length, 5);
 assert.equal(atRows[0].company, "Example Technology");
 assert.equal(atRows[0].start, "SEPT 2013");
@@ -540,9 +549,9 @@ assert.equal(atRows[1].title, "Application consultant, junior programmer");
 assert.equal(atRows[4].end, "MAR 2021");
 assert.ok(
   atRows.every((r) => r.company !== "Example Delivery Pte Ltd"),
-  "unrecognized date remains unresolved",
+  "The five month-precise rows remain unchanged",
 );
-assert.equal(extractCanonicalEmploymentFromResume(atHistory).length, 5);
+assert.equal(extractCanonicalEmploymentFromResume(atHistory).length, 6);
 const stopAtProse =
   "Employment History Example Services SAP FICO Consultant Jan 2020 - Present Delivered systems for Example Buyer SAP FICO Consultant Jan 2010 - Dec 2019";
 assert.equal(read(stopAtProse).length, 1);

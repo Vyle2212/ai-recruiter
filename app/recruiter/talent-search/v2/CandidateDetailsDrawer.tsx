@@ -6,6 +6,7 @@ import {
   type SearchV2RecruiterCandidateDetail,
 } from "@/lib/searchV2CandidateDetailContract";
 import { externalProfileActionLabel } from "@/lib/externalProfileUrl";
+import { formatEmploymentTenure } from "@/lib/employmentTenure";
 import { canonicalTalentSearchIdentity } from "@/lib/talentSearchDisplay";
 import { resetCandidateDetailsScroll } from "@/lib/candidateDetailsScroll";
 import { buildExternalCanonicalProfileOverview } from "@/lib/candidateProfileOverview";
@@ -105,7 +106,11 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number] & CandidateProfileTab;
 type ExternalTab =
-  "Overview" | "Experience" | "Match evidence" | "Data gaps" | "Data quality";
+  | "Overview"
+  | "Experience"
+  | "Match evidence"
+  | "Data gaps"
+  | "Data quality";
 type DrawerTab = Tab | ExternalTab;
 const tabId = (value: DrawerTab) => value.toLowerCase().replace(/\s+/g, "-");
 
@@ -864,7 +869,13 @@ export default function CandidateDetailsDrawer({
                           item.end,
                           item.current,
                         )}
-                        {item.duration ? ` · ${item.duration}` : ""}
+                        {formatEmploymentTenure(
+                          item.start,
+                          item.end,
+                          item.current,
+                        )
+                          ? ` · ${formatEmploymentTenure(item.start, item.end, item.current)}`
+                          : ""}
                       </p>
                       {item.location ? (
                         <p className="mt-1 text-sm text-slate-400">

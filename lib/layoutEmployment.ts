@@ -52,7 +52,12 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
   }
   const output: LayoutEmployment[] = [];
   let active = false;
-  let table: "year" | "scope" | "dateCompanyRole" | undefined;
+  let table:
+    | "year"
+    | "scope"
+    | "dateCompanyRole"
+    | "periodRoleIndustry"
+    | undefined;
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
     if (heading.test(line)) {
@@ -84,6 +89,10 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
       continue;
     }
     if (!active) continue;
+    if (/^Period\tRole\tIndustry\tDescription$/i.test(line)) {
+      table = "periodRoleIndustry";
+      continue;
+    }
     const next = (lines[i + 1] || "").replace(/^HISTORY\s+/, "");
     const add = (
       company: string,
@@ -109,6 +118,31 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
       });
     };
     const cells = line.split("\t").map((x) => x.trim());
+    if (table === "periodRoleIndustry" && cells.length === 4) {
+      const continued = next.split("\t").map((x) => x.trim());
+      const dates = `${cells[0]} ${continued[0]}`.match(
+        new RegExp(
+          `^(${date})\\s*[-–—]\\s*(${date}|Present|Current|Curr)$`,
+          "i",
+        ),
+      );
+      // The description cell must itself name a legal employer, never a client.
+      if (
+        dates &&
+        /\b(?:Sdn\.?\s*Bhd\.?|Pte\.?\s*Ltd\.?|Limited|Ltd\.?)$/i.test(
+          cells[3],
+        ) &&
+        !forbidden.test(cells[3])
+      ) {
+        const continuation = continued[1] || "";
+        const title = /-$/.test(cells[1])
+          ? cells[1].slice(0, -1) + continuation
+          : [cells[1], continuation].filter(Boolean).join(" ");
+        add(cells[3], title, dates, 2);
+        i++;
+        continue;
+      }
+    }
     if (
       table === "dateCompanyRole" &&
       cells.length === 3 &&

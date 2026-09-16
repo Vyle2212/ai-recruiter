@@ -213,6 +213,56 @@ const curr = jobs(
 );
 assert.equal(curr.length, 1);
 assert.equal(curr[0].current, true);
+const industryTable = `Working experience
+Period\tRole\tIndustry\tDescription
+Sep 2019 –\tFICO Consult-\tConsulting\tExample Delivery Sdn Bhd
+Current\tant
+Client: Example Customer
+Project: Implementation
+Working experience
+Period\tRole\tIndustry\tDescription
+May 2017 –\tApplication\tChemical\tEarlier Industries Sdn Bhd
+Dec 2017\tSupport
+Responsibilities: Production support`;
+assert.deepEqual(
+  jobs(industryTable).map((j) => [
+    j.company,
+    j.title,
+    j.start,
+    j.end,
+    j.current,
+  ]),
+  [
+    [
+      "Example Delivery Sdn Bhd",
+      "FICO Consultant",
+      "Sep 2019",
+      "Current",
+      true,
+    ],
+    [
+      "Earlier Industries Sdn Bhd",
+      "Application Support",
+      "May 2017",
+      "Dec 2017",
+      false,
+    ],
+  ],
+);
+for (const source of [
+  industryTable.replaceAll("Working experience", "Project History"),
+  industryTable.replaceAll("Description", "Client"),
+  industryTable
+    .replace("Example Delivery Sdn Bhd", "Client: Example Delivery Sdn Bhd")
+    .replace(
+      "Earlier Industries Sdn Bhd",
+      "Project: Earlier Industries Sdn Bhd",
+    ),
+  industryTable
+    .replace("Current\tant", "Apr 2018\tant")
+    .replace("Dec 2017\tSupport", "Dec 2016\tSupport"),
+])
+  assert.equal(jobs(source).length, 0);
 assert.equal(
   jobs(`Work Experience\n2021 ARIL - CURR\nSAP Consultant\nExample Ltd`).length,
   0,

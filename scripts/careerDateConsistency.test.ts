@@ -1,7 +1,27 @@
 import assert from 'node:assert/strict';
+import { formatEmploymentTenure } from '../lib/employmentTenure';
 import { careerMonthIndex, calculateTotalCareerYears } from '../lib/candidateCareerExperience';
 import { normalizeActualCandidateSchema } from '../lib/candidate360SchemaNormalize';
 const now = new Date('2026-09-15T00:00:00Z');
+assert.equal(formatEmploymentTenure('2021', 'Present', true, now), 'About 5 years (estimated; year precision)');
+assert.equal(formatEmploymentTenure('2021', 'Present', true, new Date('2027-01-01T00:00:00Z')), 'About 6 years (estimated; year precision)');
+assert.equal(formatEmploymentTenure('2021', '2024', false, now), 'About 3 years (estimated; year precision)');
+assert.equal(formatEmploymentTenure('2026', 'Present', true, now), 'Less than 1 year (estimated; year precision)');
+assert.equal(formatEmploymentTenure('Sep 2021', 'Curr', false, now), '5 years');
+assert.equal(formatEmploymentTenure('2027', 'Present', true, now), '');
+assert.equal(formatEmploymentTenure('Dec 2025', 'Mar 2025', false, now), '');
+assert.equal(formatEmploymentTenure('', 'Present', true, now), '');
+const yearOnlySource = 'Employment History 2021 QWER – CURR Applications consultant at Example Systems Pte Ltd Languages English';
+const yearOnly = normalizeActualCandidateSchema({raw_text: yearOnlySource}).enterpriseProfile.employmentTimeline;
+assert.equal(yearOnly.length, 1);
+assert.equal(yearOnly[0].start, '2021');
+assert.equal(yearOnly[0].current, true);
+assert.match(yearOnly[0].duration, /estimated; year precision/);
+assert.ok(yearOnly[0].provenance?.some(p => p.excerpt?.includes('QWER')));
+for (const source of [yearOnlySource.replace('Employment History', 'Project History'), yearOnlySource.replace('Example Systems', 'Client: Example Systems'), yearOnlySource.replace('CURR', 'Mar 2020')]) {
+  assert.equal(normalizeActualCandidateSchema({raw_text:source}).enterpriseProfile.employmentTimeline.length, 0);
+}
+assert.equal(normalizeActualCandidateSchema({raw_text:yearOnlySource.replace('2021 QWER', '2099 DEC')}).enterpriseProfile.employmentTimeline.length, 0);
 for (const date of ['2021-09', '09/2021', '09/21', 'September 2021', 'Sept 2021', '14th September 2021', '2021-09-14']) {
   assert.equal(careerMonthIndex(date, false, now), 2021 * 12 + 8, date);
 }

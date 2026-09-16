@@ -186,6 +186,31 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
       "[A-Z0-9][A-Za-z0-9&.,'() /-]{1,100}?\\b(?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Pvt\\.?\\s*Ltd\\.?|Private Limited|Corporation|Berhad|S/B|Limited|Ltd\\.?|Inc\\.?)";
     const legalRow =
       "[A-Z0-9][A-Za-z0-9&.,'() /-]{1,100}?\\b(?:Corporation\\s+Berhad|Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Pvt\\.?\\s*Ltd\\.?|Private Limited|Corporation|Berhad|S/B|Limited|Ltd\\.?|Inc\\.?)";
+    // A malformed month in an otherwise explicit current employment row still
+    // establishes the year. Preserve the original token in excerpt; never guess it.
+    const partialCurrent = new RegExp(
+      `\\b(${year})\\s+([A-Za-z]{3,9})\\s*[-–—]\\s*(?:CURR|CURRENT|PRESENT)\\s+(${title})\\s+at\\s+(${legalRow})(?=\\s+(?:${year}|Languages|Skills|Education)\\b|\\s*$)`,
+      "gi",
+    );
+    for (const m of section.matchAll(partialCurrent)) {
+      // Recognized future months must remain invalid, not be downgraded to a year.
+      if (
+        careerMonthIndex(
+          `${m[2]} ${m[1]}`,
+          false,
+          new Date("2099-12-31T00:00:00Z"),
+        ) !== null
+      )
+        continue;
+      add(
+        m[4],
+        m[3],
+        m[1],
+        "Present",
+        m[0],
+        "year-precision-current-employment",
+      );
+    }
     const explicitRole = `(?!(?:Page|Confidential|of\\s+\\d+)\\b)(?=[A-Z][^:;|.]{1,119}\\b${job}\\b)[A-Z][^:;|.]{1,119}?`;
     const roleEndingAtJob = `(?!(?:Page|Confidential|of\\s+\\d+)\\b)[A-Z][^:;|.]{1,119}\\b(?:${job}|Support)`;
     // Strong punctuation can preserve a complete employment row even when PDF
