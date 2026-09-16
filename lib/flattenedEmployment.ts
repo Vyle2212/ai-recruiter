@@ -106,7 +106,11 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
     ...source.matchAll(
       /\b(?:employment history|career history|working experiences?|work experience|professional experience)\s*:?\s*/gi,
     ),
-  ];
+    ...source.matchAll(/\bEMPLOYMENT(?!\s+HISTORY)\s+(?=[A-Z0-9])/g),
+    ...source.matchAll(
+      /(?<!PROFESSIONAL )(?<!WORK )(?<!WORKING )(?<!PROJECT )\bEXPERIENCE\s+(?=[A-Z0-9])/g,
+    ),
+  ].sort((a, b) => (a.index || 0) - (b.index || 0));
   // A declared Period / Position / Company / Duration table provides row
   // boundaries even when PDF whitespace is flattened. Duration is a boundary,
   // never a way to manufacture an endpoint. Short years use the established
@@ -175,6 +179,126 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
     const section = fullSection.split(
       /\b(?:project experience|project history|project details|projects\/assignments|education|qualifications|certifications|technical skills|references|referrals)\b|\b(?:Projects?|Client|Customer)\s*:/i,
     )[0];
+    const rowSection = fullSection.split(
+      /\b(?:project experience|project history|project details|projects\/assignments|education|qualifications|certifications|technical skills|references|referrals)\b/i,
+    )[0];
+    const legal =
+      "[A-Z0-9][A-Za-z0-9&.,'() /-]{1,100}?\\b(?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Pvt\\.?\\s*Ltd\\.?|Private Limited|Corporation|Berhad|S/B|Limited|Ltd\\.?|Inc\\.?)";
+    const legalRow =
+      "[A-Z0-9][A-Za-z0-9&.,'() /-]{1,100}?\\b(?:Corporation\\s+Berhad|Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Pvt\\.?\\s*Ltd\\.?|Private Limited|Corporation|Berhad|S/B|Limited|Ltd\\.?|Inc\\.?)";
+    const explicitRole = `(?!(?:Page|Confidential|of\\s+\\d+)\\b)(?=[A-Z][^:;|.]{1,119}\\b${job}\\b)[A-Z][^:;|.]{1,119}?`;
+    const roleEndingAtJob = `(?!(?:Page|Confidential|of\\s+\\d+)\\b)[A-Z][^:;|.]{1,119}\\b(?:${job}|Support)`;
+    // Strong punctuation can preserve a complete employment row even when PDF
+    // line breaks are lost. Each family below owns all four fields and stops at
+    // duty prose; location/placement annotations never become the employer.
+    const dutyBoundary =
+      "(?=\\s+(?:Established|Led|Managed|Serve|Spearheaded|Conducted|Developed|Involved|Responsible|Provided|Performed|Delivered|Project\\s*:|Projects\\s*:|Responsibilities?\\s*:)|\\s*[–—]\\s*SAP\\b|\\s*$)";
+    const punctuatedRows = [
+      {
+        // Date, role, employer (optional contract annotation).
+        re: new RegExp(
+          `(?:^|\\s)${range}\\s*,\\s*(${explicitRole})\\s*,\\s*(${legalRow})`,
+          "gi",
+        ),
+        f: [4, 3, 1, 2],
+        group: "dated-comma-employment-row",
+      },
+      {
+        // A contract annotation terminates an employer without a legal suffix.
+        re: new RegExp(
+          `(?:^|\\s)${range}\\s*,\\s*(${explicitRole})\\s*,\\s*([^,;|]{2,100}?)\\s+\\([^)]*contract[^)]*\\)`,
+          "gi",
+        ),
+        f: [4, 3, 1, 2],
+        group: "dated-comma-employment-row",
+      },
+      {
+        // Role, legal employer, location | year-only tenure.
+        re: new RegExp(
+          `(?:^|\\s)(${roleEndingAtJob})\\s+(${legalRow})\\s*,\\s*[A-Za-z][A-Za-z .'-]{1,55}\\s*\\|\\s*(${year})\\s*[-–—]\\s*(${year}|${ongoing})`,
+          "gi",
+        ),
+        f: [2, 1, 3, 4],
+        group: "role-employer-location-year-row",
+      },
+      {
+        // Role and tenure precede a pipe-delimited employer.
+        re: new RegExp(
+          `(?:^|\\s)(${explicitRole})\\s+${range}\\s*\\|\\s*([^;|]{2,100}?)${dutyBoundary}`,
+          "gi",
+        ),
+        f: [4, 1, 2, 3],
+        group: "role-tenure-pipe-employer-row",
+      },
+      {
+        // A visible bullet/diamond separates employer from tenure and role.
+        re: new RegExp(
+          `^([^:;|◆♦⧫]{2,100}?)\\s*[◆♦⧫]\\s*${range}\\s+(${explicitRole})${dutyBoundary}`,
+          "gi",
+        ),
+        f: [1, 4, 2, 3],
+        group: "employer-symbol-tenure-role-row",
+      },
+    ];
+    for (const { re, f, group } of punctuatedRows)
+      for (const m of (group === "dated-comma-employment-row"
+        ? rowSection
+        : section
+      ).matchAll(re)) {
+        const employer =
+          group === "employer-symbol-tenure-role-row"
+            ? m[f[0]].replace(/\s+\([^)]{2,70}\)\s*$/, "")
+            : m[f[0]];
+        add(employer, m[f[1]], m[f[2]], m[f[3]], m[0], group, true);
+      }
+
+    // A parenthesized tenure after Role, Employer, Location is self-contained.
+    // The location is discarded and project/client rows are rejected by add().
+    const roleEmployerLocation = new RegExp(
+      `(?:^|\\s)(${explicitRole})\\s*,\\s*([^,;()]{2,90})\\s*,\\s*([A-Za-z][A-Za-z .,'-]{1,70})\\s*\\(${range}\\)${dutyBoundary}`,
+      "gi",
+    );
+    for (const m of section.matchAll(roleEmployerLocation))
+      add(m[2], m[1], m[4], m[5], m[0], "role-employer-location-tenure", true);
+
+    const leading = section.replace(/^(?:\\?\\|\\s*)?(?:\d+\s+){0,3}/, "");
+    // Explicit placement annotations identify a client context, not a second
+    // employer. The legal employer before the location retains its own tenure.
+    const placement = leading.match(
+      new RegExp(
+        `^(${legal})\\s*,\\s*([A-Za-z .'-]{2,55})\\s+\\([^)]*\\bplacement\\)\\s+(${explicitRole})\\s+${range}${dutyBoundary}`,
+        "i",
+      ),
+    );
+    if (placement)
+      add(
+        placement[1],
+        placement[3],
+        placement[4],
+        placement[5],
+        placement[0],
+        "employer-placement-role-tenure",
+        true,
+      );
+    if (placement) continue;
+    // Employer, location, tenure, role: require the complete heading at the
+    // section start so later project locations cannot be promoted to employer.
+    const employerLocation = leading.match(
+      new RegExp(
+        `^([^,:;|]{2,90})\\s*,\\s*([A-Za-z .'-]{2,55})\\s+${range}\\s+(${explicitRole})${dutyBoundary}`,
+        "i",
+      ),
+    );
+    if (employerLocation)
+      add(
+        employerLocation[1],
+        employerLocation[5],
+        employerLocation[3],
+        employerLocation[4],
+        employerLocation[0],
+        "employer-location-tenure-role",
+        true,
+      );
     // Repeated employment forms delimit all fields explicitly. Projects may
     // follow Main Duties, but their Duration/Position fields cannot complete
     // an incomplete employment form. Preserve year-only ends as written.
@@ -331,8 +455,6 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
     }
     // Legal suffixes and explicit field labels supply boundaries lost when a
     // PDF is flattened. Never continue searching inside responsibility prose.
-    const legal =
-      "[A-Z0-9][A-Za-z0-9&.,'() /-]{1,100}?\\b(?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Pvt\\.?\\s*Ltd\\.?|Private Limited|Corporation|Berhad|S/B|Limited|Ltd\\.?|Inc\\.?)";
     // Complete employer / recognizable role / tenure cells may be adjacent
     // after PDF flattening. Consume from the heading only and stop at prose;
     // never search ahead through duties for another date or employer.

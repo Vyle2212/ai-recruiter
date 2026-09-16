@@ -411,3 +411,33 @@ Twenty-four regression files and typecheck pass locally. Sanitized fixtures cove
 Continuation: start from the latest PR head. Prioritize remaining source-backed groups and partially recovered histories while the private request list is being answered. Keep the **140 unresolved subset sources** separate from **693 unaudited sources**; do not invent names for the latter. The nine-profile request list is a priority evidence list, not an exhaustive list of all unresolved sources.
 
 Scope remains **SUBSET_ONLY: 277 / 970**. Production remains **NO_GO** pending real OCR with saved provenance, reviewed/version-matched backfill, full-population audit and authenticated acceptance on the exact artifact to promote. No runtime configuration, Supabase/Vercel writes, source mutation, backfill or promotion occurred.
+
+## Batch checkpoint: punctuated employment headings (2026-09-16)
+
+Baseline: `2fd8cd7790259d14ac3b455f5924675fd51ad287`; parser now `candidate-employment-v68-punctuated-heading-batch`. Before edits, all 140 unresolved source records were classified: 85 heading/date-boundary cases, 45 project/client narratives, four explicit-label cases, four headed tables and two other cases. Private source review selected seven records whose employment rows retain explicit punctuation or labelled placement boundaries after PDF flattening.
+
+- Date / role / employer rows require commas plus either a legal company suffix or an explicit contract annotation. Legal suffix matching retains compound endings such as `Corporation Berhad`; project names after the employer cannot become part of the company.
+- Role / tenure / pipe / employer rows reject page furniture and responsibility prose before the role. A role must start after the boundary and contain a recognizable job term.
+- Role / legal employer / location / year-only tenure rows preserve year precision. The role ends at its last supported job term before the legal employer, preventing role fragments from moving into the employer or vice versa.
+- Employer / visible-symbol / tenure / role rows accept only the first complete row at the employment-section boundary. Parenthesized office descriptors and locations are excluded from the employer.
+- Explicit placement annotations remain client context. Only the legal employer before the annotation receives the role and tenure. A single uppercase `EMPLOYMENT` or `EXPERIENCE` heading is recognized only when it is not part of an existing Project, Work, Working or Professional heading.
+- Employer / location / tenure / role headings and parenthesized role / employer / location / tenure headings require all fields in one bounded heading. No missing endpoint is inferred.
+
+Comparison across all 277 private sources: **137 → 144 source records with employment**, **539 → 552 rows**, and **140 → 133 without employment**. The seven recovered records add 13 rows: four rows from a comma-delimited employment history, three year-only rows, two pipe-delimited rows and four other fully bounded headings. All 539 prior company/title/start/end/current tuples remain unchanged and retained. Every new tuple was checked against private source excerpts. Source-record counts are not unique people or complete-history acceptance; some recovered records still contain older rows whose ownership is not sufficiently bounded.
+
+Read-only audit: 552 employers, 490 titles and 549 supported date ranges. Malformed, duplicate, invalid-range and pagination-leak counts remain zero. Eight overlap flags and one possible employer/client equality flag are unchanged from the baseline; they remain review signals rather than adjudicated errors. No project/client date was promoted to employer tenure.
+
+| Remaining review queue | Before | After | Continuing reason |
+| --- | ---: | ---: | --- |
+| Date near employment heading | 85 | 78 | Lost order, missing delimiters, malformed dates or unbounded prose |
+| Project/client narrative | 45 | 45 | Assignment dates alone cannot establish employer tenure |
+| Explicit employer labels | 4 | 4 | Incomplete or mixed assignment fields |
+| Headed tables | 4 | 4 | Column-major order, missing endpoints or ambiguous column ownership |
+| Other narrative/layout | 2 | 2 | No supported extraction added |
+| **Total** | **140** | **133** | Heuristic review queues, not adjudicated causes |
+
+Twenty-four regression files, typecheck, scoped formatting and whitespace checks pass locally. Sanitized fixtures cover comma, pipe, symbol, placement, location and year-only families; compound legal suffixes; page-header exclusion; incomplete/reversed dates; and project/client isolation. Full-source comparison confirms that no previous tuple was removed or changed. Verify exact-head CI and commit statuses after the single batch push; no release or test gate was weakened.
+
+Continuation: start from the latest PR head and exact-head checks. Prioritize the remaining source-backed groups and partially recovered histories while awaiting the consolidated original-CV/date confirmations. Keep the **133 unresolved subset records** separate from **693 unaudited sources**. Do not treat the private priority request list as an exhaustive list of all unresolved sources.
+
+Scope remains **SUBSET_ONLY: 277 / 970**. Production remains **NO_GO** pending real OCR with saved provenance, reviewed/version-matched backfill, full-population audit and authenticated acceptance on the exact artifact to promote. No runtime configuration, Supabase/Vercel writes, source mutation, backfill or promotion occurred.

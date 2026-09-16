@@ -658,3 +658,85 @@ for (const boundary of [
     ["Example Systems"],
   );
 }
+
+const punctuatedEmployment = [
+  [
+    "Employment History SAP QM/PM/PP Consultant, Freelance, Example City, Example Country (November 2020 – Present) Projects: Buyer rollout",
+    ["Freelance", "SAP QM/PM/PP Consultant", "November 2020", "Present"],
+  ],
+  [
+    "Working Experience 5 1 Example Manufacturing, Country Jan 2017 – Present PTP Business Analyst – SAP Program Led migration.",
+    ["Example Manufacturing", "PTP Business Analyst", "Jan 2017", "Present"],
+  ],
+  [
+    "EMPLOYMENT Example Technology Sdn Bhd, Country (Example Buyer Placement) SAP Senior Consultant August 2024 - Present Involved in implementation.",
+    [
+      "Example Technology Sdn Bhd",
+      "SAP Senior Consultant",
+      "August 2024",
+      "Present",
+    ],
+  ],
+  [
+    "Working Experience Example Group (based in Government Office) ⧫ Feb 2017 – Present SAP Basis Consultant Serve as a consultant.",
+    ["Example Group", "SAP Basis Consultant", "Feb 2017", "Present"],
+  ],
+  [
+    "Employment History April 2024 – Present, SAP ABAP Consultant, Example Consulting (6 months contract) Expense Management Project (Client: Example Buyer)",
+    ["Example Consulting", "SAP ABAP Consultant", "April 2024", "Present"],
+  ],
+  [
+    "Professional Experience Senior Manager – Head of SAP Center of Excellence Jul 2025 to Present | Example Holdings, Inc. Established governance. Page 1 of 5 Lead Senior SAP FICO Consultant Jul 2024 to Jun 2025 | Example Delivery, Inc. Project: Cloud implementation",
+    [
+      "Example Holdings, Inc.",
+      "Senior Manager – Head of SAP Center of Excellence",
+      "Jul 2025",
+      "Present",
+    ],
+  ],
+  [
+    "EXPERIENCE R2R Finance Operations Accountant/Citizen Developer/FICO Support Example Philippines Inc., Philippines | 2019-2023 Education Bachelor Degree",
+    [
+      "Example Philippines Inc.",
+      "R2R Finance Operations Accountant/Citizen Developer/FICO Support",
+      "2019",
+      "2023",
+    ],
+  ],
+] as const;
+for (const [source, expected] of punctuatedEmployment) {
+  const rows = read(source);
+  assert.ok(
+    rows.some((r) =>
+      [r.company, r.title, r.start, r.end].every(
+        (value, index) => value === expected[index],
+      ),
+    ),
+    source,
+  );
+}
+const pipeRows = read(punctuatedEmployment[5][0]);
+assert.ok(
+  pipeRows.some(
+    (row) =>
+      row.company === "Example Delivery, Inc." &&
+      row.title === "Lead Senior SAP FICO Consultant" &&
+      row.start === "Jul 2024" &&
+      row.end === "Jun 2025",
+  ),
+  "page furniture cannot become part of a role",
+);
+for (const source of [
+  "Project Experience April 2024 – Present, SAP Consultant, Example Buyer Project: Rollout",
+  "Employment History April 2024 – Present, SAP Consultant, Client Example Buyer Responsibilities: Delivery",
+  "Employment History April 2024 – March 2024, SAP Consultant, Example Services Responsibilities: Delivery",
+  "Employment History SAP Consultant, Example Services, Example City (November 2020 –) Projects: Rollout",
+  "Working Experience Example Group (based in Government Office) ⧫ Feb 2017 – Present Client Consultant Serve as a consultant.",
+  "EMPLOYMENT Example Technology Sdn Bhd, Country (Example Buyer Placement) SAP Senior Consultant Project Duration: August 2024 - Present",
+  "EXPERIENCE SAP Consultant Example Buyer, Country | 2019-2023",
+  "EXPERIENCE SAP Consultant Example Services Inc., Country | 2023-2019",
+])
+  assert.equal(read(source).length, 0, source);
+console.log(
+  "Punctuated employment headings: field ownership, page boundaries and client isolation pass",
+);
