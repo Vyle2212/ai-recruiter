@@ -13,15 +13,15 @@ const month =
   "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
 const year = "(?:19|20)\\d{2}";
 const day = "\\d{1,2}(?:st|nd|rd|th)?";
-const date = `(?:(?:${day}[ -]+)?${month}[. -]*${year}|${month}[. ]*${day}[ ,]+${year}|${year})`;
+const date = `(?:(?:${day}[ -]+)?${month}[., -]*${year}|${month}[. ]*${day}[ ,]+${year}|${year}[ |]+${month}|${year})`;
 const ongoing =
-  "(?:(?:till|until|to)\\s+(?:date|now|present)|present|current|now|continuing)";
+  "(?:(?:till|until|to|at)\\s+(?:date|now|present)|present|current|now|continuing)";
 const range = `(${date})\\s*(?:[-–—]|to|until|till)\\s*(${date}|${ongoing})`;
 const job =
-  "(?:Consultant|Manager|Lead|Developer|Analyst|Engineer|Officer|Accountant|Architect|Specialist|Administrator|Director|Executive|Associate|Expert|Controller|Coordinator|Intern|Trainee|Supervisor|Advisor|Programmer|Counsellor|Clerk|Head)";
+  "(?:Consultant|Manager|Lead|Developer|Analyst|Engineer|Officer|Accountant|Architect|Specialist|Administrator|Director|Executive|Associate|Expert|Controller|Coordinator|Intern|Trainee|Supervisor|Advisor|Programmer|Counsellor|Clerk|Head|Therapist)";
 const role = `(?:[A-Za-z0-9/&.+-]+\\s+){0,8}${job}(?:\\s*\\([^)]{1,35}\\))?`;
 const roleStart =
-  /^(?:SCM|MM|SD|FI|CO|PP|PM|QM|BW|CRM|Deputy|Full|Tech|Package|SAP|ERP|Senior|Junior|Sr\.?|Jr\.?|Principal|Principle|Lead|Project|Program|Business|Software|Systems?|Application|Technical|Functional|Finance|Financial|Accounts?|HR|IT|ABAP|Data|Support|Industrial|Intern|Recruitment|Technology|Solution|Solutions|Associate|Assistant|Executive|Manager|Consultant|Analyst|Engineer|Developer|Secondment|CPL|Team|Group|Procurement|General|Officer|Director|Architect|Tax|Property|Workday|Graduate|Operations?|Logistics|Supply|Mechanical|Electrical|Quality|QA|Sales|Customer|Service|Network|Database|Information|Computer|Product|Process|Manufacturing|Research|Trainee|Accountant|Controller|Coordinator|Advisor|Programmer|Counsellor|Clerk|Head)\b/i;
+  /^(?:Accounting|Collections|Collection|Speech|R2R|Module|Industrial|SCM|MM|SD|FI|CO|PP|PM|QM|BW|CRM|Deputy|Full|Tech|Package|SAP|ERP|Senior|Junior|Sr\.?|Jr\.?|Principal|Principle|Lead|Project|Program|Business|Software|Systems?|Application|Technical|Functional|Finance|Financial|Accounts?|HR|IT|ABAP|Data|Support|Industrial|Intern|Recruitment|Technology|Solution|Solutions|Associate|Assistant|Executive|Manager|Consultant|Analyst|Engineer|Developer|Secondment|CPL|Team|Group|Procurement|General|Officer|Director|Architect|Tax|Property|Workday|Graduate|Operations?|Logistics|Supply|Mechanical|Electrical|Quality|QA|Sales|Customer|Service|Network|Database|Information|Computer|Product|Process|Manufacturing|Research|Trainee|Accountant|Controller|Coordinator|Advisor|Programmer|Counsellor|Clerk|Head|Therapist)\b/i;
 const org =
   "[A-Za-z0-9](?:(?!\\b(?:worked|working|employed|as)\\b)[A-Za-z0-9&.,'’() /-]){1,130}?";
 const legal =
@@ -32,6 +32,7 @@ const hasJob = new RegExp(`\\b${job}\\b`, "i");
 function cleanDate(value: string) {
   if (new RegExp(`^${ongoing}$`, "i").test(value)) return "Present";
   return value
+    .replace(new RegExp(`^(${year})[ |]+(${month})$`, "i"), "$2 $1")
     .replace(new RegExp(`^(${month})(?=\\d)`, "i"), "$1 ")
     .replace(/(\d)(?:st|nd|rd|th)\b/gi, "$1")
     .replace(/[.,-]/g, " ")
@@ -40,10 +41,25 @@ function cleanDate(value: string) {
     .replace(new RegExp(`^(${month}) (\\d{1,2}) (${year})$`, "i"), "$2 $1 $3");
 }
 function validCompany(value: string) {
+  // A second legal organization after a comma can be a client. A legal suffix
+  // immediately after the comma ("Example, Inc.") is still one employer.
+  const comma = value.indexOf(",");
+  if (
+    comma >= 0 &&
+    value.slice(comma + 1).match(legal)?.length &&
+    !value.slice(0, comma).match(legal)?.length &&
+    !/^\s*(?:Inc\b|Ltd\b|Limited\b|Sdn\b|Pte\b|Co\b)/i.test(
+      value.slice(comma + 1),
+    )
+  )
+    return false;
   return (
     !new RegExp(`^${month}$`, "i").test(value) &&
     value.replace(legal, "").replace(/[^A-Za-z]/g, "").length >= 2 &&
-    !/^(?:SAP|SD|MM|FI|CO|BW|Support)\b/i.test(value) &&
+    !/^(?:SAP|ERP|SuccessFactors|Module|SD|MM|FI|CO|BW|Support)\b/i.test(
+      value,
+    ) &&
+    !/^(?:Senior|Junior|Sr\.?|Jr\.?)\b/i.test(value) &&
     !/^Programmer(?=[A-Z])/.test(value) &&
     !/\bat[A-Z]/.test(value) &&
     !/\b(?:Port Operations|Pre-shipping|Pay\s*roll|Assigned|Managed|Developed|Delivered|Provided)\b/i.test(
@@ -52,7 +68,11 @@ function validCompany(value: string) {
     value.length >= 2 &&
     value.length <= 130 &&
     !forbidden.test(value) &&
-    !hasJob.test(value) &&
+    !hasJob.test(
+      value.match(legal)?.length && !roleStart.test(value)
+        ? value.replace(/\bAssociates?\b/gi, "")
+        : value,
+    ) &&
     !/\b(?:as|from|since|for|at|with|role|position|industry|specialization|years?|months?)\b|[:;!?@]/i.test(
       value,
     ) &&
@@ -67,7 +87,10 @@ function validRole(value: string) {
     hasJob.test(value) &&
     !forbidden.test(
       value
-        .replace(/\bProject (?=Manager|Lead|Director|Coordinator)\b/gi, "")
+        .replace(
+          /\bProject (?=Manager|Lead|Director|Coordinator|Management Analyst)\b/gi,
+          "",
+        )
         .replace(/\bImplementation (?=Consultant|Manager|Lead)\b/gi, ""),
     ) &&
     !/\b(?:from|since|employed|company|industry|salary|years?|months?)\b/i.test(
@@ -150,7 +173,7 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
     }
 
   const duration =
-    "(?:\\(\\d+\\s+years?(?:\\s+(?:and\\s+)?\\d+\\s+months?)?\\)|\\(\\d+\\s+months?\\))";
+    "(?:\\(\\d+\\s+years?(?:\\s*(?:and\\s+)?\\d+\\s+months?)?\\)|\\(\\d+\\s+months?\\))";
   // Exported employment cards have a dated heading, title/employer, and the
   // Industry/Specialization/Role/Position Level schema. Labels confirm the card
   // format; printed duration and category Role never overwrite tenure/title.
@@ -182,6 +205,11 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
     )
       continue;
     const body = m[3]
+      .replace(
+        /(Consultant|Analyst|Engineer|Manager|Developer)(?=[A-Z])/g,
+        "$1 ",
+      )
+      .replace(/(\))(?!\s)(?=[A-Z])/g, "$1 ")
       .replace(new RegExp(`\\s*${duration}`, "i"), "")
       .split(/\s*\|\s*/)[0];
     const fields = body.match(
@@ -197,10 +225,11 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
   const headings =
     /\b(?:Professional Experiences?|Work(?:ing)? Experiences?|Employment History|Employment Record|Career History|Career Summary|Work History)\s*:?\s*/gi;
   const duty =
-    "(?:Attached|Participates|Troubleshoot|Responsibilities|Key (?:Responsibilities|Deliverables)|Job (?:Description|Scope)|Projects?|Clients?|Conduct(?:ed)?|Collaborate|Create|Lead|Led|Manage[ds]?|Develop(?:ed)?|Implement(?:ed)?|Support(?:ed)?|Perform(?:ed)?|Involved|Responsible|Handles?|Acts?|Work(?:ed)?|Review|Prepare|Providing|Provided|Assist(?:ed)?|Resolve|Ensure|Report|Design|Maintain(?:ed)?|Monitor(?:ing)?)";
-  const boundary = `(?=\\s+(?:${duty}\\b|[•➔\\uF0A7*]|${date})|\\s*$)`;
+    "(?:Provides?|Identified|Delivered|Engages|Leading|Master in|Team|Reduced|Delivered|Coordinate|Reviews|Configured|Currently|Attached|Participates|Troubleshoot|Responsibilities|Key (?:Responsibilities|Deliverables)|Job (?:Description|Scope)|Projects?|Clients?|Conduct(?:ed)?|Collaborate|Create|Lead|Led|Manage[ds]?|Develop(?:ed)?|Implement(?:ed)?|Support(?:ed)?|Perform(?:ed)?|Involved|Responsible|Handles?|Acts?|Work(?:ed)?|Review|Prepare|Providing|Provided|Assist(?:ed)?|Resolve|Ensure|Report|Design|Maintain(?:ed)?|Monitor(?:ing)?)";
+  const boundary = `(?=\\s+(?:${duty}\\b|[•➔\\uF0A7*]|${date})|\\s*$)`;
   const sectionHeadings = [
     ...source.matchAll(headings),
+    ...source.matchAll(/\bExperience\s*:?\s*(?=Company\s*:)/gi),
     ...source.matchAll(
       /(?<!PROJECT )(?<!WORK )(?<!PROFESSIONAL )\bEXPERIENCE\s*:?\s*/g,
     ),
@@ -225,7 +254,7 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
     )[0];
     const labels = [
       ...form.matchAll(
-        /\b(Company(?: Name)?|Employer|Organi[sz]ation|Position(?: Title)?(?:\s*\(Level\))?|Designation|Role|Duration|Period|Speciali[sz]ation|Industry|Clients?|Customers?|Environment|Job Scopes?|Job Description|Responsibilities|Work Description)\s*:/gi,
+        /\b(Company(?: Name)?|Employer|Organi[sz]ation|Position(?: Title)?(?:\s*\(Level\))?|Designation|Role|Duration|Period|Speciali[sz]ation|Industry|Clients?|Customers?|Environment|Job Scopes?|Job Description|Responsibilities|Work Description|Work Experiences?)\s*:/gi,
       ),
     ];
     const fields = labels.map((m, i) => ({
@@ -395,7 +424,7 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
       !balanced(company) ||
       !/^[A-Za-z0-9]/.test(company) ||
       /\b(?:SAP|ERP)\s*$/i.test(company) ||
-      /\b(?:Head|Projects?|Summary|provide|providing|develop|developing|design|apply|duties|experience|worked|working|implemented)\b/i.test(
+      /\b(?:Head|Projects?|Summary|provide|providing|develop|developing|design|apply|duties|experiences?|worked|working|implemented)\b/i.test(
         company,
       ) ||
       /\b(?:experience|summary|employee|skills|enhancing|providing|developing|hired|location)\b/i.test(
@@ -419,7 +448,7 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
   const endRange = "(?=\\s|[.,;)]|$)";
   for (const h of source.matchAll(separatorHeadings)) {
     if (
-      /\b(?:project|client|customer|technical|implementation|support|years?(?: of)?|summary of)\s*$/i.test(
+      /\b(?:project|client|customer|detailed|technical|implementation|support|years?(?: of)?|summary of)\s*$/i.test(
         source.slice(Math.max(0, h.index! - 50), h.index),
       )
     )
@@ -429,11 +458,280 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
       .split(
         /\b(?:Education|Qualifications|Certifications|References|Referees|Technical Skills|Personal Projects?|Project (?:Experience|History|Details|Involvement))\b/i,
       )[0];
-    let rest = tail.replace(/^(?:[_–—-]{3,}\s*|[•]\s*|\d+[.)]\s*)/, "");
+    const labelledLedger = /^Role Company Duration\b/i.test(tail);
+    let rest = tail
+      .replace(/^Role Company Duration\s*/i, "")
+      .replace(/^(?:[_–—-]{3,}\s*|[•]\s*|\d+[.)]+\s*)/, "");
     for (let adjacent = 0; adjacent < 30; adjacent++) {
       acceptedLength = 0;
       // A double-delimited pair is unambiguous in either field order; only one
       // side may contain a role. Slash delimiters must be surrounded by spaces.
+      const legalOrg = `(${org}(?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Co\\.?\\s*,?\\s*Ltd\\.?|Inc\\.?|Limited|Ltd\\.?|Berhad))`;
+      const stopDuty = `(?=\\s+(?:${duty}\\b|[•·\\uF0A7*]|[-–—]\\s*[A-Za-z])|\\s*$)`;
+      // Date / role / comma / employer, with a repeated legal company name or
+      // a duty label providing the end boundary. Never consume client prose.
+      const datedComma = rest.match(
+        new RegExp(`^${range}\\s+(${role})\\s*,\\s*${legalOrg}(?=\\s|$)`, "i"),
+      );
+      if (datedComma)
+        addHeader(
+          datedComma[4],
+          datedComma[3],
+          datedComma[1],
+          datedComma[2],
+          datedComma[0],
+          "date-role-comma-employer",
+        );
+      const roleComma = rest.match(
+        new RegExp(
+          `^(${role})\\s*,\\s*(${org})\\s*[:,]?\\s*\\(?${range}\\)?${endRange}`,
+          "i",
+        ),
+      );
+      if (roleComma)
+        addHeader(
+          roleComma[2],
+          roleComma[1],
+          roleComma[3],
+          roleComma[4],
+          roleComma[0],
+          "role-comma-employer-date",
+        );
+      // Legal employer suffix is an explicit field boundary even without a pipe.
+      const datedLegalHeader = rest.match(
+        new RegExp(`^${range}\\s+${legalOrg}\\s+(${role})${stopDuty}`, "i"),
+      );
+      if (datedLegalHeader)
+        addHeader(
+          datedLegalHeader[3],
+          datedLegalHeader[4],
+          datedLegalHeader[1],
+          datedLegalHeader[2],
+          datedLegalHeader[0],
+          "date-legal-employer-role",
+        );
+      const dateSlash = rest.match(
+        new RegExp(`^${range}\\s+(${org})\\s+/\\s+(${role})${stopDuty}`, "i"),
+      );
+      if (dateSlash)
+        addHeader(
+          dateSlash[3],
+          dateSlash[4],
+          dateSlash[1],
+          dateSlash[2],
+          dateSlash[0],
+          "date-employer-slash-role",
+        );
+      // A labelled role after employer tenure belongs to that employment heading.
+      const companyDateRole = rest.match(
+        new RegExp(
+          `^(${org})\\s+${range}\\s+Role\\s*:\\s*(${role})${stopDuty}`,
+          "i",
+        ),
+      );
+      if (companyDateRole)
+        addHeader(
+          companyDateRole[1],
+          companyDateRole[4],
+          companyDateRole[2],
+          companyDateRole[3],
+          companyDateRole[0],
+          "employer-date-labelled-role",
+        );
+      const roleCompanyParen = rest.match(
+        new RegExp(
+          `^(${role})\\s+(${org})\\s*[,]?\\s*\\(${range}\\)${endRange}`,
+          "i",
+        ),
+      );
+      if (roleCompanyParen)
+        addHeader(
+          roleCompanyParen[2],
+          roleCompanyParen[1],
+          roleCompanyParen[3],
+          roleCompanyParen[4],
+          roleCompanyParen[0],
+          "role-employer-parenthesized-date",
+        );
+      // Parenthesized tenure and an explicit dash before the role delimit the
+      // heading; the next adjacent employer may begin directly afterwards.
+      const companyParenRole = rest.match(
+        new RegExp(
+          `^(${org})\\s+\\(${range}\\)\\s*[-–—]\\s*(${role})(?=\\s|$)`,
+          "i",
+        ),
+      );
+      if (companyParenRole)
+        addHeader(
+          companyParenRole[1],
+          companyParenRole[4],
+          companyParenRole[2],
+          companyParenRole[3],
+          companyParenRole[0],
+          "employer-parenthesized-date-role",
+        );
+      // Company / title / date comma-separated headings. NFKC handles fullwidth commas.
+      const commaCells = rest.match(
+        new RegExp(
+          `^([^,;:]{2,130}),\\s*(${role})\\s*,\\s*${range}${endRange}`,
+          "i",
+        ),
+      );
+      if (commaCells)
+        addHeader(
+          commaCells[1],
+          commaCells[2],
+          commaCells[3],
+          commaCells[4],
+          commaCells[0],
+          "comma-employer-role-date",
+        );
+      const roleSlash = rest.match(
+        new RegExp(`^(${role})\\s*/\\s*(${org})\\s+${range}${endRange}`, "i"),
+      );
+      if (roleSlash)
+        addHeader(
+          roleSlash[2],
+          roleSlash[1],
+          roleSlash[3],
+          roleSlash[4],
+          roleSlash[0],
+          "role-slash-employer-date",
+        );
+      const roleCompanyDate = rest.match(
+        new RegExp(
+          `^(${role})\\s+(${org})\\s+${range}(?=\\s*[,]|\\s+${duty}\\b|\\s*$)`,
+          "i",
+        ),
+      );
+      if (roleCompanyDate)
+        addHeader(
+          roleCompanyDate[2],
+          roleCompanyDate[1],
+          roleCompanyDate[3],
+          roleCompanyDate[4],
+          roleCompanyDate[0],
+          "role-employer-date-duty",
+        );
+      const titledEmployer = rest.match(
+        new RegExp(
+          `^${range}\\s+(${role})\\s+Employer\\s*:\\s*(${org})(?=\\s+Location\\s*:|\\s+Responsibilities\\b|\\s*$)`,
+          "i",
+        ),
+      );
+      if (titledEmployer)
+        addHeader(
+          titledEmployer[4],
+          titledEmployer[3],
+          titledEmployer[1],
+          titledEmployer[2],
+          titledEmployer[0],
+          "dated-title-labelled-employer",
+        );
+      // A slash heading can contain an explicit city after a legal employer;
+      // retain it as location text, never as a role or a second employer.
+      const roleLegalLocation = rest.match(
+        new RegExp(
+          `^(${role})\\s*,\\s*(${org})\\s+[–—]\\s*${range}${endRange}`,
+          "i",
+        ),
+      );
+      if (roleLegalLocation)
+        addHeader(
+          roleLegalLocation[2],
+          roleLegalLocation[1],
+          roleLegalLocation[3],
+          roleLegalLocation[4],
+          roleLegalLocation[0],
+          "role-comma-located-employer",
+        );
+      const datedNamed = rest.match(
+        new RegExp(`^${range}\\s+(${org})\\s+(SAP\\s+${role})${stopDuty}`, "i"),
+      );
+      if (
+        datedNamed &&
+        /^SAP\b/i.test(datedNamed[4]) &&
+        !roleStart.test(datedNamed[3])
+      )
+        addHeader(
+          datedNamed[3],
+          datedNamed[4],
+          datedNamed[1],
+          datedNamed[2],
+          datedNamed[0],
+          "date-employer-role-duty",
+        );
+      const datedRoleCompany = rest.match(
+        new RegExp(
+          `^${range}\\s+(${role})\\s+(${org})(?=\\s+${duty}\\b|\\s*[•\\uF0A7]|\\s*$)`,
+          "i",
+        ),
+      );
+      if (datedRoleCompany)
+        addHeader(
+          datedRoleCompany[4],
+          datedRoleCompany[3],
+          datedRoleCompany[1],
+          datedRoleCompany[2],
+          datedRoleCompany[0],
+          "date-role-employer-duty",
+        );
+      const datedCommaLabel = rest.match(
+        new RegExp(
+          `^${range}\\s+(${role})\\s*,\\s*(${org})(?=\\s+Role\\s*:)`,
+          "i",
+        ),
+      );
+      if (datedCommaLabel)
+        addHeader(
+          datedCommaLabel[4],
+          datedCommaLabel[3],
+          datedCommaLabel[1],
+          datedCommaLabel[2],
+          datedCommaLabel[0],
+          "date-role-comma-employer-labelled-duties",
+        );
+      if (labelledLedger) {
+        const ledger = rest.match(
+          new RegExp(`^(${role})\\s+(${org})\\s+${range}${endRange}`, "i"),
+        );
+        if (ledger)
+          addHeader(
+            ledger[2],
+            ledger[1],
+            ledger[3],
+            ledger[4],
+            ledger[0],
+            "role-company-duration-table",
+          );
+      }
+      const datedRoleEmployer = rest.match(
+        new RegExp(
+          `^${range}\\s+([^:;]{2,110}?)\\s+Employer\\s*:\\s*(${org})(?=\\s+Location\\s*:)`,
+          "i",
+        ),
+      );
+      if (
+        datedRoleEmployer &&
+        /^.+(?:Specialist|Consultant|Analyst|Manager)(?:, [A-Z]{2,5})?$/i.test(
+          datedRoleEmployer[3],
+        )
+      ) {
+        const prior = output.length;
+        add(
+          datedRoleEmployer[4],
+          datedRoleEmployer[3],
+          datedRoleEmployer[1],
+          datedRoleEmployer[2],
+          datedRoleEmployer[0],
+          "dated-role-employer-location-form",
+        );
+        if (output.length > prior)
+          acceptedLength = Math.max(
+            acceptedLength,
+            datedRoleEmployer[0].length,
+          );
+      }
       const patterns = [
         {
           re: new RegExp(
@@ -710,8 +1008,110 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
           legalDateRole[0],
           "legal-company-date-role",
         );
+      const employerLedger = rest.match(
+        new RegExp(
+          `^${legalOrg}\\s+\\(${range}(?:,\\s*Contract role)?\\)(?=\\s|$)`,
+          "i",
+        ),
+      );
+      if (employerLedger) {
+        const prior = output.length;
+        add(
+          employerLedger[1],
+          "",
+          employerLedger[2],
+          employerLedger[3],
+          employerLedger[0],
+          "legal-employer-tenure-ledger",
+        );
+        if (output.length > prior)
+          acceptedLength = Math.max(acceptedLength, employerLedger[0].length);
+      }
       if (!acceptedLength) break;
       rest = rest.slice(acceptedLength).trimStart();
+    }
+  }
+  // Explicit numbered Organization / Designation / From / To tables own both
+  // date columns. Numbering and the next row boundary prevent duty resync.
+  for (const heading of source.matchAll(
+    /\bOrganization Name Designation From Date To Date\s*/gi,
+  )) {
+    let rest = source.slice(heading.index! + heading[0].length);
+    for (let row = 0; row < 40; row++) {
+      const m = rest.match(
+        new RegExp(
+          `^\\d+\\s+(${org})\\s+((?:Sr\\.?|Senior|Junior|SAP|Manager|Consultant)\\b[^:;]{0,100}?)\\s+(${date})\\s+(${date}|${ongoing})(?=\\s+\\d+\\s|\\s*$)`,
+          "i",
+        ),
+      );
+      if (!m) break;
+      const previous = output.length;
+      add(
+        m[1],
+        m[2],
+        m[3],
+        m[4],
+        m[0],
+        "numbered-organization-designation-table",
+      );
+      if (output.length === previous) break;
+      rest = rest.slice(m[0].length).trimStart();
+    }
+  }
+  // The explicit five-column schema distinguishes employment dates/company
+  // from project notes. Stop at the next row and never read dates from notes.
+  const numericDate = "(?:0?[1-9]|1[0-2])-(?:19|20)\\d{2}";
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  for (const heading of source.matchAll(
+    /\bStart End Title Comp\.? Name Notes\s*/gi,
+  )) {
+    const section = source
+      .slice(heading.index! + heading[0].length)
+      .split(
+        /\b(?:Education|Certification|References|Project Experience)\b/i,
+      )[0];
+    const rows = [
+      ...section.matchAll(
+        new RegExp(`(?:^|\\s)(${numericDate})\\s+(${numericDate})\\s+`, "g"),
+      ),
+    ];
+    for (const [index, row] of rows.entries()) {
+      const body = section.slice(
+        row.index! + row[0].length,
+        rows[index + 1]?.index,
+      );
+      const fields = body.match(
+        new RegExp(
+          `^(${role}(?:\\s+(?:Senior|Junior))?)\\s+(${org})(?=\\s+(?:SAP (?:Implementation|Project Support|Roll-Out)|AMS Delivery|Implementation|Roll-Out)\\b)`,
+          "i",
+        ),
+      );
+      if (!fields || !roleStart.test(fields[1])) continue;
+      const toMonth = (d: string) => {
+        const [m, y] = d.split("-");
+        return `${months[+m - 1]} ${y}`;
+      };
+      add(
+        fields[2],
+        fields[1],
+        toMonth(row[1]),
+        toMonth(row[2]),
+        row[0].trimStart() + fields[0],
+        "start-end-role-company-notes-table",
+      );
     }
   }
   return output.filter(

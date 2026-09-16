@@ -14,7 +14,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v79-delimited-employment-batch";
+  "candidate-employment-v80-career-heading-batch";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1876,7 +1876,7 @@ function resumeEmployment(resumeText: string) {
       if (a === null || b === null || start === null || end === null) return false;
       const exactPeriod = a === start && b === end && known.current === parsed.current;
       const differentAssertion = normalized(known.company) !== normalized(parsed.company) || normalized(known.title) !== normalized(parsed.title);
-      if (exactPeriod && differentAssertion && known.provenance?.some(ref => (ref.sourceRef?.startsWith('resume.labelledCompany') || (normalized(known.title) === normalized(parsed.title) && ref.sourceRef?.startsWith('resume.flattened.period-company-designation.'))))) return true;
+      if (exactPeriod && differentAssertion && known.provenance?.some(ref => (ref.sourceRef?.startsWith('resume.labelledCompany') || ref.sourceRef?.startsWith('resume.labelledEmployerHistory.') || (normalized(known.title) === normalized(parsed.title) && ref.sourceRef?.startsWith('resume.flattened.period-company-designation.'))))) return true;
       return row.group === 'named-employer-fields' && normalized(known.company) === normalized(parsed.company) &&
         !exactPeriod && a >= start && b <= end;
     });
@@ -1901,7 +1901,7 @@ function resumeEmployment(resumeText: string) {
       // The same heading may have been read through into a duty sentence.
       // A delimiter-bounded title can trim that explicit narrative suffix.
       if (owned.title.toLowerCase().startsWith(parsed.title.toLowerCase()) &&
-        /^\s+(?:Attached to|Participates in|Involved in|Responsible for)\b/i.test(owned.title.slice(parsed.title.length))) {
+        /^\s+(?:(?:Attached to|Participates in|Involved in|Responsible for)\b|Team\s*=)/i.test(owned.title.slice(parsed.title.length))) {
         owned.title = parsed.title;
       }
       owned.provenance = [...(owned.provenance || []), ...(parsed.provenance || [])];
