@@ -1,4 +1,5 @@
 import { hasUsableEvidence } from "./candidate360EvidenceAvailability";
+import { nativeProjectCards } from "./nativeProjectCards";
 import {
   calculateProfileCompleteness,
   profileSectionState,
@@ -25,7 +26,7 @@ export const CANDIDATE_DETAIL_PROJECTION_VERSION =
 export const CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION =
   CANDIDATE_EMPLOYMENT_TIMELINE_VERSION;
 export const CANDIDATE_PROJECT_EXTRACTOR_VERSION =
-  "candidate-projects-v24-assignment-evidence-boundaries";
+  "candidate-projects-v25-native-project-cards";
 
 type NormalizedCandidateProjection = ReturnType<
   typeof normalizeActualCandidateSchemaFresh
@@ -3231,6 +3232,18 @@ function normalizeProjects(
   output.push(...inlineClientAssignmentProjects(sourceScopes));
   output.push(...extractExplicitResponsibilityProjects(sourceScopes));
   output.push(...narrativeProjects(sourceScopes));
+  const nativeSource = firstValue(sourceScopes, ["resume_text", "raw_text", "cv_text", "raw_cv"]);
+  if (typeof unwrap(nativeSource) === "string") {
+    output.push(...nativeProjectCards(String(unwrap(nativeSource))).map((card, index) => withProjectEvidence({
+      id: `native-project-card-${index + 1}`,
+      name: card.name, client: card.client, employer: "", industry: "", country: "",
+      role: card.role, modules: stringList(card.environment.match(/\b(?:FICO|FI|CO|MM|SD|PP|PS|BW|BI|HCM)\b/gi) || []),
+      projectType: labelledAssignmentType(card.name + " " + card.responsibility),
+      implementationType: labelledAssignmentType(card.name + " " + card.responsibility),
+      start: card.start, end: card.end, duration: projectDuration(card.start, card.end),
+      responsibilities: [card.responsibility], teamSize: null, environment: card.environment,
+    }, "parsed_resume", `resume.nativeProjectCards.${index + 1}`)));
+  }
   const canonical = canonicalizeEnterpriseProjects(
     output.filter((project) => project.name || project.client),
   );
