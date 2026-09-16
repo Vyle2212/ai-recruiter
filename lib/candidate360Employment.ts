@@ -9,7 +9,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v54-link-phrase-boundaries";
+  "candidate-employment-v55-boolean-current";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1617,7 +1617,9 @@ export function canonicalEmploymentTimeline(input: {
   const extracted: EnterpriseEmployment[] = [];
   input.structuredRecords.forEach(({ record, sourceRef }) => {
     const end = value(record, ["end_date", "endDate", "to", "end"]);
-    const currentValue = value(record, ["current", "is_current", "isCurrent"]);
+    const currentValue = ["current", "is_current", "isCurrent"]
+      .map((key) => record[key])
+      .find((item) => typeof item === "boolean" || Boolean(clean(item)));
     const parsed = entry({
       company: value(record, [
         "company",
@@ -1644,7 +1646,8 @@ export function canonicalEmploymentTimeline(input: {
       start: value(record, ["start_date", "startDate", "from", "start"]),
       end,
       current:
-        /^(?:true|yes|1)$/i.test(currentValue) ||
+        currentValue === true ||
+        /^(?:true|yes|1)$/i.test(clean(currentValue)) ||
         /^(?:present|current|now)$/i.test(end),
       sourceRef,
       sourceId:

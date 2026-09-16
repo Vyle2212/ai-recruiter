@@ -59,3 +59,27 @@ const impossiblePeriod = normalizeActualCandidateSchema({raw_text:'Employment Hi
 assert.equal(impossiblePeriod.employmentTimeline.length, 0);
 assert.equal(impossiblePeriod.experienceSummary.totalCareerYears, null);
 console.log('Named calendar days reject impossible dates before career calculation: passed');
+
+for (const alias of ['current', 'is_current', 'isCurrent']) {
+  for (const flag of [true, 'true', 'yes', 1, false, 'false', 0]) {
+    const job = normalizeActualCandidateSchema({employment_history:[{
+      company:'Example Services', title:'Analyst', start_date:'Jan 2020', [alias]:flag,
+    }]}).enterpriseProfile.employmentTimeline[0];
+    const expected = flag === true || flag === 'true' || flag === 'yes' || flag === 1;
+    assert.equal(job.current, expected, `${alias}: ${flag}`);
+    assert.equal(job.start, 'Jan 2020');
+    assert.equal(job.end, '', 'a current flag does not invent a dated endpoint');
+    assert.equal(Boolean(job.duration), expected);
+  }
+}
+const explicitFalse = normalizeActualCandidateSchema({employment_history:[{
+  company:'Example Services', title:'Analyst', start_date:'Jan 2020', current:false, is_current:true,
+}]}).enterpriseProfile.employmentTimeline[0];
+assert.equal(explicitFalse.current, false, 'the first explicitly supplied flag retains alias precedence');
+const currentWithoutStart = normalizeActualCandidateSchema({employment_history:[{
+  company:'Example Services', title:'Analyst', current:true,
+}]}).enterpriseProfile;
+assert.equal(currentWithoutStart.employmentTimeline[0].current, true);
+assert.equal(currentWithoutStart.employmentTimeline[0].start, '');
+assert.equal(currentWithoutStart.experienceSummary.totalCareerYears, null);
+console.log('Structured boolean current flags retain explicit evidence without inventing dates: passed');

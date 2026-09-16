@@ -152,3 +152,11 @@ The fallback project linker accepted substrings inside unrelated words: an emplo
 The new synthetic regression failed on the preceding revision and passes after this change. All 16 local employment/calendar/canonical regression files and typecheck passed. Against commit `2b7f33a111f538442812e7f77c5e15a3231e0894`, the unchanged 277-source comparison found zero changed employment timelines or project links: 80 profiles / 315 rows, 197 unresolved and eight links. Malformed, duplicate and invalid-range employment diagnostics remain zero. No source or database records were changed.
 
 The preceding revision passed Production Trust run `35039849180`, immutable-action run `35039849200` and both previews. This revision requires its own exact-head CI. Live OCR, reviewed backfill, the remaining 693 sources and authenticated exact-artifact acceptance still block production (NO_GO).
+
+## Continuation checkpoint: structured current flags
+
+Structured employment used a string/number field reader for `current`, `is_current` and `isCurrent`, silently discarding boolean `true`. The reader now preserves boolean flags and the first explicitly supplied alias, including `false`. Existing string and numeric representations and explicit current endpoint labels remain supported. A current flag does not invent a missing start or a dated endpoint. The canonical employment cache version is incremented.
+
+Synthetic tests cover all three aliases, boolean/string/numeric values, conflicting aliases and a current job with no start date. All 16 employment/calendar/canonical regression files and typecheck passed. Against commit `498abff4833b8e9d479fb5413a7ff1a35e30aebd`, the private 277-source comparison found no changed employment timelines or experience summaries: 80 profiles / 315 rows, 197 unresolved, and zero malformed, duplicate or invalid-range employment diagnostics. This is a reproduced structured-input repair, not measured additional source recovery.
+
+The preceding revision passed Production Trust run `35040461463`, immutable-action run `35040461591` and both previews. This revision requires its own exact-head CI. No source or database records were changed. Live OCR, reviewed backfill, the remaining 693 sources and authenticated exact-artifact acceptance remain production blockers (NO_GO).
