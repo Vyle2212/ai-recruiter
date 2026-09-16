@@ -1,5 +1,7 @@
 # Precision career-ledger batch — 2026-09-16
 
+> Superseded by the [v84 ownership correction](precision-career-row-ownership-20260916.md). The counts below are historical parser output, not accuracy evidence: source review found cross-row joins and client promotion that the structural diagnostics missed.
+
 ## Outcome
 
 Parser `candidate-employment-v83-career-ledger-batch` was compared read-only with v82 across all 970 stored sources. It recovers 24 previously empty sources and 82 employment rows. The aggregate result is 674 sources with employment and 1,939 employment rows; 296 sources still require source review. All 1,857 v82 tuples remain present.
@@ -22,7 +24,7 @@ Synthetic positive and negative fixtures contain no candidate data. The negative
 | Possible client/employer equality       |     2 |     2 |               0 |
 | Profiles with overlapping source ranges |    55 |    60 | +5 review flags |
 
-The five new overlap flags come from explicit source ranges. They are retained for recruiter review and are not automatically treated as errors. No overlap is counted twice in aggregate experience.
+Correction: the earlier attribution of all five new overlap flags to explicit source ranges was not supported. The v84 ownership fix returns this count to 55. Structural flags alone do not validate semantic ownership.
 
 ## Remaining review inventory
 

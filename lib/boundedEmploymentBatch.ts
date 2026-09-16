@@ -1791,9 +1791,42 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
   const legalSuffix =
     "(?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Pvt\\.?\\s*Ltd\\.?|Co\\.?\\s*,?\\s*Ltd\\.?|Limited|Ltd\\.?|Inc\\.?|Berhad|Corporation)";
   const legalEmployer = `(${org}${legalSuffix})`;
+  // A labelled positions ledger owns the period, employer and activity/title
+  // within EACH date-delimited row. Never borrow the previous row's title.
+  for (const header of source.matchAll(
+    /\bList of professional positions\s+Period\s+Organi[sz]ation\s+Description of activities\s*/gi,
+  )) {
+    const section = source
+      .slice(header.index! + header[0].length)
+      .split(
+        /\b(?:Education|References|Project Details|Project Experience)\b/i,
+      )[0];
+    const periods = [...section.matchAll(new RegExp(range, "gi"))];
+    for (let i = 0; i < periods.length; i++) {
+      const period = periods[i];
+      const fields = section
+        .slice(
+          period.index! + period[0].length,
+          periods[i + 1]?.index ?? section.length,
+        )
+        .trim();
+      const row = fields.match(
+        new RegExp(`^${legalEmployer}\\s+(${role})$`, "i"),
+      );
+      if (row)
+        add(
+          row[1],
+          row[2],
+          period[1],
+          period[2],
+          period[0] + " " + fields,
+          "labelled-professional-positions-ledger",
+        );
+    }
+  }
   const careerSections = [
     ...source.matchAll(
-      /\b(?:WORK EXPERIENCE|Work Experience|Professional Experiences?|Employment History|Career History|CAREER HIGHLIGHTS|EXPERIENCES?|Experiences?)\b\s*:?\s*/g,
+      /\b(?:WORK EXPERIENCE|Work Experience|WORK HISTORY|Work History|Professional Experiences?|Employment History|Career History|CAREER HIGHLIGHTS|EXPERIENCES?|Experiences?)\b\s*:?\s*/g,
     ),
   ];
   for (const heading of careerSections) {
@@ -1812,12 +1845,12 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
     // Column-major tables have their own ownership-aware reader. Reading the
     // flattened row order here would pair one row's period with the next row.
     const columnMajorHeader =
-      /^\s*(?:Position\s+Company\s+Period|Role\s+Company\s+Duration)\b/i.test(
+      /\b(?:Position\s+Company\s+Period|Role\s+Company\s+Duration)\b/i.test(
         section,
       );
 
     const projectBoundary = section.search(
-      /\b(?:Current\s+Projects?\s+(?:History|Experience|Details)\s*:?|Current\s+Projects?\s*:|Projects?\s+(?:History|Experience|Details)\s*:|Projects?\s*:)/i,
+      /\b(?:Current\s+Projects?\s+(?:History|Experience|Details)\s*:?|Current\s+Projects?\s*:|Projects?\s+(?:History|Experience|Details)\s*:?|Projects?\s*:)/i,
     );
     const beforeProjects = (index: number | undefined) =>
       projectBoundary < 0 || (index ?? 0) < projectBoundary;
@@ -1839,33 +1872,67 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
       !/\b(?:certified|focused|responsibilities|training|project|client|main business|organization designation|complementary systems|carried|reduced)\b/i.test(
         value,
       );
+    const atCareerRowBoundary = (index: number | undefined) => {
+      const prefix = section
+        .slice(0, index)
+        .trim()
+        .replace(/\bFrom\s*$/i, "")
+        .trim();
+      if (!prefix) return true;
+      // Narrative sentences end a record. A corporate suffix's full stop does
+      // not: the following date/title can still belong to that same employer.
+      return (
+        /[.!?]$/.test(prefix) &&
+        !new RegExp(`${legalSuffix}\\s*$`, "i").test(prefix)
+      );
+    };
+    const careerRole = `${role}(?:\\s+(?:II|III|IV))?`;
 
-    // Legal suffixes and explicit role keywords delimit flattened rows.
+    // A legal suffix delimits a company name, not a row. In a flattened CV,
+    // an interior period/title can belong to the PREVIOUS employer. These two
+    // ambiguous grammars need a career-section start or a narrative sentence
+    // boundary. Contiguous role/date/company rows must follow an owned row;
+    // other interior rows require one of the labelled/table readers instead.
     const datedRoleLegal = new RegExp(
-      `${range}\\s+(${role})\\s*,?\\s+${legalEmployer}`,
+      `${range}\\s+(${careerRole})\\s*,?\\s+${legalEmployer}`,
       "gi",
     );
     for (const m of section.matchAll(datedRoleLegal)) {
       if (columnMajorHeader) continue;
+      // A city followed by numbered duties also explicitly ends a career
+      // heading in exports whose narrative bullets lost their punctuation.
+      const numberedDuties = /^,\s*[A-Z][A-Za-z ]{1,60}\s+1[.)]\s/.test(
+        section.slice(m.index! + m[0].length),
+      );
+      if (!atCareerRowBoundary(m.index) && !numberedDuties) continue;
       if (!beforeProjects(m.index)) continue;
       if (!strictCareerTitle(m[3]) || !strictCareerCompany(m[4])) continue;
       add(m[4], m[3], m[1], m[2], m[0], "career-date-role-legal-employer");
     }
 
     const roleDatedLegal = new RegExp(
-      `(${role})(?:\\s*\\|\\s*[^|:;]{2,70}\\s*\\|)?\\s+${range}\\s+${legalEmployer}`,
+      `(${careerRole})(?:\\s*\\|\\s*[^|:;]{2,70}\\s*\\|)?\\s+${range}\\s+${legalEmployer}`,
       "gi",
     );
+    let ownedRoleRowEnd = 0;
     for (const m of section.matchAll(roleDatedLegal)) {
+      if (columnMajorHeader) continue;
+      if (
+        !atCareerRowBoundary(m.index) &&
+        section.slice(ownedRoleRowEnd, m.index).trim()
+      )
+        continue;
       if (!beforeProjects(m.index)) continue;
       if (!strictCareerTitle(m[1]) || !strictCareerCompany(m[4])) continue;
       add(m[4], m[1], m[2], m[3], m[0], "career-role-date-legal-employer");
+      ownedRoleRowEnd = m.index! + m[0].length;
     }
 
     // Some profile builders render the legal employer immediately before a
     // role, then append a product/specialisation after a dash. Keep the
     // specialisation out of the employer field.
     const casedCareerRange = range
+      .replace(/[A-Z]/g, (letter) => `[${letter}${letter.toLowerCase()}]`)
       .replaceAll("present", "[Pp]resent")
       .replaceAll("current", "[Cc]urrent")
       .replaceAll("now", "[Nn]ow")

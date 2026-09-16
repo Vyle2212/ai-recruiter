@@ -14,7 +14,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v83-career-ledger-batch";
+  "candidate-employment-v84-career-row-ownership";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
