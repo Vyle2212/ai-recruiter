@@ -1,6 +1,6 @@
 # Production Trust release promotion
 
-> Latest code batch: [v78 bounded employment recovery](precision-bounded-employment-batch-20260916.md). All 970 sources compared: 26 additional records and 78 rows recovered; all 1,524 prior tuples retained. Local totals are 530 records / 1,602 rows, with 440 sources unresolved. Malformed, duplicate and invalid-range counts remain zero. One source-stated overlapping history adds a review flag (53 → 54); client/employer equality flags remain two. No additional production data write.
+> Latest code batch: [v79 delimited employment recovery](precision-delimited-employment-batch-20260916.md). All 970 sources compared: 27 additional records and 35 net rows recovered; one suffix-fragment employer corrected, with the other 1,601 prior tuples retained. Local totals are 557 records / 1,637 rows, with 413 sources unresolved. Malformed, duplicate and invalid-range counts remain zero. Source-stated concurrent roles add one overlap review flag (54 → 55); client/employer equality flags remain two. No additional production data write.
 
 > Previous code batch: [v76 career export recovery](precision-career-export-batch-20260916.md), checked against all 970 sources: 74 additional records recovered, 224 net additional employment rows, 484 sources still unresolved locally. This batch does not add production database writes; the verified nine-original backfill below remains the last data change.
 

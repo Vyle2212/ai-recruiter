@@ -170,6 +170,7 @@ jobs:
           node --import tsx scripts/exportedCareerEmployment.test.ts
           node --import tsx scripts/anchoredEmployment.test.ts
           node --import tsx scripts/boundedEmploymentBatch.test.ts
+          node --import tsx scripts/delimitedEmploymentBatch.test.ts
           node --import tsx scripts/cvPdfOcr.test.ts
           node --import tsx scripts/uploadCvSourceFailure.test.ts
 

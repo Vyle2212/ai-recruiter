@@ -14,7 +14,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v78-bounded-employment-batch";
+  "candidate-employment-v79-delimited-employment-batch";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1876,17 +1876,36 @@ function resumeEmployment(resumeText: string) {
       if (a === null || b === null || start === null || end === null) return false;
       const exactPeriod = a === start && b === end && known.current === parsed.current;
       const differentAssertion = normalized(known.company) !== normalized(parsed.company) || normalized(known.title) !== normalized(parsed.title);
-      if (exactPeriod && differentAssertion && known.provenance?.some(ref => ref.sourceRef?.startsWith('resume.labelledCompany'))) return true;
+      if (exactPeriod && differentAssertion && known.provenance?.some(ref => (ref.sourceRef?.startsWith('resume.labelledCompany') || (normalized(known.title) === normalized(parsed.title) && ref.sourceRef?.startsWith('resume.flattened.period-company-designation.'))))) return true;
       return row.group === 'named-employer-fields' && normalized(known.company) === normalized(parsed.company) &&
         !exactPeriod && a >= start && b <= end;
     });
     if (competing) continue;
+    // A legal suffix alone is not an employer. Prefer the complete company
+    // from the same dated, delimited heading while retaining its provenance.
+    const suffixOnly = output.find(known => /^(?:sdn\.?\s*)?bhd\.?$|^(?:inc|ltd)\.?$/i.test(known.company) &&
+      normalized(known.title) === normalized(parsed.title) && monthIndex(known.start) === monthIndex(parsed.start) &&
+      monthIndex(known.end, known.current) === monthIndex(parsed.end, parsed.current) && known.current === parsed.current &&
+      known.provenance?.some(ref => ref.sourceRef?.startsWith('resume.proseEmploymentHeading.') && clean(row.excerpt).toLowerCase().includes(clean(ref.excerpt).toLowerCase())));
+    if (suffixOnly) {
+      suffixOnly.company = parsed.company;
+      suffixOnly.provenance = [...(suffixOnly.provenance || []), ...(parsed.provenance || [])];
+      continue;
+    }
     const owned = output.find(known => monthIndex(known.start) === monthIndex(parsed.start) &&
       monthIndex(known.end, known.current) === monthIndex(parsed.end, parsed.current) &&
       known.current === parsed.current && known.provenance?.some(ref =>
         (clean(ref.excerpt).toLowerCase().includes(clean(row.excerpt).toLowerCase()) ||
           (normalized(known.title) === normalized(parsed.title) && clean(row.excerpt).toLowerCase().includes(clean(ref.excerpt).toLowerCase())))));
-    if (owned) owned.provenance = [...(owned.provenance || []), ...(parsed.provenance || [])];
+    if (owned) {
+      // The same heading may have been read through into a duty sentence.
+      // A delimiter-bounded title can trim that explicit narrative suffix.
+      if (owned.title.toLowerCase().startsWith(parsed.title.toLowerCase()) &&
+        /^\s+(?:Attached to|Participates in|Involved in|Responsible for)\b/i.test(owned.title.slice(parsed.title.length))) {
+        owned.title = parsed.title;
+      }
+      owned.provenance = [...(owned.provenance || []), ...(parsed.provenance || [])];
+    }
     else output.push(parsed);
   }
   return output;
