@@ -473,7 +473,6 @@ assert.equal(
   "SAP FICO Lead Consultant",
 );
 for (const source of [
-  "Employment History Example Technologies Software Developer Jun 2010 – Nov 2012 Example Consulting Sdn Bhd SAP FICO Consultant Feb 2017 – Mar 2018",
   "Employment History Software Developer Jun 2010 – Nov 2012 Example Consulting Sdn Bhd SAP FICO Consultant Feb 2017 – Mar 2018",
   "Project Working Experience 1) Jan 2020 - Present SAP Consultant, Example Services Ltd 2) Jan 2018 - Dec 2019 SAP Consultant, Example Delivery Ltd",
   "Working Experience PROFILE Projects: 1. Jan 2020 - Present SAP Consultant, Example Services Ltd 2. Jan 2018 - Dec 2019 SAP Consultant, Example Delivery Ltd",
@@ -483,6 +482,22 @@ for (const source of [
   "Working Experience Jan 2020 - Present Example Services Ltd Client: Buyer Role: Consultant",
 ])
   assert.equal(read(source).length, 0, source);
+// Previously unsupported adjacent jobs now qualify independently. Assert exact
+// ownership, never the old cross-employer role/date association.
+assert.deepEqual(
+  read(
+    "Employment History Example Technologies Software Developer Jun 2010 – Nov 2012 Example Consulting Sdn Bhd SAP FICO Consultant Feb 2017 – Mar 2018",
+  ).map((r) => [r.company, r.title, r.start, r.end]),
+  [
+    ["Example Technologies", "Software Developer", "Jun 2010", "Nov 2012"],
+    [
+      "Example Consulting Sdn Bhd",
+      "SAP FICO Consultant",
+      "Feb 2017",
+      "Mar 2018",
+    ],
+  ],
+);
 const nestedAssignments =
   "Working Experience 1. Jan 2020 - Present SAP Consultant, Example Services Ltd Project Experience 2. Jan 2018 - Dec 2019 SAP Consultant, Example Buyer Ltd";
 assert.ok(
@@ -490,4 +505,67 @@ assert.ok(
 );
 console.log(
   "Dated legal headings: numbered history, role order and project isolation pass",
+);
+
+const commercialHistory =
+  "Professional Experience Example Cloud Sales Manager Dec 2024 - Present Proactively drive new opportunities. Professional Experience- Example Networks Strategic Account Manager Aug 2024 - Dec 2024 Positioning solutions. Professional Experience – Example Systems APAC Account Director Jun 2021 to Dec 2023: Manufacturing. Professional Experience: Example Telecom Global Account Manager 1999 to Feb 2015 (Public Sector) Manage sales.";
+const commercialRows = read(commercialHistory);
+assert.equal(commercialRows.length, 4);
+assert.equal(commercialRows[1].company, "Example Networks");
+assert.equal(commercialRows[2].title, "APAC Account Director");
+assert.equal(commercialRows[3].start, "1999");
+assert.equal(extractCanonicalEmploymentFromResume(commercialHistory).length, 4);
+for (const [source, expectedRole] of [
+  [
+    "Professional Experience Example Services Senior Basis Consultant May 2022 – Present Upgraded systems.",
+    "Senior Basis Consultant",
+  ],
+  [
+    "Professional Experience Example Energy SAP FICO Consultant, Feb 2020 – Present Contribute to delivery.",
+    "SAP FICO Consultant",
+  ],
+  [
+    "Working Experience Example Solutions Functional Lead (Oct 2016 to Current) Responsible for delivery.",
+    "Functional Lead",
+  ],
+])
+  assert.equal(read(source)[0].title, expectedRole);
+const atHistory =
+  "Employment History 2013 SEPT – 2014 FEB Internship as Software Engineer at Example Technology, Example City, Example Country. 2014 APR – 2015 DEC Application consultant, junior programmer at Example Systems Sdn Bhd 2016 JAN – 2019 MAR Senior consultant at Example Systems Sdn Bhd 2019 MAY – 2019 DEC Senior system analyst at Example Health Pte Ltd 2020 JAN – 2021 MAR Applications consultant at Example Software Pte Ltd 2021 ARIL – CURR Applications consultant at Example Delivery Pte Ltd";
+const atRows = read(atHistory);
+assert.equal(atRows.length, 5);
+assert.equal(atRows[0].company, "Example Technology");
+assert.equal(atRows[0].start, "SEPT 2013");
+assert.equal(atRows[1].title, "Application consultant, junior programmer");
+assert.equal(atRows[4].end, "MAR 2021");
+assert.ok(
+  atRows.every((r) => r.company !== "Example Delivery Pte Ltd"),
+  "unrecognized date remains unresolved",
+);
+assert.equal(extractCanonicalEmploymentFromResume(atHistory).length, 5);
+const stopAtProse =
+  "Employment History Example Services SAP FICO Consultant Jan 2020 - Present Delivered systems for Example Buyer SAP FICO Consultant Jan 2010 - Dec 2019";
+assert.equal(read(stopAtProse).length, 1);
+const roleFirstOwnership = read(
+  "Professional Experience Senior SAP SD Functional Consultant September 2020 - Present Example Services Ltd",
+);
+assert.equal(roleFirstOwnership.length, 1);
+assert.equal(roleFirstOwnership[0].company, "Example Services Ltd");
+assert.equal(
+  roleFirstOwnership[0].title,
+  "Senior SAP SD Functional Consultant",
+);
+for (const source of [
+  "Professional Experience Worked for Example Systems SAP FICO Consultant Jan 2020 - Present",
+  "Project Professional Experience Example Buyer SAP FICO Consultant Jan 2020 - Present",
+  "Professional Experience Example Client SAP FICO Consultant Jan 2020 - Present",
+  "Employment History Example Services SAP Consultant Jan 2020 -",
+  "Employment History Example Services SAP Consultant Jan 2022 - Dec 2021",
+  "Employment History Jan 2020 - Present SAP Consultant at Example Client Ltd",
+  "Employment History Jan 2020 - Dec 2019 SAP Consultant at Example Services Ltd Jan 2018 - Dec 2018 SAP Consultant at Example Software Ltd",
+  "Employment History Jan 2020 - Present SAP Consultant at Example Services Ltd Responsibilities: Delivered systems Jan 2018 - Dec 2019 SAP Consultant at Example Buyer Ltd",
+])
+  assert.equal(read(source).length, 0, source);
+console.log(
+  "Compact histories: adjacent job ownership, precision and prose boundaries pass",
 );

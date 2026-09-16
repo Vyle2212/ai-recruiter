@@ -355,3 +355,28 @@ Twenty-four local regression files and typecheck passed, with scoped formatting 
 Continuation: inspect the latest PR head, prioritize remaining evidence-backed layout groups and partial-history coverage, and compare all sources before publishing. Keep requests for original CVs private and consolidated from actual metadata; do not ask for files still accessible. The remaining 150 unresolved sources and 693 unaudited sources are separate populations.
 
 Production remains **NO_GO**. Scope is still **SUBSET_ONLY: 277 / 970**. Live OCR with saved provenance, reviewed/version-matched backfill, full-population audit and authenticated acceptance on the exact artifact to promote remain required. No private source identifiers or CV text are committed; no runtime configuration, Supabase/Vercel writes, backfill or promotion occurred.
+
+## Batch checkpoint: compact consecutive employment histories (2026-09-16)
+
+Baseline: `9d70cf13c06e10fb6faadf2d04386c2b86c71215`; parser now `candidate-employment-v66-compact-history-batch`. Before editing, the full 150-source unresolved inventory was classified into 94 heading/date-boundary cases, 45 project/client narratives, four labelled-field cases, five headed tables and two other cases. Private review selected adjacent employer/role/tenure cells, repeated employment headings and explicit date/role/"at"/employer ledgers.
+
+Compact employer/role/tenure cells are consumed from the start of an employment section and must remain consecutive. Recognizable role phrases define the role boundary; a seniority word alone cannot become an employer. Table headers remain owned by their existing readers. Parsing stops at responsibility prose instead of searching ahead for another date or company. The inverse ledger requires an explicit "at" and complete per-cell tenure. Location is excluded from the employer at a comma boundary. A later unrecognized date stops parsing without contaminating the preceding complete cell; the parser does not guess a misspelled month or a current endpoint. Year-only starts retain their source precision.
+
+Comparison across all 277 private sources: **127 → 133 sources with employment**, **503 → 522 rows**, **150 → 144 sources without employment**. A consecutive company/role ledger gains six rows, repeated commercial-role headings gain five, an explicit "at" ledger gains five, and three other bounded headings gain one row each. All 19 additions have a source-supported company, title and tenure; every added tuple was checked against private excerpts. All 503 prior company/title/start/end/current tuples remain unchanged and retained. These source counts are not unique-person counts or complete-history acceptance. In particular, the explicit "at" source still contains an unresolved malformed date after its five recovered rows.
+
+Read-only audit: 522 employers, 460 titles and 519 supported date ranges. Malformed, duplicate, invalid-range and pagination-leak counts remain zero. Seven overlap flags and one possible employer/client equality flag are unchanged. Existing incomplete fields and review signals remain outstanding.
+
+| Remaining review queue | Before | After | Continuing reason |
+| --- | ---: | ---: | --- |
+| Date near employment heading | 94 | 88 | Missing boundaries, malformed dates or lost reading order |
+| Project/client narrative | 45 | 45 | Assignment dates do not establish employer tenure |
+| Explicit employer labels | 4 | 4 | Missing tenure or mixed assignment fields |
+| Headed tables | 5 | 5 | Column-major text, ambiguous column ownership or duration-only dates |
+| Other narrative/layout | 2 | 2 | No supported extraction added |
+| **Total** | **150** | **144** | Heuristic review queues, not adjudicated causes |
+
+Twenty-four regression files, typecheck, scoped formatting and whitespace checks pass locally. Tests cover complete adjacent-job ownership, repeated headings, year precision, explicit "at" boundaries, location exclusion, malformed-date stopping, project/narrative isolation and role-only headings. A formerly unsupported adjacent-job fixture now asserts both exact employer/title/date tuples instead of zero rows; the forbidden cross-employer association remains excluded. Existing table regressions caught an attempted second reading of a headed table, which was repaired locally before publishing. No release conditions or privacy requirements were reduced. Verify exact-head CI and statuses after the single batch push.
+
+Continuation: start from the latest head, prioritize remaining evidence-backed source groups and partially recovered histories, and keep comparing all 277 sources. The 144 unresolved records are separate from the 693 sources not yet audited. Consolidate any original-CV requests privately from actual metadata and do not request available files again.
+
+Scope remains **SUBSET_ONLY: 277 / 970**. Production remains **NO_GO** pending live OCR with saved provenance, reviewed/version-matched backfill, full-population audit and authenticated acceptance on the exact artifact to promote. No CVs or private identifiers are committed; no runtime configuration, Supabase/Vercel writes, source mutation, backfill or promotion occurred.

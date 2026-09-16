@@ -264,6 +264,60 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
     // PDF is flattened. Never continue searching inside responsibility prose.
     const legal =
       "[A-Z0-9][A-Za-z0-9&.,'() /-]{1,100}?\\b(?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Pvt\\.?\\s*Ltd\\.?|Private Limited|Corporation|Berhad|S/B|Limited|Ltd\\.?|Inc\\.?)";
+    // Complete employer / recognizable role / tenure cells may be adjacent
+    // after PDF flattening. Consume from the heading only and stop at prose;
+    // never search ahead through duties for another date or employer.
+    const roleModifiers =
+      "(?:Senior|Junior|Lead|Principal|Global|Regional|Strategic|APAC|Functional|Technical|Business|Sales|Account|Software|Basis|Solution|Development|Integration)";
+    const compactRole = `(?:(?:${roleModifiers}\\s+){1,5}${job}|(?:${roleModifiers}\\s+){0,2}SAP\\s+[A-Za-z0-9/& -]{0,65}?\\b${job})`;
+    const compactRange = `(${date}|${year})\\s*(?:[-–—]|to|until|till)\\s*(${date}|${year}|${ongoing})`;
+    const compactCell = new RegExp(
+      `^([A-Z0-9][A-Za-z0-9&.,'() /-]{1,110}?)\\s+(${compactRole})\\s*,?\\s+\\(?${compactRange}\\)?(?=\\s|[.:;]|$)`,
+      "i",
+    );
+    let compactRest = section.replace(/^[-–—]\s*/, "");
+    while (compactRest.trim()) {
+      const m = compactRest.trimStart().match(compactCell);
+      if (
+        !m ||
+        /\b(?:worked|working|delivered|provided|supported|responsible|involved|led)\b/i.test(
+          m[1],
+        )
+      )
+        break;
+      if (new RegExp(`^(?:${roleModifiers}\\s*)+$`, "i").test(m[1])) break;
+      if (/^(?:Organi[sz]ation|Date|Position|Period|Duration)\s/i.test(m[1]))
+        break;
+      const previousCount = result.length;
+      add(m[1], m[2], m[3], m[4], m[0], "compact-employer-role-tenure");
+      if (result.length === previousCount) break;
+      compactRest = compactRest.trimStart().slice(m[0].length);
+    }
+    // The inverse ledger has an explicit "at" between role and employer.
+    // Candidate date boundaries delimit cells; an invalid later date stops
+    // parsing without contaminating the preceding complete employer cell.
+    const atDates = [
+      ...section.matchAll(
+        new RegExp(`(?:${range}|${year}\\s+[A-Za-z]{3,9}\\s*[-–—])`, "gi"),
+      ),
+    ];
+    if (atDates[0]?.index === 0) {
+      for (const [n, boundary] of atDates.entries()) {
+        const cell = section
+          .slice(boundary.index, atDates[n + 1]?.index)
+          .trim();
+        const m = cell.match(
+          new RegExp(
+            `^${range}\\s+([^:;]{2,110}?)\\s+at\\s+([A-Z0-9][A-Za-z0-9&.'() /-]{1,110}?)(?:,\\s*[A-Za-z .,-]{2,60})?\\.?$`,
+            "i",
+          ),
+        );
+        if (!m) break;
+        const before = result.length;
+        add(m[4], m[3], m[1], m[2], m[0], "dated-role-at-employer-ledger");
+        if (result.length === before) break;
+      }
+    }
     // A dated legal-employer heading can put role before or after tenure.
     // Read only the section start, or an established 1 / 2 / 3 employment
     // enumeration. Dates embedded in duties never introduce new jobs.
