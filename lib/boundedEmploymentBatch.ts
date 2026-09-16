@@ -160,6 +160,150 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
     output.push({ company, title, start, end, current, excerpt, group });
   }
   // Explicit employment sentences establish their own employer/date ownership.
+  // Numbered employer descriptions explicitly bound employment and promotions.
+  // Role periods must stay inside that employer's stated employment span.
+  const employerDescriptions = [
+    ...source.matchAll(
+      /\b\d{1,2}\)\s+([^:]{2,150}?)\s+Company Description\s*:/gi,
+    ),
+  ];
+  for (let i = 0; i < employerDescriptions.length; i++) {
+    const heading = employerDescriptions[i];
+    const company = heading[1].replace(
+      /\s*\((?:Malaysia|Singapore|India|Vietnam)\)\s*$/i,
+      "",
+    );
+    const block = source
+      .slice(
+        heading.index! + heading[0].length,
+        employerDescriptions[i + 1]?.index ?? source.length,
+      )
+      .split(/\b(?:EDUCATION|REFERENCES|CO-CORRICULUM)\b/i)[0];
+    const span = block.match(
+      new RegExp(
+        `\\bLength of Employment\\s*:\\s*[^()]{0,60}\\(${range}\\)`,
+        "i",
+      ),
+    );
+    if (!span) continue;
+    const from = careerMonthIndex(cleanDate(span[1])),
+      to = careerMonthIndex(
+        cleanDate(span[2]),
+        /present/i.test(cleanDate(span[2])),
+      );
+    const roles = block.slice(span.index! + span[0].length).trim();
+    for (const entry of roles.matchAll(
+      new RegExp(`(?:^|[.!?]\\s+)(SAP\\s+${role})\\s*\\(${range}\\)`, "gi"),
+    )) {
+      const a = careerMonthIndex(cleanDate(entry[2])),
+        b = careerMonthIndex(
+          cleanDate(entry[3]),
+          /present/i.test(cleanDate(entry[3])),
+        );
+      if (
+        from !== null &&
+        to !== null &&
+        a !== null &&
+        b !== null &&
+        a >= from &&
+        b <= to
+      )
+        add(
+          company,
+          entry[1],
+          entry[2],
+          entry[3],
+          heading[0] + " " + span[0] + " " + entry[0],
+          "numbered-employer-promotion-span",
+        );
+    }
+  }
+  // Numeric month dates are local to an explicit worked-at statement, never
+  // normalized across a project table or day/month/year date.
+  const numericPeriod = `(?:${numericMonth}\\s*[/\\-]\\s*${year}|${month}\\s+${year})`;
+  const numericStatement = new RegExp(
+    `\\bWorked\\s+(?:in\\s+in|in|at)\\s+(${org})[. ]+as\\s+(?:an?\\s+)?(${role})\\s+from\\s+(${numericPeriod})\\s+to\\s+(${numericPeriod})(?=\\s|[.;]|$)`,
+    "gi",
+  );
+  for (const m of source.matchAll(numericStatement)) {
+    const normalize = (value: string) =>
+      /^\d/.test(value) ? value.replace(/\s+/g, "").replace("-", "/") : value;
+    add(
+      m[1].replace(/\.$/, ""),
+      m[2],
+      normalize(m[3]),
+      normalize(m[4]),
+      m[0],
+      "numeric-worked-at-statement",
+    );
+  }
+  // Employer heading with a bullet separating tenure from the role.
+  const bulletRole = new RegExp(
+    `\\bWORK EXPERIENCE\\s+(${org})\\s+${range}\\s+[-•]\\s+(${role})(?=\\s+in\\b|[.;])`,
+    "gi",
+  );
+  for (const m of source.matchAll(bulletRole))
+    add(m[1], m[4], m[2], m[3], m[0], "employment-heading-bullet-role");
+  // Repeated employment headings own their dates; client blocks cannot supply
+  // dates to a different employer. Preserve separate contract/permanent spells.
+  const employmentCards = [
+    ...source.matchAll(/\bEMPLOYMENT HISTORY\/EXPERIENCE\s+/gi),
+  ];
+  const dottedDay = `\\d{2}\\.\\d{2}\\.${year}`;
+  const cardDate = `(?:${dottedDay}|${date})`;
+  const cardPeriod = `(${cardDate})\\s+(?:till|to)\\s+(${cardDate}|current|present)\\s*\\((?:Permanent|Professional Contract)\\)`;
+  const normalizeCardDate = (value: string) => {
+    const m = value.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (!m) return value;
+    const dayValue = Number(m[1]),
+      monthValue = Number(m[2]),
+      yearValue = Number(m[3]);
+    const check = new Date(Date.UTC(yearValue, monthValue - 1, dayValue));
+    if (
+      check.getUTCFullYear() !== yearValue ||
+      check.getUTCMonth() !== monthValue - 1 ||
+      check.getUTCDate() !== dayValue
+    )
+      return "";
+    return `${dayValue} ${cleanDate(`${monthValue}/${yearValue}`)}`;
+  };
+  for (let i = 0; i < employmentCards.length; i++) {
+    const h = employmentCards[i];
+    const block = source.slice(
+      h.index! + h[0].length,
+      employmentCards[i + 1]?.index ?? source.length,
+    );
+    const employerAt = block.search(/\bEmployer\s*:/i);
+    if (employerAt < 0) continue;
+    const before = block.slice(0, employerAt);
+    const periods = [...before.matchAll(new RegExp(cardPeriod, "gi"))];
+    if (!periods.length || periods[0].index !== 0) continue;
+    const last = periods[periods.length - 1];
+    const title = before
+      .slice(last.index! + last[0].length)
+      .replace(/^\s*\*Acquired by [A-Za-z ]+ in (?:19|20)\d{2}\s*/i, "")
+      .trim();
+    const companyPart = block
+      .slice(employerAt)
+      .replace(/^Employer\s*:\s*/i, "");
+    const company = companyPart.match(
+      /^(.{2,130}?)(?=\s+\((?:formerly|Formerly)\b|\s+Client\s*:)/,
+    )?.[1];
+    if (!company || !validRole(title)) continue;
+    for (const p of periods) {
+      const a = normalizeCardDate(p[1]),
+        b = normalizeCardDate(p[2]);
+      if (a && b)
+        add(
+          company,
+          title,
+          a,
+          b,
+          h[0] + before + " Employer: " + company,
+          "labelled-employer-contract-spells",
+        );
+    }
+  }
   // Reject additional employer/client relations rather than guessing the payer.
   const statements = [
     {
