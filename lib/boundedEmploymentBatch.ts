@@ -106,6 +106,10 @@ function validRole(value: string) {
 export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
   const source = input
     .normalize("NFKC")
+    .replace(
+      /\bW\s*O\s*R\s*K\s+E\s*X\s*P\s*E\s*R\s*I\s*E\s*N\s*C\s*E\b/gi,
+      "WORK EXPERIENCE",
+    )
     .replace(/\b(?:W\s*O\s*R\s*K\s+)?E X P E R I E N C E\b/g, "WORK EXPERIENCE")
     .replace(/\b(?:WorkingExperiences?|WorkExperiences?)\b/g, "Work Experience")
     .replace(/\bRelevantExperiences?\b/g, "Relevant Experience")
@@ -462,6 +466,7 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
       group === "dash-pair" &&
       (title.includes(",") ||
         company.includes("/") ||
+        /\s[-–—]\s/.test(company) ||
         !new RegExp(`^${role}$`, "i").test(title))
     )
       return;
@@ -1776,6 +1781,187 @@ export function boundedEmploymentBatch(input: string): BoundedEmployment[] {
           "employment-chronicle-ledger",
         );
       priorEnd = m.index! + m[0].length;
+    }
+  }
+
+  // Career sections exported from visual CV builders often preserve every
+  // field but interleave the columns. Scan only self-contained headings with a
+  // legal employer boundary or an explicit field label. Do not resynchronise
+  // on project/client prose, and never take a project date as employer tenure.
+  const legalSuffix =
+    "(?:Sdn\\.?\\s*Bhd\\.?|Pte\\.?\\s*Ltd\\.?|Pvt\\.?\\s*Ltd\\.?|Co\\.?\\s*,?\\s*Ltd\\.?|Limited|Ltd\\.?|Inc\\.?|Berhad|Corporation)";
+  const legalEmployer = `(${org}${legalSuffix})`;
+  const careerSections = [
+    ...source.matchAll(
+      /\b(?:WORK EXPERIENCE|Work Experience|Professional Experiences?|Employment History|Career History|CAREER HIGHLIGHTS|EXPERIENCES?|Experiences?)\b\s*:?\s*/g,
+    ),
+  ];
+  for (const heading of careerSections) {
+    if (
+      /\b(?:project|client|customer|industry|technical)\s*$/i.test(
+        source.slice(Math.max(0, heading.index! - 45), heading.index),
+      )
+    )
+      continue;
+    const section = source
+      .slice(heading.index! + heading[0].length)
+      .split(
+        /\b(?:Education|Academic Qualifications|Certifications|References|Referees|Personal Details)\b/i,
+      )[0]
+      .slice(0, 24000);
+    // Column-major tables have their own ownership-aware reader. Reading the
+    // flattened row order here would pair one row's period with the next row.
+    const columnMajorHeader =
+      /^\s*(?:Position\s+Company\s+Period|Role\s+Company\s+Duration)\b/i.test(
+        section,
+      );
+
+    const projectBoundary = section.search(
+      /\b(?:Current\s+Projects?\s+(?:History|Experience|Details)\s*:?|Current\s+Projects?\s*:|Projects?\s+(?:History|Experience|Details)\s*:|Projects?\s*:)/i,
+    );
+    const beforeProjects = (index: number | undefined) =>
+      projectBoundary < 0 || (index ?? 0) < projectBoundary;
+    const strictCareerTitle = (value: string) =>
+      /^[A-Z]/.test(value) &&
+      (roleStart.test(value) ||
+        /^(?:Employee|Contract|Sales|Secretary|Corporate|ATR|Account|MIS|Credit|SuccessFactors)\b/.test(
+          value,
+        )) &&
+      value.split(/\s+/).length <= 12 &&
+      !/[.!?]/.test(value) &&
+      !/\b(?:provide|providing|perform|process|focused|certain|improve|enhancement|intake|implemented|implementation|project scope|providers?|documents?|designation duration|organization designation|main business|worked|working)\b/i.test(
+        value,
+      );
+    const strictCareerCompany = (value: string) =>
+      /^[A-Z]/.test(value) &&
+      value.length <= 100 &&
+      !/[A-Za-z]{36,}/.test(value) &&
+      !/\b(?:certified|focused|responsibilities|training|project|client|main business|organization designation|complementary systems|carried|reduced)\b/i.test(
+        value,
+      );
+
+    // Legal suffixes and explicit role keywords delimit flattened rows.
+    const datedRoleLegal = new RegExp(
+      `${range}\\s+(${role})\\s*,?\\s+${legalEmployer}`,
+      "gi",
+    );
+    for (const m of section.matchAll(datedRoleLegal)) {
+      if (columnMajorHeader) continue;
+      if (!beforeProjects(m.index)) continue;
+      if (!strictCareerTitle(m[3]) || !strictCareerCompany(m[4])) continue;
+      add(m[4], m[3], m[1], m[2], m[0], "career-date-role-legal-employer");
+    }
+
+    const roleDatedLegal = new RegExp(
+      `(${role})(?:\\s*\\|\\s*[^|:;]{2,70}\\s*\\|)?\\s+${range}\\s+${legalEmployer}`,
+      "gi",
+    );
+    for (const m of section.matchAll(roleDatedLegal)) {
+      if (!beforeProjects(m.index)) continue;
+      if (!strictCareerTitle(m[1]) || !strictCareerCompany(m[4])) continue;
+      add(m[4], m[1], m[2], m[3], m[0], "career-role-date-legal-employer");
+    }
+
+    // Some profile builders render the legal employer immediately before a
+    // role, then append a product/specialisation after a dash. Keep the
+    // specialisation out of the employer field.
+    const casedCareerRange = range
+      .replaceAll("present", "[Pp]resent")
+      .replaceAll("current", "[Cc]urrent")
+      .replaceAll("now", "[Nn]ow")
+      .replaceAll("continuing", "[Cc]ontinuing");
+    const employerRoleSpecialisation = new RegExp(
+      `\\b([A-Z][A-Z0-9&.,()'/]*(?:\\s+[A-Z][A-Z0-9&.,()'/]*){1,10})\\s+((?:SAP|ERP)\\s+[A-Z][A-Z0-9/&.+-]*(?:\\s+[A-Z][A-Z0-9/&.+-]*){0,6})\\s*-\\s*[^0-9]{2,120}?\\s+${casedCareerRange}`,
+      "g",
+    );
+    for (const m of section.matchAll(employerRoleSpecialisation)) {
+      if (!beforeProjects(m.index)) continue;
+      if (m[1] !== m[1].toUpperCase()) continue;
+      if (!strictCareerTitle(m[2]) || !strictCareerCompany(m[1])) continue;
+      add(
+        m[1],
+        m[2],
+        m[3],
+        m[4],
+        m[0],
+        "career-employer-role-specialisation-tenure",
+      );
+    }
+
+    const dashedRoleCompany = new RegExp(
+      `((?:SAP|ERP)\\s+${role})\\s*-\\s*(${org})\\s+${range}(?=\\s|$)`,
+      "gi",
+    );
+    for (const m of section.matchAll(dashedRoleCompany)) {
+      if (!beforeProjects(m.index)) continue;
+      // A second spaced dash identifies a product/module description, not an
+      // employer. That layout is handled by the preceding bounded reader.
+      if (/\s[-–—]\s/.test(m[2])) continue;
+      if (!strictCareerTitle(m[1]) || !strictCareerCompany(m[2])) continue;
+      add(m[2], m[1], m[3], m[4], m[0], "career-role-dash-employer-tenure");
+    }
+
+    // A descriptive company card explicitly labels Job Title after the company
+    // description. The description cannot contribute a company or a date.
+    const datedJobTitleCard = new RegExp(
+      `${range}\\s+(PT\\.?\\s+[A-Z][A-Za-z0-9&.,() -]{2,100}?)(?=\\s+(?:A member|A high-energy|Our |The |Vision|Company |[A-Z][a-z]+ is|Job Title))[^:]{0,650}?\\s+Job Title\\s*:\\s*(${role})(?=\\s|$)`,
+      "gi",
+    );
+    for (const m of section.matchAll(datedJobTitleCard))
+      add(m[3], m[4], m[1], m[2], m[0], "career-date-company-job-title-card");
+
+    // Explicit service/designation fields retain ownership despite a company
+    // description between them. Limit this to the first legal employer in the
+    // section so client names in duties cannot start another record.
+    const serviceDesignation = section.match(
+      new RegExp(
+        `^(${org}${legalSuffix})[^:]{0,1800}?Year\\(s\\) of Service\\s*:\\s*${range}\\s+Designation\\s*:\\s*(${role})(?=\\s+Role\\s*:|\\s|$)`,
+        "i",
+      ),
+    );
+    if (serviceDesignation)
+      add(
+        serviceDesignation[1],
+        serviceDesignation[4],
+        serviceDesignation[2],
+        serviceDesignation[3],
+        serviceDesignation[0],
+        "career-service-designation-card",
+      );
+  }
+
+  // Recruitment-system resumes have an explicit title/employer/range grammar.
+  // Restrict this reader to sources bearing the system marker; durations and
+  // industry tags after the range are ignored.
+  if (/\bSystem generated resume\b/i.test(source)) {
+    const generatedBody = source.split(/\bSystem generated resume\b/i)[1];
+    const generatedRole =
+      "(?:(?:Senior|Junior|SAP|Logistics|Assistant|Principal|Software|Business|Quality|Failure|Conventional|Accounts?|Project|Application|Technical|Functional|IT|Data|Package|Packaged)\\s+)(?:[A-Za-z0-9/&.+()-]+\\s+){0,7}" +
+      `${job}(?:\\s*\\([^)]{1,35}\\))?`;
+    const generated = new RegExp(
+      `(${generatedRole})\\s+(?:@\\s*)?(${org})\\s*-\\s*${range}(?=[.\\s]|$)`,
+      "gi",
+    );
+    for (const m of generatedBody.matchAll(generated)) {
+      if (
+        m[1].length > 100 ||
+        m[1].split(/\s+/).length > 10 ||
+        /[a-z][A-Z]/.test(m[1]) ||
+        /\b(?:providers?|projects?|documents?|responsibilities?)\b/i.test(m[1])
+      )
+        continue;
+      if (/^by\b/i.test(m[1])) continue;
+      const company = m[2]
+        .replace(/\\s*\\([^)]*(?:Under|Contract)[^)]*\\)\\s*$/i, "")
+        .trim();
+      add(
+        company,
+        m[1],
+        m[3],
+        m[4],
+        m[0],
+        "generated-resume-role-employer-tenure",
+      );
     }
   }
 

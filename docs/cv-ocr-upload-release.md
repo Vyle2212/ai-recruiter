@@ -1,5 +1,7 @@
 # CV upload OCR integration
 
+> Latest code batch: [v83 career ledger recovery](precision-career-ledger-batch-20260916.md). All 970 stored sources were compared against v82: 24 previously empty sources recover 82 employment rows, all 1,857 prior tuples remain, and local totals reach 674 sources / 1,939 rows. The remaining 296 sources are classified for source review. Malformed, duplicate and invalid-range counts remain zero; client/employer equality remains two. Five additional overlap flags reflect explicit source ranges and remain review flags. No production data was written.
+
 > Latest code batch: [v82 interleaved career records](precision-interleaved-career-batch-20260916.md). All 970 sources compared: 27 previously empty sources recover 61 employment rows; all 1,796 prior tuples remain unchanged. Local totals: 650 sources / 1,857 rows, with 320 sources unresolved. Malformed, duplicate and invalid-range counts remain zero; overlap flags remain 55 and client/employer equality flags remain two. Plural project-section boundaries now prevent project dates from leaking into employment. No additional production data write.
 
 > Previous code batch: [v76 career export recovery](precision-career-export-batch-20260916.md), checked against all 970 sources: 74 additional records recovered, 224 net additional employment rows, 484 sources still unresolved locally. This batch does not add production database writes; the verified nine-original backfill below remains the last data change.
@@ -205,14 +207,14 @@ The full subset audit reports 336 employers, 295 titles and 334 supported date r
 
 `node --import tsx scripts/classifyEmploymentSourceGaps.ts --input <private-export.json>` now provides a repeatable, local-only aggregate inventory with no candidate identifiers, filenames, source excerpts or contact details. Its mutually exclusive queues are screening heuristics, not adjudicated root causes. Priority is headed tables, explicit employer labels, near-heading dates, then narrative/project signals; reference sections are excluded.
 
-| Review queue | Before | After |
-| --- | ---: | ---: |
-| Date near an employment heading; boundary review needed | 132 | 125 |
-| Project/client narrative; employment evidence needed | 47 | 47 |
-| Explicit employer labels; field review needed | 9 | 7 |
-| Explicit table headings; layout review needed | 7 | 6 |
-| Other narrative/layout review | 2 | 2 |
-| **Total without employment** | **197** | **187** |
+| Review queue                                            |  Before |   After |
+| ------------------------------------------------------- | ------: | ------: |
+| Date near an employment heading; boundary review needed |     132 |     125 |
+| Project/client narrative; employment evidence needed    |      47 |      47 |
+| Explicit employer labels; field review needed           |       9 |       7 |
+| Explicit table headings; layout review needed           |       7 |       6 |
+| Other narrative/layout review                           |       2 |       2 |
+| **Total without employment**                            | **197** | **187** |
 
 Next coverage work should examine the remaining 125 near-heading-date sources in groups; these include mixed project/employment sections and lost column boundaries, so a nearby date alone is not sufficient. Six table sources require layout-aware review; seven labelled sources require field-boundary review. Do not infer a missing end, copy client dates, or increase coverage by converting project-only evidence to employment. Recover originals through existing private access where possible; keep any original-source request list private and consolidated.
 
@@ -228,14 +230,14 @@ Private source comparison: **90 → 100 profiles with employment**, **336 → 35
 
 The full read-only audit reports 357 employers, 309 titles and 355 supported date ranges. Malformed, duplicate, invalid-range and pagination-leak counts remain zero. The seven overlap review flags and one possible employer/client equality flag are unchanged. No dates were inferred, source records mutated or database rows backfilled.
 
-| Remaining review queue | Before | After | Continuing reason |
-| --- | ---: | ---: | --- |
-| Date near employment heading | 125 | 115 | Mixed narrative, missing delimiters or lost column order; proximity alone is insufficient |
-| Project/client narrative | 47 | 47 | Employer tenure cannot be established from assignment dates |
-| Explicit employer labels | 7 | 7 | Labels remain separated from their own dates or roles by mixed content |
-| Headed tables | 6 | 6 | Original layout or bounded row reconstruction still needed |
-| Other narrative/layout | 2 | 2 | No supported extraction added in this batch |
-| **Total** | **187** | **177** | Heuristic review queues, not adjudicated causes |
+| Remaining review queue       |  Before |   After | Continuing reason                                                                         |
+| ---------------------------- | ------: | ------: | ----------------------------------------------------------------------------------------- |
+| Date near employment heading |     125 |     115 | Mixed narrative, missing delimiters or lost column order; proximity alone is insufficient |
+| Project/client narrative     |      47 |      47 | Employer tenure cannot be established from assignment dates                               |
+| Explicit employer labels     |       7 |       7 | Labels remain separated from their own dates or roles by mixed content                    |
+| Headed tables                |       6 |       6 | Original layout or bounded row reconstruction still needed                                |
+| Other narrative/layout       |       2 |       2 | No supported extraction added in this batch                                               |
+| **Total**                    | **187** | **177** | Heuristic review queues, not adjudicated causes                                           |
 
 Twenty-four local regression files, TypeScript typecheck and formatting checks pass. Representative positive and negative fixtures extend the existing mandatory flattened-employment CI regression; no release gate was relaxed. Before another batch, inspect the current PR head and exact-head CI/status results rather than reusing the baseline SHA. Continue grouping the 115 boundary-review records, and review the six remaining table layouts together. Original-source requests must use actual private metadata and exclude files still accessible locally.
 
@@ -251,14 +253,14 @@ Private comparison of all 277 available sources: **100 → 104 sources with empl
 
 Read-only audit: 425 employers, 372 titles and 423 supported date ranges. Malformed, duplicate and invalid-range diagnostics remain zero; seven overlap flags and one possible employer/client equality flag are unchanged and remain review signals. No database backfill or original-file replacement was performed.
 
-| Remaining review queue | Before | After | Continuing reason |
-| --- | ---: | ---: | --- |
-| Date near employment heading | 115 | 112 | Mixed narrative, incomplete field boundaries or lost column order |
-| Project/client narrative | 47 | 46 | Assignment dates do not prove employer tenure; one explicit form recovered |
-| Explicit employer labels | 7 | 7 | Own dates/roles remain separated by mixed content |
-| Headed tables | 6 | 6 | Original layout or bounded row reconstruction required |
-| Other narrative/layout | 2 | 2 | Insufficient supported extraction |
-| **Total** | **177** | **173** | Heuristic queues, not adjudicated root causes |
+| Remaining review queue       |  Before |   After | Continuing reason                                                          |
+| ---------------------------- | ------: | ------: | -------------------------------------------------------------------------- |
+| Date near employment heading |     115 |     112 | Mixed narrative, incomplete field boundaries or lost column order          |
+| Project/client narrative     |      47 |      46 | Assignment dates do not prove employer tenure; one explicit form recovered |
+| Explicit employer labels     |       7 |       7 | Own dates/roles remain separated by mixed content                          |
+| Headed tables                |       6 |       6 | Original layout or bounded row reconstruction required                     |
+| Other narrative/layout       |       2 |       2 | Insufficient supported extraction                                          |
+| **Total**                    | **177** | **173** | Heuristic queues, not adjudicated root causes                              |
 
 Twenty-four local regression files, TypeScript typecheck and formatting pass. The expanded regression remains mandatory in CI. Check the latest PR head and exact-head CI/status results before continuing; the baseline SHA is not evidence for this revision. Prioritize remaining labelled/table groups and source-backed boundary groups, and measure missing historical rows as well as completely unresolved sources. Keep any original-source request list private and do not request files still accessible.
 
@@ -274,14 +276,14 @@ Private comparison of all 277 available sources: **104 → 107 sources with empl
 
 Read-only audit: 450 employers, 397 titles and 447 supported date ranges. Malformed, duplicate, invalid-range and pagination-leak counts remain zero. Seven overlap review flags and one possible employer/client equality flag are unchanged. The newly retained partial row still requires source review; absence of diagnostic errors is not full-profile acceptance.
 
-| Remaining review queue | Before | After | Continuing reason |
-| --- | ---: | ---: | --- |
-| Date near employment heading | 112 | 112 | Mixed narrative, missing delimiters or lost reading order |
-| Project/client narrative | 46 | 46 | Assignment dates cannot establish employer tenure |
-| Explicit employer labels | 7 | 4 | Missing own tenure, mixed assignment context, or lost text boundaries |
-| Headed tables | 6 | 6 | Column-major text, partial dates or original layout still require review |
-| Other narrative/layout | 2 | 2 | No supported extraction added |
-| **Total** | **173** | **170** | Heuristic queues, not adjudicated causes |
+| Remaining review queue       |  Before |   After | Continuing reason                                                        |
+| ---------------------------- | ------: | ------: | ------------------------------------------------------------------------ |
+| Date near employment heading |     112 |     112 | Mixed narrative, missing delimiters or lost reading order                |
+| Project/client narrative     |      46 |      46 | Assignment dates cannot establish employer tenure                        |
+| Explicit employer labels     |       7 |       4 | Missing own tenure, mixed assignment context, or lost text boundaries    |
+| Headed tables                |       6 |       6 | Column-major text, partial dates or original layout still require review |
+| Other narrative/layout       |       2 |       2 | No supported extraction added                                            |
+| **Total**                    | **173** | **170** | Heuristic queues, not adjudicated causes                                 |
 
 Twenty-four regression files, typecheck, formatting and whitespace checks passed locally. Synthetic fixtures cover day precision, year-first dates, invalid dates, missing years, competing labels, cross-company/project isolation and coexistence with the existing quoted-employer reader. These extend the mandatory flattened-employment CI regression. Verify exact-head CI/status results after publishing and start future work from the latest PR head. Remaining work should focus on the actual boundary/table queues and partial-history coverage, without inferring dates or converting project-only text to employment.
 
@@ -297,14 +299,14 @@ Private comparison across all 277 available sources: **107 → 116 sources with 
 
 Read-only audit: 460 employers, 401 titles and 457 supported date ranges. Malformed, duplicate, invalid-range and pagination-leak counts remain zero. Seven overlap flags and one possible employer/client equality flag are unchanged. Newly retained employer-only rows still require incomplete-field review; diagnostic PASS is not complete-profile acceptance.
 
-| Remaining review queue | Before | After | Continuing reason |
-| --- | ---: | ---: | --- |
-| Date near employment heading | 112 | 103 | Missing delimiters, mixed narrative or lost reading order |
-| Project/client narrative | 46 | 46 | Assignment dates do not establish employer tenure |
-| Explicit employer labels | 4 | 4 | Missing tenure or mixed assignment fields |
-| Headed tables | 6 | 6 | Original layout or bounded column reconstruction needed |
-| Other narrative/layout | 2 | 2 | No supported extraction added |
-| **Total** | **170** | **161** | Heuristic queues, not adjudicated causes |
+| Remaining review queue       |  Before |   After | Continuing reason                                         |
+| ---------------------------- | ------: | ------: | --------------------------------------------------------- |
+| Date near employment heading |     112 |     103 | Missing delimiters, mixed narrative or lost reading order |
+| Project/client narrative     |      46 |      46 | Assignment dates do not establish employer tenure         |
+| Explicit employer labels     |       4 |       4 | Missing tenure or mixed assignment fields                 |
+| Headed tables                |       6 |       6 | Original layout or bounded column reconstruction needed   |
+| Other narrative/layout       |       2 |       2 | No supported extraction added                             |
+| **Total**                    | **170** | **161** | Heuristic queues, not adjudicated causes                  |
 
 Twenty-four local regression files, typecheck, formatting and whitespace checks pass. The mandatory flattened-employment regression now covers each new heading order, location exclusion, distinct promotion/project dates, missing/reversed endpoints and coexistence with the older prose parser. A duplicate identified by the existing prose regression was repaired locally before publishing; no regression expectations or release gates were weakened. Verify CI and commit statuses on this revision, and always inspect the latest PR head before continuing. Prioritize evidence-backed heading/table groups and missing historical rows; keep original-source requests private and avoid requesting available files.
 
@@ -322,14 +324,14 @@ All 277 private sources were compared: **116 → 120 sources with employment**, 
 
 Read-only audit: 483 employers, 424 titles and 480 supported date ranges. Malformed, duplicate, invalid-range and pagination-leak counts remain zero. Seven overlap flags and one possible employer/client equality flag are unchanged; these are review signals, not adjudicated errors. Missing fields and original layout ambiguity still require source review.
 
-| Remaining review queue | Before | After | Continuing reason |
-| --- | ---: | ---: | --- |
-| Date near employment heading | 103 | 100 | Mixed narrative, missing delimiters or lost reading order |
-| Project/client narrative | 46 | 46 | Assignment dates do not prove employer tenure |
-| Explicit employer labels | 4 | 4 | Missing tenure or mixed assignment fields |
-| Headed tables | 6 | 5 | Column-major text, ambiguous column ownership or duration-only dates |
-| Other narrative/layout | 2 | 2 | No supported extraction added |
-| **Total** | **161** | **157** | Heuristic review queues, not adjudicated causes |
+| Remaining review queue       |  Before |   After | Continuing reason                                                    |
+| ---------------------------- | ------: | ------: | -------------------------------------------------------------------- |
+| Date near employment heading |     103 |     100 | Mixed narrative, missing delimiters or lost reading order            |
+| Project/client narrative     |      46 |      46 | Assignment dates do not prove employer tenure                        |
+| Explicit employer labels     |       4 |       4 | Missing tenure or mixed assignment fields                            |
+| Headed tables                |       6 |       5 | Column-major text, ambiguous column ownership or duration-only dates |
+| Other narrative/layout       |       2 |       2 | No supported extraction added                                        |
+| **Total**                    | **161** | **157** | Heuristic review queues, not adjudicated causes                      |
 
 Twenty-four local regression files, typecheck, scoped formatting and whitespace checks passed. Sanitized tests cover each new family, year precision, current endpoints, seniority, title words in employer names, column-major rejection, reversed dates and project/narrative isolation. A role split and a concatenated-employer case were caught and corrected locally before publishing. No private source identifiers/text are committed and no release/test requirements were weakened. Verify exact-head CI and commit statuses after the single batch push; start subsequent work from the latest PR head.
 
@@ -347,14 +349,14 @@ Comparison across all 277 private sources: **120 → 127 sources with employment
 
 Read-only audit: 503 employers, 441 titles and 500 supported date ranges. Malformed, duplicate, invalid-range and pagination-leak counts remain zero. Seven overlap flags and one possible employer/client equality flag remain unchanged. Blank titles and other incomplete fields still need source review; diagnostic PASS is not complete-profile acceptance.
 
-| Remaining review queue | Before | After | Continuing reason |
-| --- | ---: | ---: | --- |
-| Date near employment heading | 100 | 94 | Unbounded role/company text, missing dates or lost reading order |
-| Project/client narrative | 46 | 45 | Most assignment dates still do not establish employer tenure |
-| Explicit employer labels | 4 | 4 | Missing tenure or mixed assignment fields |
-| Headed tables | 5 | 5 | Column-major text, ambiguous column ownership or duration-only dates |
-| Other narrative/layout | 2 | 2 | No supported extraction added |
-| **Total** | **157** | **150** | Heuristic review queues, not adjudicated causes |
+| Remaining review queue       |  Before |   After | Continuing reason                                                    |
+| ---------------------------- | ------: | ------: | -------------------------------------------------------------------- |
+| Date near employment heading |     100 |      94 | Unbounded role/company text, missing dates or lost reading order     |
+| Project/client narrative     |      46 |      45 | Most assignment dates still do not establish employer tenure         |
+| Explicit employer labels     |       4 |       4 | Missing tenure or mixed assignment fields                            |
+| Headed tables                |       5 |       5 | Column-major text, ambiguous column ownership or duration-only dates |
+| Other narrative/layout       |       2 |       2 | No supported extraction added                                        |
+| **Total**                    | **157** | **150** | Heuristic review queues, not adjudicated causes                      |
 
 Twenty-four local regression files and typecheck passed, with scoped formatting and whitespace checks. Sanitized fixtures cover numbered history, day precision, contract annotations, role/date order, location/alias exclusion, missing or reversed dates, project isolation and adjacent-job ownership. Full-source comparison caught duplicate reader output and a potential cross-employer role/date association; both were corrected locally before publishing. No regression expectations or release gates were lowered. Verify exact-head CI and statuses after the batch push.
 
@@ -372,21 +374,20 @@ Comparison across all 277 private sources: **127 → 133 sources with employment
 
 Read-only audit: 522 employers, 460 titles and 519 supported date ranges. Malformed, duplicate, invalid-range and pagination-leak counts remain zero. Seven overlap flags and one possible employer/client equality flag are unchanged. Existing incomplete fields and review signals remain outstanding.
 
-| Remaining review queue | Before | After | Continuing reason |
-| --- | ---: | ---: | --- |
-| Date near employment heading | 94 | 88 | Missing boundaries, malformed dates or lost reading order |
-| Project/client narrative | 45 | 45 | Assignment dates do not establish employer tenure |
-| Explicit employer labels | 4 | 4 | Missing tenure or mixed assignment fields |
-| Headed tables | 5 | 5 | Column-major text, ambiguous column ownership or duration-only dates |
-| Other narrative/layout | 2 | 2 | No supported extraction added |
-| **Total** | **150** | **144** | Heuristic review queues, not adjudicated causes |
+| Remaining review queue       |  Before |   After | Continuing reason                                                    |
+| ---------------------------- | ------: | ------: | -------------------------------------------------------------------- |
+| Date near employment heading |      94 |      88 | Missing boundaries, malformed dates or lost reading order            |
+| Project/client narrative     |      45 |      45 | Assignment dates do not establish employer tenure                    |
+| Explicit employer labels     |       4 |       4 | Missing tenure or mixed assignment fields                            |
+| Headed tables                |       5 |       5 | Column-major text, ambiguous column ownership or duration-only dates |
+| Other narrative/layout       |       2 |       2 | No supported extraction added                                        |
+| **Total**                    | **150** | **144** | Heuristic review queues, not adjudicated causes                      |
 
 Twenty-four regression files, typecheck, scoped formatting and whitespace checks pass locally. Tests cover complete adjacent-job ownership, repeated headings, year precision, explicit "at" boundaries, location exclusion, malformed-date stopping, project/narrative isolation and role-only headings. A formerly unsupported adjacent-job fixture now asserts both exact employer/title/date tuples instead of zero rows; the forbidden cross-employer association remains excluded. Existing table regressions caught an attempted second reading of a headed table, which was repaired locally before publishing. No release conditions or privacy requirements were reduced. Verify exact-head CI and statuses after the single batch push.
 
 Continuation: start from the latest head, prioritize remaining evidence-backed source groups and partially recovered histories, and keep comparing all 277 sources. The 144 unresolved records are separate from the 693 sources not yet audited. Consolidate any original-CV requests privately from actual metadata and do not request available files again.
 
 Scope remains **SUBSET_ONLY: 277 / 970**. Production remains **NO_GO** pending live OCR with saved provenance, reviewed/version-matched backfill, full-population audit and authenticated acceptance on the exact artifact to promote. No CVs or private identifiers are committed; no runtime configuration, Supabase/Vercel writes, source mutation, backfill or promotion occurred.
-
 
 ## Batch checkpoint: explicit forms, duration tables and private review inventory (2026-09-16)
 
@@ -401,14 +402,14 @@ All 277 private sources were compared: **133 → 137 source records with employm
 
 Read-only audit: 539 employers, 477 titles and 536 supported date ranges. Malformed, duplicate, invalid-range and pagination-leak counts remain zero. The possible client/employer equality flag stays at one. Overlap flags increase **seven → eight** because the newly recovered form explicitly includes a part-time job overlapping another job. Both source-supported ranges are retained and the review flag remains visible; this is not counted as a new erroneous range or silently resolved.
 
-| Remaining review queue | Before | After | Continuing reason |
-| --- | ---: | ---: | --- |
-| Date near employment heading | 88 | 85 | Lost order, missing delimiters or malformed dates |
-| Project/client narrative | 45 | 45 | Assignment dates alone cannot establish employer tenure |
-| Explicit employer labels | 4 | 4 | Incomplete or mixed assignment fields |
-| Headed tables | 5 | 4 | Column-major order, missing endpoints or ambiguous column ownership |
-| Other narrative/layout | 2 | 2 | No supported extraction added |
-| **Total** | **144** | **140** | Heuristic review queues, not adjudicated causes |
+| Remaining review queue       |  Before |   After | Continuing reason                                                   |
+| ---------------------------- | ------: | ------: | ------------------------------------------------------------------- |
+| Date near employment heading |      88 |      85 | Lost order, missing delimiters or malformed dates                   |
+| Project/client narrative     |      45 |      45 | Assignment dates alone cannot establish employer tenure             |
+| Explicit employer labels     |       4 |       4 | Incomplete or mixed assignment fields                               |
+| Headed tables                |       5 |       4 | Column-major order, missing endpoints or ambiguous column ownership |
+| Other narrative/layout       |       2 |       2 | No supported extraction added                                       |
+| **Total**                    | **144** | **140** | Heuristic review queues, not adjudicated causes                     |
 
 A separate private inventory consolidates seven requests for original/layout evidence, two requests for date confirmation and two apparent non-candidate records (a JD and an empty template) requiring classification review. No deletion or data correction occurred. Eight original-CV identities already accessible were excluded from re-upload requests; this is an availability check, not a claim that all those originals passed extraction or backfill. Names, metadata, contact details, source tokens and private file links are deliberately absent from this repository.
 
@@ -433,14 +434,14 @@ Comparison across all 277 private sources: **137 → 144 source records with emp
 
 Read-only audit: 552 employers, 490 titles and 549 supported date ranges. Malformed, duplicate, invalid-range and pagination-leak counts remain zero. Eight overlap flags and one possible employer/client equality flag are unchanged from the baseline; they remain review signals rather than adjudicated errors. No project/client date was promoted to employer tenure.
 
-| Remaining review queue | Before | After | Continuing reason |
-| --- | ---: | ---: | --- |
-| Date near employment heading | 85 | 78 | Lost order, missing delimiters, malformed dates or unbounded prose |
-| Project/client narrative | 45 | 45 | Assignment dates alone cannot establish employer tenure |
-| Explicit employer labels | 4 | 4 | Incomplete or mixed assignment fields |
-| Headed tables | 4 | 4 | Column-major order, missing endpoints or ambiguous column ownership |
-| Other narrative/layout | 2 | 2 | No supported extraction added |
-| **Total** | **140** | **133** | Heuristic review queues, not adjudicated causes |
+| Remaining review queue       |  Before |   After | Continuing reason                                                   |
+| ---------------------------- | ------: | ------: | ------------------------------------------------------------------- |
+| Date near employment heading |      85 |      78 | Lost order, missing delimiters, malformed dates or unbounded prose  |
+| Project/client narrative     |      45 |      45 | Assignment dates alone cannot establish employer tenure             |
+| Explicit employer labels     |       4 |       4 | Incomplete or mixed assignment fields                               |
+| Headed tables                |       4 |       4 | Column-major order, missing endpoints or ambiguous column ownership |
+| Other narrative/layout       |       2 |       2 | No supported extraction added                                       |
+| **Total**                    | **140** | **133** | Heuristic review queues, not adjudicated causes                     |
 
 Twenty-four regression files, typecheck, scoped formatting and whitespace checks pass locally. Sanitized fixtures cover comma, pipe, symbol, placement, location and year-only families; compound legal suffixes; page-header exclusion; incomplete/reversed dates; and project/client isolation. Full-source comparison confirms that no previous tuple was removed or changed. Verify exact-head CI and commit statuses after the single batch push; no release or test gate was weakened.
 
@@ -484,11 +485,11 @@ Baseline `c452a84b9e34b4cb2ad99524ddf4f0dae10a00d5`; parser `candidate-employmen
 
 Three source-backed families were repaired together: date / recognizable role / comma / employer bounded by a following duty sentence; numbered role-colon / legal employer / full dates / Responsibilities; and uppercase legal employer / parenthesized industry / dates / POSITION / bullet. Employer and role remain in their own fields. Role strings containing a legal company suffix are rejected, module/location prose is not absorbed into company, and client/project sections and reversed/impossible dates remain excluded. The explicit Customer Service Specialist title is allowed only in the labelled POSITION family; client labels do not gain a general exception.
 
-| Family | Newly recovered source records | Employment rows |
-| --- | ---: | ---: |
-| Dated role-comma-employer headings | 2 | 8 |
-| Numbered title-colon-employer rows | 1 | 4 |
-| Industry-labelled position headings | 1 | 2 |
+| Family                              | Newly recovered source records | Employment rows |
+| ----------------------------------- | -----------------------------: | --------------: |
+| Dated role-comma-employer headings  |                              2 |               8 |
+| Numbered title-colon-employer rows  |                              1 |               4 |
+| Industry-labelled position headings |                              1 |               2 |
 
 All 277 sources were compared against baseline: **144 -> 148 sources with employment**, **553 -> 567 rows**, **133 -> 129 without employment**. All 553 existing company/title/start/end/current tuples are unchanged; only the four previously unresolved sources gain rows. Malformed, duplicate and invalid-range counts remain zero. Baseline and final read-only audits both have nine overlapping-range review flags and one possible client/employer equality flag; neither increased. All 13 available original-file representations retain identical employment tuples. No source substitution or backfill occurred.
 
@@ -525,14 +526,14 @@ This batch recovers employment headings whose field boundaries survive as a role
 
 The complete 277-source comparison gives **156 -> 164 source records with employment**, **586 -> 595 rows**, and **121 -> 113 records without employment**. Eight previously unresolved source records gain nine rows. All 586 existing employer/title/start/end/current tuples are retained. Malformed, duplicate and invalid-range counts remain zero; overlap review remains nine and possible client/employer equality remains one. These counts establish partial source recovery, not complete histories or unique-person totals.
 
-| Remaining review queue | Before | After | Continuing reason |
-| --- | ---: | ---: | --- |
-| Date near employment heading | 66 | 58 | Missing boundaries, corrupted tokens, partial dates or reading-order loss |
-| Project/client narrative | 45 | 45 | Assignment ranges do not establish employer tenure |
-| Explicit employer labels | 4 | 4 | Missing own tenure or mixed assignment context |
-| Headed tables | 4 | 4 | Column ownership requires source-layout evidence |
-| Other narrative/layout | 2 | 2 | Insufficient supported employment evidence |
-| **Total** | **121** | **113** | Heuristic queues, not adjudicated root causes |
+| Remaining review queue       |  Before |   After | Continuing reason                                                         |
+| ---------------------------- | ------: | ------: | ------------------------------------------------------------------------- |
+| Date near employment heading |      66 |      58 | Missing boundaries, corrupted tokens, partial dates or reading-order loss |
+| Project/client narrative     |      45 |      45 | Assignment ranges do not establish employer tenure                        |
+| Explicit employer labels     |       4 |       4 | Missing own tenure or mixed assignment context                            |
+| Headed tables                |       4 |       4 | Column ownership requires source-layout evidence                          |
+| Other narrative/layout       |       2 |       2 | Insufficient supported employment evidence                                |
+| **Total**                    | **121** | **113** | Heuristic queues, not adjudicated root causes                             |
 
 All 13 available original-file representations remain unchanged at 57 tuples. No original was substituted into the export and no new CV request is established by this batch. Local validation covers 31 source/parser/acceptance-harness regression files, typecheck, scoped formatting, whitespace checks, full-subset comparison and original-file comparison. Sanitized fixtures include each supported heading and negative project/client, training, malformed-range and location cases. Verify CI and commit statuses on the resulting head before merge.
 
@@ -544,18 +545,18 @@ Baseline `b71d84baf3d65263f9f1752eae68c7132f975bab`; parser `candidate-employmen
 
 Full 277-source comparison: **164 -> 176 sources with employment**, **595 -> 627 rows**, **113 -> 101 without employment**. Twelve previously unresolved source records gain 32 rows; all 595 previous employer/title/start/end/current tuples are retained. Malformed, duplicate and invalid-range diagnostics stay zero. Overlap review flags stay nine; possible client/employer equality stays one. Of the 627 rows, 554 have titles and 618 have complete source date ranges; these are partial source histories, not complete CVs or unique people.
 
-| Remaining review queue | Before | After | Continuing reason |
-| --- | ---: | ---: | --- |
-| Heading/date boundary | 58 | 48 | Lost layout, incomplete or malformed dates and unsupported boundaries |
-| Project/client narrative | 45 | 43 | Employer identity or assignment ownership is not sufficiently established |
-| Explicit employer labels | 4 | 4 | Ambiguous fields or missing assignment ownership |
-| Headed tables | 4 | 4 | Existing originals require reviewed source replacement/backfill; not a request to resend files |
-| Other narrative/layout | 2 | 2 | Insufficient supported employment evidence |
-| **Total** | **113** | **101** | Heuristic review queues, not adjudicated causes |
+| Remaining review queue   |  Before |   After | Continuing reason                                                                              |
+| ------------------------ | ------: | ------: | ---------------------------------------------------------------------------------------------- |
+| Heading/date boundary    |      58 |      48 | Lost layout, incomplete or malformed dates and unsupported boundaries                          |
+| Project/client narrative |      45 |      43 | Employer identity or assignment ownership is not sufficiently established                      |
+| Explicit employer labels |       4 |       4 | Ambiguous fields or missing assignment ownership                                               |
+| Headed tables            |       4 |       4 | Existing originals require reviewed source replacement/backfill; not a request to resend files |
+| Other narrative/layout   |       2 |       2 | Insufficient supported employment evidence                                                     |
+| **Total**                | **113** | **101** | Heuristic review queues, not adjudicated causes                                                |
 
 ### Recruiter-requested estimate policy
 
-The recruiter explicitly authorized estimating missing employer tenure from the first and last project at that employer. This supersedes earlier statements prohibiting *all* project-based tenure estimates; it does not authorize rewriting source dates as fact. `estimatedTenure` retains its own start/end, project IDs and `project_envelope` basis. Both employment views label it as estimated and warn that gaps may exist. Explicit employer ownership is required. Client matching and title similarity alone are insufficient. Multiple roles at the same employer remain unresolved unless ownership is disambiguated. Complete source tenure takes priority, partial source endpoints constrain eligible projects, invalid/future/reversed project dates are excluded, and a current employer does not extend a finished project to today.
+The recruiter explicitly authorized estimating missing employer tenure from the first and last project at that employer. This supersedes earlier statements prohibiting _all_ project-based tenure estimates; it does not authorize rewriting source dates as fact. `estimatedTenure` retains its own start/end, project IDs and `project_envelope` basis. Both employment views label it as estimated and warn that gaps may exist. Explicit employer ownership is required. Client matching and title similarity alone are insufficient. Multiple roles at the same employer remain unresolved unless ownership is disambiguated. Complete source tenure takes priority, partial source endpoints constrain eligible projects, invalid/future/reversed project dates are excluded, and a current employer does not extend a finished project to today.
 
 For source-backed Project Involvement headings, the established employer and role own the following assignment range only before another employer or duties. Multiple named projects sharing one range remain one assignment group. This adds **four estimated employer ranges on one source record** without changing its blank source endpoints. No database write occurs.
 

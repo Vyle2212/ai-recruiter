@@ -1,5 +1,7 @@
 # Original CV layout verification — 2026-09-15
 
+> Latest code batch: [v83 career ledger recovery](precision-career-ledger-batch-20260916.md). The read-only 970-source comparison reaches 674 sources / 1,939 employment rows, with 296 sources still requiring review. It recovers 24 previously empty sources and 82 rows while retaining all 1,857 v82 tuples. A specialization/module after an SAP role is explicitly prevented from becoming an employer. No original CV, identity, contact detail or source excerpt is committed.
+
 > Latest code batch: [v82 interleaved career records](precision-interleaved-career-batch-20260916.md). All 970 sources compared: 27 previously empty sources recover 61 employment rows; all 1,796 prior tuples remain unchanged. Local totals: 650 sources / 1,857 rows, with 320 sources unresolved. Malformed, duplicate and invalid-range counts remain zero; overlap flags remain 55 and client/employer equality flags remain two. Plural project-section boundaries now prevent project dates from leaking into employment. No additional production data write.
 
 > Previous code batch: [v76 career export recovery](precision-career-export-batch-20260916.md), checked against all 970 sources: 74 additional records recovered, 224 net additional employment rows, 484 sources still unresolved locally. This batch does not add production database writes; the verified nine-original backfill below remains the last data change.
@@ -18,15 +20,15 @@ The employment reader supports line-bounded company/date/title headings, role/Em
 
 Seven original PDFs (32 pages total) and one corresponding DOCX were inspected locally. No original CVs, names, contact details, or OCR text are committed. Before this change the uploaded PDFs each produced zero canonical employment rows through the upload parser.
 
-| Source layout | Employment rows after repair | Complete date ranges | Qualification |
-| --- | ---: | ---: | --- |
-| Corrupted PDF character mapping | 5 | 5 | Requires locally rendered OCR text; direct PDF upload is still unresolved |
-| Five-column employment ledger | 11 | 2 | Nine ends are unspecified; duration alone does not establish an exact end |
-| Sidebar heading and wrapped dates | 9 | 9 | Contract clients remain separate from employers |
-| Company / scope / year table | 5 | 5 | Includes an explicitly overlapping part-time engagement |
-| Reordered content stream | 3 | 3 | Education and projects excluded from employment |
-| Company and role with right-aligned dates | 6 | 6 | Community and education entries excluded |
-| Employer/client tables plus older role headings | 20 | 10 | Actual PDF and DOCX yield identical company/title/date tuples |
+| Source layout                                   | Employment rows after repair | Complete date ranges | Qualification                                                             |
+| ----------------------------------------------- | ---------------------------: | -------------------: | ------------------------------------------------------------------------- |
+| Corrupted PDF character mapping                 |                            5 |                    5 | Requires locally rendered OCR text; direct PDF upload is still unresolved |
+| Five-column employment ledger                   |                           11 |                    2 | Nine ends are unspecified; duration alone does not establish an exact end |
+| Sidebar heading and wrapped dates               |                            9 |                    9 | Contract clients remain separate from employers                           |
+| Company / scope / year table                    |                            5 |                    5 | Includes an explicitly overlapping part-time engagement                   |
+| Reordered content stream                        |                            3 |                    3 | Education and projects excluded from employment                           |
+| Company and role with right-aligned dates       |                            6 |                    6 | Community and education entries excluded                                  |
+| Employer/client tables plus older role headings |                           20 |                   10 | Actual PDF and DOCX yield identical company/title/date tuples             |
 
 Total: 59 employment rows across seven CVs, including the five rows from offline OCR. This is not a claim of 59 distinct employers, complete candidate profiles, or successful production backfill. The OCR employment row labelled only “Current Position” leaves its title unassigned. The revised employer/client CV differs from the previously exported source version.
 
@@ -44,16 +46,16 @@ Production remains NO_GO. The subsequent upload OCR integration is documented in
 
 Eight additional PDFs (26 pages) and three corresponding DOCX files were reviewed locally. With parser `candidate-employment-v69-original-layout-batch`, PDF extraction produces **35 employment rows across eight CVs**, compared with one row across one CV at baseline `9f0d53e3cec910e506993fba69aba41c6ffdb8b0`. The three PDF/DOCX pairs have matching employer/title/start/end/current tuples after case folding; they are not counted as extra people or extra histories.
 
-| Original layout | Rows | Qualification |
-| --- | ---: | --- |
-| Date / Company Name / Role table | 6 | Start-only dates; project-labelled row remains unresolved |
-| Right-hand dates wrapped across heading lines | 4 | Includes an explicitly written shared-year internship range |
-| Two-column advisory history | 5 | Sidebar and client-list prose excluded from employers |
-| Two-column quality-assurance history | 5 | Explicit freelance overlap retained |
-| Numeric month/year headings | 3 | Communications role retained; references excluded |
-| Employer/location/tenure plus “Served as” | 4 | Location separated; identical heading evidence merged without a duplicate untitled row |
-| Date/employer heading with following role | 6 | Location and reporting-manager annotations excluded from fields |
-| Undated role-at-employer statements | 2 | No tenure or SAP experience inferred; other event/gig entries remain unresolved |
+| Original layout                               | Rows | Qualification                                                                          |
+| --------------------------------------------- | ---: | -------------------------------------------------------------------------------------- |
+| Date / Company Name / Role table              |    6 | Start-only dates; project-labelled row remains unresolved                              |
+| Right-hand dates wrapped across heading lines |    4 | Includes an explicitly written shared-year internship range                            |
+| Two-column advisory history                   |    5 | Sidebar and client-list prose excluded from employers                                  |
+| Two-column quality-assurance history          |    5 | Explicit freelance overlap retained                                                    |
+| Numeric month/year headings                   |    3 | Communications role retained; references excluded                                      |
+| Employer/location/tenure plus “Served as”     |    4 | Location separated; identical heading evidence merged without a duplicate untitled row |
+| Date/employer heading with following role     |    6 | Location and reporting-manager annotations excluded from fields                        |
+| Undated role-at-employer statements           |    2 | No tenure or SAP experience inferred; other event/gig entries remain unresolved        |
 
 Every non-whitespace PDF text-item character is retained on all 26 pages. This is a text-retention check, not OCR verification. Employment headings were also inspected visually. DOCX multi-paragraph cells are paired only within an explicit Date / Company Name / Role row when all three cell counts agree; unequal cells remain raw source for review.
 
@@ -89,4 +91,4 @@ The 13 currently available original-file representations remain unchanged at 57 
 
 Parser `candidate-employment-v74-owned-fields-batch` increases the unchanged 277-source export from 164 / 595 to **176 sources / 627 employment rows**, retaining all prior source endpoint tuples; **101** sources still have no employment. The 13 original-file representations remain unchanged at 57 rows and are not added to the export. No original needs to be resent for the already-accessible table cases.
 
-The recruiter subsequently authorized employer-tenure estimates from explicitly owned project ranges. Four otherwise undated employer rows now expose a separate, labelled project-envelope estimate; their original endpoints remain blank. This is an explicit change to the earlier no-project-date policy for *presentation of estimates*, not a claim that project dates are exact employment dates. Actual SAP duration uses supported SAP delivery interval unions, excludes non-SAP operational roles and does not count envelope gaps. See the latest `cv-ocr-upload-release.md` checkpoint for the full group inventory, safety conditions and data comparison. All production gates remain NO_GO; no backfill or runtime mutation occurred.
+The recruiter subsequently authorized employer-tenure estimates from explicitly owned project ranges. Four otherwise undated employer rows now expose a separate, labelled project-envelope estimate; their original endpoints remain blank. This is an explicit change to the earlier no-project-date policy for _presentation of estimates_, not a claim that project dates are exact employment dates. For a clearly owned SAP employer, the SAP tenure estimate spans the first through last supported SAP project at that employer and may include internal-work gaps; non-SAP accounting, sales and end-user roles remain excluded. Overlapping periods are never double-counted. See the latest `cv-ocr-upload-release.md` checkpoint for the full group inventory, safety conditions and data comparison. All production gates remain NO_GO; no backfill or runtime mutation occurred.
