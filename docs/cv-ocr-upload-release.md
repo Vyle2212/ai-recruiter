@@ -471,3 +471,21 @@ All 277 export sources were compared: **144 sources / 552 rows -> 144 sources / 
 Local validation includes all 31 regression files, typecheck, scoped formatting and whitespace checks. Regressions cover review-year changes, approximate versus month-precise tenure, unknown endpoints, future/reversed dates, retained typo evidence, table ownership, split titles and client/project rejection. Inspect the exact new head's CI/statuses before release. Private review notes now mark the requested original as received and the duplicate as unchanged; no personal identifiers or CV text are committed.
 
 Production remains **NO_GO**: live OCR with persisted provenance, reviewed/version-matched backfill, audit of all 970 sources and authenticated exact-artifact acceptance remain outstanding. The other 693 sources are unaudited. No runtime configuration, Supabase/Vercel write, data mutation or production promotion occurred.
+
+## Punctuated employment row batch — 2026-09-16
+
+Baseline `c452a84b9e34b4cb2ad99524ddf4f0dae10a00d5`; parser `candidate-employment-v71-punctuated-row-batch`. Before editing, all 133 unresolved sources were classified into heuristic review queues: 78 heading/date-boundary, 45 project/client-heavy, four explicit-label, four headed-table and two other. These queues are screening categories, not adjudicated causes or evidence of full-history completeness.
+
+Three source-backed families were repaired together: date / recognizable role / comma / employer bounded by a following duty sentence; numbered role-colon / legal employer / full dates / Responsibilities; and uppercase legal employer / parenthesized industry / dates / POSITION / bullet. Employer and role remain in their own fields. Role strings containing a legal company suffix are rejected, module/location prose is not absorbed into company, and client/project sections and reversed/impossible dates remain excluded. The explicit Customer Service Specialist title is allowed only in the labelled POSITION family; client labels do not gain a general exception.
+
+| Family | Newly recovered source records | Employment rows |
+| --- | ---: | ---: |
+| Dated role-comma-employer headings | 2 | 8 |
+| Numbered title-colon-employer rows | 1 | 4 |
+| Industry-labelled position headings | 1 | 2 |
+
+All 277 sources were compared against baseline: **144 -> 148 sources with employment**, **553 -> 567 rows**, **133 -> 129 without employment**. All 553 existing company/title/start/end/current tuples are unchanged; only the four previously unresolved sources gain rows. Malformed, duplicate and invalid-range counts remain zero. Baseline and final read-only audits both have nine overlapping-range review flags and one possible client/employer equality flag; neither increased. All 13 available original-file representations retain identical employment tuples. No source substitution or backfill occurred.
+
+Remaining review queues: **74** heading/date-boundary, **45** project/client-heavy, **4** explicit-label, **4** headed-table and **2** other. In the newly recovered histories, shared-year internship rows, a title/module/employer boundary, an unrecognized end month and a tutor entry without an employer remain incomplete evidence. Recovering at least one row does not close a whole profile's review. A recruiter-confirmed sole available CV remains the accepted source; no replacement CV is required merely to support an unsubstantiated filename/title. Private review notes retain that instruction.
+
+Local validation: 31 regression files, typecheck, scoped formatting, full-subset comparison, original-file comparison and whitespace checks pass. Sanitized positive/negative fixtures cover all three families, field ownership, client/project isolation, module/location rejection and chronological validation. Inspect CI and commit statuses on the new exact head after the batch push. Production remains **NO_GO** for live OCR/provenance, reviewed/version-matched backfill, full 970-source audit (693 still unaudited) and authenticated exact-artifact acceptance. No runtime configuration, data write or promotion occurred.

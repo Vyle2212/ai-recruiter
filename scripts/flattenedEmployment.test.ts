@@ -749,3 +749,88 @@ for (const source of [
 console.log(
   "Punctuated employment headings: field ownership, page boundaries and client isolation pass",
 );
+
+const datedCommaBatch =
+  "Working Experience October 2023 - Present: Game Developer, Example Games Create applications. September 2022 - October 2023: Unity Programmer, Earlier Studio Learned new tools. June 2021 - August 2022 AMS SAP CONSULTANT, Example Consulting As an AMS Consultant supported users.";
+assert.deepEqual(
+  read(datedCommaBatch).map((r) => [r.company, r.title, r.start, r.end]),
+  [
+    ["Example Games", "Game Developer", "October 2023", "Present"],
+    ["Earlier Studio", "Unity Programmer", "September 2022", "October 2023"],
+    ["Example Consulting", "AMS SAP CONSULTANT", "June 2021", "August 2022"],
+  ],
+);
+const numberedColonBatch =
+  "Working Experience 1) Account Internship: :Example Flow (M) Bhd Sdn 15 November 2012 - 31 January 2013 Responsibilities: Filing. 2) Financial Planner & Market Analyst Executive: Example Ocean Sdn Bhd 26 November 2013 - 19 February 2014 Responsibilities: Analysis. 3) SAP Consultant: MM Module Example Systems Sdn Bhd 22 August 2022 - 31 October 2023 Responsibilities: Configuration.";
+assert.deepEqual(
+  read(numberedColonBatch).map((r) => [r.company, r.title, r.start, r.end]),
+  [
+    [
+      "Example Flow (M) Bhd Sdn",
+      "Account Internship",
+      "15 November 2012",
+      "31 January 2013",
+    ],
+    [
+      "Example Ocean Sdn Bhd",
+      "Financial Planner & Market Analyst Executive",
+      "26 November 2013",
+      "19 February 2014",
+    ],
+  ],
+);
+const industryBatch =
+  "WORKING EXPERIENCE EXAMPLE SYSTEMS SDN BHD (GAMING) AUG 2023 - PRESENT POSITION: CUSTOMER SERVICE SPECIALIST - Provided support. EXAMPLE MEDIA SDN.BHD (GAMING) OCTOBER 2021 - JULY 2023 POSITION: MARKETING EXECUTIVE - Build campaigns.";
+assert.deepEqual(
+  read(industryBatch).map((r) => [r.company, r.title, r.start, r.end]),
+  [
+    [
+      "EXAMPLE SYSTEMS SDN BHD",
+      "CUSTOMER SERVICE SPECIALIST",
+      "AUG 2023",
+      "Present",
+    ],
+    [
+      "EXAMPLE MEDIA SDN.BHD",
+      "MARKETING EXECUTIVE",
+      "OCTOBER 2021",
+      "JULY 2023",
+    ],
+  ],
+);
+for (const source of [datedCommaBatch, numberedColonBatch, industryBatch]) {
+  assert.equal(
+    read(source.replace(/working experience/i, "Project Experience")).length,
+    0,
+  );
+  assert.equal(
+    read(
+      source.replace(
+        /working experience/i,
+        "Working Experience Project History",
+      ),
+    ).length,
+    0,
+  );
+  const canonical = extractCanonicalEmploymentFromResume(source);
+  assert.equal(canonical.length, read(source).length);
+  assert.equal(
+    employmentTimelineDiagnostics(canonical).malformedNarrativeRecords,
+    0,
+  );
+  assert.equal(employmentTimelineDiagnostics(canonical).invalidRanges, 0);
+}
+for (const source of [
+  "Working Experience Jan 2020 - Jan 2022: SAP Consultant, Client: Example Buyer Work on delivery.",
+  "Working Experience Jan 2022 - Jan 2020: SAP Consultant, Example Services Work on delivery.",
+  "Working Experience Jan 2020 - Jan 2022 Example Employer SAP Consultant, Country Work on delivery.",
+  "Working Experience 1) Analyst: Example Ltd 31 April 2020 - Jan 2022 Responsibilities: Analysis.",
+  "Working Experience 1) Analyst: Location Example Ltd Jan 2020 - Jan 2022 Responsibilities: Analysis.",
+  "Working Experience EXAMPLE LTD (CLIENT) JAN 2020 - JAN 2022 POSITION: SAP CONSULTANT - Work on delivery.",
+  "Working Experience EXAMPLE SDN BHD (CLIENT) JAN 2020 - JAN 2022 POSITION: SAP CONSULTANT - Work on delivery.",
+  "Working Experience EXAMPLE SDN BHD (GAMING) JAN 2022 - JAN 2020 POSITION: ANALYST - Work on delivery.",
+])
+  assert.equal(read(source).length, 0, source);
+console.log(
+  "Dated comma, numbered title-colon and industry-labelled batches preserve field ownership",
+);

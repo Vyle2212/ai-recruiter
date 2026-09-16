@@ -87,9 +87,13 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
       (role &&
         (new RegExp(date, "i").test(role) ||
           (!labelledRole && !new RegExp(`\\b${job}\\b`, "i").test(role)) ||
-          /\b(?:client|customer|responsibilities|duties|being|worked|working|responsible|involved|performed|handled|about)\b/i.test(
+          (/\b(?:client|customer|responsibilities|duties|being|worked|working|responsible|involved|performed|handled|about)\b/i.test(
             role,
-          )))
+          ) &&
+            !(
+              group === "industry-labelled-position" &&
+              /^[A-Z ]{0,30}CUSTOMER SERVICE SPECIALIST$/i.test(role)
+            ))))
     )
       return;
     result.push({
@@ -218,6 +222,50 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
     // duty prose; location/placement annotations never become the employer.
     const dutyBoundary =
       "(?=\\s+(?:Established|Led|Managed|Serve|Spearheaded|Conducted|Developed|Involved|Responsible|Provided|Performed|Delivered|Project\\s*:|Projects\\s*:|Responsibilities?\\s*:)|\\s*[–—]\\s*SAP\\b|\\s*$)";
+    // Date -> role, employer. The comma and a following duty sentence jointly
+    // bound the organization, including employers without a legal suffix.
+    const commaRole = `[^:;,|]{0,80}?\\b(?:${job}|Programmer|Intern)(?:\\s*\\([^)]{1,30}\\))?`;
+    const dutySentence =
+      "(?=\\s+(?:As\\s+an?\\b|Create\\b|Learned\\b|Work(?:ed)?\\b)|\\s*$)";
+    const datedRoleCompany = new RegExp(
+      `(?:^|\\s)${range}\\s*:?\\s+(${commaRole})\\s*,\\s*([A-Z0-9][A-Za-z0-9&.'() /-]{1,100}?)${dutySentence}`,
+      "gi",
+    );
+    for (const m of section.matchAll(datedRoleCompany)) {
+      if (/\b(?:Ltd|Limited|Bhd|Inc|Corporation)\b/i.test(m[3])) continue;
+      if (
+        !/^(?:SAP|AMS|Senior|Junior|Lead|Principal|Associate|Contract|Game|Unity|Software|Business|Technical|Functional|Financial|System|Sales|Intern)\b/i.test(
+          m[3].trim(),
+        )
+      )
+        continue;
+      add(m[4], m[3], m[1], m[2], m[0], "dated-role-comma-employer", true);
+    }
+
+    // Numbered rows use a title colon and an explicit Responsibilities label.
+    // No location/module prose is absorbed into the employer cell.
+    const numberedJob = new RegExp(
+      `(?:^|\\s)\\d+[)]\\s+([^:;|]{2,100})\\s*:\\s*:?\\s*(${legalRow}|[A-Z][A-Za-z0-9&.'() /-]{1,90}\\bBhd\\s+Sdn)\\s+${range}\\s+Responsibilities\\s*:`,
+      "gi",
+    );
+    for (const m of section.matchAll(numberedJob)) {
+      if (!new RegExp(`\\b(?:${job}|Internship)\\b`, "i").test(m[1])) continue;
+      if (/\b(?:module|location|industry)\b/i.test(m[2])) continue;
+      add(m[2], m[1], m[3], m[4], m[0], "numbered-title-colon-employer", true);
+    }
+
+    // Uppercase company / (industry) / tenure / POSITION headings remain
+    // distinct from both project headings and the following bullet prose.
+    const upperDate = `(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\\s+${year}`;
+    const upperRange = `(${upperDate})\\s*[-–—]\\s*(${upperDate}|PRESENT|CURRENT)`;
+    const industryPosition = new RegExp(
+      `(?:^|\\s)([A-Z0-9][A-Z0-9&.' ]{1,85}\\b(?:SDN\\.?\\s*BHD\\.?|PTE\\.?\\s*LTD\\.?))\\s+\\(([A-Z &/-]{2,35})\\)\\s+${upperRange}\\s+POSITION\\s*:\\s*([A-Z][A-Z /&-]{2,100}?)\\s+[-–—•]\\s+(?=[A-Z])`,
+      "g",
+    );
+    for (const m of section.matchAll(industryPosition)) {
+      if (/\b(?:CLIENT|CUSTOMER|PROJECT)\b/.test(m[2])) continue;
+      add(m[1], m[5], m[3], m[4], m[0], "industry-labelled-position", true);
+    }
     const punctuatedRows = [
       {
         // Date, role, employer (optional contract annotation).
