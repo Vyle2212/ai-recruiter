@@ -834,3 +834,107 @@ for (const source of [
 console.log(
   "Dated comma, numbered title-colon and industry-labelled batches preserve field ownership",
 );
+
+const chronologicalBatch = [
+  [
+    "WORKING EXPERIENCE May 1 st 2010 – Current: Example Print Head of Sales / Production and IT Set up meetings. April 14 th 2008 – April 15 th 2010: Example Systems SAP Analyst Analyze incidents.",
+    [
+      [
+        "Example Print",
+        "Head of Sales / Production and IT",
+        "May 2010",
+        "Current",
+      ],
+      ["Example Systems", "SAP Analyst", "April 2008", "April 2010"],
+    ],
+  ],
+  [
+    "WORKING EXPERIENCE 2020 – Present: Example Foods Sdn Bhd Role: Regional Access Coordinator. Conduct training. 2019 – Present: Example Foods Sdn Bhd Role: Earlier Coordinator. Provide support.",
+    [
+      [
+        "Example Foods Sdn Bhd",
+        "Regional Access Coordinator",
+        "2020",
+        "Present",
+      ],
+    ],
+  ],
+  [
+    "PROFESSIONAL EXPERIENCE Example Consulting Kuala Lumpur, Malaysia Technology Consultant – SAP Jan. 2021 – Present Delivered implementations.",
+    [
+      [
+        "Example Consulting",
+        "Technology Consultant – SAP",
+        "Jan 2021",
+        "Present",
+      ],
+    ],
+  ],
+  [
+    "WORKING EXPERIENCE SAP MM Functional Consultant FREELANCER June 2022 – Present Job Description: Support configuration.",
+    [["FREELANCER", "SAP MM Functional Consultant", "June 2022", "Present"]],
+  ],
+  [
+    "Employment History: Example Manufacturing Corporation. From 07-2014 to 07-2015: SAP Project Assistant Manager & IT Manager Main Duties: Delivery. Example Services Co., Ltd. From 05-2005 to 07-2014: Manager Main Duties: Operations. Education: Degree",
+    [
+      [
+        "Example Manufacturing Corporation",
+        "SAP Project Assistant Manager & IT Manager",
+        "Jul 2014",
+        "Jul 2015",
+      ],
+      ["Example Services Co., Ltd.", "Manager", "May 2005", "Jul 2014"],
+    ],
+  ],
+  [
+    "PROFESSIONAL EXPERIENCE Senior Inside Sales Representative May 2023 - Present Example Training Sdn Bhd, Example City Executed sales activity. Inside Sales Executive Nov 2021 - Apr 2023 Example Training Sdn Bhd, Example City Managed accounts.",
+    [
+      [
+        "Example Training Sdn Bhd",
+        "Senior Inside Sales Representative",
+        "May 2023",
+        "Present",
+      ],
+      [
+        "Example Training Sdn Bhd",
+        "Inside Sales Executive",
+        "Nov 2021",
+        "Apr 2023",
+      ],
+    ],
+  ],
+  [
+    "WORKING EXPERIENCE Oct 2021 – present Example Advisory SAP Senior Consultant, Example City, India Responsibilities: Implementation. Nov 2020 – Oct 2021 Example Telecom SAP Senior Consultant, Example City, India Responsibilities: Support.",
+    [
+      ["Example Advisory", "SAP Senior Consultant", "Oct 2021", "Present"],
+      ["Example Telecom", "SAP Senior Consultant", "Nov 2020", "Oct 2021"],
+    ],
+  ],
+] as const;
+for (const [source, expected] of chronologicalBatch) {
+  const rows = extractCanonicalEmploymentFromResume(source);
+  assert.deepEqual(
+    rows.map((row) => [row.company, row.title, row.start, row.end]),
+    expected,
+    source,
+  );
+  const diagnostics = employmentTimelineDiagnostics(rows);
+  assert.equal(diagnostics.records, rows.length);
+  assert.equal(diagnostics.companyComplete, rows.length);
+  assert.equal(diagnostics.titleComplete, rows.length);
+  assert.equal(diagnostics.dateRangeComplete, rows.length);
+  assert.equal(diagnostics.malformedNarrativeRecords, 0);
+  assert.equal(diagnostics.duplicateRecords, 0);
+  assert.equal(diagnostics.invalidRanges, 0);
+}
+for (const source of [
+  "Project Experience Oct 2021 – present Example Advisory SAP Senior Consultant, Example City, India Responsibilities: Implementation.",
+  "WORKING EXPERIENCE Oct 2021 – present Client: Example Buyer SAP Senior Consultant, Example City, India Responsibilities: Implementation.",
+  "WORKING EXPERIENCE Oct 2022 – Oct 2021 Example Advisory SAP Senior Consultant, Example City, India Responsibilities: Implementation.",
+  "Employment History: Example Manufacturing Corporation. From 07-2015 to 07-2014: SAP Manager Main Duties: Delivery.",
+  "WORKING EXPERIENCE SAP MM Functional Consultant FREELANCER June 2022 – Project Duration: Present Job Description: Support.",
+])
+  assert.deepEqual(extractCanonicalEmploymentFromResume(source), [], source);
+console.log(
+  "Chronological employment batch: explicit boundaries, repeated rows and project isolation pass",
+);
