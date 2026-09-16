@@ -2,6 +2,7 @@ import { careerMonthIndex } from "./candidateCareerExperience";
 import { formatEmploymentTenure } from "./employmentTenure";
 import { layoutEmployment } from "./layoutEmployment";
 import { flattenedEmployment } from "./flattenedEmployment";
+import { anchoredEmployment } from "./anchoredEmployment";
 import { exportedCareerEmployment } from "./exportedCareerEmployment";
 import type {
   EnterpriseEmployment,
@@ -12,7 +13,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v76-exported-career-cards";
+  "candidate-employment-v77-anchored-employer-tenures";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -498,7 +499,14 @@ function tabularResumeEmployment(source: string): EnterpriseEmployment[] {
     const company = clientAt >= 0 ? body.slice(0, clientAt) : roleAt > 0 ? body.slice(0, roleAt) : "";
     if (!company) return [];
     // A role-column narrative is retained as evidence, never invented as a title.
-    const roleText = clientAt < 0 ? body.slice(roleAt).trim().split(/\s+for\s+(?:Global\s+)?(?:Implementation|SAP Implementation|production support)\b/i)[0] : body.match(/\b((?:SAP|S4\/HANA)\s+[^.]{2,100}?(?:Consultant(?:\s+and\s+(?:Team\s+)?Lead)?|Team\s+Lead))\b/i)?.[1] || "";
+    let roleText = clientAt < 0 ? body.slice(roleAt).trim().split(/\s+for\s+(?:Global\s+)?(?:Implementation|SAP Implementation|production support)\b/i)[0] : body.match(/\b((?:SAP|S4\/HANA)\s+[^.]{2,100}?(?:Consultant(?:\s+and\s+(?:Team\s+)?Lead)?|Team\s+Lead))\b/i)?.[1] || "";
+    // A repeated table header paired with a pagination footer is not part
+    // of the role cell. Preserve an explicitly parenthesized role prefix and
+    // leave the footer/name text solely in the source excerpt.
+    if (/\bP\s*a\s*g\s*e\s*\|?\s*\d+\s+Date\s+Company Name\s+Role\s*$/i.test(roleText)) {
+      const bounded = roleText.match(/^((?:(?:Senior|Junior|Managing|Lead)\s+)?(?:Consultant|Analyst|Engineer|Manager|Developer)\s*\([^)]{1,50}\))\s+/i);
+      roleText = bounded?.[1] || "";
+    }
     const employer = company.replace(/\s*\([^)]*\bProject\)\s*$/i, "").trim();
     const parsed = entry({company: employer, title: roleText,
       start: expand(row[1]), end: expand(row[2]), current: /^(Till date|Present|Current|Now)$/i.test(row[2]),
@@ -1405,6 +1413,18 @@ function resumeEmployment(resumeText: string) {
       sameHeading.provenance = [...(sameHeading.provenance || []), ...(parsed.provenance || [])];
       sameHeading.sourceEmploymentIds?.push(...(parsed.sourceEmploymentIds || []));
     } else output.push(parsed);
+  }
+  for (const [index, row] of anchoredEmployment(source).entries()) {
+    const parsed = entry({...row, allowGroundedEmployerOnly: true, sourceRef: `resume.anchored.${index + 1}`, sourceType: 'parsed_resume', confidence: 94});
+    if (!parsed) continue;
+    // A fuller reader already owns this exact heading. Retain its complete
+    // role rather than introducing an empty or clipped duplicate.
+    const owned = output.find(known => monthIndex(known.start) === monthIndex(parsed.start) &&
+      monthIndex(known.end, known.current) === monthIndex(parsed.end, parsed.current) &&
+      known.current === parsed.current && known.provenance?.some(ref =>
+        clean(ref.excerpt).toLowerCase().includes(clean(row.excerpt).toLowerCase())));
+    if (owned) owned.provenance = [...(owned.provenance || []), ...(parsed.provenance || [])];
+    else output.push(parsed);
   }
   const monthYear =
     "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[a-z]*[’']?\\s*(?:19|20)\\d{2}";

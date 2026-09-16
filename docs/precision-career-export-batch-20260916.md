@@ -1,5 +1,7 @@
 # Exported career history batch — 2026-09-16
 
+> Continued in [v77 anchored employer batch](precision-anchored-employer-batch-20260916.md); the v76 figures below are the preserved baseline.
+
 ## Current state
 
 Parser `candidate-employment-v76-exported-career-cards` was checked against all 970 source records from the verified nine-original backfill snapshot. This is a **local parser comparison**, not an additional production database write or authenticated deployment acceptance. The preceding nine-original production backfill remains verified in [the population checkpoint](precision-full-population-audit-20260916.md).
