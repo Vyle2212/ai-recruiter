@@ -28,6 +28,7 @@ const cleanDate = (value: string) =>
     : value
         .replace(/(\d)(?:st|nd|rd|th)\b/i, "$1")
         .replace(/[.’'-]/g, " ")
+        .replace(/([A-Za-z])((?:19|20)\d{2})\b/g, "$1 $2")
         .replace(/\s+/g, " ")
         .trim();
 
@@ -40,6 +41,7 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
     end: string,
     excerpt: string,
     group: string,
+    labelledRole = false,
   ) => {
     employer = employer.trim().replace(/[, ]+$/, "");
     role = role.trim().replace(/\s+\((?:promoted|contract|permanent)\)$/i, "");
@@ -49,6 +51,10 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
     const a = careerMonthIndex(start),
       b = careerMonthIndex(end, current);
     if (
+      (labelledRole &&
+        /\b(?:research student|doctoral student|phd student|undergraduate|bachelor|master of|degree)\b/i.test(
+          role,
+        )) ||
       a === null ||
       b === null ||
       b < a ||
@@ -59,7 +65,7 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
       new RegExp(`\\b${job}\\b`, "i").test(employer) ||
       (role &&
         (new RegExp(date, "i").test(role) ||
-          !new RegExp(`\\b${job}\\b`, "i").test(role) ||
+          (!labelledRole && !new RegExp(`\\b${job}\\b`, "i").test(role)) ||
           /\b(?:client|customer|responsibilities|duties|being|worked|working|responsible|involved|performed|handled|about)\b/i.test(
             role,
           )))
@@ -102,11 +108,93 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
       /\b(?:project|client|customer)\s+$/i.test(source.slice(0, heading.index))
     )
       continue;
-    const section = source
+    const fullSection = source
       .slice((heading.index || 0) + heading[0].length, headings[i + 1]?.index)
       .split(
-        /\b(?:project experience|project history|project details|projects\/assignments|education|qualifications|certifications|technical skills|references|referrals)\b|\b(?:Projects?|Client|Customer)\s*:/i,
+        /\b(?:education|qualifications|certifications|technical skills|references|referrals)\b/i,
       )[0];
+    const section = fullSection.split(
+      /\b(?:project experience|project history|project details|projects\/assignments|education|qualifications|certifications|technical skills|references|referrals)\b|\b(?:Projects?|Client|Customer)\s*:/i,
+    )[0];
+    // Repeated uppercase form labels survive flattened PDF page furniture.
+    // All three fields must be adjacent; dates in an intervening project are
+    // never used to complete a partial employment form.
+    const formCompany =
+      "(?:(?!\\b(?:COMPANY|POSITION|DURATION)\\b)[^:;|]){2,120}?";
+    const formRole = "(?:(?!\\b(?:COMPANY|POSITION|DURATION)\\b)[^:;]){2,160}?";
+    const forms = [
+      ...fullSection.matchAll(
+        new RegExp(
+          `\\bCOMPANY\\s+(${formCompany})\\s+POSITION\\s+(${formRole})\\s+DURATION\\s+${range}(?=\\s|[.;)]|$)`,
+          "gi",
+        ),
+      ),
+    ];
+    const firstForm = forms[0];
+    if (
+      firstForm &&
+      !/\b(?:project experience|project history|project details|projects\/assignments)\b|\b(?:Project|Client|Customer)\s*:/i.test(
+        fullSection.slice(0, firstForm.index),
+      )
+    ) {
+      for (const m of forms) {
+        if (
+          !/^COMPANY\s/.test(m[0]) ||
+          !/\sPOSITION\s/.test(m[0]) ||
+          !/\sDURATION\s/.test(m[0])
+        )
+          continue;
+        if (
+          /\b(?:Project|Client|Customer)\s*:?\s*$/i.test(
+            fullSection.slice(0, m.index),
+          )
+        )
+          continue;
+        add(m[1], m[2], m[3], m[4], m[0], "labelled-employment-form", true);
+      }
+    }
+    // Current/Previous Employment explicitly introduces Company, Position and
+    // Service Period. Do not borrow a later Project Period or an unlabeled role.
+    const serviceForms = new RegExp(
+      `\\b(?:Current|Previous) (?:Employment\\s+(?:(?:Current|Previous) Position\\s+)?|Position\\s+)Company\\s+(${company})\\s+Position\\s+([^:;]{2,160}?)\\s+Service Period\\s+${range}(?=\\s|[.;]|$)`,
+      "gi",
+    );
+    for (const m of fullSection.matchAll(serviceForms))
+      add(m[1], m[2], m[3], m[4], m[0], "labelled-employment-form", true);
+    // Period / Company / Designation forms: the duty verb terminates the
+    // title. A malformed row cannot consume the next Period field.
+    if (/^Period\s+/i.test(section)) {
+      const periodForm = new RegExp(
+        `\\bPeriod\\s+${range}\\s+Company\\s+(${company})\\s+Designation\\s+(${title})(?=\\s+(?:Plan|Investigate|Begun|Provide|Develop|Responsibilities)\\b|$)`,
+        "gi",
+      );
+      for (const m of fullSection.matchAll(periodForm))
+        if (
+          !/\b(?:Project|Client|Customer)\s*$/i.test(
+            fullSection.slice(0, m.index),
+          )
+        )
+          add(m[3], m[4], m[1], m[2], m[0], "period-company-designation");
+    }
+    // A direct employment assertion with its own range can establish tenure
+    // without a title. Project Role fields that follow stay unassigned.
+    const assertion = section
+      .replace(/^[-–—]\d+\s+/, "")
+      .match(
+        new RegExp(
+          `^(?:Worked|Working)\\s+(?:with|at)\\s+(${company})\\s+(?:since|from)\\s+${range}(?=\\s|[.;]|$)`,
+          "i",
+        ),
+      );
+    if (assertion)
+      add(
+        assertion[1],
+        "",
+        assertion[2],
+        assertion[3],
+        assertion[0],
+        "employment-tenure-assertion",
+      );
     // "Worked with Employer as Role from ..." and the inverse order. Require
     // the employment verb; project delivery and "for client" are not aliases.
     const statements = [

@@ -234,3 +234,26 @@ The full read-only audit reports 357 employers, 309 titles and 355 supported dat
 Twenty-four local regression files, TypeScript typecheck and formatting checks pass. Representative positive and negative fixtures extend the existing mandatory flattened-employment CI regression; no release gate was relaxed. Before another batch, inspect the current PR head and exact-head CI/status results rather than reusing the baseline SHA. Continue grouping the 115 boundary-review records, and review the six remaining table layouts together. Original-source requests must use actual private metadata and exclude files still accessible locally.
 
 Scope remains **SUBSET_ONLY: 277 / 970**, with 693 unaudited. Production remains **NO_GO** pending live OCR with saved provenance, reviewed/version-matched backfill, full-population audit and authenticated acceptance of the exact deployment artifact. No runtime configuration, Supabase/Vercel writes or production promotion occurred. Exact-head GitHub CI is required for this revision.
+
+## Batch checkpoint: repeated employment forms (2026-09-16)
+
+Baseline: `f13cf641f64458748198051280a4b359b7af8bf7`; parser now `candidate-employment-v61-labelled-forms-batch`. The complete 177-record unresolved inventory was examined before editing. Three evidence groups were selected: explicitly labelled employer/position/tenure forms, Period/Company/Designation forms, and direct worked-with/since/from assertions with their own date ranges. The first group also revealed substantial missing historical rows in sources whose first employment had already been extracted.
+
+Uppercase COMPANY/POSITION/DURATION fields are read across repeated forms in an employment section, including intervening page furniture. Complete adjacent labels are required; partial fields cannot consume the next form or borrow a project duration. Current/Previous Employment or Position plus Company/Position/Service Period are also supported. Period/Company/Designation titles end at a bounded responsibility verb. Direct employment assertions preserve empty titles instead of borrowing project roles. Joined named-month/four-digit-year tokens retain their stated precision. Academic research-student/degree entries are excluded; explicitly labelled internships remain distinct source assertions. Representative fixtures use fictional organizations and cover project-only contexts, malformed forms, invalid chronology, missing dates and incomplete-row isolation.
+
+Private comparison of all 277 available sources: **100 → 104 sources with employment**, **357 → 425 rows**, **177 → 173 sources without employment**. Ten source records gain 68 rows: seven uppercase-form sources gain 56 rows, one service-period form gains three, one period/company/designation source gains four, and one direct-tenure source gains five intentionally untitled rows. Four previously unresolved sources gain 25 rows; six already partially extracted sources gain 43 historical rows. All previous employer/title/start/end/current tuples remain present and unchanged. Added rows were checked against private source excerpts. These are source-record counts, not unique people or full-profile acceptance.
+
+Read-only audit: 425 employers, 372 titles and 423 supported date ranges. Malformed, duplicate and invalid-range diagnostics remain zero; seven overlap flags and one possible employer/client equality flag are unchanged and remain review signals. No database backfill or original-file replacement was performed.
+
+| Remaining review queue | Before | After | Continuing reason |
+| --- | ---: | ---: | --- |
+| Date near employment heading | 115 | 112 | Mixed narrative, incomplete field boundaries or lost column order |
+| Project/client narrative | 47 | 46 | Assignment dates do not prove employer tenure; one explicit form recovered |
+| Explicit employer labels | 7 | 7 | Own dates/roles remain separated by mixed content |
+| Headed tables | 6 | 6 | Original layout or bounded row reconstruction required |
+| Other narrative/layout | 2 | 2 | Insufficient supported extraction |
+| **Total** | **177** | **173** | Heuristic queues, not adjudicated root causes |
+
+Twenty-four local regression files, TypeScript typecheck and formatting pass. The expanded regression remains mandatory in CI. Check the latest PR head and exact-head CI/status results before continuing; the baseline SHA is not evidence for this revision. Prioritize remaining labelled/table groups and source-backed boundary groups, and measure missing historical rows as well as completely unresolved sources. Keep any original-source request list private and do not request files still accessible.
+
+Scope remains **SUBSET_ONLY: 277 / 970**, with 693 unaudited. Production remains **NO_GO** pending live OCR with saved provenance, reviewed/version-matched backfill, full-population audit and authenticated acceptance on the exact deployment artifact. Exact-head GitHub CI is required after this commit. No runtime configuration, Supabase/Vercel writes or production promotion occurred.

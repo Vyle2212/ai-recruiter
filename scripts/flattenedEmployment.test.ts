@@ -167,3 +167,71 @@ for (const text of headingNegatives) assert.deepEqual(read(text), [], text);
 console.log(
   "Bounded heading fields: order, enumeration, employer-only ledgers and assignment isolation pass",
 );
+
+const labelledForms =
+  "Professional Experience Resume supplied for recruitment review. COMPANY Example Services Ltd POSITION SAP Manager DURATION July 2024 - Present Client: Buyer One Project: Migration Role: Developer Jan 2020 - Dec 2020 COMPANY Example Manufacturing Ltd POSITION Production Chemist DURATION May 2011 - March 2014 Responsibilities: Production quality.";
+assert.deepEqual(
+  read(labelledForms).map((j) => [j.company, j.title, j.start, j.end]),
+  [
+    ["Example Services Ltd", "SAP Manager", "July 2024", "Present"],
+    [
+      "Example Manufacturing Ltd",
+      "Production Chemist",
+      "May 2011",
+      "March 2014",
+    ],
+  ],
+);
+const serviceForms =
+  "Working Experience Current Employment Current Position Company Example Services Position Consultant Service Period August 2017 until current Key Responsibilities Previous Position Company Example Manufacturing Position Production Chemist Service Period May 2011 until March 2014 Key Responsibilities";
+assert.equal(read(serviceForms).length, 2);
+assert.equal(read(serviceForms)[1].title, "Production Chemist");
+const periodForms =
+  "Working Experience Period February 2020 – Present Company Example Services Designation Senior SAP Basis Consultant Plan, coordinate with customers. Period September 2014 – January 2020 Company Example Systems Designation SAP Basis Engineer Investigate incidents. Period April 2012 – February 2013 Company Example Logistics Designation Service Desk Analyst (German Speaker) Provide support.";
+assert.deepEqual(
+  read(periodForms).map((j) => j.title),
+  [
+    "Senior SAP Basis Consultant",
+    "SAP Basis Engineer",
+    "Service Desk Analyst (German Speaker)",
+  ],
+);
+const assertions =
+  "Professional Experience-2 Working with Example Services since Sep 2023 to till date 1. Projects Details: Client: Buyer One Role: SAP Consultant Professional Experience-1 Worked with Example Systems from July2020-Jan2021 Projects Details: Role: Developer";
+assert.deepEqual(
+  read(assertions).map((j) => [j.company, j.title, j.start, j.end]),
+  [
+    ["Example Services", "", "Sep 2023", "Present"],
+    ["Example Systems", "", "July 2020", "Jan 2021"],
+  ],
+);
+for (const text of [
+  "Project Professional Experience COMPANY Example Buyer POSITION Consultant DURATION Jan 2020 - Present",
+  "Professional Experience Project: Delivery COMPANY Example Buyer POSITION Consultant DURATION Jan 2020 - Present",
+  "Professional Experience Project Experience COMPANY Example Buyer POSITION Consultant DURATION Jan 2020 - Present",
+  "Professional Experience COMPANY Example Services POSITION Consultant Client: Buyer DURATION Jan 2020 - Present",
+  "Professional Experience COMPANY Example Services POSITION Consultant DURATION Jan 2024 - Dec 2023",
+  "Professional Experience COMPANY Example University POSITION RESEARCH STUDENT DURATION Jan 2020 - Dec 2021",
+  "Professional Experience COMPANY Example Services POSITION Consultant DURATION Jan 2020 - Project Duration Jan 2021 - Dec 2021",
+  "Working Experience Current Employment Company Example Services Position Consultant Project Period Jan 2020 - Present",
+  "Working Experience Period Jan 2020 - Present Company Client Buyer Designation SAP Consultant Plan delivery",
+  "Working Experience Period Jan 2020 - Present Company Example Services Designation SAP Consultant Client: Buyer Plan delivery",
+  "Professional Experience-1 Worked with Client Buyer since Jan 2020 - Present",
+  "Professional Experience-1 Worked for Example Buyer since Jan 2020 - Present",
+  "Professional Experience-1 Working with Example Services since Jan 2020 Project: Delivery Jan 2021 - Present",
+])
+  assert.equal(read(text).length, 0, text);
+assert.equal(extractCanonicalEmploymentFromResume(labelledForms).length, 2);
+assert.equal(extractCanonicalEmploymentFromResume(serviceForms).length, 2);
+assert.equal(extractCanonicalEmploymentFromResume(periodForms).length, 3);
+assert.equal(extractCanonicalEmploymentFromResume(assertions).length, 2);
+console.log(
+  "Labelled forms batch: field boundaries, project isolation and explicit tenure pass",
+);
+
+assert.deepEqual(
+  read(
+    "Professional Experience COMPANY Example Partial POSITION Chemist DURATION COMPANY Example Complete POSITION Chemist DURATION Jan 2020 - Dec 2021",
+  ).map((j) => j.company),
+  ["Example Complete"],
+);
