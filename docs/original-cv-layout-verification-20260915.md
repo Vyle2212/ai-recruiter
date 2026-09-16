@@ -33,3 +33,24 @@ Synthetic tests cover PDF row ordering, fragmented words, both table formats, mu
 With the subsequent parser checkpoints documented in `cv-ocr-upload-release.md`, the unchanged 277-source export now yields 144 source records with employment / 552 employment rows, with 133 sources without employment. These are source records, not unique-person or complete-CV counts. Original files have not been written back to that export or the database; the 59 original-file rows must not be added to its counts as if backfill had occurred. The other 693 sources remain unaudited. Existing malformed, duplicate and invalid-range diagnostic counts remain zero.
 
 Production remains NO_GO. The subsequent upload OCR integration is documented in `cv-ocr-upload-release.md`; live service verification remains outstanding. Authenticated database backfill, full-population audit, and deployed-SHA acceptance remain outstanding. Runtime Supabase/Vercel changes are outside this automated GitHub-only scope. No production data writes or production promotion were performed.
+
+## Additional original-file batch — 2026-09-16
+
+Eight additional PDFs (26 pages) and three corresponding DOCX files were reviewed locally. With parser `candidate-employment-v69-original-layout-batch`, PDF extraction produces **35 employment rows across eight CVs**, compared with one row across one CV at baseline `9f0d53e3cec910e506993fba69aba41c6ffdb8b0`. The three PDF/DOCX pairs have matching employer/title/start/end/current tuples after case folding; they are not counted as extra people or extra histories.
+
+| Original layout | Rows | Qualification |
+| --- | ---: | --- |
+| Date / Company Name / Role table | 6 | Start-only dates; project-labelled row remains unresolved |
+| Right-hand dates wrapped across heading lines | 4 | Includes an explicitly written shared-year internship range |
+| Two-column advisory history | 5 | Sidebar and client-list prose excluded from employers |
+| Two-column quality-assurance history | 5 | Explicit freelance overlap retained |
+| Numeric month/year headings | 3 | Communications role retained; references excluded |
+| Employer/location/tenure plus “Served as” | 4 | Location separated; identical heading evidence merged without a duplicate untitled row |
+| Date/employer heading with following role | 6 | Location and reporting-manager annotations excluded from fields |
+| Undated role-at-employer statements | 2 | No tenure or SAP experience inferred; other event/gig entries remain unresolved |
+
+Every non-whitespace PDF text-item character is retained on all 26 pages. This is a text-retention check, not OCR verification. Employment headings were also inspected visually. DOCX multi-paragraph cells are paired only within an explicit Date / Company Name / Role row when all three cell counts agree; unequal cells remain raw source for review.
+
+The original-file cohort is separate from the unchanged 277-source export (144 sources / 552 employment rows, 133 unresolved); no backfill occurred. Original-file counts must not be added to the export's recovered count. This batch does not establish complete histories: partial dates, an assignment-labelled table row and ambiguous event/gig entries remain visible review work. Two newly supplied identities do not replace a different, similarly named requested identity. Private review notes retain those distinctions and recruiter-provided date corrections without publishing names or source text.
+
+Production remains **NO_GO**, with the same live OCR, reviewed backfill, 970-source audit and exact-artifact authenticated acceptance gates.

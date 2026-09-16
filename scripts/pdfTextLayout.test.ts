@@ -106,6 +106,41 @@ async function main() {
     table.includes("Feb 2019\tSecond Ltd\tSAP Tester\tTesting\t3 months"),
   );
   assert.ok(table.includes("Page 1 of 1"));
+  const sideItems = [
+    item("EDUCATION", 20, 500),
+    item("\uE001", 210, 500),
+    item("WORK EXPERIENCE", 300, 500),
+    item("Example University", 20, 470),
+    item("Jan 2023 - Present", 300, 470),
+    item("2010 - 2014", 20, 450),
+    item("Solution Advisor", 300, 450),
+    item("Example Ltd", 300, 430),
+    item("SKILLS", 20, 400),
+    item("Excel", 20, 380),
+  ];
+  const sidebar = await createCvPdfRenderer()(page(sideItems));
+  assert.ok(sidebar.indexOf("Excel") < sidebar.indexOf("WORK EXPERIENCE"));
+  assert.ok(
+    sidebar.includes("Jan 2023 - Present\nSolution Advisor\nExample Ltd"),
+  );
+  const inventory = (s: string) => [...s.replace(/\s/g, "")].sort().join("");
+  assert.equal(
+    inventory(sidebar),
+    inventory(sideItems.map((x) => x.str).join("")),
+    "Every non-whitespace source character must survive column ordering",
+  );
+  const centeredItems = [
+    item("Header", 20, 600),
+    item("PROFESSIONAL EXPERIENCE", 200, 500),
+    item("Example Ltd", 20, 470),
+    item("Jan 2020 - Present", 300, 470),
+    item("SAP Consultant", 20, 450),
+  ];
+  assert.equal(
+    await createCvPdfRenderer()(page(centeredItems)),
+    renderPdfTextItems(centeredItems),
+    "A centered heading without a sidebar must not split the page",
+  );
   console.log(
     "PDF geometry ordering, word gaps, explicit table columns and document isolation passed",
   );

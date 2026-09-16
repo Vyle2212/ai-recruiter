@@ -37,3 +37,56 @@ assert.equal(
 console.log(
   "DOCX soft line breaks, tabs and canonical employment boundary passed",
 );
+const cell = (...values: string[]) => ({
+  type: "tableCell",
+  children: values.map((v) => paragraph([text(v)])),
+});
+const row = (...children: ReturnType<typeof cell>[]) => ({
+  type: "tableRow",
+  children,
+});
+const table = {
+  type: "table",
+  children: [
+    row(cell("Employment History:")),
+    row(cell("Date"), cell("Company Name"), cell("Role")),
+    row(
+      cell("Jan 2023", "Feb 2021"),
+      cell("Example Ltd", "Earlier Ltd"),
+      cell("SAP Consultant", "Basis Consultant"),
+    ),
+    row(cell("Skills:")),
+    row(cell("Jan 2020"), cell("Not Employment"), cell("SAP Consultant")),
+  ],
+};
+const renderedTable = renderDocxText(table);
+assert.ok(
+  renderedTable.includes(
+    "Jan 2023\tExample Ltd\tSAP Consultant\nFeb 2021\tEarlier Ltd\tBasis Consultant",
+  ),
+);
+assert.equal(
+  normalizeActualCandidateSchema({ raw_text: renderedTable }).enterpriseProfile
+    .employmentTimeline.length,
+  2,
+);
+const unequal = renderDocxText({
+  type: "table",
+  children: [
+    table.children[0],
+    table.children[1],
+    row(
+      cell("Jan 2023", "Feb 2021"),
+      cell("Only One Ltd"),
+      cell("SAP Consultant", "Basis Consultant"),
+    ),
+  ],
+});
+assert.ok(
+  !unequal.includes("Jan 2023\tOnly One Ltd"),
+  "Unequal cell counts must not be zipped or filled",
+);
+assert.ok(
+  unequal.includes("Feb 2021") && unequal.includes("Only One Ltd"),
+  "Retain unmatched source text for review",
+);

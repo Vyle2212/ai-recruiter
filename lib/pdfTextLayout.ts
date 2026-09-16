@@ -56,6 +56,51 @@ type PdfPage = {
 const compact = (items: TextItem[]) =>
   renderPdfTextItems(items).replace(/\s+/g, " ").trim();
 
+/** Split a sidebar only at a positioned, explicit employment heading. */
+function renderEmploymentColumns(items: TextItem[]): string | undefined {
+  const ys = [...new Set(items.map((x) => x.transform[5]))].sort(
+    (a, b) => b - a,
+  );
+  const minX = Math.min(
+    ...items.filter((x) => x.str.trim()).map((x) => x.transform[4]),
+  );
+  for (const y of ys) {
+    const row = items
+      .filter((x) => Math.abs(x.transform[5] - y) <= 2)
+      .sort((a, b) => a.transform[4] - b.transform[4]);
+    for (let first = 0; first < row.length; first++) {
+      if (!/[a-z]/i.test(row[first].str)) continue;
+      let label = "";
+      for (let last = first; last < row.length && label.length <= 24; last++) {
+        label += row[last].str.replace(/[^a-z]/gi, "").toUpperCase();
+        if (label !== "WORKEXPERIENCE" && label !== "PROFESSIONALEXPERIENCE")
+          continue;
+        const x = row[first].transform[4];
+        if (x < minX + 100) continue;
+        const below = items.filter((item) => item.transform[5] <= y + 2);
+        const left = below.filter((item) => item.transform[4] < x - 3);
+        const right = below.filter((item) => item.transform[4] >= x - 3);
+        // Require independent sidebar sections, not an indented employment heading.
+        if (
+          !renderPdfTextItems(left)
+            .split("\n")
+            .some((s) =>
+              /^(?:EDUCATION|SKILLS|LANGUAGES|SUMMARYOFQUALIFICATIONS)$/i.test(
+                s.replace(/[^a-z]/gi, ""),
+              ),
+            )
+        )
+          continue;
+        return [
+          renderPdfTextItems(items.filter((item) => item.transform[5] > y + 2)),
+          renderPdfTextItems(left),
+          renderPdfTextItems(right),
+        ].join("\n");
+      }
+    }
+  }
+}
+
 /** Keep cells in explicit employment tables together instead of interleaving prose. */
 export function createCvPdfRenderer() {
   let scopeTable = false;
@@ -65,6 +110,8 @@ export function createCvPdfRenderer() {
       disableCombineTextItems: true,
     });
     const plain = renderPdfTextItems(items);
+    const columns = renderEmploymentColumns(items);
+    if (columns) return columns;
     const scopeHeader = items.find((x) => /^Scope of\s*$/.test(x.str));
     if (
       /Name of Company/.test(plain) &&

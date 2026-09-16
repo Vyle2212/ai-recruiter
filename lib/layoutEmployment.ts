@@ -7,19 +7,30 @@ export type LayoutEmployment = {
 };
 const month =
   "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
-const date = `(?:${month}\\s+(?:19|20)\\d{2}|(?:0?[1-9]|1[0-2])/(?:19|20)\\d{2})`;
+const date = `(?:${month}\\s+(?:19|20)\\d{2}|(?:0?[1-9]|1[0-2])[/.]\\s*(?:19|20)\\d{2})`;
 const range = new RegExp(
-  `(${date})\\s*[-–—]\\s*(${date}|Present|Current)`,
+  `(${date})\\s*(?:[-–—]|to)\\s*(${date}|Present|Current|Curr)`,
   "i",
 );
 const role =
-  /\b(?:consultant|manager|officer|associate|intern|specialist|executive|lead|head|analyst|engineer|developer|analytic|contractor|administrator|advisory|technician|tutor)\b/i;
+  /\b(?:consultant|manager|officer|associate|intern|trainee|specialist|executive|lead|head|analyst|engineer|developer|analytic|contractor|administrator|advisor|advisory|technician|tutor|QA Automation|support|management|housekeeper|promoter)\b/i;
 const forbidden =
   /^(?:[•●]|client\b|project\s*[:\t]|responsibilit|environment\b|contract for\b)|\b(?:went live|go.live|implementation project)\b/i;
 const heading =
   /^(?:professional (?:work )?experiences?|employment history|work(?:ing)? experience)\s*:?$/i;
 const stop =
-  /^(?:education|references|skills|professional certificates|community leadership|academic qualifications|detailed work experiences?|project (?:history|experience|details))\b/i;
+  /^(?:education|references?|skills|hobbies|technology summary|professional certificates|community leadership|academic qualifications|detailed work experiences?|project (?:history|experience|details))\b/i;
+
+function normalizeHeading(line: string): string {
+  const compact = line.replace(/[\s\uE000-\uF8FF]/g, "").toUpperCase();
+  const headings: Record<string, string> = {
+    WORKEXPERIENCE: "Work Experience",
+    PROFESSIONALEXPERIENCE: "Professional Experience",
+    EDUCATION: "Education",
+    TECHNOLOGYSUMMARY: "Technology Summary",
+  };
+  return headings[compact] || line;
+}
 
 /** Only line-bounded employment headings; never infer dates from assignment prose. */
 export function layoutEmployment(source: string): LayoutEmployment[] {
@@ -27,7 +38,7 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
     .normalize("NFKC")
     .replace(/\r/g, "")
     .split("\n")
-    .map((x) => x.trim())
+    .map((x) => normalizeHeading(x.trim()))
     .filter(Boolean);
   const lines: string[] = [];
   for (let i = 0; i < rawLines.length; i++) {
@@ -41,7 +52,7 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
   }
   const output: LayoutEmployment[] = [];
   let active = false;
-  let table: "year" | "scope" | undefined;
+  let table: "year" | "scope" | "dateCompanyRole" | undefined;
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
     if (heading.test(line)) {
@@ -68,6 +79,10 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
       table = "scope";
       continue;
     }
+    if (active && /^Date\s*\tCompany Name\s*\tRole$/i.test(line)) {
+      table = "dateCompanyRole";
+      continue;
+    }
     if (!active) continue;
     const next = (lines[i + 1] || "").replace(/^HISTORY\s+/, "");
     const add = (
@@ -77,7 +92,7 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
       count: number,
     ) => {
       company = company.trim();
-      title = title.trim();
+      title = title.trim().split(/\s+reporting to\b/i)[0];
       if (
         !company ||
         !role.test(title) ||
@@ -93,7 +108,36 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
         excerpt: lines.slice(i, i + count).join("\n"),
       });
     };
-    const cells = line.split("\t");
+    const cells = line.split("\t").map((x) => x.trim());
+    if (
+      table === "dateCompanyRole" &&
+      cells.length === 3 &&
+      new RegExp(`^${date}$`, "i").test(cells[0]) &&
+      cells[1].trim() &&
+      cells[2].trim()
+    ) {
+      let title = cells[2].trim();
+      // A wrapped table cell remains on its own physical line; never take the next row's date.
+      let count = 1;
+      if (
+        !next.includes("\t") &&
+        !stop.test(next) &&
+        /[.]$/.test(next) &&
+        /\(Project\)/i.test(title) &&
+        next.length < 100
+      ) {
+        title += " " + next;
+        count++;
+      }
+      output.push({
+        company: cells[1].trim(),
+        title,
+        start: cells[0],
+        excerpt: lines.slice(i, i + count).join("\n"),
+      });
+      i += count - 1;
+      continue;
+    }
     if (
       table === "year" &&
       cells.length === 5 &&
@@ -127,6 +171,151 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
       continue;
     }
     if (forbidden.test(line)) continue;
+    const sharedYearMonths = line.match(
+      new RegExp(`^(${month})\\s*[-–—]\\s*(${month})$`, "i"),
+    );
+    if (
+      sharedYearMonths &&
+      !role.test(next) &&
+      !forbidden.test(next) &&
+      /^(?:19|20)\d{2}$/.test(lines[i + 2] || "") &&
+      role.test(lines[i + 3] || "")
+    ) {
+      const year = lines[i + 2];
+      add(
+        next,
+        lines[i + 3],
+        `${sharedYearMonths[1]} ${year} - ${sharedYearMonths[2]} ${year}`.match(
+          range,
+        ),
+        4,
+      );
+      continue;
+    }
+    const undatedAt = line.match(
+      /^([A-Za-z][^,.\t]{2,70}) at ([A-Za-z][^\t]{2,140})$/,
+    );
+    if (
+      undatedAt &&
+      role.test(undatedAt[1]) &&
+      !/\b(?:19|20)\d{2}\b|\b(?:client|project|worked|working|responsible|supporting)\b/i.test(
+        line,
+      )
+    ) {
+      add(undatedAt[2].split(/,|\s+selling\b/i)[0], undatedAt[1], null, 1);
+      continue;
+    }
+    if (
+      !role.test(line) &&
+      !line.includes("\t") &&
+      new RegExp(`^${date}\\s*[-–—]$`, "i").test(next) &&
+      role.test(lines[i + 2] || "") &&
+      new RegExp(`^${month}$`, "i").test(lines[i + 3] || "") &&
+      /^(?:19|20)\d{2}$/.test(lines[i + 4] || "")
+    ) {
+      add(
+        line,
+        lines[i + 2],
+        `${next} ${lines[i + 3]} ${lines[i + 4]}`.match(range),
+        5,
+      );
+      continue;
+    }
+    // A right-hand date may wrap around the adjacent role in PDF reading order.
+    if (
+      !role.test(line) &&
+      !line.includes("\t") &&
+      new RegExp(`^${date}$`, "i").test(next) &&
+      role.test(lines[i + 2] || "") &&
+      /^[-–—]\s*(?:Present|Current)$/i.test(lines[i + 3] || "")
+    ) {
+      add(line, lines[i + 2], (next + " " + lines[i + 3]).match(range), 4);
+      continue;
+    }
+    const roleMonth = next.match(new RegExp(`^([^\\t]+)\\t(${month})$`, "i"));
+    const middleDate = lines[i + 2] || "";
+    const lastDate = (lines[i + 3] || "").match(/^([^\t]+)\t((?:19|20)\d{2})$/);
+    if (
+      !role.test(line) &&
+      !line.includes("\t") &&
+      roleMonth &&
+      lastDate &&
+      new RegExp(`^(?:19|20)\\d{2}\\s*[-–—]\\s*${month}$`, "i").test(middleDate)
+    ) {
+      add(
+        line,
+        roleMonth[1],
+        `${roleMonth[2]} ${middleDate} ${lastDate[2]}`.match(range),
+        4,
+      );
+      continue;
+    }
+    const wholeDates = line.match(range);
+    if (
+      wholeDates &&
+      wholeDates.index === 0 &&
+      !line.slice(wholeDates[0].length).replace(/[-–—]/g, "").trim()
+    ) {
+      const company = lines[i + 2] || "";
+      if (
+        role.test(next) &&
+        !role.test(company) &&
+        !company.includes("\t") &&
+        !stop.test(company)
+      ) {
+        add(company, next, wholeDates, 3);
+        continue;
+      }
+    }
+    // A complete date followed by the employer is an explicit two-line heading.
+    if (
+      wholeDates?.index === 0 &&
+      line.slice(wholeDates[0].length).trim() &&
+      role.test(next)
+    ) {
+      add(
+        line
+          .slice(wholeDates[0].length)
+          .trim()
+          .replace(/\s*\(Based in\b.*$/i, ""),
+        next,
+        wholeDates,
+        2,
+      );
+      continue;
+    }
+    // Role on its own line followed by employer and a right-aligned tenure.
+    const employerDates = next.match(range);
+    if (
+      role.test(line) &&
+      line.length <= 120 &&
+      !/[.\t:]/.test(line) &&
+      employerDates &&
+      employerDates.index! > 0 &&
+      !next.slice(employerDates.index! + employerDates[0].length).trim()
+    ) {
+      add(
+        next
+          .slice(0, employerDates.index)
+          .trim()
+          .replace(/\s*\|$/, ""),
+        line,
+        employerDates,
+        2,
+      );
+      continue;
+    }
+    const served = next.match(/^Served as (.{3,120}?)(?:\s+(?:to|for)\b|,)/i);
+    const located = line.match(
+      new RegExp(
+        `^(.{2,140}),[^()]{1,50}\\((${range.source})\\)\\s*[-–—]`,
+        "i",
+      ),
+    );
+    if (served && located) {
+      add(located[1], served[1], located[2].match(range), 2);
+      continue;
+    }
     const followingCompany = next.match(/^([^|\t]{2,140})\s*\|\s*(.+)$/);
     if (role.test(line) && !line.includes("\t") && followingCompany) {
       const dates = followingCompany[2].match(range);
@@ -212,7 +401,12 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
     }
     // Company on its own line, then date range, then a job title.
     const nextDates = next.match(range);
-    if (!role.test(line) && nextDates?.[0] === next && !line.includes("\t")) {
+    if (
+      !role.test(line) &&
+      nextDates?.[0] === next &&
+      !line.includes("\t") &&
+      (!/[.!?]$/.test(line) || /\b(?:Ltd|Inc|Bhd|Corp|Co)\.$/i.test(line))
+    ) {
       add(line, lines[i + 2] || "", nextDates, 3);
     }
   }

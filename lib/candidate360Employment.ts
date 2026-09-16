@@ -10,7 +10,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v68-punctuated-heading-batch";
+  "candidate-employment-v69-original-layout-batch";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -186,7 +186,7 @@ export function validEmploymentTitle(input: unknown) {
     return "";
   if (/^[^A-Za-z0-9]+/.test(title)) return "";
   if (
-    /^(?:com|www|https?|mailto|e-?mail|phone|mobile|contact|or\s+position\s+held\b)/i.test(
+    /^(?:com\b|www\b|https?\b|mailto\b|e-?mail\b|phone\b|mobile\b|contact\b|or\s+position\s+held\b)/i.test(
       title,
     )
   )
@@ -1045,7 +1045,7 @@ function employerAssignmentSummary(source: string): EnterpriseEmployment[] {
 function resumeEmployment(resumeText: string) {
   const output: EnterpriseEmployment[] = [];
   for (const [index, row] of layoutEmployment(resumeText).entries()) {
-    const normalizeDate = (input = '') => input.replace(/^(0?[1-9]|1[0-2])\/(\d{4})$/, (_, m, y) => `${monthNames[Number(m) - 1]} ${y}`);
+    const normalizeDate = (input = '') => input.replace(/^(0?[1-9]|1[0-2])[/.]\s*(\d{4})$/, (_, m, y) => `${monthNames[Number(m) - 1]} ${y}`).replace(/^Curr$/i, 'Current');
     const start = normalizeDate(row.start), end = normalizeDate(row.end);
     if (start && end && !supportedRange(start, end, /^(present|current)$/i.test(end))) continue;
     const parsed = entry({ ...row, start, end, allowGroundedEmployerOnly: true, sourceRef: `resume.layout.${index + 1}`, sourceType: 'parsed_resume', confidence: 90 });
@@ -1063,7 +1063,18 @@ function resumeEmployment(resumeText: string) {
   for (const [index, row] of flattenedEmployment(source).entries()) {
     const parsed = entry({...row, allowGroundedEmployerOnly: true,
       sourceRef: `resume.flattened.${row.group}.${index + 1}`, sourceType: "parsed_resume", confidence: 94});
-    if (parsed) output.push(parsed);
+    if (!parsed) continue;
+    const sameHeading = !parsed.title && output.find((known) => known.title &&
+      normalized(known.company) === normalized(parsed.company) &&
+      monthIndex(known.start) !== null && monthIndex(known.start) === monthIndex(parsed.start) &&
+      monthIndex(known.end, known.current) !== null && monthIndex(known.end, known.current) === monthIndex(parsed.end, parsed.current) &&
+      known.current === parsed.current && parsed.provenance?.[0]?.excerpt &&
+      known.provenance?.some((ref) => ref.sourceRef?.startsWith('resume.layout.') &&
+        clean(ref.excerpt).toLowerCase().includes(clean(parsed.provenance?.[0]?.excerpt).toLowerCase())));
+    if (sameHeading) {
+      sameHeading.provenance = [...(sameHeading.provenance || []), ...(parsed.provenance || [])];
+      sameHeading.sourceEmploymentIds?.push(...(parsed.sourceEmploymentIds || []));
+    } else output.push(parsed);
   }
   const monthYear =
     "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[a-z]*[’']?\\s*(?:19|20)\\d{2}";
