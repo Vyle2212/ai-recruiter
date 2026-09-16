@@ -108,4 +108,20 @@ for (const ending of ['', '   ', ' Education Example University', ' Project Hist
 assert.equal(jobs(`Project History ${terminalOrganization}`).length, 0);
 assert.equal(jobs(`Professional Experience ${terminalOrganization.replace('March 2021', 'March 2018')}`).length, 0);
 
+
+
+const headingPosition = 'Working Experience Example Services Duration: March 2017 - March 2020 Position: Accounts Assistant Salary: undisclosed Responsibilities: Support.';
+const headingRows = jobs(`${headingPosition} Unbounded Employer Duration: Jan 2015 - Feb 2017 Position: Analyst Salary: undisclosed Working Experience Example Logistics Duration: July 2010 - Feb 2012 Position: Coordinator Salary: undisclosed Education`);
+assert.deepEqual(headingRows.map(item => item.company), ['Example Services', 'Example Logistics']);
+assert.deepEqual(headingRows.map(item => item.title), ['Accounts Assistant', 'Coordinator']);
+assert.ok(headingRows.every(item => item.provenance?.length && item.provenance.every(ref => !ref.excerpt?.includes('Salary'))));
+assert.equal(jobs(`Project History ${headingPosition}`).length, 0);
+assert.equal(jobs(headingPosition.replace('Example Services', 'Client Example Services')).length, 0);
+assert.equal(jobs(headingPosition.replace('March 2020', 'March 2010')).length, 0);
+assert.equal(jobs(headingPosition.replace('March 2020', 'March 20200')).length, 0);
+
+
+
+assert.equal(jobs(`Education Example University ${headingPosition}`).length, 1);
+
 console.log('Employment table dates, role boundaries and spaced-date layouts: passed');

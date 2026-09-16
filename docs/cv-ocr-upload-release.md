@@ -120,3 +120,11 @@ The `Organization -> Duration -> Designation` reader required whitespace before 
 Synthetic regressions reproduce the previous omission and cover end-of-document, trailing whitespace, education/project transitions and project-only rejection. All 16 local employment, calendar-date and canonical regression files plus typecheck passed. The unchanged private 277-source subset still yields 79 profiles / 313 rows, with 198 unresolved and zero changed employment timelines. Malformed, duplicate and invalid-range diagnostics remain zero. This is a coverage regression repair, not additional recovery measured on that subset.
 
 Exact-head CI remains required. Live OCR, reviewed backfill, the remaining 693 sources and authenticated exact-artifact acceptance remain outstanding; production remains NO_GO.
+
+## Continuation checkpoint: heading/duration/position forms
+
+A flattened employment form places the employer immediately after `Working Experience` or `Employment History`, followed by explicit `Duration`, `Position` and `Salary` labels. The parser now uses the heading as the employer's left boundary and those labels as field boundaries. Salary is used only as a delimiter and excluded from employment evidence. Later unlabelled employer names embedded in responsibility prose are not guessed. Education before employment is supported; project sections, client-labelled employers and reversed or malformed date ranges remain excluded.
+
+The private 277-source subset increased from 79 profiles / 313 rows to 80 profiles / 315 rows, leaving 197 profiles without employment. One previously unresolved profile gained two complete employer/title/date records; all other employment timelines are unchanged. Malformed, duplicate and invalid-range diagnostics remain zero. This does not recover every job in that profile: unbounded rows still require source-layout review. No backfill or source mutation was performed, and 693 sources remain unaudited.
+
+All 16 local employment/calendar/canonical regression files and typecheck passed. Synthetic cases cover repeated headings, education-first ordering, ambiguous unbounded rows, salary evidence exclusion, project/client isolation and invalid ranges. Exact-head CI remains required; live OCR, reviewed backfill, full-population audit and authenticated exact-artifact acceptance still block production (NO_GO).

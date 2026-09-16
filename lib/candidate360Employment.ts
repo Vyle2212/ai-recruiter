@@ -9,7 +9,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v50-terminal-organization";
+  "candidate-employment-v51-heading-duration-position";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -800,6 +800,25 @@ function numberedPositionPeriodEmployment(source: string): EnterpriseEmployment[
   });
 }
 
+// A section heading supplies the employer's left boundary when flattened
+// responsibility prose makes later unlabelled employer boundaries ambiguous.
+function headingDurationPositionEmployment(source: string): EnterpriseEmployment[] {
+  const start = source.search(/\b(?:Working Experience|Employment History)\b/i);
+  if (start < 0 || /\b(?:Project History|Project Experience)\b/i.test(source.slice(0, start))) return [];
+  const bounded = source.slice(start).split(/\b(?:Project History|Project Experience|Education|Technical Skills|Qualifications|References)\b/i)[0];
+  const monthYear = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s+(?:19|20)\\d{2}';
+  const pattern = new RegExp(`\\b(?:Working Experience|Employment History)\\s*:?\\s*([^:;!?]{2,140}?)\\s+Duration\\s*:\\s*(${monthYear})\\s*[-–—]\\s*(${monthYear}|Present|Current|Now)\\s+Position\\s*:\\s*([^:;!?]{2,120}?)\\s+Salary\\s*:`, 'gi');
+  return [...bounded.matchAll(pattern)].flatMap((match, index) => {
+    const company = match[1].trim();
+    const current = /^(?:Present|Current|Now)$/i.test(match[3]);
+    if (/\b(?:client|customer|project|responsibilities|duration|position)\b/i.test(company) || !supportedRange(match[2], match[3], current)) return [];
+    const parsed = entry({company, title: match[4], start: match[2], end: match[3], current,
+      sourceRef: `resume.headingDurationPosition.${index + 1}`, sourceType: 'parsed_resume', confidence: 96,
+      excerpt: match[0].replace(/\s+Salary\s*:$/i, '')});
+    return parsed ? [parsed] : [];
+  });
+}
+
 function datedEmploymentLedger(source: string): EnterpriseEmployment[] {
   const headings = [...source.matchAll(/\bEMPLOYMENT HISTORY\s*:?\s*/gi)];
   const month = '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*';
@@ -1036,7 +1055,7 @@ function resumeEmployment(resumeText: string) {
     })
     .replace(/[\r\n]+/g, " ")
     .replace(/\s+/g, " ");
-  output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source), ...labelledEmployerHistory(source), ...explicitHeadingVariants(source), ...orderedLabelEmployment(source), ...dateCompanyRoleEmployment(source), ...explicitEmploymentStatements(source), ...spacedDateEmployment(source), ...datedEmploymentLedger(source), ...numberedPositionEmployment(source), ...numberedPositionPeriodEmployment(source), ...roleCompanyPeriodEmployment(source), ...locatedEmployerHistory(source), ...durationEmployerHistory(source), ...organizationDurationDesignationEmployment(source), ...organizationPeriodEmployment(source), ...datedCareerSummary(source), ...numberedWorkExperience(source), ...locatedRoleEmployment(source), ...formerNameEmployment(source), ...employerAssignmentSummary(source));
+  output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source), ...labelledEmployerHistory(source), ...explicitHeadingVariants(source), ...orderedLabelEmployment(source), ...dateCompanyRoleEmployment(source), ...explicitEmploymentStatements(source), ...spacedDateEmployment(source), ...datedEmploymentLedger(source), ...headingDurationPositionEmployment(source), ...numberedPositionEmployment(source), ...numberedPositionPeriodEmployment(source), ...roleCompanyPeriodEmployment(source), ...locatedEmployerHistory(source), ...durationEmployerHistory(source), ...organizationDurationDesignationEmployment(source), ...organizationPeriodEmployment(source), ...datedCareerSummary(source), ...numberedWorkExperience(source), ...locatedRoleEmployment(source), ...formerNameEmployment(source), ...employerAssignmentSummary(source));
   const monthYear =
     "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[a-z]*[’']?\\s*(?:19|20)\\d{2}";
   const explicitCompanyPositionDate = new RegExp(
