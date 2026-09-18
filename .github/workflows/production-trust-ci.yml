@@ -183,6 +183,7 @@ jobs:
           node --import tsx scripts/originalCareerLayouts.test.ts
           node --import tsx scripts/threeTierRecovery.test.ts
           node --import tsx scripts/candidateSecurityFixtureRls.test.ts
+          node --import tsx scripts/candidateDetailAuthorization.test.ts
           node --import tsx scripts/cvPdfOcr.test.ts
           node --import tsx scripts/uploadCvSourceFailure.test.ts
 
