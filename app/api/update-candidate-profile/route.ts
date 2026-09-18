@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
+import { recruiterSearchAuthorizationDenied, recruiterSearchPrivateNoStoreHeaders, requireRecruiterSearchAuthorization } from "@/lib/recruiterSearchAuthorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,6 +35,9 @@ function normalizeStatus(value: any, fallback = "Not verified") {
 
 export async function PATCH(req: NextRequest) {
   try {
+    const authorization = await requireRecruiterSearchAuthorization({ permission: "candidate-detail:read", route: "/api/update-candidate-profile" });
+    if (!authorization.allowed) return recruiterSearchAuthorizationDenied(authorization);
+    const supabase = createLazySupabaseServiceClient();
     const body = (await req.json()) as AnyRecord;
     const id = cleanString(body.id || body.candidate_id || body.candidateId);
     if (!id) return NextResponse.json({ error: "Candidate id is required." }, { status: 400 });
@@ -74,8 +78,8 @@ export async function PATCH(req: NextRequest) {
       .select("*")
       .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true, candidate: data });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: recruiterSearchPrivateNoStoreHeaders });
+    return NextResponse.json({ ok: true, candidate: data }, { headers: recruiterSearchPrivateNoStoreHeaders });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "Failed to update candidate profile." }, { status: 500 });
   }

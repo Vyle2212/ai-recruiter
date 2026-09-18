@@ -1,3 +1,4 @@
+import { sanitizeCandidateSourceText } from "./candidateSourcePreservation";
 /* FINAL SAP CV Parser - recruiter-grade extraction
    Fixes:
    - Prevents headings/skills/project text from becoming candidate name
@@ -741,7 +742,7 @@ export function parseCandidateFromText(input: string, fileName?: string) {
     consultingDNAScore,
     employerReputationScore: Math.min(30, brands.length * 10),
 
-    rawText,
+    rawText: sanitizeCandidateSourceText(input),
   };
 }
 
@@ -754,22 +755,19 @@ async function bufferToText(buffer: Buffer, fileName = "") {
   const ext = fileName.toLowerCase().split(".").pop();
 
   if (ext === "docx") {
-    const mammoth = await import("mammoth");
-    const res = await mammoth.extractRawText({ buffer });
-    return res.value;
-  }
-
-  if (ext === "pdf") {
-    const mod: any = await import("pdf-parse");
-    const pdfParse = mod.default || mod;
-    const res = await pdfParse(buffer);
-    return res.text;
+    const { extractDocxText } = await import("./docxTextLayout");
+    return extractDocxText(buffer);
   }
 
   return buffer.toString("utf8");
 }
 
-export async function parseCv(buffer: Buffer, fileName?: string) {
+export async function parseCv(buffer: Buffer, fileName?: string, options: import('./cvPdfExtraction').PdfExtractionOptions = {}) {
+  if (fileName?.toLowerCase().endsWith('.pdf')) {
+    const { extractCvPdf } = await import('./cvPdfExtraction');
+    const { text, sourceExtraction } = await extractCvPdf(buffer, options);
+    return { ...parseCandidateFromText(text, fileName), sourceExtraction };
+  }
   const text = await bufferToText(buffer, fileName || "");
-  return parseCandidateFromText(text, fileName);
+  return { ...parseCandidateFromText(text, fileName), sourceExtraction: {method: 'native' as const, pageCount: 0, reason: ''} };
 }

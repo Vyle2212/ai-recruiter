@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { applyCandidateValidationAction, buildCandidateValidationState, serializeCandidateValidationState, type CandidateValidationAction } from "@/lib/candidateValidation";
-import { supabase } from "@/lib/supabase";
+import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
+import {
+  recruiterSearchAuthorizationDenied,
+  recruiterSearchPrivateNoStoreHeaders,
+  requireRecruiterSearchAuthorization,
+} from "@/lib/recruiterSearchAuthorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+const supabase = createLazySupabaseServiceClient();
 
 type AnyRecord = Record<string, any>;
 
@@ -49,13 +55,15 @@ async function persistValidation(candidateId: string, candidate: AnyRecord, stat
 
 export async function GET(req: NextRequest) {
   try {
+    const authorization = await requireRecruiterSearchAuthorization({ permission: "candidate-detail:read", route: "/api/candidate-validation" });
+    if (!authorization.allowed) return recruiterSearchAuthorizationDenied(authorization);
     const id = clean(req.nextUrl.searchParams.get("id") || req.nextUrl.searchParams.get("candidateId"));
     if (!id) return NextResponse.json({ error: "Candidate id is required." }, { status: 400 });
 
     const { candidate, error } = await loadCandidate(id);
     if (!candidate) return NextResponse.json({ error }, { status: 404 });
 
-    return NextResponse.json({ ok: true, state: buildCandidateValidationState(candidate) });
+    return NextResponse.json({ ok: true, state: buildCandidateValidationState(candidate) }, { headers: recruiterSearchPrivateNoStoreHeaders });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "Failed to load candidate validation." }, { status: 500 });
   }
@@ -63,6 +71,8 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+    const authorization = await requireRecruiterSearchAuthorization({ permission: "candidate-detail:read", route: "/api/candidate-validation" });
+    if (!authorization.allowed) return recruiterSearchAuthorizationDenied(authorization);
     const body = (await req.json()) as AnyRecord;
     const candidateId = clean(body.candidateId || body.candidate_id || body.id);
     const action = clean(body.action) as CandidateValidationAction;
@@ -85,7 +95,7 @@ export async function PATCH(req: NextRequest) {
     });
     const saved = await persistValidation(candidateId, candidate, recomputed);
 
-    return NextResponse.json({ ok: true, state: buildCandidateValidationState(saved), candidate: saved });
+    return NextResponse.json({ ok: true, state: buildCandidateValidationState(saved), candidate: saved }, { headers: recruiterSearchPrivateNoStoreHeaders });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "Failed to update candidate validation." }, { status: 500 });
   }

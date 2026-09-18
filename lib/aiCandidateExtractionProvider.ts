@@ -34,7 +34,7 @@ export function openAiProviderEnabled(options: AiExtractionRunOptions = {}) {
 }
 
 export function requestedProviderMode(options: AiExtractionRunOptions = {}) {
-  if ((options.providerMode || process.env.AI_EXTRACTION_PROVIDER) === "openai" && process.env.OPENAI_API_KEY) return "openai";
+  if ((options.providerMode || process.env.AI_EXTRACTION_PROVIDER) === "openai") return "openai";
   if ((options.providerMode || process.env.AI_EXTRACTION_PROVIDER) === "mock") return "mock";
   return "fallback";
 }

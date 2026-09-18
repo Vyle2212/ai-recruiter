@@ -145,6 +145,7 @@ export function buildSearchV2RecruiterCandidateDetail(
         duration: cleanCandidatePresentationText(item.duration),
         current: item.current,
         linkedProjectIds: [...(item.linkedProjectIds || [])],
+        estimatedTenure: item.estimatedTenure ? { ...item.estimatedTenure, projectIds: [...item.estimatedTenure.projectIds] } : undefined,
       })),
       projects: enterprise.projects.map((item) => ({
         id: item.id,

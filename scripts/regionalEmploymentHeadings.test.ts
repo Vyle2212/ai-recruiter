@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import { normalizeActualCandidateSchema } from '../lib/candidate360SchemaNormalize';
+const jobs = (raw_text: string) => normalizeActualCandidateSchema({raw_text}).enterpriseProfile.employmentTimeline;
+const pt = jobs('PROFESSIONAL EXPERIENCE SAP Consultant PT. Example Consulting August 2024-Present Engaged across multiple industries. Project Experience Customer: Example Client');
+assert.equal(pt.length, 1);
+assert.equal(pt[0].company, 'PT. Example Consulting');
+assert.equal(pt[0].title, 'SAP Consultant');
+assert.equal(pt[0].start, 'August 2024');
+const pipe = jobs('Professional Experience Senior SAP SD Functional Consultant September 2020 – Present Example Services | Singapore Senior Functional BRIM/SD Consultant for online food delivery service.');
+assert.equal(pipe.length, 1);
+assert.equal(pipe[0].company, 'Example Services');
+assert.equal(pipe[0].title, 'Senior SAP SD Functional Consultant');
+assert.equal(pipe[0].start, 'September 2020');
+assert.equal(jobs('Project Experience SAP Consultant PT. Example Consulting August 2024-Present').length, 0);
+assert.equal(jobs('Professional Experience Responsibilities: SAP Consultant PT. Example Consulting August 2024-Present').length, 0);
+assert.equal(jobs('Professional Experience Senior SAP SD Functional Consultant September 2020 – Present Client Example | Singapore').length, 0);
+assert.equal(jobs('Professional Experience SAP Consultant PT. Example Consulting August 2024-August 2020').length, 0);
+console.log('Regional employment headings and narrative/project isolation: passed');

@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import { normalizeActualCandidateSchema } from '../lib/candidate360SchemaNormalize';
+const jobs = (raw_text: string) => normalizeActualCandidateSchema({raw_text}).enterpriseProfile.employmentTimeline;
+const heading = 'Feb 2019 - Current Functional Application Consultant (for SAP SuccessFactors) Example Outsourcing MSC SDN. BHD. - Cyberjaya';
+const rows = jobs('Employment History ' + heading + ' Troubleshoot incidents and implement change requests. Project Experience Client: Example Customer Duration: Jan 2017 - Jan 2018');
+assert.equal(rows.length, 1);
+assert.equal(rows[0].company, 'Example Outsourcing MSC SDN. BHD.');
+assert.equal(rows[0].title, 'Functional Application Consultant (for SAP SuccessFactors)');
+assert.equal(rows[0].start, 'Feb 2019');
+assert.equal(rows[0].current, true);
+assert.equal(jobs('Project History ' + heading).length, 0);
+assert.equal(jobs('Employment History Responsibilities: ' + heading).length, 0);
+console.log('Functional application employment heading and project isolation: passed');

@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import { normalizeActualCandidateSchema } from '../lib/candidate360SchemaNormalize';
+const jobs = (raw_text: string) => normalizeActualCandidateSchema({raw_text}).enterpriseProfile.employmentTimeline;
+const heading = 'September 2020 - current Example Business Solutions MSC SDN BHD (fka Example Outsourcing MSC Sdn Bhd) AMS Pre-Sales Senior Consultant (Solution Design and Costing) Work Description :';
+const rows = jobs('EMPLOYMENT HISTORY ' + heading + ' Designs solutions for customers.');
+assert.equal(rows.length, 1);
+assert.equal(rows[0].company, 'Example Business Solutions MSC SDN BHD (fka Example Outsourcing MSC Sdn Bhd)');
+assert.equal(rows[0].title, 'AMS Pre-Sales Senior Consultant (Solution Design and Costing)');
+assert.equal(rows[0].start, 'September 2020');
+assert.equal(jobs('PROJECT HISTORY ' + heading).length, 0);
+assert.equal(jobs('EMPLOYMENT HISTORY ' + heading.replace('September 2020 - current', 'September 2020 - August 2019')).length, 0);
+const summary = jobs('Professional Experience 2011 – Present Example Malaysia (Example Solutions) Job Experiences :- 1) SAP BW HANA Consultant (Customer Operations) - Project experience on client site');
+assert.equal(summary.length, 1);
+assert.equal(summary[0].company, 'Example Malaysia (Example Solutions)');
+assert.equal(summary[0].title, '');
+assert.equal(summary[0].start, '2011');
+assert.equal(jobs('Professional Experience 2011 – Present Client Example Job Experiences :- SAP Consultant').length, 0);
+console.log('Former names and employer/assignment role boundaries: passed');

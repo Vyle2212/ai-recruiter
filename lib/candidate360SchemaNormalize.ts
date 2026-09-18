@@ -1,10 +1,12 @@
 import { hasUsableEvidence } from "./candidate360EvidenceAvailability";
+import { nativeProjectCards } from "./nativeProjectCards";
 import {
   calculateProfileCompleteness,
   profileSectionState,
   type CompletenessComponent,
   type ProfileSectionState,
 } from "./candidate360Completeness";
+import { estimateEmploymentFromProjects, ownedProjectRangesFromResume, supportedSapYears, type ProjectTenureEstimate } from "./projectEmploymentEstimate";
 import { calculateTotalCareerYears } from "./candidateCareerExperience";
 import {
   CANDIDATE_EMPLOYMENT_TIMELINE_VERSION,
@@ -18,13 +20,13 @@ import {
 
 export type CandidateSchemaRecord = Record<string, unknown>;
 export const CANDIDATE_CANONICAL_VERSION =
-  "candidate-canonical-v52-grounded-partial-employment";
+  "candidate-canonical-v63-original-layout";
 export const CANDIDATE_DETAIL_PROJECTION_VERSION =
   "candidate-detail-v24-exact-project-identity";
 export const CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION =
   CANDIDATE_EMPLOYMENT_TIMELINE_VERSION;
 export const CANDIDATE_PROJECT_EXTRACTOR_VERSION =
-  "candidate-projects-v24-assignment-evidence-boundaries";
+  "candidate-projects-v25-native-project-cards";
 
 type NormalizedCandidateProjection = ReturnType<
   typeof normalizeActualCandidateSchemaFresh
@@ -57,6 +59,7 @@ export type EnterpriseEmployment = {
   evidenceState?: EvidenceState;
   evidenceConfidence?: number;
   linkedProjectIds?: string[];
+  estimatedTenure?: ProjectTenureEstimate;
   provenance?: EvidenceRef[];
 };
 
@@ -811,6 +814,7 @@ function buildExperienceSummary(
   timeline: EnterpriseEmployment[],
   primaryModule: string,
   currentEmployer: string,
+  projects: EnterpriseProject[],
 ): CandidateExperienceSummary {
   const current = timeline.find((item) => item.current && item.start) || null;
   const explicitSap = maximumNumeric(sourceScopes, [
@@ -820,9 +824,7 @@ function buildExperienceSummary(
   ]);
   const datedCapabilityEvidence = (item: EnterpriseEmployment) =>
     item.title + " " + item.modules.join(" ");
-  const sapRoles = timeline.filter((item) =>
-    /\bsap\b|s\/4|hana|abap/i.test(datedCapabilityEvidence(item)),
-  );
+  const actualSapYears = supportedSapYears(timeline, projects);
   const modulePattern = primaryModule
     ? new RegExp(primaryModule.replace(/[.*+?^()|[\]\\]/g, "\\$&"), "i")
     : null;
@@ -843,9 +845,7 @@ function buildExperienceSummary(
     currentRoleTenureYears:
       current?.title && current.start ? currentTenure : null,
     sapExperienceYears:
-      explicitSap && explicitSap > 0
-        ? explicitSap
-        : nonOverlappingYears(sapRoles),
+      actualSapYears ?? (timeline.length || projects.length ? null : explicitSap && explicitSap > 0 ? explicitSap : null),
     primaryModuleExperienceYears: moduleRoles.length
       ? nonOverlappingYears(moduleRoles)
       : null,
@@ -2085,12 +2085,12 @@ function normalizeEmployment(
   }));
   return canonicalEmploymentTimeline({
     structuredRecords: records,
-    resumeText: firstText(sourceScopes, [
+    resumeText: String(firstValue(sourceScopes, [
       "resume_text",
       "raw_text",
       "cv_text",
       "raw_cv",
-    ]),
+    ]) || ""),
     currentRole: explicitCurrentRoleContext(sourceScopes),
   });
 }
@@ -2121,6 +2121,9 @@ export function resolveCurrentEmployer(
     (item) => item.company && /present|current|now/i.test(item.end),
   );
   if (openEndedRecord) return openEndedRecord.company;
+  // Undated employment cannot be chronologically placed behind a completed
+  // role. Do not present that older role as the current employer.
+  if (timeline.some((item) => item.company && !item.start && !item.end)) return "";
   return timeline.find((item) => item.company)?.company || "";
 }
 
@@ -2159,7 +2162,8 @@ function plausiblePersonName(value: string) {
   )
     return "";
   if (
-    /[,;:]$|[!?]$|(?:\.$)/.test(name) ||
+    /[,;:]$|[!?]$/.test(name) ||
+    (/\.$/.test(name) && !/\b[A-Z]\.$/.test(name)) ||
     /^(?:and|driving)\b/i.test(name) ||
     /\b(?:and|or|of|for|with)$/i.test(name) ||
     /\b(?:framework|hobbies|high-impact outcomes?)\b/i.test(name)
@@ -2261,6 +2265,12 @@ function resolveCandidateName(sourceScopes: CandidateSchemaRecord[]) {
       : "";
   const explicit = boundedExplicit || plausiblePersonName(explicitValue);
   if (explicit) return explicit;
+  const layoutHeader = String(firstValue(sourceScopes, ["resume_text", "raw_text", "cv_text", "raw_cv"]) || "")
+    .split(/\r?\n/).map(line => line.trim()).find(Boolean) || "";
+  if (/^[A-Z][A-Z'’ -]+,\s+[A-Z][A-Z .'-]+$/.test(layoutHeader)) {
+    const headerName = plausiblePersonName(layoutHeader);
+    if (headerName) return headerName;
+  }
   const first = firstText(sourceScopes, [
     "first_name",
     "firstName",
@@ -3222,6 +3232,18 @@ function normalizeProjects(
   output.push(...inlineClientAssignmentProjects(sourceScopes));
   output.push(...extractExplicitResponsibilityProjects(sourceScopes));
   output.push(...narrativeProjects(sourceScopes));
+  const nativeSource = firstValue(sourceScopes, ["resume_text", "raw_text", "cv_text", "raw_cv"]);
+  if (typeof unwrap(nativeSource) === "string") {
+    output.push(...nativeProjectCards(String(unwrap(nativeSource))).map((card, index) => withProjectEvidence({
+      id: `native-project-card-${index + 1}`,
+      name: card.name, client: card.client, employer: "", industry: "", country: "",
+      role: card.role, modules: stringList(card.environment.match(/\b(?:FICO|FI|CO|MM|SD|PP|PS|BW|BI|HCM)\b/gi) || []),
+      projectType: labelledAssignmentType(card.name + " " + card.responsibility),
+      implementationType: labelledAssignmentType(card.name + " " + card.responsibility),
+      start: card.start, end: card.end, duration: projectDuration(card.start, card.end),
+      responsibilities: [card.responsibility], teamSize: null, environment: card.environment,
+    }, "parsed_resume", `resume.nativeProjectCards.${index + 1}`)));
+  }
   const canonical = canonicalizeEnterpriseProjects(
     output.filter((project) => project.name || project.client),
   );
@@ -4188,16 +4210,16 @@ function normalizeActualCandidateSchemaFresh(
     stageTimings.employmentMs = performance.now() - stageStartedAt;
   stageStartedAt = performance.now();
   const projects = removeEmploymentOnlyProjectDuplicates(
-    normalizeProjects(raw, sourceScopes),
+    [...normalizeProjects(raw, sourceScopes), ...ownedProjectRangesFromResume(normalizedEmployment, firstText(sourceScopes, ["resume_text", "raw_text", "cv_text", "raw_cv"]))],
     normalizedEmployment,
   );
   if (stageTimings)
     stageTimings.projectConstructionMs = performance.now() - stageStartedAt;
   stageStartedAt = performance.now();
-  const employmentTimeline = linkProjectsToEmployment(
+  const employmentTimeline = estimateEmploymentFromProjects(linkProjectsToEmployment(
     normalizedEmployment,
     projects,
-  );
+  ), projects);
   if (stageTimings)
     stageTimings.projectLinkingMs = performance.now() - stageStartedAt;
   stageStartedAt = performance.now();
@@ -4492,6 +4514,7 @@ function normalizeActualCandidateSchemaFresh(
     employmentTimeline,
     primarySapModule,
     currentCompany,
+    projects,
   );
   const consultingYears = experienceSummary.consultingExperienceYears;
   const leadershipYears =
@@ -4956,7 +4979,7 @@ export function normalizeActualCandidateSchema(
   // fixtures and ad-hoc objects deliberately bypass this process cache.
   const cacheKey =
     candidateId && updatedAt
-      ? `${CANDIDATE_CANONICAL_VERSION}:${candidateId}:${updatedAt}`
+      ? `${CANDIDATE_CANONICAL_VERSION}:${CANDIDATE_DETAIL_PROJECTION_VERSION}:${CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION}:${CANDIDATE_PROJECT_EXTRACTOR_VERSION}:${candidateId}:${updatedAt}`
       : null;
   const cached = cacheKey ? normalizedProjectionCache.get(cacheKey) : null;
   if (cached) return cached;

@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   employmentTimelineDiagnostics,
   extractCanonicalEmploymentFromResume,
+  linkProjectsToEmployment,
 } from "../lib/candidate360Employment";
 import { normalizeActualCandidateSchema } from "../lib/candidate360SchemaNormalize";
 import { calculateTotalCareerYears } from "../lib/candidateCareerExperience";
@@ -377,6 +378,244 @@ assert.equal(
   ),
   2,
   "project dates never extend employment duration",
+);
+
+const explicitEmployerProfile = normalizeActualCandidateSchema({
+  employment_history: ["Example Alpha", "Example Beta"].map((company) => ({
+    company,
+    title: "SAP Consultant",
+    start_date: "Jan 2020",
+    end_date: "Dec 2022",
+  })),
+  projects: [
+    {
+      name: "Delivery",
+      employer: "Example Alpha",
+      client: "Example Beta",
+      role: "SAP Consultant",
+      start_date: "Jan 2021",
+      end_date: "Dec 2021",
+    },
+  ],
+}).enterpriseProfile;
+const explicitProject = explicitEmployerProfile.projects[0];
+const alphaEmployment = explicitEmployerProfile.employmentTimeline.find(
+  (item) => item.company === "Example Alpha",
+)!;
+const betaEmployment = explicitEmployerProfile.employmentTimeline.find(
+  (item) => item.company === "Example Beta",
+)!;
+assert.deepEqual(alphaEmployment.linkedProjectIds, [explicitProject.id]);
+assert.deepEqual(
+  betaEmployment.linkedProjectIds,
+  [],
+  "overlapping dates, equal roles and a client name cannot override explicit employer",
+);
+assert.deepEqual(
+  linkProjectsToEmployment(
+    [alphaEmployment],
+    [
+      {
+        ...explicitProject,
+        employer: "EXAMPLE ALPHA Sdn Bhd",
+        role: "Delivery Manager",
+      },
+    ],
+  )[0].linkedProjectIds,
+  [explicitProject.id],
+  "normalized explicit employer links even when project role differs",
+);
+assert.deepEqual(
+  linkProjectsToEmployment(
+    [
+      {
+        ...betaEmployment,
+        provenance: [
+          {
+            sourceType: "employment",
+            label: "Employment",
+            sourceRef: "resume.professionalExperience.0",
+          },
+        ],
+      },
+    ],
+    [
+      {
+        ...explicitProject,
+        name: "Example Beta Delivery",
+        fieldEvidence: {
+          ...explicitProject.fieldEvidence,
+          name: {
+            ...explicitProject.fieldEvidence.name!,
+            provenance: [
+              {
+                sourceType: "parsed_resume",
+                label: "Project",
+                sourceRef: "resume.inlineClientAssignments.0.0",
+              },
+            ],
+          },
+        },
+      },
+    ],
+  )[0].linkedProjectIds,
+  [],
+  "narrative and nested provenance cannot override a conflicting explicit employer",
+);
+assert.deepEqual(
+  linkProjectsToEmployment(
+    [alphaEmployment],
+    [
+      {
+        ...explicitProject,
+        start: "Jan 2019",
+      },
+    ],
+  )[0].linkedProjectIds,
+  [],
+  "matching employer still requires project dates inside the employment tenure",
+);
+assert.deepEqual(
+  linkProjectsToEmployment(
+    [alphaEmployment],
+    [
+      {
+        ...explicitProject,
+        employer: "Example Alpha Services",
+      },
+    ],
+  )[0].linkedProjectIds,
+  [],
+  "a partial company-name match does not establish the same employer",
+);
+
+for (const [start, end] of [
+  ["Dec 2021", "Jan 2021"],
+  ["Dec 2025", "Jan 2019"],
+  ["Jan 2021", ""],
+  ["", "Dec 2021"],
+  ["31 Apr 2021", "Dec 2021"],
+]) {
+  const profile = normalizeActualCandidateSchema({
+    employment_history: [
+      {
+        company: "Example Alpha",
+        title: "SAP Consultant",
+        start_date: "Jan 2020",
+        end_date: "Dec 2022",
+      },
+    ],
+    projects: [
+      {
+        name: "Delivery",
+        employer: "Example Alpha",
+        role: "SAP Consultant",
+        start_date: start,
+        end_date: end,
+      },
+    ],
+  }).enterpriseProfile;
+  assert.deepEqual(
+    profile.employmentTimeline[0].linkedProjectIds,
+    [],
+    `invalid or incomplete project dates cannot establish employment links: ${start} / ${end}`,
+  );
+}
+assert.deepEqual(
+  linkProjectsToEmployment(
+    [alphaEmployment],
+    [
+      {
+        ...explicitProject,
+        start: "Jan 2021",
+        end: "Jan 2021",
+      },
+    ],
+  )[0].linkedProjectIds,
+  [explicitProject.id],
+  "a valid same-month project can still link to its employer",
+);
+assert.deepEqual(
+  linkProjectsToEmployment(
+    [
+      {
+        ...alphaEmployment,
+        start: "Dec 2022",
+        end: "Jan 2020",
+      },
+    ],
+    [
+      {
+        ...explicitProject,
+        start: "Dec 2025",
+        end: "Jan 2019",
+      },
+    ],
+  )[0].linkedProjectIds,
+  [],
+  "reversed employment and project ranges cannot produce a link",
+);
+
+// Substrings inside another word do not establish employer or role evidence.
+for (const [company, title, name, role] of [
+  [
+    "Example Alpha",
+    "SAP Consultant",
+    "Example Alphabet delivery",
+    "Delivery Manager",
+  ],
+  ["Example Alpha", "Architect", "Delivery", "Architecture Analyst"],
+  ["Ltd", "SAP Consultant", "Unrelated delivery", "Delivery Manager"],
+]) {
+  assert.deepEqual(
+    linkProjectsToEmployment(
+      [{ ...alphaEmployment, company, title }],
+      [
+        {
+          ...explicitProject,
+          employer: "",
+          name,
+          role,
+          responsibilities: [],
+          environment: "",
+          fieldEvidence: {},
+        },
+      ],
+    )[0].linkedProjectIds,
+    [],
+    "partial words or empty normalized company names must not establish a link",
+  );
+}
+assert.deepEqual(
+  linkProjectsToEmployment(
+    [alphaEmployment],
+    [
+      {
+        ...explicitProject,
+        employer: "",
+        name: "Delivery for Example Alpha, regional rollout",
+        role: "Delivery Manager",
+        fieldEvidence: {},
+      },
+    ],
+  )[0].linkedProjectIds,
+  [explicitProject.id],
+  "a complete employer phrase in narrative remains supported",
+);
+assert.deepEqual(
+  linkProjectsToEmployment(
+    [alphaEmployment],
+    [
+      {
+        ...explicitProject,
+        employer: "",
+        role: "Senior SAP Consultant",
+        fieldEvidence: {},
+      },
+    ],
+  )[0].linkedProjectIds,
+  [explicitProject.id],
+  "complete role phrases remain compatible",
 );
 
 const drawer = fs.readFileSync(
