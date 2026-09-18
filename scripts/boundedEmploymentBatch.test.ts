@@ -74,6 +74,11 @@ assert.deepEqual(
   canonical("Professional Work Experience Executive, Communications & Engagement | Example National Energy Berhad (ENERGYCO) August 2019 – Present Education").map((job) => [job.company, job.title, job.start, job.end, job.current]),
   [["Example National Energy Berhad (ENERGYCO)", "Executive, Communications & Engagement", "August 2019", "Present", true]],
 );
+assert.equal(
+  canonical("WORK EXPERIENCE Jan 2022 - Now Deputy Manager | Example Systems Jan 2018 - Now Project Manager | Example Systems Aug 2015 - Now Senior Business Analyst | Example Systems").length,
+  3,
+  "date-first rows must not borrow the following role's period",
+);
 for (const bad of [
   "Client: Worked at Example Systems from Jan 2020 to Dec 2021.",
   "Worked at Example Systems from Dec 2025 to Mar 2025.",
