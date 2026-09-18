@@ -870,6 +870,30 @@ function roleCompanyPeriodEmployment(source: string): EnterpriseEmployment[] {
   });
 }
 
+// A pipe between a role and company is an explicit ownership boundary in
+// flattened CV exports. Keep this narrowly scoped to an employment heading:
+// project/client sections often contain the same date vocabulary but do not
+// use this role | employer record shape.
+function pipedRoleEmployerPeriodEmployment(source: string): EnterpriseEmployment[] {
+  const headings = [...source.matchAll(/\b(?:Professional Work Experience|Professional Experience|Employment History|Working Experiences?|Work Experience)\s*:?[\s]*/gi)];
+  const monthYear = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s+(?:19|20)\\d{2}';
+  const pattern = new RegExp(`\\b([^|\\n]{2,120}?)\\s*\\|\\s*([A-Z][A-Za-z0-9&.,'() -]{2,140}?)\\s+(${monthYear})\\s*[-–—]\\s*(${monthYear}|Present|Current|Now)(?![A-Za-z0-9_])`, 'gi');
+  return headings.flatMap((heading, sectionIndex) => {
+    const section = source.slice((heading.index || 0) + heading[0].length, headings[sectionIndex + 1]?.index)
+      .split(/\b(?:Project Experience|Project History|Projects? Involved|Education|Technical Skills|Certifications|Qualifications|References)\b/i)[0];
+    return [...section.matchAll(pattern)].flatMap((match, index) => {
+      const title = match[1].trim();
+      const company = match[2].trim();
+      const current = /^(?:Present|Current|Now)$/i.test(match[4]);
+      if (/\b(?:client|customer|project|responsibilities|duties)\b/i.test(company) || !supportedRange(match[3], match[4], current)) return [];
+      const parsed = entry({company, title, start: match[3], end: match[4], current,
+        sourceRef: `resume.pipedRoleEmployerPeriod.${sectionIndex + 1}.${index + 1}`,
+        sourceType: 'parsed_resume', confidence: 96, excerpt: match[0]});
+      return parsed ? [parsed] : [];
+    });
+  });
+}
+
 // Explicit tenure followed by an Employer label and legal name. A following
 // company description can contain an unlabelled role, so do not guess its title.
 function durationEmployerHistory(source: string): EnterpriseEmployment[] {
@@ -1411,7 +1435,7 @@ function resumeEmployment(resumeText: string) {
       ownedCareerSpans.push(row);
     }
   }
-  output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source), ...labelledEmployerHistory(source), ...explicitHeadingVariants(source), ...orderedLabelEmployment(source), ...dateCompanyRoleEmployment(source), ...explicitEmploymentStatements(source), ...spacedDateEmployment(source), ...datedEmploymentLedger(source), ...headingDurationPositionEmployment(source), ...numberedPositionEmployment(source), ...numberedPositionPeriodEmployment(source), ...roleCompanyPeriodEmployment(source), ...locatedEmployerHistory(source), ...durationEmployerHistory(source), ...organizationDurationDesignationEmployment(source), ...organizationPeriodEmployment(source), ...datedCareerSummary(source), ...numberedWorkExperience(source), ...locatedRoleEmployment(source), ...formerNameEmployment(source), ...employerAssignmentSummary(source), ...chronologicalEmploymentLedgers(source), ...numericFromToEmployment(source), ...structuredEmploymentTables(source));
+  output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source), ...labelledEmployerHistory(source), ...explicitHeadingVariants(source), ...orderedLabelEmployment(source), ...dateCompanyRoleEmployment(source), ...explicitEmploymentStatements(source), ...spacedDateEmployment(source), ...datedEmploymentLedger(source), ...headingDurationPositionEmployment(source), ...numberedPositionEmployment(source), ...numberedPositionPeriodEmployment(source), ...roleCompanyPeriodEmployment(source), ...pipedRoleEmployerPeriodEmployment(source), ...locatedEmployerHistory(source), ...durationEmployerHistory(source), ...organizationDurationDesignationEmployment(source), ...organizationPeriodEmployment(source), ...datedCareerSummary(source), ...numberedWorkExperience(source), ...locatedRoleEmployment(source), ...formerNameEmployment(source), ...employerAssignmentSummary(source), ...chronologicalEmploymentLedgers(source), ...numericFromToEmployment(source), ...structuredEmploymentTables(source));
   for (const [index, row] of flattenedEmployment(source).entries()) {
     const parsed = entry({...row, allowGroundedEmployerOnly: true,
       sourceRef: `resume.flattened.${row.group}.${index + 1}`, sourceType: "parsed_resume", confidence: 94});

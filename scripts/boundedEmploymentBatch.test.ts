@@ -70,6 +70,10 @@ for (const source of [
   assert.equal(read(source)[0]?.company, "Example Systems", source);
   assert.equal(canonical(source).length, 1, source);
 }
+assert.deepEqual(
+  canonical("Professional Work Experience Executive, Communications & Engagement | Example National Energy Berhad (ENERGYCO) August 2019 – Present Education").map((job) => [job.company, job.title, job.start, job.end, job.current]),
+  [["Example National Energy Berhad (ENERGYCO)", "Executive, Communications & Engagement", "August 2019", "Present", true]],
+);
 for (const bad of [
   "Client: Worked at Example Systems from Jan 2020 to Dec 2021.",
   "Worked at Example Systems from Dec 2025 to Mar 2025.",
@@ -83,6 +87,8 @@ for (const bad of [
   "Work Experience Example Systems, Country Senior Consultant Jan 2020 - Dec 2021 Responsibilities: duties",
   "Work Experience Jan 2020 - Present Example Systems PROJECT MANAGER Managed Agile/Scrum projects.",
   "Work Experience Jan 2020 - Present SAP Consultant Example Systems Assigned to Client Buyer",
+  "Project Experience SAP Consultant | Buyer Corporation August 2019 – Present",
+  "Professional Work Experience SAP Consultant | Client Buyer August 2019 – Present",
   "Jan 2020 - Present Senior Analyst SD, PM Example Systems Industry Technology Specialization IT Role Consultant Position Level Senior Executive",
   "Jan 2020 - Present Analyst ProgrammerExample Systems Ltd Industry Technology Specialization IT Role Programmer Position Level Executive",
   "Jan 2020 - Present Analyst Example Systems Industry Technology Responsibilities: duties",
