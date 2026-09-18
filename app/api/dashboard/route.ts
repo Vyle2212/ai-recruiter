@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
+import {
+  recruiterSearchAuthorizationDenied,
+  recruiterSearchPrivateNoStoreHeaders,
+  requireRecruiterSearchAuthorization,
+} from "@/lib/recruiterSearchAuthorization";
 
 export async function GET() {
+  const authorization = await requireRecruiterSearchAuthorization({ permission: "search:read", route: "/api/dashboard" });
+  if (!authorization.allowed) return recruiterSearchAuthorizationDenied(authorization);
+  const supabase = createLazySupabaseServiceClient();
   const { count: totalCandidates } = await supabase
     .from("candidates")
     .select("*", { count: "exact", head: true });
@@ -20,5 +28,5 @@ export async function GET() {
     totalCandidates: totalCandidates || 0,
     totalFavorites: totalFavorites || 0,
     totalShortlisted: totalShortlisted || 0,
-  });
+  }, { headers: recruiterSearchPrivateNoStoreHeaders });
 }

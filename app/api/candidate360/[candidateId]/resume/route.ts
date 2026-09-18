@@ -1,5 +1,10 @@
 ﻿import { createCandidateSupabaseAdminClient } from "@/lib/candidateSupabase";
 
+import {
+  recruiterSearchAuthorizationDenied,
+  requireRecruiterSearchAuthorization,
+} from "@/lib/recruiterSearchAuthorization";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -9,6 +14,8 @@ function safeFilename(value: unknown) {
 }
 
 export async function GET(request: Request, context: { params: Promise<{ candidateId: string }> }) {
+  const authorization = await requireRecruiterSearchAuthorization({ permission: "candidate-detail:read", route: "/api/candidate360/[candidateId]/resume" });
+  if (!authorization.allowed) return recruiterSearchAuthorizationDenied(authorization);
   const { candidateId } = await context.params;
   const id = decodeURIComponent(candidateId).trim();
   const db = createCandidateSupabaseAdminClient();
