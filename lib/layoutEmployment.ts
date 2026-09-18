@@ -7,19 +7,19 @@ export type LayoutEmployment = {
 };
 const month =
   "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
-const date = `(?:${month}\\s+(?:19|20)\\d{2}|(?:0?[1-9]|1[0-2])[/.]\\s*(?:19|20)\\d{2})`;
+const date = `(?:(?:19|20)\\d{2}-(?:0[1-9]|1[0-2])|${month}\\s+(?:19|20)\\d{2}|(?:0?[1-9]|1[0-2])[/.]\\s*(?:19|20)\\d{2})`;
 const range = new RegExp(
   `(${date})\\s*(?:[-–—]|to)\\s*(${date}|Present|Current|Curr)`,
   "i",
 );
 const role =
-  /\b(?:consultant|manager|officer|associate|intern|trainee|specialist|executive|lead|head|analyst|engineer|developer|analytic|contractor|administrator|advisor|advisory|technician|tutor|QA Automation|support|management|housekeeper|promoter)\b/i;
+  /\b(?:consultant|manager|officer|associate|intern|trainee|specialist|executive|lead|head|analyst|engineer|developer|analytic|contractor|administrator|advisor|advisory|technician|tutor|QA Automation|support|management|housekeeper|promoter|expert|recruiter|generalist)\b/i;
 const forbidden =
   /^(?:[•●]|client\b|project\s*[:\t]|responsibilit|environment\b|contract for\b)|\b(?:went live|go.live|implementation project)\b/i;
 const heading =
-  /^(?:professional (?:work )?experiences?|employment history|work(?:ing)? experience)\s*:?$/i;
+  /^(?:professional (?:work )?experiences?|employment history|work history|career backgrou(?:nd|d)|work(?:ing)? experience)\s*:?$/i;
 const stop =
-  /^(?:education|references?|skills|hobbies|technology summary|professional certificates|community leadership|academic qualifications|detailed work experiences?|project (?:history|experience|details))\b/i;
+  /^(?:career highlight|extra-curricular|referees|education|references?|skills|hobbies|technology summary|professional certificates|community leadership|academic qualifications|detailed work experiences?|project (?:history|experience|details))\b/i;
 
 function normalizeHeading(line: string): string {
   const compact = line.replace(/[\s\uE000-\uF8FF]/g, "").toUpperCase();
@@ -53,6 +53,7 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
   const output: LayoutEmployment[] = [];
   let active = false;
   let table:
+    | "career"
     | "year"
     | "scope"
     | "dateCompanyRole"
@@ -89,6 +90,10 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
       continue;
     }
     if (!active) continue;
+    if (/^Company\tJob Title\tProject\tDuration$/i.test(line)) {
+      table = "career";
+      continue;
+    }
     if (/^Period\tRole\tIndustry\tDescription$/i.test(line)) {
       table = "periodRoleIndustry";
       continue;
@@ -104,11 +109,14 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
       title = title.trim().split(/\s+reporting to\b/i)[0];
       if (
         !company ||
+        /^[,;:]/.test(company) ||
         !role.test(title) ||
         forbidden.test(company) ||
         // PDF bullet glyphs can disappear. A following imperative duty must
         // not become the employer in a date/title/company layout.
         /^(?:Conduct(?:ed|ing)?|Perform(?:ed|ing)?|Maintain(?:ed|ing)?|Provide[ds]?|Ensure[ds]?|Develop(?:ed|ing)?|Prepare[ds]?)\s+[a-z]/.test(company) ||
+        /^(?:Provided?|Designed?|Developed?|Conducted?|Maintained?|Performed?)\s/i.test(title) ||
+        /^Support (?:day to day|daily|the|all|users?\b)/i.test(title) ||
         forbidden.test(title)
       )
         return;
@@ -121,6 +129,13 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
       });
     };
     const cells = line.split("\t").map((x) => x.trim());
+    if (table === "career" && cells.length === 4) {
+      const years = cells[3].match(/^((?:19|20)\d{2})\s*(?:[-–—]|to)\s*((?:19|20)\d{2}|Present)$/i);
+      const half = cells[3].match(/^((?:19|20)\d{2})\s*\((1st|2nd) 6 months\)$/i);
+      const dates = years || (half ? `${half[2] === "1st" ? "Jan" : "Jul"} ${half[1]} - ${half[2] === "1st" ? "Jun" : "Dec"} ${half[1]}`.match(range) : null);
+      if (dates) add(cells[0], cells[1], dates, 1);
+      continue;
+    }
     if (table === "periodRoleIndustry" && cells.length === 4) {
       const continued = next.split("\t").map((x) => x.trim());
       const dates = `${cells[0]} ${continued[0]}`.match(
@@ -293,6 +308,11 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
       wholeDates.index === 0 &&
       !line.slice(wholeDates[0].length).replace(/[-–—]/g, "").trim()
     ) {
+      if (!role.test(next) && !next.includes("\t") && !stop.test(next) && role.test(lines[i + 2] || "")) {
+        add(next, lines[i + 2], wholeDates, 3);
+        i += 2;
+        continue;
+      }
       const company = lines[i + 2] || "";
       if (
         role.test(next) &&
@@ -303,6 +323,11 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
         add(company, next, wholeDates, 3);
         continue;
       }
+    }
+    // ISO month sidebar followed by a title cell and the employer below it.
+    if (wholeDates?.index === 0 && /^\t/.test(line.slice(wholeDates[0].length)) && role.test(line.slice(wholeDates[0].length)) && !role.test(next) && !stop.test(next)) {
+      add(next, line.slice(wholeDates[0].length).trim(), wholeDates, 2);
+      continue;
     }
     // A complete date followed by the employer is an explicit two-line heading.
     if (

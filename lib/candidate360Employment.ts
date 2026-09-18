@@ -14,7 +14,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v88-explicit-employer-fields";
+  "candidate-employment-v89-original-career-layouts";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1417,12 +1417,14 @@ function resumeEmployment(resumeText: string) {
       sourceRef: `resume.flattened.${row.group}.${index + 1}`, sourceType: "parsed_resume", confidence: 94});
     if (!parsed) continue;
     const sameHeading = !parsed.title && output.find((known) => known.title &&
-      normalized(known.company) === normalized(parsed.company) &&
+      (normalized(known.company) === normalized(parsed.company) ||
+        normalized(known.company.replace(/\s*\([^()]+\)$/, "")) === normalized(parsed.company)) &&
       monthIndex(known.start) !== null && monthIndex(known.start) === monthIndex(parsed.start) &&
       monthIndex(known.end, known.current) !== null && monthIndex(known.end, known.current) === monthIndex(parsed.end, parsed.current) &&
       known.current === parsed.current && parsed.provenance?.[0]?.excerpt &&
       known.provenance?.some((ref) => ref.sourceRef?.startsWith('resume.layout.') &&
-        clean(ref.excerpt).toLowerCase().includes(clean(parsed.provenance?.[0]?.excerpt).toLowerCase())));
+        (clean(ref.excerpt).toLowerCase().includes(clean(parsed.provenance?.[0]?.excerpt).toLowerCase()) ||
+          clean(parsed.provenance?.[0]?.excerpt).toLowerCase().startsWith(clean(ref.excerpt).toLowerCase()))));
     if (sameHeading) {
       sameHeading.provenance = [...(sameHeading.provenance || []), ...(parsed.provenance || [])];
       sameHeading.sourceEmploymentIds?.push(...(parsed.sourceEmploymentIds || []));

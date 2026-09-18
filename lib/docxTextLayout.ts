@@ -11,6 +11,7 @@ export function renderDocxText(node: DocumentNode): string {
   if (node.type === "break") return "\n";
   if (node.type === "table") {
     let datedTable = false;
+    let careerTable = false;
     return (node.children || [])
       .map((row) => {
         const cells = (row.children || []).map((cell) =>
@@ -19,6 +20,14 @@ export function renderDocxText(node: DocumentNode): string {
             .map((x) => x.trim())
             .filter(Boolean),
         );
+        if (cells.map((c) => c.join(" ")).join("|") === "Company|Job Title|Project|Duration") {
+          careerTable = true;
+          return "Company\tJob Title\tProject\tDuration\n";
+        }
+        if (careerTable && cells.length === 4) {
+          return cells.map((c) => c.join(" ").replace(/\s+/g, " ").trim()).join("\t") + "\n";
+        }
+        careerTable = false;
         if (
           cells.length === 3 &&
           cells.map((c) => c.join(" ")).join("|") === "Date|Company Name|Role"
