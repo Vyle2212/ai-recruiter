@@ -8,6 +8,7 @@ const searchRoute = fs.readFileSync("app/api/search-candidates/route.ts", "utf8"
 const getCandidatesRoute = fs.readFileSync("app/api/get-candidates/route.ts", "utf8");
 const resumeRoute = fs.readFileSync("app/api/candidate360/[candidateId]/resume/route.ts", "utf8");
 const dashboardRoute = fs.readFileSync("app/api/dashboard/route.ts", "utf8");
+const validationRoute = fs.readFileSync("app/api/candidate-validation/route.ts", "utf8");
 
 for (const source of [route, page]) {
   assert.match(source, /requireRecruiterSearchAuthorization/);
@@ -37,4 +38,7 @@ for (const source of [getCandidatesRoute, dashboardRoute]) {
 assert.match(resumeRoute, /requireRecruiterSearchAuthorization/);
 assert.match(resumeRoute, /permission: "candidate-detail:read"/);
 assert.doesNotMatch(getCandidatesRoute, /\.select\("\*"\)/);
+assert.match(validationRoute, /requireRecruiterSearchAuthorization/);
+assert.match(validationRoute, /createLazySupabaseServiceClient/);
+assert.doesNotMatch(validationRoute, /from "@\/lib\/supabase"/);
 console.log("candidateDetailAuthorization.test.ts passed");
