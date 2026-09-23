@@ -877,30 +877,54 @@ function roleCompanyPeriodEmployment(source: string): EnterpriseEmployment[] {
 function pipedRoleEmployerPeriodEmployment(source: string): EnterpriseEmployment[] {
   const headings = [...source.matchAll(/\b(?:Professional Work Experience|Professional Experience|Employment History|Working Experiences?|Work Experience)\s*:?[\s]*/gi)];
   const monthYear = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s+(?:19|20)\\d{2}';
-  const pattern = new RegExp(`\\b([^|\\n]{2,120}?)\\s*\\|\\s*([A-Z][A-Za-z0-9&.,'() -]{2,140}?)\\s+(${monthYear})\\s*[-–—]\\s*(${monthYear}|Present|Current|Now)(?![A-Za-z0-9_])`, 'gi');
+  const pattern = new RegExp(`\\|\\s*([A-Z][A-Za-z0-9&.,'() -]{2,140}?)\\s+(${monthYear})\\s*[-–—]\\s*(${monthYear}|Present|Current|Now)(?![A-Za-z0-9_])`, 'gi');
+  const role = /\b(?:consultant|analyst|manager|executive|specialist|advisor|trainee|engineer|developer|architect|officer|associate|director)\b/i;
+  const location = /\b(?:city|province|state)\s*,\s*[A-Z]{2}\b|\((?:remote|full[ -]?time|onsite|hybrid)\)/i;
+  const ownedTitle = (prefix: string) => {
+    const value = prefix.slice(-150).trimEnd();
+    const tokens = [...value.matchAll(/[A-Za-z][A-Za-z0-9/+&-]*/g)];
+    if (!tokens.length || tokens[tokens.length - 1].index! + tokens[tokens.length - 1][0].length !== value.length) return '';
+    let start = value.length;
+    let count = 0;
+    for (let i = tokens.length - 1; i >= 0 && count < 11; i--) {
+      const token = tokens[i];
+      const separator = value.slice(token.index! + token[0].length, start);
+      if (!/^[A-Z]/.test(token[0]) || !(/^[\s,&/–—-]*$/.test(separator) || (token[0].length <= 3 && /^\.[\s,&/–—-]*$/.test(separator)))) break;
+      start = token.index!;
+      count++;
+    }
+    let title = value.slice(start).replace(/^(?:(?:professional|working|work)\s+experience|employment\s+history)\s+/i, '').trim();
+    // A final organization in a list can touch the next role after export
+    // flattening: "... and Brand Associate, Marketing | Employer ...".
+    // Remove that organization only when the next token is itself a role.
+    if (/\band\s+$/i.test(value.slice(0, start)) && /^[A-Z][A-Za-z]+\s+(?:Associate|Consultant|Analyst|Manager|Executive|Specialist|Advisor|Engineer|Developer)\b/.test(title))
+      title = title.replace(/^[A-Z][A-Za-z]+\s+/, '');
+    return role.test(title) && title.split(/\s+/).length <= 11 ? title : '';
+  };
   return headings.flatMap((heading, sectionIndex) => {
     const section = source.slice((heading.index || 0) + heading[0].length, headings[sectionIndex + 1]?.index)
       .split(/\b(?:Project Experience|Project History|Projects? Involved|Education|Technical Skills|Certifications|Qualifications|References)\b/i)[0];
     const dateRange = new RegExp(`${monthYear}\\s*[-–—]\\s*(?:${monthYear}|Present|Current|Now)`, 'i');
-    const dateRangeAtEnd = new RegExp(`${dateRange.source}\\s*$`, 'i');
     let acceptedEnd = 0;
     return [...section.matchAll(pattern)].flatMap((match, index) => {
-      const title = match[1].trim();
-      const company = match[2].trim();
-      const current = /^(?:Present|Current|Now)$/i.test(match[4]);
       const gapAfterAcceptedRow = section.slice(acceptedEnd, match.index || 0);
-      // A date-first row (`period title | employer`) otherwise lets this
-      // reader borrow the following row's period. Accept later pipe rows only
-      // when they continue directly after a row already owned by this reader.
+      const title = ownedTitle(gapAfterAcceptedRow);
+      const company = match[1].trim();
+      const current = /^(?:Present|Current|Now)$/i.test(match[3]);
+      // The pipe must separate a role from its employer. A date before that
+      // role belongs to a date-first row; a role or location after the pipe
+      // indicates the opposite column order or an employer/location pair.
       if (
-        dateRange.test(title) ||
-        (acceptedEnd === 0 && dateRangeAtEnd.test(gapAfterAcceptedRow)) ||
+        !title ||
+        dateRange.test(gapAfterAcceptedRow) ||
+        role.test(company) ||
+        location.test(company) ||
         /\b(?:client|customer|project|responsibilities|duties)\b/i.test(company) ||
-        !supportedRange(match[3], match[4], current)
+        !supportedRange(match[2], match[3], current)
       ) return [];
-      const parsed = entry({company, title, start: match[3], end: match[4], current,
+      const parsed = entry({company, title, start: match[2], end: current ? 'Present' : match[3], current,
         sourceRef: `resume.pipedRoleEmployerPeriod.${sectionIndex + 1}.${index + 1}`,
-        sourceType: 'parsed_resume', confidence: 96, excerpt: match[0]});
+        sourceType: 'parsed_resume', confidence: 96, excerpt: title + ' ' + match[0]});
       if (!parsed) return [];
       acceptedEnd = (match.index || 0) + match[0].length;
       return [parsed];

@@ -146,6 +146,44 @@ assert.equal(
   "explicit labelled record owns competing same-role tenure",
 );
 assert.equal(repeatedCompany[0].company, "Example Consulting Malaysia Sdn Bhd");
+const pipedCareer = canonical(
+  "Work Experience SAP MM SENIOR CONSULTANT | Example Systems Inc. April 2024 – Present Supported delivery. PACKAGE APPLICATION DEVELOPMENT SR. ANALYST | Example Technologies Ltd. Feb 2020 - Mar 2024 APPLICATION SUPPORT ANALYST | Example Labs Inc. Apr 2017 - Jan 2020",
+);
+assert.deepEqual(
+  pipedCareer.map((job) => [job.company, job.title, job.start, job.end]),
+  [
+    ["Example Systems Inc.", "SAP MM SENIOR CONSULTANT", "April 2024", "Present"],
+    ["Example Technologies Ltd.", "PACKAGE APPLICATION DEVELOPMENT SR. ANALYST", "Feb 2020", "Mar 2024"],
+    ["Example Labs Inc.", "APPLICATION SUPPORT ANALYST", "Apr 2017", "Jan 2020"],
+  ],
+  "each piped role owns its own period and excludes preceding duties",
+);
+const pipedAffiliates = canonical(
+  "Professional Work Experience Executive, Communications & Engagement | Example Parent Berhad August 2019 – Present Maintaining relationships and ExampleBrand Associate, Digital Marketing | Example Subsidiary Ltd Dec 2018 - Mar 2019",
+);
+assert.deepEqual(
+  pipedAffiliates.map((job) => [job.company, job.title]),
+  [
+    ["Example Parent Berhad", "Executive, Communications & Engagement"],
+    ["Example Subsidiary Ltd", "Associate, Digital Marketing"],
+  ],
+  "a preceding organization in duties does not become part of the next title",
+);
+assert.deepEqual(
+  canonical("Work Experience Solutions Advisor – Business Technology Platform - Analytics | SAP Dec 2022 – Present")
+    .map((job) => [job.company, job.title]),
+  [["SAP", "Solutions Advisor – Business Technology Platform - Analytics"]],
+);
+for (const source of [
+  "Work Experience Example Ltd | SAP SD Consultant Jan 2025 - Present",
+  "Work Experience SAP Analyst | City, PH Jan 2020 - Dec 2021",
+  "Work Experience SAP Analyst | Country (Remote) Jan 2020 - Dec 2021",
+  "Work Experience Jan 2022 - Present SAP Analyst | Example Systems Ltd Jan 2023 - Present",
+])
+  assert.ok(
+    canonical(source).every((job) => (job.sourceEmploymentIds || []).every((id) => !id.startsWith("resume.pipedRoleEmployerPeriod."))),
+    "the piped role/employer reader must not reverse columns, claim locations, or borrow dates",
+  );
 const dottedLedger = canonical(
   "EMPLOYMENT HISTORY : Example One SDN. BHD. – Senior SAP FICO Consultant. (Feb 2011 – Present) Example Two Sdn. Bhd. - Senior SAP FICO Consultant (July 2010 – Feb 2011) Example Three Sdn Bhd - Senior SAP Consultant (May 2008 – July 2010) PREVIOUS PROJECTS INVOLVED : Jan 2017 – Present Client: Buyer",
 );
