@@ -120,6 +120,7 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
       APP_ENV: test
       AUTH_MODE: disabled
+      NODE_OPTIONS: --conditions=react-server
       EXTERNAL_TALENT_SEARCH_ENABLED: "false"
       EXTERNAL_TALENT_PROVIDER: disabled
     steps:
