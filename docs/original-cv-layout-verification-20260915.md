@@ -1,5 +1,7 @@
 # Original CV layout verification — 2026-09-15
 
+> Latest parser safety checkpoint: [v98 owned label boundaries](precision-v98-owned-label-boundaries-20260923.md). Incomplete labelled career rows cannot borrow employer/role from the next row. The same 970-source projection remains 707 sources / 2,071 rows, 263 unresolved. Original-source review and release gates remain pending (NO_GO).
+
 > Latest source batch: [v97 labelled employer/client ledger](precision-v97-labelled-client-employer-20260923.md). Read-only 970-source re-projection yields 707 sources / 2,071 employment rows, 263 unresolved; 22 added rows retain Company as employer and Client as project context. Original-source review and production gates remain outstanding (NO_GO).
 
 > Latest source-owned quality checkpoint: [v96 career row ownership](precision-v96-source-ownership-quality-20260923.md). The same 970 stored texts re-project to 705 sources / 2,049 employment rows; four incorrect/duplicate rows removed and two non-SAP titles bounded. This read-only result does not replace original-CV review, backfill/readback, live OCR or authenticated exact-artifact acceptance. Production remains NO_GO.

@@ -39,4 +39,13 @@ assert.equal(
   1,
   "The second row cannot donate its role or reverse-date range to the first",
 );
+assert.deepEqual(
+  extractCanonicalEmploymentFromResume(
+    "WORK EXPERIENCE DURATION: JAN/21 TO MAR/21 CLIENT: Example Buyer " +
+      "DURATION: APR/21 TO MAY/21 CLIENT: Example Supplier COMPANY: Example Consultancy " +
+      "ROLE SAP Consultant RESPONSIBILITIES Implemented SAP.",
+  ).map(({ company, start, end }) => ({ company, start, end })),
+  [{ company: "Example Consultancy", start: "APR 2021", end: "MAY 2021" }],
+  "A missing Company in one row must never borrow the next row's employer",
+);
 console.log("Labelled client/employer employment boundaries: passed");

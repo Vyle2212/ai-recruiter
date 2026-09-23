@@ -1,5 +1,7 @@
 # Production Trust release promotion
 
+> Latest code-only safety checkpoint: [v98 owned label boundaries](precision-v98-owned-label-boundaries-20260923.md). The 970-source result remains 707 sources / 2,071 rows; cached results from the weaker row-boundary reader are invalidated. Production stays NO_GO pending reviewed backfill/readback, live OCR and authenticated exact-artifact acceptance.
+
 > Latest code-only checkpoint: [v97 labelled employer/client ledger](precision-v97-labelled-client-employer-20260923.md). On the same private 970-source snapshot, 22 source-owned rows are recovered across two sources with all prior 2,049 rows retained; production is NO_GO pending reviewed backfill/readback, live OCR and exact-artifact authenticated acceptance.
 
 > Latest source-owned quality checkpoint: [v96 career row ownership](precision-v96-source-ownership-quality-20260923.md). Full 970-source read-only comparison corrects source ownership and deduplication: 705 sources / 2,049 employment rows; 265 remain under review. SAP experience and projects are unchanged. This is code verification only; reviewed backfill/readback, live OCR and authenticated acceptance on the promoted artifact remain required. Production is NO_GO.

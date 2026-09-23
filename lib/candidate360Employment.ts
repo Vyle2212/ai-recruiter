@@ -14,7 +14,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v97-labelled-client-employer-rows";
+  "candidate-employment-v98-owned-label-boundaries";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1448,7 +1448,7 @@ function labelledClientEmployerEmployment(source: string): EnterpriseEmployment[
   const heading = /\bWORK EXPERIENCE\s+(?=DURATION\s*:)/gi;
   const date = "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[/. -]*[’']?\\d{2,4}";
   const pattern = new RegExp(
-    `\\bDURATION\\s*:\\s*(${date})\\s+(?:TO|TILL|UNTIL|[-–—])\\s*(${date}|CURRENT|PRESENT|DATE|NOW)\\s+CLIENT\\s*:\\s*(.{2,110}?)\\s+COMPANY\\s*:\\s*(.{2,120}?)\\s+ROLE\\s*:?(?=\\s)`,
+    `\\bDURATION\\s*:\\s*(${date})\\s+(?:TO|TILL|UNTIL|[-–—])\\s*(${date}|CURRENT|PRESENT|DATE|NOW)\\s+CLIENT\\s*:\\s*((?:(?!\\b(?:DURATION|CLIENT|ROLE)\\s*:).){2,110}?)\\s+COMPANY\\s*:\\s*((?:(?!\\b(?:DURATION|CLIENT|COMPANY)\\s*:|\\bROLE\\b).){2,120}?)\\s+ROLE\\s*:?(?=\\s)`,
     "gi",
   );
   const normalizeDate = (value: string) => {
