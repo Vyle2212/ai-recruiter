@@ -97,6 +97,23 @@ assert.ok(
   ),
   "a card substring must not erase a separately evidenced role",
 );
+const roleAfterDuties = extractCanonicalEmploymentFromResume(
+  "Work Experience Prepared SAP reports for the customer, completed support configuration and trained all users SAP Consultant at Example Solutions Sdn. Bhd. Jan 2020 - Dec 2021 Created test data and configured many project scenarios to help users and analysts Software Engineer at Example Labs Pvt(I). Ltd. May 2008 - Oct 2009",
+);
+assert.deepEqual(
+  roleAfterDuties.map((job) => [job.company, job.title, job.start, job.end]),
+  [
+    ["Example Solutions Sdn. Bhd.", "SAP Consultant", "Jan 2020", "Dec 2021"],
+    ["Example Labs Pvt(I). Ltd.", "Software Engineer", "May 2008", "Oct 2009"],
+  ],
+  "duties do not become the next title and dotted legal names remain complete",
+);
+assert.deepEqual(
+  extractCanonicalEmploymentFromResume("Work Experience Senior SAP Consultant at Example Systems Sdn. Bhd. Jan 2020 - Dec 2021")
+    .map((job) => [job.company, job.title]),
+  [["Example Systems Sdn. Bhd.", "Senior SAP Consultant"]],
+  "a source-owned title keeps its seniority and SAP qualification",
+);
 const projectAfterCard =
   "Career historySAP Sr. ABAP Consultant and Jr. EWM Consultant at Example Systems Mar 2014 - Oct 2018 (4 years 8 months) ABAP consultant at Example Systems Project : SAP EWM ( Oct 2017 - Oct 2018 ) Client : Example Buyer Job Role : ABAP / Functional";
 assert.deepEqual(

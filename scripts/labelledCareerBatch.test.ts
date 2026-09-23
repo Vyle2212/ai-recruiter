@@ -65,6 +65,27 @@ const cases = [
     "Business Development Manager",
   ],
 ] as const;
+const boundedFields = [
+  [
+    "Employment History Company Name : Example Solutions Sdn Bhd. Company Industry : ERP Partner Position Title : SAP Consultant Job Specialization : ABAP Developer Position Level : Consultant Date Joined : 17-Jan-2011 until Now Date Left : - Work Description: Delivery",
+    "Example Solutions Sdn Bhd.", "SAP Consultant",
+  ],
+  [
+    "Work Experience November 2012 – June 2014 Company : Example Consulting Sdn Bhd Position : Senior ABAP Consultant Division : ERP Technical Team Reporting Line Provide consulting services for Project Implementation",
+    "Example Consulting Sdn Bhd", "Senior ABAP Consultant",
+  ],
+  [
+    "Professional Experience Employer : Example Company Position : SAP FI Senior Analyst (permanent) Specific Responsibilities SAP ECC 6.0 Upgrade project – (Sept 2013 to December 2015)",
+    "Example Company", "SAP FI Senior Analyst (permanent)",
+  ],
+] as const;
+for (const [source, company, title] of boundedFields)
+  assert.ok(canonical(source).some((job) => job.company === company && job.title === title), source);
+assert.ok(
+  canonical("Work Experience November 2012 – June 2014 Company : Example Services Sdn Bhd Office Tower, No. 12, Example Street Position : Technology Consultant II Department : Enterprise Business")
+    .every((job) => (job.sourceEmploymentIds || []).every((id) => !id.startsWith("resume.labelledCompanyPositionDate."))),
+  "address and department fields cannot be silently promoted as employer and role",
+);
 for (const [source, company, title] of cases) {
   assert.ok(
     read(source).some((j) => j.company === company && j.title === title),

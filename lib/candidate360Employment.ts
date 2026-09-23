@@ -14,7 +14,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v89-original-career-layouts";
+  "candidate-employment-v94-owned-career-fields";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -613,7 +613,7 @@ function labelledEmployerHistory(source: string): EnterpriseEmployment[] {
     const title = block.match(/\b(?:(?:Current )?Position(?: Title| Level)?|Designation|Job Title|Job roles)\s*:\s*([\s\S]{2,120}?)(?=\s+(?:Duration|Period(?:\s*\([^)]*\))?|Organization|Specialization|Last Drawn Salary|Level|Industry|Date Joined)\s*:|[.;]|$)/i)?.[1];
     const range = block.match(new RegExp(`(?:\\d{1,2}\\s+)?(${month})\\s*(?:[-–—~]|to)\\s*(?:\\d{1,2}\\s+)?(${month}|Present|Current|Now)\\b`, 'i'));
     if (!company || !title || !range) return [];
-    const cleanTitle = title.replace(new RegExp(`\\s+${month}[\\s\\S]*$`, 'i'), '').trim();
+    const cleanTitle = title.replace(new RegExp(`\\s+${month}[\\s\\S]*$`, 'i'), '').replace(/\s+Specific Responsibilities\b[\s\S]*$/i, '').trim();
     const narrativeRole = /^(?:Act as|Led |Overall |SME for)/i.test(cleanTitle);
     const parsed = entry({company: company.split(/\s+seconded to\s+/i)[0], title: narrativeRole ? '' : cleanTitle, allowGroundedEmployerOnly: true,
       responsibilities: narrativeRole ? [cleanTitle] : [], start: range[1], end: range[2], current: /^(present|current|now)$/i.test(range[2]),
@@ -1516,7 +1516,7 @@ function resumeEmployment(resumeText: string) {
     );
     const parsed = entry({
       company: match[2],
-      title: match[3].replace(
+      title: match[3].replace(/\s+(?:Division\s*:|Reporting Line\b)[\s\S]*$/i, "").replace(
         /\s*\([^)]*(?:permanent|contract)[^)]*\)\s*$/i,
         "",
       ),
@@ -1576,7 +1576,7 @@ function resumeEmployment(resumeText: string) {
     const title =
       block.match(
         /\b(?:Job\s+)?Position\s*:\s*([\s\S]{2,140}?)(?=\s+(?:Speciali[sz]ation|Duration|Job\s+Scopes?|Specific\s+Responsibilities|Responsibilities|Tasks?|Background|Project(?!\s+(?:Manager|Lead|Director|Coordinator|Management)\b)|Client)\s*:?\s|\s*\(|[.;]|$)/i,
-      )?.[1] || "";
+      )?.[1]?.replace(/\s+(?:Division\s*:|Reporting Line\b)[\s\S]*$/i, "") || "";
     const durationRange = block.match(
       new RegExp(
         `\\bDuration\\s*:\\s*(${looseMonthYear})\\s*(?:[-\\u2013\\u2014]|to|until|till)\\s*(${looseMonthYear}|Present|Current|date)`,
@@ -1616,6 +1616,8 @@ function resumeEmployment(resumeText: string) {
       !company ||
       !title ||
       !range ||
+      (/\b(?:No\.\s*\d+|Jalan|Street|Towers?|Wisma)\b/i.test(company) &&
+        /\bDepartment\s*:/i.test(title)) ||
       /\b(?:duration|client|project)\s*:/i.test(company)
     )
       return;
@@ -1743,6 +1745,25 @@ function resumeEmployment(resumeText: string) {
     `([^.!?]{2,100}?\\b(?:Consultant|Manager|Lead|Developer|Analyst|Engineer|Officer|Accountant))\\s+at\\s+(.{2,140}?)\\s+((${date})\\s*[—–-]\\s*(${date}|Present|Current))`,
     "gi",
   );
+  const careerRoleSuffix = (raw: string) => {
+    const value = clean(raw);
+    // Flattened exports can put duty prose directly before a new role. Only
+    // the capitalized suffix immediately before "at Employer" owns its date.
+    const boundary = Math.max(value.lastIndexOf(','), value.lastIndexOf(':'), value.lastIndexOf(')'), value.lastIndexOf('•'));
+    const fragment = value.slice(boundary + 1).trim();
+    const tokens = [...fragment.matchAll(/[A-Za-z][A-Za-z0-9/+-]*/g)];
+    if (!tokens.length || tokens.at(-1)!.index! + tokens.at(-1)![0].length !== fragment.length) return '';
+    let start = fragment.length;
+    for (let index = tokens.length - 1, words = 0; index >= 0 && words < 7; index--, words++) {
+      const token = tokens[index];
+      if (!/^[A-Z]/.test(token[0]) || !/^[\s/&-]*$/.test(fragment.slice(token.index! + token[0].length, start))) break;
+      start = token.index!;
+      if (/^(?:SAP|ERP|ABAP|FI|CO|FICO|MM|SD|PP|PS|BW|HCM)$/i.test(token[0])) break;
+    }
+    const title = fragment.slice(start).trim();
+    return /\b(?:Consultant|Manager|Lead|Developer|Analyst|Engineer|Officer|Accountant)$/i.test(title)
+      ? title : '';
+  };
   // Explicit cards own their text span. The older prose reader otherwise
   // crosses card boundaries or clips dotted company names to "Bhd."/"Ltd".
   // Match original offsets, not text replacement: identical text may also
@@ -1750,9 +1771,16 @@ function resumeEmployment(resumeText: string) {
   [...source.matchAll(titleAtCompany)].forEach((match, index) => {
     const end = (match.index || 0) + match[0].length;
     if (ownedCareerSpans.some(span => end > span.sourceStart && end <= span.sourceEnd)) return;
+    const originalTitle = resumeRole(match[1]);
+    const wellFormedTitle = /^(?:SAP|ERP|ABAP|FI|SD|MM|CO|PP|PS|Senior|Sr\.?|Junior|Lead|Principal|Managing|Chief|Project|Head|Business|System|Systems|Software|Technical|Functional|Wintel|IT|HR|Finance|Account|Accounts|Customer|Support|Associate|Consultant|Developer|Analyst|Engineer|Officer|Manager|Director|Operations|Application|Network|Security|Data)\b/i.test(originalTitle);
+    const title = !wellFormedTitle && (originalTitle.length > 65 || /:/.test(originalTitle))
+      ? careerRoleSuffix(match[1]) : originalTitle;
+    if (!title) return;
+    const priorCompany = resumeCompany(match[2]);
     const parsed = entry({
-      title: resumeRole(match[1]),
-      company: resumeCompany(match[2]),
+      title,
+      company: /^(?:Bhd|Ltd|Inc|Limited)(?:\.|\))?$/i.test(priorCompany)
+        ? validEmploymentCompany(clean(match[2])) : priorCompany,
       start: match[4],
       end: match[5],
       current: /present|current/i.test(match[5]),
@@ -1896,11 +1924,11 @@ function resumeEmployment(resumeText: string) {
     );
     const company =
       block.match(
-        /^Company\s+Name\s*:\s*([\s\S]{2,140}?)(?=\s+(?:From\s*\/\s*To|Position(?:\s+Title)?|Industry|Date\s+(?:join(?:ed)?|left))\s*:?\s*)/i,
+        /^Company\s+Name\s*:\s*([\s\S]{2,140}?)(?=\s+(?:From\s*\/\s*To|Position(?:\s+Title)?|(?:Company\s+)?Industry|Date\s+(?:join(?:ed)?|left))\s*:?\s*)/i,
       )?.[1] || "";
     const title =
       block.match(
-        /\bPosition(?:\s+Title)?\s*:?\s*([\s\S]{2,120}?)(?=\s+(?:Responsibilities?|Duties|Industry|From\s*\/\s*To|Date\s+(?:join(?:ed)?|left)|Work\s+(?:Description|description)|Support|Handle|Provide|Manage|$))/i,
+        /\bPosition(?:\s+Title)?\s*:?\s*([\s\S]{2,120}?)(?=\s+(?:Responsibilities?|Duties|Job\s+Specialization|Position\s+Level|Industry|From\s*\/\s*To|Date\s+(?:join(?:ed)?|left)|Work\s+(?:Description|description)|Support|Handle|Provide|Manage|$))/i,
       )?.[1] || "";
     const range = block.match(
       /\bFrom\s*\/\s*To\s*:\s*([\s\S]{2,50}?)\s*[-\u2013\u2014]\s*([\s\S]{2,50}?)(?=\s+Position(?:\s+Title)?\s*:|$)/i,
