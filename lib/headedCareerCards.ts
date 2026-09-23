@@ -19,7 +19,7 @@ const role =
   `(?:\\s*\\([^)]{1,50}\\))?` +
   `(?:\\s*,\\s*(?:[A-Za-z0-9/&.+()-]+\\s+){0,4}${job})?)`;
 const duty =
-  "(?:Liaise|Managed|Manage|Conducted|Review|Extracting|Created|Reduced|Responsible|Responsibilities|Led|Worked|Implemented|Configured|Supported|Support|Developed|Built|Collaborated|Provided|Assigned|Help|Adjusting|Assessing|In charge|Performed|Designed|Delivered|Coordinated)";
+  "(?:Liaise|Managed|Manage|Conducted|Review|Extracting|Created|Reduced|Responsible|Responsibilities|Led|Worked|Implemented|Configured|Supported|Support|Developed|Built|Collaborated|Provided|Assigned|Help|Adjusting|Assessing|Taking|Scheduling|In charge|Performed|Designed|Delivered|Coordinated)";
 const heading =
   /\b(?:WORK(?:ING)? EXPERIENCES?|PROFESSIONAL EXPERIENCES?|EMPLOYMENT HISTORY|CAREER HISTORY)\b/gi;
 const stop =
@@ -222,4 +222,31 @@ export function headedCareerCards(input: string): HeadedCareerCard[] {
     }
   }
   return [];
+}
+
+/** Repeated employer / YEAR MONTH / role cards under one employment heading. */
+export function reversedMonthCareerCards(input: string): HeadedCareerCard[] {
+  const text = input.normalize("NFKC").replace(/\s+/g, " ");
+  const heading = /\b(?:Employment History|Career History|Work(?:ing)? Experiences?|Professional Experiences?)\b/i.exec(text);
+  if (!heading) return [];
+  const raw = text.slice(heading.index + heading[0].length);
+  const end = raw.search(stop);
+  const section = raw.slice(0, end < 0 ? 2200 : Math.min(end, 2200)).trimStart().replace(/^[:|–—-]+\s*/, "");
+  const company = "([A-Z][a-z]+(?:\\s+(?:[A-Z][a-z]+|Of)){1,5})";
+  const reverseDate = `((?:19|20)\\d{2})\\s+(${month})`;
+  const reversePeriod = `${reverseDate}\\s+(?:to|[-–—])\\s+(?:((?:19|20)\\d{2})\\s+(${month})|(present|current|now))`;
+  const title = "(Chiropractor(?:\\s+and\\s+(?:[A-Z][a-z]+\\s+){0,2}Manager)?|(?:[A-Za-z]+\\s+){0,5}(?:Consultant|Engineer|Developer|Analyst|Specialist|Manager|Therapist))";
+  const card = new RegExp(`(?:^|\\s)${company}\\s*[-–—]\\s*${reversePeriod}\\s+${title}(?=\\s+${duty}\\b)`, "g");
+  const matches = [...section.matchAll(card)];
+  // A later card cannot prove that preceding unstructured text was employment.
+  if (!matches.length || (matches[0].index || 0) > 5) return [];
+  const result: HeadedCareerCard[] = [];
+  for (const match of matches) {
+    const start = `${match[3]} ${match[2]}`;
+    const endDate = match[6] || `${match[5]} ${match[4]}`;
+    const owned = validate(match[1], match[7], start, endDate);
+    if (!owned) break;
+    result.push({ ...owned, start, end: endDate, excerpt: match[0].trim().slice(0, 280) });
+  }
+  return result;
 }

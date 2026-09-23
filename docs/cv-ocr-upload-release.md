@@ -1,5 +1,7 @@
 # CV upload OCR integration
 
+> Latest read-only source batch: [v102 owned career spells](precision-v102-owned-career-spells-20260923.md). On the same 970-source snapshot, 3 sources gain 9 employment rows: 726 sources / 2,105 rows, 244 still requiring review. All 2,096 earlier employment tuples are retained; two explicitly owned project assignments yield a separately labelled employer estimate with internal gaps included. Non-SAP service desk roles do not add SAP tenure. No reviewed backfill, live OCR or authenticated acceptance on the promoted artifact occurred; production remains NO_GO.
+
 > Latest read-only career-card batch: [v101 heading-bound career cards](precision-v101-headed-career-cards-20260923.md). Same 970-source snapshot: 723 sources / 2,096 employment rows, 247 still requiring review; nine previously empty sources gain one source-owned row each while all 2,087 earlier rows and all projects are preserved. Non-SAP roles remain general employment and do not add SAP tenure. No reviewed backfill, live OCR, or authenticated exact-artifact acceptance occurred; production remains NO_GO.
 
 > Latest read-only chronology batch: [v100 dated career headings](precision-v100-headed-chronology-20260923.md). Same 970-source snapshot: 714 sources / 2,087 employment rows, 256 still requiring review; five previously empty sources gain 12 source-owned rows. All prior 2,075 rows and 970-source projects are preserved. No reviewed backfill, live OCR or authenticated exact-artifact acceptance occurred; production remains NO_GO.

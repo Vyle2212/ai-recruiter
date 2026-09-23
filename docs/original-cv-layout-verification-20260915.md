@@ -1,5 +1,7 @@
 # Original CV layout verification — 2026-09-15
 
+> Latest read-only checkpoint: [v102 bounded career spells and employer-owned projects](precision-v102-owned-career-spells-20260923.md). The same 970-source snapshot projects 726 sources / 2,105 employment rows, with 244 needing review. Earlier tuples are preserved. Project-only dates remain separately labelled estimates, including gaps between projects for the same employer; unrelated non-SAP jobs add no SAP years. Original-layout review, version-matched backfill/readback, live OCR and authenticated acceptance remain required (NO_GO).
+
 > Latest source-card recovery: [v101 heading-bound career cards](precision-v101-headed-career-cards-20260923.md). A read-only 970-source comparison recovers nine first cards with explicit employer/role/date ownership, reaching 723 sources / 2,096 rows and leaving 247 for review. Legal clients cannot pass as locations; non-SAP titles remain outside SAP tenure. Original-source review and production gates remain pending (NO_GO).
 
 > Latest source chronology: [v100 career heading/date rows](precision-v100-headed-chronology-20260923.md). Validated date-first role/employer ownership recovers 12 rows across five sources on a read-only 970-source projection: 714 sources / 2,087 rows, 256 unresolved. Numeric dates require unambiguous day-first evidence within the same source. Original review and production gates remain pending (NO_GO).

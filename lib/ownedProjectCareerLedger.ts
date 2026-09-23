@@ -14,7 +14,7 @@ export type OwnedProjectCareerRow = {
 const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*";
 const dated = `(?:${month}\\s+(?:19|20)\\d{2}|\\d{1,2}\\.\\d{1,2}\\.(?:19|20)\\d{2})`;
 const period = new RegExp(`\\b(${dated})\\s*(?:[-–—]|to|until)\\s*(${dated}|Present|Current|Now)\\b`, "i");
-const label = /\b(?:Company|Employer|Customer|Client|End-Client|Industry|Projects?|Project Role|Role|Duration|Development Stage|Support Stage|Responsibilit(?:y|ies)|Duties)\s*:/gi;
+const label = /\b(?:Company|Employer|Customer|Client|End-Client|Industry|Projects?|Project Role|Role|Duration|Team Size|Module|Role and Responsibilit(?:y|ies)|Development Stage|Support Stage|Responsibilit(?:y|ies)|Duties)\s*:/gi;
 
 function fields(source: string) {
   const markers = [...source.matchAll(label)];
@@ -57,6 +57,20 @@ export function ownedProjectCareerLedger(resumeText: string): OwnedProjectCareer
   const text = resumeText.normalize("NFKC").replace(/\s+/g, " ")
     .split(/\b(?:References|Personal Profile|Educational Qualifications)\s*:?(?=\s|$)/i)[0];
   const output: OwnedProjectCareerRow[] = [];
+  // A numbered project ledger owns each labelled field only until the next
+  // project. Its Duration describes the assignment, never stated job tenure.
+  const numbered = [...text.matchAll(/\bProject\s+(\d{1,2})\s+Duration\s*:/gi)];
+  numbered.forEach((marker, index) => {
+    const block = text.slice(marker.index || 0, numbered[index + 1]?.index ?? text.length)
+      .split(/\b(?:Education|Academic Qualifications|Personal Profile|References|Contact Details)\s*:?/i)[0]
+      .slice(0, 1400);
+    const field = fields(block);
+    const item = row({ employer: field.get("employer") || "", client: field.get("client") || "",
+      project: `Project ${marker[1]}`, role: field.get("role") || "",
+      period: field.get("duration") || "", sourceRef: `resume.ownedProjectLedger.numbered.${index + 1}`,
+      excerpt: block });
+    if (item) output.push(item);
+  });
   // An explicitly separate Customer identifies a project client. Company is its employer.
   const companies = [...text.matchAll(/\bCompany\s*:/gi)];
   companies.forEach((marker, index) => {
