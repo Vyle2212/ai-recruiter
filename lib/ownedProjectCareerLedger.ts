@@ -71,6 +71,29 @@ export function ownedProjectCareerLedger(resumeText: string): OwnedProjectCareer
       excerpt: block });
     if (item) output.push(item);
   });
+  // In project-led career tables, a Client and a Company appear as separate
+  // fields. The printed Duration belongs to the project: retain it on that
+  // project and leave the resulting employment endpoints unstated.
+  const career = /\bProfessional Experience\b/i.exec(text);
+  if (career) {
+    const section = text.slice(career.index).split(/\b(?:Education|Academic Qualifications|References)\s*:/i)[0];
+    const markers = [...section.matchAll(/\bPROJECT\s*#?\s*(\d{1,2})\s*:?(?=\s+Client\s*:)/gi)];
+    markers.forEach((marker, index) => {
+      const block = section.slice(marker.index || 0, markers[index + 1]?.index ?? section.length).slice(0, 1800);
+      const cells = /^Project\s*#?\s*\d{1,2}\s*:?\s+Client\s*:\s*(.{2,120}?)\s+Company\s*:\s*(.{2,120}?)\s+Project\s*:\s*(.{2,100}?)\s+Duration\s*:\s*(.{8,65}?)\s+Role\s*:\s*(.{3,95}?)(?=\s+(?:Client\s+Description|Project\s+Description|Description|Roles?\s*&\s*Responsibilities)\b\s*:?|$)/i.exec(block);
+      if (!cells) return;
+      const ownPeriod = cells[4]
+        .replace(/([A-Za-z])((?:19|20)\d{2})\b/g, "$1 $2")
+        .replace(/\btill\s+(?:to\s+)?date\b/gi, "Present");
+      // An open assignment in an undated CV does not establish that it is
+      // still active today. Only closed project ranges enter this reader.
+      if (/\b(?:Present|Current|Now)\b/i.test(ownPeriod)) return;
+      const item = row({ employer: cells[2], client: cells[1], project: cells[3],
+        role: cells[5], period: ownPeriod,
+        sourceRef: `resume.ownedProjectLedger.clientCompany.${index + 1}`, excerpt: block });
+      if (item) output.push(item);
+    });
+  }
   // An explicitly separate Customer identifies a project client. Company is its employer.
   const companies = [...text.matchAll(/\bCompany\s*:/gi)];
   companies.forEach((marker, index) => {

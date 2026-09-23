@@ -22,4 +22,10 @@ assert.deepEqual(boundedEmployerRoleCards("PROJECT EXPERIENCE SAP Consultant @ B
 assert.deepEqual(boundedEmployerRoleCards("WORK EXPERIENCE & PROJECT DETAILS: SAP Consultant @ Buyer Ltd, Malaysia (Mar 2023-Feb 2022) Key Roles, Responsibilities & Scope: invalid dates"), []);
 assert.deepEqual(boundedEmployerRoleCards("WORK EXPERIENCE & PROJECT DETAILS: SAP Consultant @ Buyer Ltd, Malaysia (Mar 2023-Feb 2024) Client: Example Corp. Key Roles, Responsibilities & Scope: not an employer card"), []);
 assert.deepEqual(boundedEmployerRoleCards("WORK EXPERIENCE Consultant Example Ltd, Dubai, UAE Jan 2020-Feb 2021.  Buyer Ltd, Dubai, UAE Mar 2021-Apr 2022 duties").map(row => row.company), ["Example Ltd"]);
+const employerHeadings = "Work Experience: Example Systems – Kuala Lumpur, Malaysia, India Duration: Nov 2024 – Till date SAP FI/CO Specialist Project#15: Client: Buyer Finance. Project: rollout Duration: Nov 2024 to Till date Project Description: Client duties. Example Advice - Hyderabad, India Duration: Aug 2021 – Dec 2023 Senior Consultant Project #12: Client: Other Buyer. Project: upgrade Duration: Jun 2023 to Nov 2023 Project Description: duties. Education: degree";
+assert.deepEqual(boundedEmployerRoleCards(employerHeadings).map(({company,title,start,end}) => ({company,title,start,end})), [
+  {company:"Example Systems",title:"SAP FI/CO Specialist",start:"Nov 2024",end:"Present"},
+  {company:"Example Advice",title:"Senior Consultant",start:"Aug 2021",end:"Dec 2023"},
+]);
+assert.deepEqual(boundedEmployerRoleCards("Work Experience: Client: Buyer Ltd - Kuala Lumpur, Malaysia Duration: Jan 2020 - Feb 2020 SAP Consultant Project#1: Assignment only"), []);
 console.log("Bounded employer role cards, project/client and date isolation: PASS");

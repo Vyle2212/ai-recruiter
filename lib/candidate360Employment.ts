@@ -20,7 +20,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v104-bounded-employer-role-cards";
+  "candidate-employment-v105-bounded-employer-and-client-project-cards";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,

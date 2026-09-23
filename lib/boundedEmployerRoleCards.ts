@@ -73,8 +73,20 @@ export function boundedEmployerRoleCards(input: string): BoundedEmployerRoleCard
     for (const match of section.matchAll(bulletCard))
       add(jobs, match[2], match[1], match[3], match[4], match[0]);
 
-    // Employer – location Duration period Role Project#: the Project# boundary
-    // prevents an assignment's own Duration from becoming employer tenure.
+  }
+  // A career-wide employer heading can precede several client project cards.
+  // Only the employer heading's own Duration, role and following Project#
+  // marker form a job; a Duration within a Project# block is not eligible.
+  const explicitWork = /\bWork Experience\s*:/i.exec(text);
+  if (explicitWork) {
+    const section = text.slice(explicitWork.index, explicitWork.index + 26000)
+      .split(/\b(?:Education|Academic Qualifications)\s*:/i)[0];
+    const employerHeading = new RegExp(
+      `(?:Work Experience\\s*:|[.!?]\\s+)\\s*((?:[A-Z][A-Za-z&'-]*\\s*){1,5})[-–—]\\s*(?:[A-Z][A-Za-z -]{2,40},\\s*){1,3}(?:Malaysia|India|Singapore|UAE|Qatar)\\s+Duration\\s*:\\s*(${date})\\s*[-–—]\\s*(${end})\\s+((?:[A-Za-z/()-]+\\s+){0,6}${role})\\s+Project\\s*#\\s*\\d+\\s*:`,
+      "gi",
+    );
+    for (const match of section.matchAll(employerHeading))
+      add(jobs, match[1], match[4], match[2], match[3], match[0]);
   }
   return jobs.filter((job, index) => jobs.findIndex(other =>
     [other.company, other.title, other.start, other.end].join("|").toLowerCase() ===
