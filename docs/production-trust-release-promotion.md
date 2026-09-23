@@ -1,5 +1,7 @@
 # Production Trust release promotion
 
+> Latest code-only checkpoint: [v97 labelled employer/client ledger](precision-v97-labelled-client-employer-20260923.md). On the same private 970-source snapshot, 22 source-owned rows are recovered across two sources with all prior 2,049 rows retained; production is NO_GO pending reviewed backfill/readback, live OCR and exact-artifact authenticated acceptance.
+
 > Latest source-owned quality checkpoint: [v96 career row ownership](precision-v96-source-ownership-quality-20260923.md). Full 970-source read-only comparison corrects source ownership and deduplication: 705 sources / 2,049 employment rows; 265 remain under review. SAP experience and projects are unchanged. This is code verification only; reviewed backfill/readback, live OCR and authenticated acceptance on the promoted artifact remain required. Production is NO_GO.
 
 > Latest calculation checkpoint: [v95 SAP Sales and Distribution consulting](precision-v95-sap-sd-experience-20260923.md). All 970 sources were compared read-only on the same input; one SAP duration changes, all employment and project records are unchanged. This is code verification only. Reviewed backfill/readback, live OCR and authenticated acceptance on the promoted artifact remain required; production is NO_GO.

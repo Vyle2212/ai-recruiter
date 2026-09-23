@@ -1,5 +1,7 @@
 # Original CV layout verification — 2026-09-15
 
+> Latest source batch: [v97 labelled employer/client ledger](precision-v97-labelled-client-employer-20260923.md). Read-only 970-source re-projection yields 707 sources / 2,071 employment rows, 263 unresolved; 22 added rows retain Company as employer and Client as project context. Original-source review and production gates remain outstanding (NO_GO).
+
 > Latest source-owned quality checkpoint: [v96 career row ownership](precision-v96-source-ownership-quality-20260923.md). The same 970 stored texts re-project to 705 sources / 2,049 employment rows; four incorrect/duplicate rows removed and two non-SAP titles bounded. This read-only result does not replace original-CV review, backfill/readback, live OCR or authenticated exact-artifact acceptance. Production remains NO_GO.
 
 > Latest calculation checkpoint: [v95 SAP Sales and Distribution consulting](precision-v95-sap-sd-experience-20260923.md). Full 970-source read-only projection preserves every employment tuple while correcting one SAP duration classification. Production remains NO_GO pending reviewed originals/backfill, live OCR and exact-artifact acceptance.

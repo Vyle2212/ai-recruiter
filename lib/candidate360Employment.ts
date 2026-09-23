@@ -14,7 +14,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v96-source-owned-roles";
+  "candidate-employment-v97-labelled-client-employer-rows";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1441,6 +1441,45 @@ function structuredEmploymentTables(source: string): EnterpriseEmployment[] {
   return output;
 }
 
+// A flattened assignment ledger may explicitly label Client and Company in
+// separate columns. The Company field owns the employment claim; dates and
+// roles must be inside that same row. Never promote the Client field.
+function labelledClientEmployerEmployment(source: string): EnterpriseEmployment[] {
+  const heading = /\bWORK EXPERIENCE\s+(?=DURATION\s*:)/gi;
+  const date = "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[/. -]*[’']?\\d{2,4}";
+  const pattern = new RegExp(
+    `\\bDURATION\\s*:\\s*(${date})\\s+(?:TO|TILL|UNTIL|[-–—])\\s*(${date}|CURRENT|PRESENT|DATE|NOW)\\s+CLIENT\\s*:\\s*(.{2,110}?)\\s+COMPANY\\s*:\\s*(.{2,120}?)\\s+ROLE\\s*:?(?=\\s)`,
+    "gi",
+  );
+  const normalizeDate = (value: string) => {
+    if (/^(?:current|present|date|now)$/i.test(value)) return "Present";
+    const match = value.match(/^([A-Za-z]+)[/. -]*[’']?(\d{2}|\d{4})$/);
+    if (!match) return "";
+    const year = Number(match[2]);
+    return `${match[1]} ${year < 100 ? year + (year <= 30 ? 2000 : 1900) : year}`;
+  };
+  return [...source.matchAll(heading)].flatMap((section, sectionIndex) => {
+    const body = source.slice((section.index || 0) + section[0].length)
+      .split(/\b(?:PROJECT SUMMARY|PROJECT EXPERIENCE|ACADEMIC QUALIFICATIONS?|EDUCATIONAL QUALIFICATIONS?|PERSONAL DETAILS)\b/i)[0];
+    return [...body.matchAll(pattern)].flatMap((match, rowIndex) => {
+      const next = body.slice((match.index || 0) + match[0].length);
+      const roleCell = next.split(/\bRESPONSIBILITIES\b|\b(?:DURATION|EDUCATION)\s*:(?=\s|$)/i)[0].trim();
+      const title = roleCell.replace(/^.{0,65}?\b(?:was assigned|worked|acting)\s+as\s+(?:an?\s+)?/i, "")
+        .replace(/^an?\s+/i, "").trim();
+      const company = match[4].split(/\bINDUSTRY\s*[-–—:]\s*/i)[0].trim();
+      const start = normalizeDate(match[1]);
+      const end = normalizeDate(match[2]);
+      const current = end === "Present";
+      if (!title || !company || !supportedRange(start, end, current)) return [];
+      const parsed = entry({company, title, start, end, current,
+        sourceRef: `resume.labelledClientEmployer.${sectionIndex + 1}.${rowIndex + 1}`,
+        sourceType: "parsed_resume", excerpt: match[0] + " " + roleCell,
+        confidence: 94});
+      return parsed ? [parsed] : [];
+    });
+  });
+}
+
 function resumeEmployment(resumeText: string) {
   const output: EnterpriseEmployment[] = [];
   const namedMonth = "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
@@ -1475,7 +1514,7 @@ function resumeEmployment(resumeText: string) {
       ownedCareerSpans.push(row);
     }
   }
-  output.push(...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source), ...labelledEmployerHistory(source), ...explicitHeadingVariants(source), ...orderedLabelEmployment(source), ...dateCompanyRoleEmployment(source), ...explicitEmploymentStatements(source), ...spacedDateEmployment(source), ...datedEmploymentLedger(source), ...headingDurationPositionEmployment(source), ...numberedPositionEmployment(source), ...numberedPositionPeriodEmployment(source), ...roleCompanyPeriodEmployment(source), ...pipedRoleEmployerPeriodEmployment(source), ...locatedEmployerHistory(source), ...durationEmployerHistory(source), ...organizationDurationDesignationEmployment(source), ...organizationPeriodEmployment(source), ...datedCareerSummary(source), ...numberedWorkExperience(source), ...locatedRoleEmployment(source), ...formerNameEmployment(source), ...employerAssignmentSummary(source), ...chronologicalEmploymentLedgers(source), ...numericFromToEmployment(source), ...structuredEmploymentTables(source));
+  output.push(...labelledClientEmployerEmployment(source), ...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source), ...labelledEmployerHistory(source), ...explicitHeadingVariants(source), ...orderedLabelEmployment(source), ...dateCompanyRoleEmployment(source), ...explicitEmploymentStatements(source), ...spacedDateEmployment(source), ...datedEmploymentLedger(source), ...headingDurationPositionEmployment(source), ...numberedPositionEmployment(source), ...numberedPositionPeriodEmployment(source), ...roleCompanyPeriodEmployment(source), ...pipedRoleEmployerPeriodEmployment(source), ...locatedEmployerHistory(source), ...durationEmployerHistory(source), ...organizationDurationDesignationEmployment(source), ...organizationPeriodEmployment(source), ...datedCareerSummary(source), ...numberedWorkExperience(source), ...locatedRoleEmployment(source), ...formerNameEmployment(source), ...employerAssignmentSummary(source), ...chronologicalEmploymentLedgers(source), ...numericFromToEmployment(source), ...structuredEmploymentTables(source));
   for (const [index, row] of flattenedEmployment(source).entries()) {
     const parsed = entry({...row, allowGroundedEmployerOnly: true,
       sourceRef: `resume.flattened.${row.group}.${index + 1}`, sourceType: "parsed_resume", confidence: 94});
