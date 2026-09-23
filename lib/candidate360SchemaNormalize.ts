@@ -7,6 +7,7 @@ import {
   type ProfileSectionState,
 } from "./candidate360Completeness";
 import { estimateEmploymentFromProjects, ownedProjectRangesFromResume, supportedSapYears, type ProjectTenureEstimate } from "./projectEmploymentEstimate";
+import { ownedProjectCareerLedger } from "./ownedProjectCareerLedger";
 import { calculateTotalCareerYears } from "./candidateCareerExperience";
 import {
   CANDIDATE_EMPLOYMENT_TIMELINE_VERSION,
@@ -2734,7 +2735,7 @@ function narrativeProjects(
                 : "Implementation";
     const rawClient = clean(
       segment.match(
-        /\b(?:client|customer)\s*[:\-\u2013\u2014]\s*([\s\S]{2,160}?)(?=\s+(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(?:19|20)\d{2}|(?:company|duration|position|role|project|system|year|highlights?|specific\s+responsibilities)\s*[:\-\u2013\u2014(])|\s*\(|[.;]|$)/i,
+        /\b(?:client|customer)\s*[:\-\u2013\u2014]\s*([\s\S]{2,160}?)(?=\s+(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(?:19|20)\d{2}|(?:company|duration|position|role|project|industry|system|year|highlights?|specific\s+responsibilities)\s*[:\-\u2013\u2014(])|\s*\(|[.;]|$)/i,
       )?.[1] || "",
     ).replace(
       /\s*-\s*(?:Plantation|Manufacturing|Banking|Energy|Retail)\s+Industry$/i,
@@ -3229,6 +3230,25 @@ function normalizeProjects(
   });
   output.push(...normalizeResumeProjects(sourceScopes));
   output.push(...labelledWorkingExperienceProjects(sourceScopes));
+  const ownedLedgerText = firstValue(sourceScopes, ["resume_text", "raw_text", "cv_text", "raw_cv"]);
+  if (typeof unwrap(ownedLedgerText) === "string") {
+    output.push(...ownedProjectCareerLedger(String(unwrap(ownedLedgerText))).flatMap((row) => {
+      const employer = validEmploymentCompany(row.employer);
+      const client = clean(row.client);
+      const role = cleanCandidateTitle(row.role);
+      const duration = projectDuration(row.start, row.end);
+      if (!employer || !client || !role || !duration) return [];
+      const name = clean(row.project);
+      const projectType = labelledAssignmentType(name + " " + role);
+      return [withProjectEvidence({
+        id: row.sourceRef, name, client, employer, role, industry: "", country: "",
+        modules: stringList(`${name} ${role}`.match(/\b(?:FICO|FI|CO|MM|SD|PP|PS|BW|BI|HCM|ABAP|TRM)\b/gi) || []),
+        projectType, implementationType: projectType,
+        start: row.start, end: row.end, duration, responsibilities: [],
+        teamSize: null, environment: "",
+      }, "parsed_resume", row.sourceRef)];
+    }));
+  }
   output.push(...inlineClientAssignmentProjects(sourceScopes));
   output.push(...extractExplicitResponsibilityProjects(sourceScopes));
   output.push(...narrativeProjects(sourceScopes));

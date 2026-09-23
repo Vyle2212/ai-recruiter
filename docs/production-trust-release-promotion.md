@@ -1,5 +1,7 @@
 # Production Trust release promotion
 
+> Latest code-only checkpoint: [v99 owned project ledgers](precision-v99-owned-project-ledgers-20260923.md). Read-only comparison on 970 existing sources recovers four employer-owned roles from two sources with four labelled project estimates. The 709-source / 2,075-row projection is not a database backfill or deployed OCR acceptance. Reviewed backfill/readback, live OCR and authenticated acceptance on the exact promoted artifact still block production (NO_GO).
+
 > Latest code-only safety checkpoint: [v98 owned label boundaries](precision-v98-owned-label-boundaries-20260923.md). The 970-source result remains 707 sources / 2,071 rows; cached results from the weaker row-boundary reader are invalidated. Production stays NO_GO pending reviewed backfill/readback, live OCR and authenticated exact-artifact acceptance.
 
 > Latest code-only checkpoint: [v97 labelled employer/client ledger](precision-v97-labelled-client-employer-20260923.md). On the same private 970-source snapshot, 22 source-owned rows are recovered across two sources with all prior 2,049 rows retained; production is NO_GO pending reviewed backfill/readback, live OCR and exact-artifact authenticated acceptance.

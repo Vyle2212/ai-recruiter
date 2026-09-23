@@ -1,5 +1,7 @@
 # CV upload OCR integration
 
+> Latest read-only owned-project batch: [v99 employer/customer ledgers](precision-v99-owned-project-ledgers-20260923.md). Four employment roles and four linked project periods were recovered from two previously empty sources, with employer distinct from customer and project dates labelled estimated. Same 970-source snapshot: 709 sources / 2,075 rows; 261 sources remain unresolved. All earlier employment tuples and other sources' SAP metrics are unchanged. Production remains NO_GO pending reviewed source adjudication, backfill/readback, live OCR and authenticated exact-artifact acceptance.
+
 > Latest data-integrity correction: [v98 owned label boundaries](precision-v98-owned-label-boundaries-20260923.md). A missing Company in one row can no longer borrow the next row's employer and role. Re-projection of the same 970 sources stays at 707 sources / 2,071 rows, with 263 requiring review; no new source recovery is claimed. Production remains NO_GO pending reviewed backfill/readback, live OCR and authenticated exact-artifact acceptance.
 
 > Latest read-only source batch: [v97 labelled employer/client ledger](precision-v97-labelled-client-employer-20260923.md). The same 970-source snapshot yields 707 sources / 2,071 employment rows, recovering 22 rows from two previously empty sources and preserving all 2,049 earlier rows. 263 sources require review; an explicitly overlapping assignment adds one overlap review flag. Reviewed backfill/readback, live OCR and exact-artifact authenticated acceptance remain blockers (NO_GO).

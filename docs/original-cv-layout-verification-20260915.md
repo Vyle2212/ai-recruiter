@@ -1,5 +1,7 @@
 # Original CV layout verification — 2026-09-15
 
+> Latest source-owned project layout: [v99 employer/customer ledgers](precision-v99-owned-project-ledgers-20260923.md). Company/Employer and Customer/End-Client are bounded within the same record; project stage dates are shown only as estimated tenure and require original-source review before backfill. Read-only 970-source projection: 709 sources / 2,075 rows, 261 unresolved; production NO_GO.
+
 > Latest parser safety checkpoint: [v98 owned label boundaries](precision-v98-owned-label-boundaries-20260923.md). Incomplete labelled career rows cannot borrow employer/role from the next row. The same 970-source projection remains 707 sources / 2,071 rows, 263 unresolved. Original-source review and release gates remain pending (NO_GO).
 
 > Latest source batch: [v97 labelled employer/client ledger](precision-v97-labelled-client-employer-20260923.md). Read-only 970-source re-projection yields 707 sources / 2,071 employment rows, 263 unresolved; 22 added rows retain Company as employer and Client as project context. Original-source review and production gates remain outstanding (NO_GO).

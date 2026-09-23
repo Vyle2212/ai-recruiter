@@ -5,6 +5,7 @@ import { flattenedEmployment } from "./flattenedEmployment";
 import { boundedEmploymentBatch } from "./boundedEmploymentBatch";
 import { anchoredEmployment } from "./anchoredEmployment";
 import { exportedCareerEmployment } from "./exportedCareerEmployment";
+import { ownedProjectCareerLedger } from "./ownedProjectCareerLedger";
 import type {
   EnterpriseEmployment,
   EnterpriseProject,
@@ -14,7 +15,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v98-owned-label-boundaries";
+  "candidate-employment-v99-owned-project-ledgers";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1515,6 +1516,12 @@ function resumeEmployment(resumeText: string) {
     }
   }
   output.push(...labelledClientEmployerEmployment(source), ...tabularResumeEmployment(source), ...organizationDesignationEmployment(source), ...proseEmploymentHeadings(source), ...compactEmploymentHeading(source), ...labelledEmployerHistory(source), ...explicitHeadingVariants(source), ...orderedLabelEmployment(source), ...dateCompanyRoleEmployment(source), ...explicitEmploymentStatements(source), ...spacedDateEmployment(source), ...datedEmploymentLedger(source), ...headingDurationPositionEmployment(source), ...numberedPositionEmployment(source), ...numberedPositionPeriodEmployment(source), ...roleCompanyPeriodEmployment(source), ...pipedRoleEmployerPeriodEmployment(source), ...locatedEmployerHistory(source), ...durationEmployerHistory(source), ...organizationDurationDesignationEmployment(source), ...organizationPeriodEmployment(source), ...datedCareerSummary(source), ...numberedWorkExperience(source), ...locatedRoleEmployment(source), ...formerNameEmployment(source), ...employerAssignmentSummary(source), ...chronologicalEmploymentLedgers(source), ...numericFromToEmployment(source), ...structuredEmploymentTables(source));
+  for (const project of ownedProjectCareerLedger(source)) {
+    const parsed = entry({ company: project.employer, title: project.role,
+      sourceRef: project.sourceRef, sourceType: "parsed_resume", confidence: 94,
+      excerpt: project.excerpt });
+    if (parsed) output.push(parsed);
+  }
   for (const [index, row] of flattenedEmployment(source).entries()) {
     const parsed = entry({...row, allowGroundedEmployerOnly: true,
       sourceRef: `resume.flattened.${row.group}.${index + 1}`, sourceType: "parsed_resume", confidence: 94});
