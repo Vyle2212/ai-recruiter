@@ -106,6 +106,13 @@ export type EmploymentPromotionExecutionReport = {
   };
 };
 
+export type EmploymentPromotionExecutionGateInput = {
+  preflight: EmploymentPromotionBatchPreflight;
+  backup: EmploymentPromotionBackupEvidence;
+  authorization: EmploymentPromotionExecutionAuthorization;
+  expectedCommitSha: string;
+};
+
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -358,20 +365,12 @@ export function preflightEmploymentPromotionBatch(input: {
   };
 }
 
-export async function executeEmploymentPromotionBatch(input: {
-  preflight: EmploymentPromotionBatchPreflight;
-  repository: EmploymentPromotionTransactionalRepository;
-  backup: EmploymentPromotionBackupEvidence;
-  authorization: EmploymentPromotionExecutionAuthorization;
-  expectedCommitSha: string;
-}): Promise<EmploymentPromotionExecutionReport> {
-  const { preflight, repository, backup, authorization } = input;
+export function assertEmploymentPromotionExecutionGate(
+  input: EmploymentPromotionExecutionGateInput,
+) {
+  const { preflight, backup, authorization } = input;
   assertSha(input.expectedCommitSha, "expectedCommitSha");
   assertPreflightIntegrity(preflight);
-  if (!repository.transactional)
-    throw new Error(
-      "Employment promotion execution refused: repository is not transactional",
-    );
   if (
     preflight.targetCommitSha !== input.expectedCommitSha ||
     authorization.targetCommitSha !== input.expectedCommitSha
@@ -421,6 +420,19 @@ export async function executeEmploymentPromotionBatch(input: {
   if (Date.parse(backup.capturedAt) > Date.parse(authorization.authorizedAt))
     throw new Error(
       "Employment promotion execution refused: authorization predates backup",
+    );
+}
+
+export async function executeEmploymentPromotionBatch(
+  input: EmploymentPromotionExecutionGateInput & {
+    repository: EmploymentPromotionTransactionalRepository;
+  },
+): Promise<EmploymentPromotionExecutionReport> {
+  const { preflight, repository } = input;
+  assertEmploymentPromotionExecutionGate(input);
+  if (!repository.transactional)
+    throw new Error(
+      "Employment promotion execution refused: repository is not transactional",
     );
 
   return repository.transaction(async (transaction) => {

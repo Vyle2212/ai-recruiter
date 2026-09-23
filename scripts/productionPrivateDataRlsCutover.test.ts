@@ -99,6 +99,7 @@ const targetRpcs = [
   "search_candidate_index",
   "search_candidate_index_v2",
   "search_candidate_index_vector",
+  "apply_reviewed_employment_promotion_batch",
 ] as const;
 
 for (const table of targetTables) {
@@ -160,7 +161,7 @@ for (const rpc of targetRpcs) {
 }
 assert.equal(
   (migration.match(/set search_path = pg_catalog, public/gi) || []).length,
-  6,
+  7,
 );
 assert.match(readback, /private_database_surface_readback_passed/);
 assert.doesNotMatch(

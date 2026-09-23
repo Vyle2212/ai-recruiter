@@ -33,7 +33,8 @@ declare
     'public.sap_detect_modules_from_text(text)',
     'public.search_candidate_index(text,text[],text,text,numeric,boolean,integer,integer)',
     'public.search_candidate_index_v2(text,text[],text,text,numeric,boolean,integer,integer)',
-    'public.search_candidate_index_vector(public.vector,text[],text,numeric,boolean,integer)'
+    'public.search_candidate_index_vector(public.vector,text[],text,numeric,boolean,integer)',
+    'public.apply_reviewed_employment_promotion_batch(jsonb)'
   ];
 begin
   foreach target_table in array target_tables loop
@@ -143,4 +144,4 @@ $$;
 select 'private_database_surface_readback_passed' as verification,
        25 as tables_verified,
        2 as views_verified,
-       6 as functions_verified;
+       7 as functions_verified;

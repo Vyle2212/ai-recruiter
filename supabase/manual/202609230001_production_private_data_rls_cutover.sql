@@ -32,7 +32,8 @@ declare
     'public.sap_detect_modules_from_text(text)',
     'public.search_candidate_index(text,text[],text,text,numeric,boolean,integer,integer)',
     'public.search_candidate_index_v2(text,text[],text,text,numeric,boolean,integer,integer)',
-    'public.search_candidate_index_vector(public.vector,text[],text,numeric,boolean,integer)'
+    'public.search_candidate_index_vector(public.vector,text[],text,numeric,boolean,integer)',
+    'public.apply_reviewed_employment_promotion_batch(jsonb)'
   ];
 begin
   foreach required_table in array required_tables loop
@@ -115,6 +116,8 @@ alter function public.search_candidate_index_v2(text, text[], text, text, numeri
   set search_path = pg_catalog, public;
 alter function public.search_candidate_index_vector(public.vector, text[], text, numeric, boolean, integer)
   set search_path = pg_catalog, public;
+alter function public.apply_reviewed_employment_promotion_batch(jsonb)
+  set search_path = pg_catalog, public;
 
 revoke all on function public.match_candidates(public.vector, double precision, integer) from public, anon, authenticated;
 revoke all on function public.match_job_candidates(public.vector, double precision, integer) from public, anon, authenticated;
@@ -122,6 +125,7 @@ revoke all on function public.sap_detect_modules_from_text(text) from public, an
 revoke all on function public.search_candidate_index(text, text[], text, text, numeric, boolean, integer, integer) from public, anon, authenticated;
 revoke all on function public.search_candidate_index_v2(text, text[], text, text, numeric, boolean, integer, integer) from public, anon, authenticated;
 revoke all on function public.search_candidate_index_vector(public.vector, text[], text, numeric, boolean, integer) from public, anon, authenticated;
+revoke all on function public.apply_reviewed_employment_promotion_batch(jsonb) from public, anon, authenticated;
 
 grant execute on function public.match_candidates(public.vector, double precision, integer) to service_role;
 grant execute on function public.match_job_candidates(public.vector, double precision, integer) to service_role;
@@ -129,6 +133,7 @@ grant execute on function public.sap_detect_modules_from_text(text) to service_r
 grant execute on function public.search_candidate_index(text, text[], text, text, numeric, boolean, integer, integer) to service_role;
 grant execute on function public.search_candidate_index_v2(text, text[], text, text, numeric, boolean, integer, integer) to service_role;
 grant execute on function public.search_candidate_index_vector(public.vector, text[], text, numeric, boolean, integer) to service_role;
+grant execute on function public.apply_reviewed_employment_promotion_batch(jsonb) to service_role;
 
 commit;
 
@@ -152,5 +157,6 @@ commit;
 -- from pg_proc p join pg_namespace n on n.oid = p.pronamespace
 -- where n.nspname = 'public' and p.proname = any(array[
 --   'match_candidates','match_job_candidates','sap_detect_modules_from_text',
---   'search_candidate_index','search_candidate_index_v2','search_candidate_index_vector'
+--   'search_candidate_index','search_candidate_index_v2','search_candidate_index_vector',
+--   'apply_reviewed_employment_promotion_batch'
 -- ]);

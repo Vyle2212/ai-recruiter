@@ -30,7 +30,8 @@ declare
     'public.sap_detect_modules_from_text(text)',
     'public.search_candidate_index(text,text[],text,text,numeric,boolean,integer,integer)',
     'public.search_candidate_index_v2(text,text[],text,text,numeric,boolean,integer,integer)',
-    'public.search_candidate_index_vector(public.vector,text[],text,numeric,boolean,integer)'
+    'public.search_candidate_index_vector(public.vector,text[],text,numeric,boolean,integer)',
+    'public.apply_reviewed_employment_promotion_batch(jsonb)'
   ];
 begin
   foreach required_role in array array['anon', 'authenticated', 'service_role'] loop
@@ -83,7 +84,8 @@ target_functions(signature) as (
     'public.sap_detect_modules_from_text(text)',
     'public.search_candidate_index(text,text[],text,text,numeric,boolean,integer,integer)',
     'public.search_candidate_index_v2(text,text[],text,text,numeric,boolean,integer,integer)',
-    'public.search_candidate_index_vector(public.vector,text[],text,numeric,boolean,integer)'
+    'public.search_candidate_index_vector(public.vector,text[],text,numeric,boolean,integer)',
+    'public.apply_reviewed_employment_promotion_batch(jsonb)'
   ]::text[])
 ),
 table_state as (
