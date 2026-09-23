@@ -108,10 +108,7 @@ for (const rpc of [
   "search_candidate_index_v2",
   "search_candidate_index_vector",
 ]) {
-  assert.match(
-    migration,
-    new RegExp(`alter function public\\.${rpc}\\(`, "i"),
-  );
+  assert.match(migration, new RegExp(`alter function public\\.${rpc}\\(`, "i"));
   assert.match(
     migration,
     new RegExp(
