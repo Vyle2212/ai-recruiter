@@ -37,6 +37,54 @@ assert.match(
   migration,
   /grant select, insert, update, delete[^;]*service_role/i,
 );
+for (const view of ["candidate_audit_view", "candidate_quality_audit"]) {
+  assert.match(
+    migration,
+    new RegExp(
+      `alter view public\\.${view} set \\(security_invoker = true\\)`,
+      "i",
+    ),
+  );
+  assert.match(
+    migration,
+    new RegExp(
+      `revoke all on table public\\.${view} from public, anon, authenticated`,
+      "i",
+    ),
+  );
+  assert.match(
+    migration,
+    new RegExp(`grant select on table public\\.${view} to service_role`, "i"),
+  );
+}
+for (const rpc of [
+  "match_candidates",
+  "match_job_candidates",
+  "sap_detect_modules_from_text",
+  "search_candidate_index",
+  "search_candidate_index_v2",
+  "search_candidate_index_vector",
+]) {
+  assert.match(migration, new RegExp(`alter function public\\.${rpc}\\(`, "i"));
+  assert.match(
+    migration,
+    new RegExp(
+      `revoke all on function public\\.${rpc}\\([^;]+from public, anon, authenticated`,
+      "i",
+    ),
+  );
+  assert.match(
+    migration,
+    new RegExp(
+      `grant execute on function public\\.${rpc}\\([^;]+to service_role`,
+      "i",
+    ),
+  );
+}
+assert.equal(
+  (migration.match(/set search_path = pg_catalog, public/gi) || []).length,
+  6,
+);
 assert.match(serverClient, /import "server-only"/);
 assert.match(serverClient, /createLazySupabaseServiceClient/);
 assert.doesNotMatch(serverClient, /NEXT_PUBLIC_SUPABASE_ANON_KEY/);
