@@ -120,7 +120,6 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
       APP_ENV: test
       AUTH_MODE: disabled
-      NODE_OPTIONS: --conditions=react-server
       EXTERNAL_TALENT_SEARCH_ENABLED: "false"
       EXTERNAL_TALENT_PROVIDER: disabled
     steps:
@@ -145,6 +144,8 @@ jobs:
         run: npm run test:production-trust:authorization
 
       - name: Authenticated acceptance harness safety contracts
+        env:
+          NODE_OPTIONS: --conditions=react-server
         run: npm run test:acceptance:harness
 
       - name: Search authorization, cache scope, and candidate privacy
