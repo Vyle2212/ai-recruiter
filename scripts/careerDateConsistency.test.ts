@@ -191,6 +191,9 @@ assert.equal(supportedSapYears([job({title:'SAP Sales Distribution Functional Co
 assert.equal(supportedSapYears([job({title:'Sales Distribution Consultant',start:'Jan 2020',end:'Jan 2024'})],[],now),null,'sales consulting without SAP is not SAP delivery');
 assert.equal(supportedSapYears([job({title:'SAP Sales Manager',start:'Jan 2020',end:'Jan 2024'})],[],now),null,'SAP product sales is not consulting delivery');
 assert.equal(supportedSapYears([job({title:'SAP end user',start:'Jan 2020',end:'Jan 2024'})],[],now),null,'SAP end-user work remains excluded');
+assert.equal(supportedSapYears([job({title:'SAP Core User & Senior Design Engineer',start:'Jan 2020',end:'Jan 2024'})],[],now),null,'SAP core-user work remains excluded even when the operational title contains engineer');
+assert.equal(supportedSapYears([job({title:'SAP Key User',start:'Jan 2020',end:'Jan 2024'})],[],now),null,'SAP key-user work remains excluded');
+assert.equal(supportedSapYears([job({title:'SAP Super User / Business Analyst',start:'Jan 2020',end:'Jan 2024'})],[],now),null,'SAP super-user work remains excluded even when paired with analyst');
 import { ownedProjectRangesFromResume } from '../lib/projectEmploymentEstimate';
 assert.equal(ownedProjectRangesFromResume([job()], 'Example Systems Ltd SAP Consultant Project Involvement: Undated work. Other Ltd SAP Consultant Project Involvement: SAP Upgrade 01/20 - 01/21').length,0,'next employer range cannot fill an undated assignment');
 assert.equal(ownedProjectRangesFromResume([job()], 'Example Systems Ltd SAP Consultant Project Involvement: Responsibilities delivered support 01/20 - 01/21').length,0,'dates buried in duties are not a project heading');

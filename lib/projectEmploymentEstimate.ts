@@ -86,7 +86,7 @@ export function estimateEmploymentFromProjects(
 const sap =
   /\bsap\b|\babap\b|\bhana\b|\b(?:s\/?4\s*hana|s4hana|successfactors|fico)\b/i;
 const nonDelivery =
-  /\b(?:accountant|bookkeeper|sales(?:person|man|woman|\s+(?:executive|representative|manager))?|end[ -]?user|data\s+entry)\b/i;
+  /\b(?:accountant|bookkeeper|sales(?:person|man|woman|\s+(?:executive|representative|manager))?|(?:end|core|key|super)[ -]?user|data\s+entry)\b/i;
 function operationalRole(role: string) {
   return (
     nonDelivery.test(role) &&

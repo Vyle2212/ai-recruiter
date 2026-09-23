@@ -1,6 +1,6 @@
 # Production Trust release promotion
 
-> Latest code-only checkpoint: [v102 owned career spells and project ledgers](precision-v102-owned-career-spells-20260923.md). Read-only projection on the same 970-source snapshot reaches 726 sources / 2,105 rows, with 244 needing review and all 2,096 prior rows retained. Reviewed backfill/readback, live OCR and authenticated acceptance on the exact artifact remain release blockers (NO_GO).
+> Latest code-only checkpoint: [v103 bounded repeated career summaries](precision-v103-bounded-career-summaries-20260923.md). Read-only projection on the same 970-source snapshot reaches 730 sources / 2,129 rows, with 240 needing review and all 2,105 prior rows retained. Missing endpoints stay missing and operational SAP-user roles do not add delivery years. Reviewed backfill/readback, live OCR and authenticated acceptance on the exact artifact remain release blockers (NO_GO).
 
 > Latest code-only checkpoint: [v101 heading-bound career cards](precision-v101-headed-career-cards-20260923.md). The unchanged 970-source snapshot projects 723 sources / 2,096 rows, with 247 sources still requiring review. Nine source-owned rows are added without changing any prior employment tuple, project, estimate, or audit diagnostic. This is not database backfill or live acceptance. Reviewed adjudication and backfill/readback, live OCR, and authenticated acceptance on the exact promoted artifact still block production (NO_GO).
 
