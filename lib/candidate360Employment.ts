@@ -6,6 +6,7 @@ import { boundedEmploymentBatch } from "./boundedEmploymentBatch";
 import { anchoredEmployment } from "./anchoredEmployment";
 import { exportedCareerEmployment } from "./exportedCareerEmployment";
 import { ownedProjectCareerLedger } from "./ownedProjectCareerLedger";
+import { headedChronologicalEmployment } from "./headedChronologicalEmployment";
 import type {
   EnterpriseEmployment,
   EnterpriseProject,
@@ -15,7 +16,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v99-owned-project-ledgers";
+  "candidate-employment-v100-headed-career-chronology";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -2072,6 +2073,13 @@ function resumeEmployment(resumeText: string) {
       owned.provenance = [...(owned.provenance || []), ...(parsed.provenance || [])];
     }
     else output.push(parsed);
+  }
+  if (!output.length) {
+    for (const [index, row] of headedChronologicalEmployment(resumeText).entries()) {
+      const parsed = entry({ ...row, sourceRef: `resume.headedChronology.${index + 1}`,
+        sourceType: "parsed_resume", confidence: 91 });
+      if (parsed) output.push(parsed);
+    }
   }
   return output;
 }

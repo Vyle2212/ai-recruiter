@@ -1,5 +1,7 @@
 # Original CV layout verification — 2026-09-15
 
+> Latest source chronology: [v100 career heading/date rows](precision-v100-headed-chronology-20260923.md). Validated date-first role/employer ownership recovers 12 rows across five sources on a read-only 970-source projection: 714 sources / 2,087 rows, 256 unresolved. Numeric dates require unambiguous day-first evidence within the same source. Original review and production gates remain pending (NO_GO).
+
 > Latest source-owned project layout: [v99 employer/customer ledgers](precision-v99-owned-project-ledgers-20260923.md). Company/Employer and Customer/End-Client are bounded within the same record; project stage dates are shown only as estimated tenure and require original-source review before backfill. Read-only 970-source projection: 709 sources / 2,075 rows, 261 unresolved; production NO_GO.
 
 > Latest parser safety checkpoint: [v98 owned label boundaries](precision-v98-owned-label-boundaries-20260923.md). Incomplete labelled career rows cannot borrow employer/role from the next row. The same 970-source projection remains 707 sources / 2,071 rows, 263 unresolved. Original-source review and release gates remain pending (NO_GO).
