@@ -10,6 +10,7 @@ import { headedChronologicalEmployment } from "./headedChronologicalEmployment";
 import { headedCareerCards, reversedMonthCareerCards } from "./headedCareerCards";
 import { labelledCompanySpells } from "./labelledCompanySpells";
 import { boundedCareerSummary } from "./boundedCareerSummary";
+import { boundedEmployerRoleCards } from "./boundedEmployerRoleCards";
 import type {
   EnterpriseEmployment,
   EnterpriseProject,
@@ -19,7 +20,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v103-bounded-career-summaries";
+  "candidate-employment-v104-bounded-employer-role-cards";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -2101,6 +2102,13 @@ function resumeEmployment(resumeText: string) {
   if (!output.length) {
     for (const [index, row] of boundedCareerSummary(resumeText).entries()) {
       const parsed = entry({ ...row, sourceRef: `resume.boundedCareerSummary.${index + 1}`,
+        sourceType: "parsed_resume", confidence: 93 });
+      if (parsed) output.push(parsed);
+    }
+  }
+  if (!output.length) {
+    for (const [index, row] of boundedEmployerRoleCards(resumeText).entries()) {
+      const parsed = entry({ ...row, sourceRef: `resume.boundedEmployerRoleCard.${index + 1}`,
         sourceType: "parsed_resume", confidence: 93 });
       if (parsed) output.push(parsed);
     }

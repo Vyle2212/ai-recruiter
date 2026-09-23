@@ -169,6 +169,7 @@ jobs:
           node --import tsx scripts/headedChronologicalEmployment.test.ts
           node --import tsx scripts/headedCareerCards.test.ts
           node --import tsx scripts/boundedCareerSummary.test.ts
+          node --import tsx scripts/boundedEmployerRoleCards.test.ts
           node --import tsx scripts/employmentEvidenceDeduplication.test.ts
           node --import tsx scripts/profileSourceAuditEvidence.test.ts
           node --import tsx scripts/flattenedEmployment.test.ts
