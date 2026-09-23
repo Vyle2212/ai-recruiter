@@ -23,7 +23,9 @@ assert.doesNotMatch(
   runtimeClients,
   /throw new Error\([^)]*(?:OPENAI|SUPABASE|SERVICE_ROLE|API_KEY)/,
 );
-assert.match(publicClient, /new Proxy/);
+assert.match(publicClient, /createLazySupabaseServiceClient/);
+assert.match(publicClient, /import "server-only"/);
+assert.doesNotMatch(publicClient, /NEXT_PUBLIC_SUPABASE_ANON_KEY/);
 assert.doesNotMatch(publicClient, /export const supabase\s*=\s*createClient/);
 assert.doesNotMatch(legacyPublicClient, /createClient\s*\(/);
 assert.match(legacyPublicClient, /@\/lib\/supabase/);

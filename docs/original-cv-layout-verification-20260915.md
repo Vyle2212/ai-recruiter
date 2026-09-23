@@ -1,5 +1,7 @@
 # Original CV layout verification — 2026-09-15
 
+> Latest security checkpoint: [v107 private candidate data RLS cutover](precision-v107-private-data-rls-cutover-20260923.md). Production privilege inspection confirmed anonymous direct access to candidate and workflow tables. The remediation keeps candidate access server-side behind recruiter authorization and prepares a manual RLS cutover; it does not alter CV source text or the 737-source / 2,160-row read-only projection. No runtime write occurred and production remains NO_GO.
+
 > Latest read-only checkpoint: [v103 bounded repeated career summaries](precision-v103-bounded-career-summaries-20260923.md). The same 970-source snapshot projects 730 sources / 2,129 employment rows, with 240 needing review and all 2,105 prior tuples retained. Start-only roles keep a missing end; operational SAP-user roles do not add SAP delivery years. Original-layout review, version-matched backfill/readback, live OCR and authenticated acceptance remain required (NO_GO).
 
 > Latest source-card recovery: [v101 heading-bound career cards](precision-v101-headed-career-cards-20260923.md). A read-only 970-source comparison recovers nine first cards with explicit employer/role/date ownership, reaching 723 sources / 2,096 rows and leaving 247 for review. Legal clients cannot pass as locations; non-SAP titles remain outside SAP tenure. Original-source review and production gates remain pending (NO_GO).

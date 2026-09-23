@@ -8,20 +8,28 @@ import {
   updateRecruiterApiSession,
   updateStagingSession,
 } from "./utils/supabase/proxy";
+import { recruiterApiPolicyForRequest } from "./lib/recruiterApiPolicyRegistry";
 
 export async function proxy(request: NextRequest) {
+  const apiPolicy = recruiterApiPolicyForRequest(
+    request.nextUrl.pathname,
+    request.method,
+  );
+  const recruiterApiNamespace =
+    request.nextUrl.pathname.startsWith("/api/recruiter/");
   if (
     process.env.APP_ENV === "acceptance" &&
     !acceptanceAuthConfigured() &&
     (shouldProtectPortal(request.nextUrl.pathname) ||
-      request.nextUrl.pathname.startsWith("/api/recruiter/"))
+      recruiterApiNamespace ||
+      Boolean(apiPolicy))
   ) {
     return new NextResponse("Acceptance authentication is not configured.", {
       status: 503,
       headers: { "Cache-Control": "no-store" },
     });
   }
-  if (request.nextUrl.pathname.startsWith("/api/recruiter/")) {
+  if (recruiterApiNamespace || apiPolicy) {
     return updateRecruiterApiSession(request);
   }
 
@@ -47,6 +55,6 @@ export const config = {
     "/recruiter/:path*",
     "/client/:path*",
     "/candidate/:path*",
-    "/api/recruiter/:path*",
+    "/api/:path*",
   ],
 };
