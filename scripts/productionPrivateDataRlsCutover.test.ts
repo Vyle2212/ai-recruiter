@@ -69,7 +69,10 @@ assert.match(
 assert.match(readback, /not row_security or not force_row_security/i);
 assert.match(readback, /select 1 from pg_policies/i);
 assert.match(readback, /array\['anon', 'authenticated'\]/i);
-assert.match(readback, /array\['SELECT', 'INSERT', 'UPDATE', 'DELETE'\]/);
+assert.match(
+  readback,
+  /array\['SELECT', 'INSERT', 'UPDATE', 'DELETE'\]/,
+);
 assert.match(readback, /has_table_privilege\('service_role'/i);
 assert.match(readback, /raise exception 'RLS readback failed:/i);
 
