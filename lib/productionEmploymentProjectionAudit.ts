@@ -44,6 +44,12 @@ export type ProductionEmploymentProjectionAudit = {
     existingConflictReview: number;
     emptyStillUnresolved: number;
   };
+  promotionRows: {
+    emptyToPopulatedAdditions: number;
+    existingAdditiveAdditions: number;
+    conflictProposedAdditions: number;
+    conflictStoredTuplesAtRisk: number;
+  };
   tupleComparison: {
     storedTuples: number;
     preservedStoredTuples: number;
@@ -188,6 +194,10 @@ export function auditProductionEmploymentProjection(
   let existingUnchanged = 0;
   let existingConflictReview = 0;
   let emptyStillUnresolved = 0;
+  let emptyToPopulatedAdditions = 0;
+  let existingAdditiveAdditions = 0;
+  let conflictProposedAdditions = 0;
+  let conflictStoredTuplesAtRisk = 0;
 
   for (const row of rows) {
     const stored = storedEmployment(row);
@@ -224,11 +234,18 @@ export function auditProductionEmploymentProjection(
       projectedKeys.size > storedKeys.size
     ) {
       changes["additive-only"] += 1;
-      if (storedKeys.size) existingAdditiveReview += 1;
-      else emptyToPopulatedReview += 1;
+      if (storedKeys.size) {
+        existingAdditiveReview += 1;
+        existingAdditiveAdditions += added;
+      } else {
+        emptyToPopulatedReview += 1;
+        emptyToPopulatedAdditions += added;
+      }
     } else {
       changes["replacement-or-removal"] += 1;
       existingConflictReview += 1;
+      conflictProposedAdditions += added;
+      conflictStoredTuplesAtRisk += storedKeys.size - preserved;
     }
 
     if (!projected.length)
@@ -277,6 +294,12 @@ export function auditProductionEmploymentProjection(
       existingUnchanged,
       existingConflictReview,
       emptyStillUnresolved,
+    },
+    promotionRows: {
+      emptyToPopulatedAdditions,
+      existingAdditiveAdditions,
+      conflictProposedAdditions,
+      conflictStoredTuplesAtRisk,
     },
     tupleComparison: {
       storedTuples: storedRows,

@@ -71,6 +71,12 @@ assert.equal(
   report.population,
 );
 assert.equal(
+  report.promotionRows.emptyToPopulatedAdditions +
+    report.promotionRows.existingAdditiveAdditions +
+    report.promotionRows.conflictProposedAdditions,
+  report.tupleComparison.addedProjectedTuples,
+);
+assert.equal(
   report.tupleComparison.preservedStoredTuples +
     report.tupleComparison.removedOrChangedStoredTuples,
   report.tupleComparison.storedTuples,
