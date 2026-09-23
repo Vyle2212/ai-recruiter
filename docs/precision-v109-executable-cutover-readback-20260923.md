@@ -21,9 +21,9 @@ surface after the manual cutover:
   `search_path=pg_catalog, public`, remain security-invoker functions, deny
   anon and authenticated execution, and allow service_role execution.
 
-The readback script contains no DDL or DML. Static regression coverage requires
-all objects and all fail-closed assertions, and also rejects mutating statements
-from the readback artifact.
+The readback script contains no DDL or DML. It emits a single success row only
+after every fail-closed assertion passes. Its output must be retained with the
+cutover evidence; the Supabase advisor rerun remains a separate required check.
 
 ## Release status
 
