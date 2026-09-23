@@ -24,7 +24,7 @@ export const CANDIDATE_CANONICAL_VERSION =
 export const CANDIDATE_DETAIL_PROJECTION_VERSION =
   "candidate-detail-v24-exact-project-identity";
 export const CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION =
-  CANDIDATE_EMPLOYMENT_TIMELINE_VERSION;
+  `${CANDIDATE_EMPLOYMENT_TIMELINE_VERSION}:sap-sales-distribution-v2`;
 export const CANDIDATE_PROJECT_EXTRACTOR_VERSION =
   "candidate-projects-v25-native-project-cards";
 

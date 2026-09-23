@@ -90,7 +90,7 @@ const nonDelivery =
 function operationalRole(role: string) {
   return (
     nonDelivery.test(role) &&
-    !/\bsap\b.*\bsales\s*(?:and|&|\/)\s*distribution\b.*\bconsultant\b/i.test(
+    !/\bsap\b.*\bsales\s*(?:(?:and|&|\/)\s*)?distribution\s+(?:functional\s+)?consultant\b/i.test(
       role,
     )
   );
