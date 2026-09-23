@@ -1,5 +1,7 @@
 # Original CV layout verification — 2026-09-15
 
+> Latest source-card recovery: [v101 heading-bound career cards](precision-v101-headed-career-cards-20260923.md). A read-only 970-source comparison recovers nine first cards with explicit employer/role/date ownership, reaching 723 sources / 2,096 rows and leaving 247 for review. Legal clients cannot pass as locations; non-SAP titles remain outside SAP tenure. Original-source review and production gates remain pending (NO_GO).
+
 > Latest source chronology: [v100 career heading/date rows](precision-v100-headed-chronology-20260923.md). Validated date-first role/employer ownership recovers 12 rows across five sources on a read-only 970-source projection: 714 sources / 2,087 rows, 256 unresolved. Numeric dates require unambiguous day-first evidence within the same source. Original review and production gates remain pending (NO_GO).
 
 > Latest source-owned project layout: [v99 employer/customer ledgers](precision-v99-owned-project-ledgers-20260923.md). Company/Employer and Customer/End-Client are bounded within the same record; project stage dates are shown only as estimated tenure and require original-source review before backfill. Read-only 970-source projection: 709 sources / 2,075 rows, 261 unresolved; production NO_GO.

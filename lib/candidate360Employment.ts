@@ -7,6 +7,7 @@ import { anchoredEmployment } from "./anchoredEmployment";
 import { exportedCareerEmployment } from "./exportedCareerEmployment";
 import { ownedProjectCareerLedger } from "./ownedProjectCareerLedger";
 import { headedChronologicalEmployment } from "./headedChronologicalEmployment";
+import { headedCareerCards } from "./headedCareerCards";
 import type {
   EnterpriseEmployment,
   EnterpriseProject,
@@ -16,7 +17,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v100-headed-career-chronology";
+  "candidate-employment-v101-headed-career-cards";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -2077,6 +2078,13 @@ function resumeEmployment(resumeText: string) {
   if (!output.length) {
     for (const [index, row] of headedChronologicalEmployment(resumeText).entries()) {
       const parsed = entry({ ...row, sourceRef: `resume.headedChronology.${index + 1}`,
+        sourceType: "parsed_resume", confidence: 91 });
+      if (parsed) output.push(parsed);
+    }
+  }
+  if (!output.length) {
+    for (const [index, row] of headedCareerCards(resumeText).entries()) {
+      const parsed = entry({ ...row, sourceRef: `resume.headedCareerCard.${index + 1}`,
         sourceType: "parsed_resume", confidence: 91 });
       if (parsed) output.push(parsed);
     }

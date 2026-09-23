@@ -167,6 +167,7 @@ jobs:
           node --import tsx scripts/careerOwnershipQuality.test.ts
           node --import tsx scripts/labelledClientEmployerEmployment.test.ts
           node --import tsx scripts/headedChronologicalEmployment.test.ts
+          node --import tsx scripts/headedCareerCards.test.ts
           node --import tsx scripts/employmentEvidenceDeduplication.test.ts
           node --import tsx scripts/profileSourceAuditEvidence.test.ts
           node --import tsx scripts/flattenedEmployment.test.ts
