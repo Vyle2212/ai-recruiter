@@ -1,5 +1,7 @@
 # Original CV layout verification — 2026-09-15
 
+> Latest source-owned quality checkpoint: [v96 career row ownership](precision-v96-source-ownership-quality-20260923.md). The same 970 stored texts re-project to 705 sources / 2,049 employment rows; four incorrect/duplicate rows removed and two non-SAP titles bounded. This read-only result does not replace original-CV review, backfill/readback, live OCR or authenticated exact-artifact acceptance. Production remains NO_GO.
+
 > Latest calculation checkpoint: [v95 SAP Sales and Distribution consulting](precision-v95-sap-sd-experience-20260923.md). Full 970-source read-only projection preserves every employment tuple while correcting one SAP duration classification. Production remains NO_GO pending reviewed originals/backfill, live OCR and exact-artifact acceptance.
 
 > Latest checkpoint: [v94 career field boundaries](precision-v94-career-field-boundaries-20260923.md). Same private 970-source read-only comparison corrects 45 employer/title tuples on 38 sources while keeping every source date, current flag and total row count. Projection remains 705 sources / 2,053 employment rows; 265 sources need review. Malformed, duplicate and invalid-range diagnostics remain zero; overlap and employer/client review flags are unchanged. An earlier over-broad experiment was rejected after it created unreviewed rows. Local mandatory regressions and typecheck pass; exact-head CI, reviewed backfill/readback, live OCR and authenticated acceptance remain required. Production is NO_GO.

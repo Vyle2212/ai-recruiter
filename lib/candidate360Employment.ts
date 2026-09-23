@@ -14,7 +14,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v94-owned-career-fields";
+  "candidate-employment-v96-source-owned-roles";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -183,6 +183,8 @@ export function validEmploymentTitle(input: unknown) {
       /^\s*(?:(?:currently\s+)?working\s+as|currently\s+(?:he|she|they)\s+is\s+(?:working\s+)?as|worked\s+as|as(?=\s)|designation(?=\s|:)|position(?:\s+held)?(?=\s|:)|role(?=\s|:)|job title(?=\s|:))\s*:?\s*/i,
       "",
     )
+    .replace(/\s+(?:Responsibilit(?:y|ies)|Job\s+Duties)\s*:\s*[\s\S]*$/i, "")
+    .replace(/\s+[-–—]\s+Freelance\s+Job\b[\s\S]*$/i, "")
     .replace(/[+()\d][\d\s()+.-]{7,}.*$/, "")
     .replace(/\s+at\s+.+$/i, "")
     .trim();
@@ -556,7 +558,7 @@ function proseEmploymentHeadings(source: string): EnterpriseEmployment[] {
   return [...section.matchAll(pattern)].flatMap((match, index) => {
     if (!/\b(?:Consultant|Lead|Engineer|Specialist|Manager|Administrator|Staff|Director|Analyst)\b/i.test(match[2])) return [];
     const company = match[1].replace(/^.*\b[a-z]{4,}\.\s+/, "");
-    if (new RegExp(month, 'i').test(company) || /\b(?:consultant|engineer|analyst|manager)\s+at\b/i.test(company) || /^(?:Present|Current|Now)\b/i.test(match[2])) return [];
+    if (new RegExp(month, 'i').test(company) || /\b(?:consultant|engineer|analyst|manager)\s+at\b/i.test(company) || /^(?:Senior|Junior|Lead|Principal|SAP|ERP|ABAP)\b(?:\s+[A-Za-z0-9/-]+){0,5}\s+(?:Consultant|Engineer|Analyst|Manager|Developer|Specialist)\s*$/i.test(company) || /^(?:Present|Current|Now)\b/i.test(match[2])) return [];
     const parsed = entry({company, title: match[2], start: match[3], end: match[4],
       sourceRef: `resume.proseEmploymentHeading.${index + 1}`, sourceType: 'parsed_resume',
       confidence: 94, excerpt: match[0]});
@@ -743,7 +745,7 @@ function spacedDateEmployment(source: string): EnterpriseEmployment[] {
   repaired = repaired.replace(/\b([12])\s*([09])\s*(\d)\s*(\d)\b/g, '$1$2$3$4');
   const month = '(?:January|February|March|April|May|June|July|August|September|October|November|December)';
   const date = `${month}\\s+(?:19|20)\\d{2}`;
-  const role = '(?:SAP\\s+[^.!?;]{1,65}?(?:Consultant|Analyst|Engineer|Lead)|Inside Sales Representative|Sales Development Associate|Sales Executive|Telesales Representative|Freelancer(?:\\s*\\([^)]{1,40}\\))?)';
+  const role = '(?:(?:Sr\\.?|Senior|Junior)\\s+)?(?:SAP\\s+[^.!?;]{1,65}?(?:Consultant|Analyst|Engineer|Lead)|Inside Sales Representative|Sales Development Associate|Sales Executive|Telesales Representative|Freelancer(?:\\s*\\([^)]{1,40}\\))?)';
   const pattern = new RegExp(`\\b(${role})\\s+at\\s+([^;!?]{2,150}?)\\s+(${date})\\s*[-–—]\\s*(${date}|Present|Current)(?=\\s|$)`, 'gi');
   return [...repaired.matchAll(pattern)].flatMap((match, index) => {
     if (/\b(?:client|customer|project|responsibilities)\b/i.test(match[2])) return [];
@@ -1691,6 +1693,9 @@ function resumeEmployment(resumeText: string) {
   );
   const roleMatches = [...source.matchAll(roleCompany)];
   roleMatches.forEach((match, index) => {
+    // A freelance assignment followed by "as <role>" is project evidence,
+    // never a second employer when another reader owns the consulting firm.
+    if (/^Freelance\s+(?:Job|Project)\b/i.test(clean(match[2])) && /[-–—]\s*as\s+/i.test(match[2])) return;
     const sourceEnd = roleMatches[index + 1]?.index ?? source.length;
     const parsed = entry({
       title: resumeRole(match[1]),
@@ -2037,10 +2042,21 @@ function sameEmployment(
   left: EnterpriseEmployment,
   right: EnterpriseEmployment,
 ) {
+  // A second reader can retain the explicit city in the employer cell while
+  // the location-aware reader stores that very city separately. Merge only
+  // identical roles and dates; differing titles remain distinct assertions.
+  const withoutTrailingCity = (company: string) => company.replace(
+    /,\s*(?:Singapore|Kuala Lumpur|Petaling Jaya|Jakarta|Bangkok|Ho Chi Minh City)\s*$/i,
+    "",
+  );
   const sameCompany = Boolean(
     left.company &&
     right.company &&
-    normalized(left.company) === normalized(right.company),
+    (normalized(left.company) === normalized(right.company) ||
+      ((withoutTrailingCity(left.company) !== left.company) !==
+        (withoutTrailingCity(right.company) !== right.company) &&
+        normalized(withoutTrailingCity(left.company)) ===
+          normalized(withoutTrailingCity(right.company)))),
   );
   const sameTitle = Boolean(
     left.title &&
