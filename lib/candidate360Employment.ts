@@ -11,6 +11,8 @@ import { headedCareerCards, reversedMonthCareerCards } from "./headedCareerCards
 import { labelledCompanySpells } from "./labelledCompanySpells";
 import { boundedCareerSummary } from "./boundedCareerSummary";
 import { boundedEmployerRoleCards } from "./boundedEmployerRoleCards";
+import { boundedCareerTables } from "./boundedCareerTables";
+import { companyDurationRoleCards, datedRoleCompanyCards } from "./boundedEmploymentFieldCards";
 import type {
   EnterpriseEmployment,
   EnterpriseProject,
@@ -20,7 +22,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v105-bounded-employer-and-client-project-cards";
+  "candidate-employment-v106-bounded-employer-field-tables";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -2109,6 +2111,27 @@ function resumeEmployment(resumeText: string) {
   if (!output.length) {
     for (const [index, row] of boundedEmployerRoleCards(resumeText).entries()) {
       const parsed = entry({ ...row, sourceRef: `resume.boundedEmployerRoleCard.${index + 1}`,
+        sourceType: "parsed_resume", confidence: 93 });
+      if (parsed) output.push(parsed);
+    }
+  }
+  if (!output.length) {
+    for (const [index, row] of boundedCareerTables(resumeText).entries()) {
+      const parsed = entry({ ...row, sourceRef: `resume.boundedCareerTable.${index + 1}`,
+        sourceType: "parsed_resume", confidence: 93 });
+      if (parsed) output.push(parsed);
+    }
+  }
+  if (!output.length) {
+    for (const [index, row] of datedRoleCompanyCards(resumeText).entries()) {
+      const parsed = entry({ ...row, sourceRef: `resume.datedRoleCompanyCard.${index + 1}`,
+        sourceType: "parsed_resume", confidence: 93 });
+      if (parsed) output.push(parsed);
+    }
+  }
+  if (!output.length) {
+    for (const [index, row] of companyDurationRoleCards(resumeText).entries()) {
+      const parsed = entry({ ...row, sourceRef: `resume.companyDurationRoleCard.${index + 1}`,
         sourceType: "parsed_resume", confidence: 93 });
       if (parsed) output.push(parsed);
     }
