@@ -3,6 +3,9 @@
 -- This migration intentionally removes browser/anon access to private recruiter
 -- and candidate tables. Recruiter access continues through authorized server
 -- routes using a service-role client.
+-- Required first: verify a version-matched data backup and retain the JSON from
+-- 202609230000_production_private_data_rls_snapshot.sql. The metadata snapshot
+-- is evidence for rollback review; it is not a substitute for the data backup.
 
 begin;
 
