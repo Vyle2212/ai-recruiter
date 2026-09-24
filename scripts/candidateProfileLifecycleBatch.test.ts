@@ -13,6 +13,10 @@ const uploadRoute = fs.readFileSync(
   new URL("../app/api/upload-cv/route.ts", import.meta.url),
   "utf8",
 );
+const sharedCvPipeline = fs.readFileSync(
+  new URL("../lib/candidateCvIngestion.ts", import.meta.url),
+  "utf8",
+);
 const saveCandidate = fs.readFileSync(
   new URL("../lib/saveCandidate.ts", import.meta.url),
   "utf8",
@@ -66,8 +70,10 @@ assert.match(uploadPage, /heldForReviewCount/);
 assert.match(uploadPage, /incompleteExtractionCount/);
 assert.match(uploadRoute, /IDENTITY_REVIEW_REQUIRED/);
 assert.match(uploadRoute, /ingestionAction/);
-assert.match(uploadRoute, /evaluateCandidateExtractionCoverage/);
-assert.match(uploadRoute, /enrichCandidateUpload/);
+assert.match(uploadRoute, /prepareCandidateCv/);
+assert.match(sharedCvPipeline, /evaluateCandidateExtractionCoverage/);
+assert.match(sharedCvPipeline, /enrichCandidateUpload/);
+assert.match(sharedCvPipeline, /"admin_upload" \| "candidate_upload"/);
 assert.match(saveCandidate, /resolveCandidateIngestion/);
 assert.doesNotMatch(
   saveCandidate,

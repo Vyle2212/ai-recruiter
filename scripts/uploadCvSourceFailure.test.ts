@@ -16,6 +16,42 @@ async function main() {
   const stubs: Record<string, unknown> = {
     "next/server": { NextResponse: { json: (body: unknown) => body } },
     "@/lib/cvPdfOcr": { CvSourceError },
+    "@/lib/candidateCvIngestion": {
+      prepareCandidateCv: async ({ fileName }: { fileName: string }) => {
+        if (fileName === "failed.pdf")
+          throw new CvSourceError(
+            "OCR_INCOMPLETE",
+            "OCR did not return all pages.",
+          );
+        return {
+          accepted: true,
+          rawText: "Synthetic CV",
+          sourceExtraction: { method: "native", pageCount: 1, reason: "" },
+          classification: {
+            shouldSave: true,
+            recordType: "SAP_CV",
+            reason: "CV",
+            signals: [],
+          },
+          candidatePayload: { name: fileName },
+          parserQuality: {
+            rejected: false,
+            warnings: [],
+            rejectionReasons: [],
+            parserQualityScore: 90,
+            needsManualReview: false,
+          },
+          extractionCoverage: {
+            status: "complete_for_validation",
+            coveragePercent: 100,
+            observedSections: [],
+            extractedSections: [],
+            missedObservedSections: [],
+            missingRequiredFields: [],
+          },
+        };
+      },
+    },
     "@/lib/cv-parser": {
       parseCv: async (_: Buffer, name: string) => {
         if (name === "failed.pdf")

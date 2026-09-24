@@ -1,27 +1,18 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
-import { parseCv } from "@/lib/cv-parser";
 import { CvSourceError } from "@/lib/cvPdfOcr";
 import type { CvSourceExtraction } from "@/lib/cvPdfExtraction";
 import { saveCandidate } from "@/lib/saveCandidate";
-import { enrichCandidateWithSapTaxonomy } from "@/lib/sapTalentTaxonomy";
-import {
-  classifyCandidateText,
-  normalizeCandidatePayloadForSapUpload,
-} from "@/lib/candidateFileGuards";
-import {
-  evaluateResumeQualityGate,
-  summarizeImportResults,
-} from "@/lib/resumeQualityGate";
+import { summarizeImportResults } from "@/lib/resumeQualityGate";
 import {
   archiveOriginalCv,
   discardUnlinkedOriginalCv,
 } from "@/lib/originalCvArchive";
 import { commitCandidateWithArchivedCv } from "@/lib/originalCvArchiveCommit";
+import type { CandidateExtractionCoverage } from "@/lib/candidateExtractionCoverage";
 import {
-  evaluateCandidateExtractionCoverage,
-  type CandidateExtractionCoverage,
-} from "@/lib/candidateExtractionCoverage";
-import { enrichCandidateUpload } from "@/lib/candidateUploadEnrichment";
+  prepareCandidateCv,
+  type CandidateCvParserQuality,
+} from "@/lib/candidateCvIngestion";
 import { recordCandidateUploadReview } from "@/lib/candidateUploadReviewQueue";
 import { requireRecruiterApiRouteAuthorization } from "@/lib/recruiterApiAuthorization";
 import { supabase } from "@/lib/supabase";
@@ -46,7 +37,7 @@ type UploadResult = {
   reason?: string;
   recordType?: string;
   signals?: string[];
-  parserQuality?: ReturnType<typeof evaluateResumeQualityGate>;
+  parserQuality?: CandidateCvParserQuality;
   extractionCoverage?: CandidateExtractionCoverage;
   ingestionAction?:
     | "create_new"
@@ -202,81 +193,36 @@ export async function POST(req: NextRequest) {
 
         originalCvObjectKey(fileName, buffer);
 
-        const parsed = await parseCv(buffer, fileName);
-        const rawText =
-          typeof parsed.rawText === "string" ? parsed.rawText : "";
-
-        const classification = classifyCandidateText(rawText, fileName);
-
-        if (!classification.shouldSave) {
-          if (archivedObjectKey)
-            await discardUnlinkedOriginalCv(archivedObjectKey);
-          results.push({
-            fileName,
-            ok: false,
-            rejected: true,
-            recordType: classification.recordType,
-            reason: classification.reason,
-            signals: classification.signals,
-            error: classification.reason,
-          });
-          continue;
-        }
-
-        const normalizedParsed = normalizeCandidatePayloadForSapUpload(
-          {
-            ...parsed,
-            raw_text: rawText,
-            resume_text: rawText,
-            raw_cv: rawText,
-            source_file: fileName,
-            file_name: fileName,
-          },
-          rawText,
-        );
-
-        const baseCandidatePayload = enrichCandidateWithSapTaxonomy({
-          ...normalizedParsed,
-          file_classification: classification,
-          record_type: "SAP_CV",
-          is_sap_profile: true,
-          source_file: fileName,
-          file_name: fileName,
+        const prepared = await prepareCandidateCv({
+          buffer,
+          fileName,
+          source: "admin_upload",
         });
-        const candidatePayload = enrichCandidateUpload(
-          baseCandidatePayload,
-          rawText,
-        );
-        const extractionCoverage = evaluateCandidateExtractionCoverage(
-          rawText,
-          candidatePayload,
-        );
 
-        const parserQuality = evaluateResumeQualityGate(candidatePayload);
-
-        if (parserQuality.rejected) {
+        if (!prepared.accepted) {
           if (archivedObjectKey)
             await discardUnlinkedOriginalCv(archivedObjectKey);
           results.push({
             fileName,
             ok: false,
             rejected: true,
-            recordType: "REJECTED_RESUME_QUALITY",
-            reason:
-              parserQuality.rejectionReasons.join(", ") ||
-              "Rejected by Resume Quality Gate.",
-            signals: [
-              ...parserQuality.rejectionReasons,
-              ...parserQuality.warnings,
-            ],
-            parserQuality,
-            extractionCoverage,
-            error:
-              parserQuality.rejectionReasons.join(", ") ||
-              "Rejected by Resume Quality Gate.",
+            recordType: prepared.recordType,
+            reason: prepared.reason,
+            signals: prepared.signals,
+            parserQuality: prepared.parserQuality,
+            extractionCoverage: prepared.extractionCoverage,
+            sourceExtraction: prepared.sourceExtraction,
+            error: prepared.reason,
           });
           continue;
         }
+        const {
+          candidatePayload,
+          classification,
+          extractionCoverage,
+          parserQuality,
+          sourceExtraction,
+        } = prepared;
 
         // Preserve the actual document before committing its parsed text. A
         // missing private bucket fails closed, so a new CV cannot silently
@@ -293,18 +239,6 @@ export async function POST(req: NextRequest) {
             saveCandidate({
               ...candidatePayload,
               archivedCvReference,
-              parser_quality: parserQuality,
-              extraction_coverage: extractionCoverage,
-              extraction_coverage_status: extractionCoverage.status,
-              extraction_missing_sections:
-                extractionCoverage.missedObservedSections,
-              profile_source_type: "admin_upload",
-              profile_quality_score: parserQuality.parserQualityScore,
-              name_review_required:
-                parserQuality.needsManualReview ||
-                extractionCoverage.missingRequiredFields.includes(
-                  "display_name",
-                ),
             }),
           discardUnlinkedOriginalCv,
         );
@@ -360,7 +294,7 @@ export async function POST(req: NextRequest) {
               status: saved.status,
               competingCandidateCount: saved.competing_candidate_count,
             },
-            sourceExtraction: parsed.sourceExtraction,
+            sourceExtraction,
             extractionCoverage,
           });
           continue;
@@ -388,7 +322,7 @@ export async function POST(req: NextRequest) {
             s4hana_projects: saved?.s4hana_projects,
           },
           ingestionAction: saved?.ingestion_action,
-          sourceExtraction: parsed.sourceExtraction,
+          sourceExtraction,
           extractionCoverage,
         });
       } catch (error: any) {
