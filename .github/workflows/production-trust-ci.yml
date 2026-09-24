@@ -208,6 +208,7 @@ jobs:
           node --import tsx scripts/privateReviewFilePermissions.test.ts
           node --import tsx scripts/productionEmploymentPromotionBackup.test.ts
           node --import tsx scripts/productionEmploymentPromotionAuthorization.test.ts
+          node --import tsx scripts/releaseDocumentationIntegrity.test.ts
           node --import tsx scripts/candidateDetailAuthorization.test.ts
           node --import tsx scripts/cvPdfOcr.test.ts
           node --import tsx scripts/uploadCvSourceFailure.test.ts
@@ -221,7 +222,7 @@ jobs:
       - name: Scoped formatting check
         run: |
           npm run check:production-trust:format
-          npx prettier --check lib/search/legacyIndexMutationGate.ts lib/search/rebuildSearchIndex.ts app/api/admin/rebuild-search-index/route.ts app/api/admin/rebuild-candidate/route.ts app/api/candidate-search-index/rebuild/route.ts app/api/candidate-search-index/sync/route.ts scripts/legacyIndexMutationGate.test.ts scripts/rebuild-index.ts
+          npx prettier --check lib/search/legacyIndexMutationGate.ts lib/search/rebuildSearchIndex.ts app/api/admin/rebuild-search-index/route.ts app/api/admin/rebuild-candidate/route.ts app/api/candidate-search-index/rebuild/route.ts app/api/candidate-search-index/sync/route.ts scripts/legacyIndexMutationGate.test.ts scripts/rebuild-index.ts scripts/releaseDocumentationIntegrity.test.ts docs/precision-v131-production-readonly-reverification-20260924.md
           npm run check:acceptance:format
 
       - name: Commit whitespace check

@@ -1,5 +1,7 @@
 # Original CV layout verification — 2026-09-15
 
+> Latest production re-verification checkpoint: [v131 read-only production security and data re-verification](precision-v131-production-readonly-reverification-20260924.md). The current production baseline is still 970 candidates, 231 stored employment sources / 715 rows and 739 gaps; no source changed after 2026-09-16. This does not replace the 737-source / 2,160-row code projection or original-layout review. The deny-by-default RLS/view/RPC cutover remains unapplied and production remains NO_GO.
+
 > Latest review-integrity checkpoint: [v130 employment review temporal integrity](precision-v130-employment-review-temporal-integrity-20260924.md). The review pack now enforces chronological source, snapshot, review and finalization evidence. This does not replace original-layout review, live OCR, verified backup or authenticated acceptance. Production remains NO_GO.
 
 > Latest authorization checkpoint: [v119 private employment release authorization](precision-v119-private-employment-authorization-20260924.md). The reviewed additive path now requires a persisted private authorization bound to the exact commit, manifest, preflight, candidate/source state and verified v118 backup. Exact release-owner confirmation and disk readback are required; reports remain aggregate-only. No real private artifact or production write occurred, and all source/OCR/runtime gates remain outstanding. Production is NO_GO.
