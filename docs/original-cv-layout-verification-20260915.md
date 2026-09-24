@@ -1,5 +1,7 @@
 # Original CV layout verification — 2026-09-15
 
+> Latest replacement-source workflow: [v133 full re-upload and candidate claim](precision-v133-full-reupload-candidate-claim-20260924.md). The operator no longer needs to identify 233 originals separately: upload the complete 970+ collection and let deterministic identity/version rules route each source. Ambiguous identity cannot overwrite a profile, non-SAP files are rejected before persistence, and every observed employment/project/education/certification/skill/language section must have structured output or enter incomplete review. This is code-only until the private archive, reviewed schema and full-population readback are run.
+
 > Latest production re-verification checkpoint: [v131 read-only production security and data re-verification](precision-v131-production-readonly-reverification-20260924.md). The current production baseline is still 970 candidates, 231 stored employment sources / 715 rows and 739 gaps; no source changed after 2026-09-16. This does not replace the 737-source / 2,160-row code projection or original-layout review. The deny-by-default RLS/view/RPC cutover remains unapplied and production remains NO_GO.
 
 > Latest review-integrity checkpoint: [v130 employment review temporal integrity](precision-v130-employment-review-temporal-integrity-20260924.md). The review pack now enforces chronological source, snapshot, review and finalization evidence. This does not replace original-layout review, live OCR, verified backup or authenticated acceptance. Production remains NO_GO.

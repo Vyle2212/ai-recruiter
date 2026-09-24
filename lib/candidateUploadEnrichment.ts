@@ -1,0 +1,273 @@
+import { extractFullCandidateProfile } from "./fullCandidateExtractionEngine";
+import { normalizeActualCandidateSchema } from "./candidate360SchemaNormalize";
+
+const clean = (value: unknown) =>
+  String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const unique = (values: unknown[]) =>
+  Array.from(new Set(values.map(clean).filter(Boolean)));
+
+const SECTION_HEADINGS =
+  /^(?:work|professional|career|employment)\s+(?:experience|history)|projects?|client experience|education|academic background|academic qualifications?|qualifications?|certifications?|credentials?|skills?|technical skills?|core competencies|languages?|language proficiency|personal details|summary|profile|references?\s*:?[\s]*$/i;
+
+function explicitSectionLines(rawText: string, heading: RegExp) {
+  const lines = rawText.split(/\r?\n/).map((line) => line.trim());
+  const start = lines.findIndex((line) => heading.test(line));
+  if (start < 0) return [];
+  const output: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    if (SECTION_HEADINGS.test(line)) break;
+    if (line && line.length <= 240)
+      output.push(line.replace(/^[•·▪\-*]+\s*/, ""));
+    if (output.length >= 20) break;
+  }
+  return unique(output);
+}
+
+function explicitLanguages(rawText: string) {
+  const section = explicitSectionLines(
+    rawText,
+    /^(?:languages?|language proficiency|spoken languages?)\s*:?[\s]*$/i,
+  ).join(" ");
+  if (!section) return [];
+  const known = [
+    "English",
+    "Mandarin",
+    "Chinese",
+    "Japanese",
+    "Korean",
+    "Malay",
+    "Bahasa Malaysia",
+    "Bahasa Indonesia",
+    "Indonesian",
+    "Vietnamese",
+    "Thai",
+    "Tamil",
+    "Hindi",
+    "German",
+    "French",
+    "Spanish",
+  ];
+  return known.filter((language) =>
+    new RegExp(`\\b${language.replace(/\s+/g, "\\s+")}\\b`, "i").test(section),
+  );
+}
+
+function explicitProjectRecords(rawText: string) {
+  const normalized = rawText
+    .normalize("NFKC")
+    .replace(/\r/g, "")
+    .replace(/[ \t]+/g, " ");
+  const projectMarkers = [
+    ...normalized.matchAll(
+      /(?:^|\n)\s*(?:project\s+(?:name|title)|project)\s*:/gim,
+    ),
+  ];
+  const clientMarkers = [
+    ...normalized.matchAll(/(?:^|\n)\s*(?:client|customer)\s*:/gim),
+  ];
+  const markers = projectMarkers.length ? projectMarkers : clientMarkers;
+  const dateToken =
+    "(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s+)?(?:19|20)\\d{2}|(?:0?[1-9]|1[0-2])[/-](?:19|20)?\\d{2}";
+  const rangePattern = new RegExp(
+    `(${dateToken})\\s*(?:-|–|—|to)\\s*(${dateToken}|Present|Current|Till Date|To Date)`,
+    "i",
+  );
+  const records: Array<Record<string, unknown>> = [];
+  for (const [index, marker] of markers.entries()) {
+    const start = marker.index || 0;
+    const end =
+      markers[index + 1]?.index ?? Math.min(normalized.length, start + 2400);
+    const block = normalized.slice(start, end);
+    const name = clean(
+      block.match(
+        /(?:^|\n)\s*(?:project\s+(?:name|title)|project)\s*:\s*([^\n]{2,160})/im,
+      )?.[1],
+    );
+    const client = clean(
+      block.match(/(?:^|\n)\s*(?:client|customer)\s*:\s*([^\n]{2,160})/im)?.[1],
+    );
+    const role = clean(
+      block.match(
+        /(?:^|\n)\s*(?:project\s+role|role|position|designation)\s*:\s*([^\n]{2,160})/im,
+      )?.[1],
+    );
+    const range = block.match(rangePattern);
+    if (!(name || client) || !role || !range) continue;
+    const moduleLine = clean(
+      block.match(
+        /(?:^|\n)\s*(?:sap\s+modules?|modules?)\s*:\s*([^\n]{1,160})/im,
+      )?.[1],
+    );
+    const projectType = clean(
+      block.match(
+        /(?:^|\n)\s*(?:project\s+type|type)\s*:\s*([^\n]{1,100})/im,
+      )?.[1] ||
+        block.match(
+          /\b(implementation|rollout|migration|upgrade|support|ams|greenfield|brownfield|conversion)\b/i,
+        )?.[1],
+    );
+    records.push({
+      name,
+      client,
+      role,
+      start_date: clean(range[1]),
+      end_date: clean(range[2]),
+      modules: unique(moduleLine.split(/[,;|/]+/)),
+      project_type: projectType,
+    });
+  }
+  return records;
+}
+
+/** Enriches the lightweight upload parser with the repository's deterministic
+ * full-profile reader. Only evidence-backed values are added; missing dates,
+ * employers and project ownership remain missing for review.
+ */
+export function enrichCandidateUpload(
+  candidate: Record<string, any>,
+  rawText: string,
+) {
+  const full = extractFullCandidateProfile({
+    ...candidate,
+    raw_text: rawText,
+    resume_text: rawText,
+  });
+  const canonical = normalizeActualCandidateSchema({
+    ...candidate,
+    raw_text: rawText,
+    resume_text: rawText,
+  });
+  const explicitEducation = explicitSectionLines(
+    rawText,
+    /^(?:education|academic background|academic qualifications?|qualifications?)\s*:?[\s]*$/i,
+  );
+  const explicitCertifications = explicitSectionLines(
+    rawText,
+    /^(?:certifications?|licenses?\s*(?:&|and)\s*certifications?|credentials?)\s*:?[\s]*$/i,
+  );
+  const explicitLanguageValues = explicitLanguages(rawText);
+  const explicitSkills = explicitSectionLines(
+    rawText,
+    /^(?:skills?|technical skills?|core competencies|sap skills?|expertise)\s*:?[\s]*$/i,
+  ).flatMap((line) => line.split(/[,;|•·▪]+/));
+  const experience = canonical.workExperience?.length
+    ? canonical.workExperience.map((item: any) => ({
+        employer: clean(item.company),
+        company: clean(item.company),
+        title: clean(item.title),
+        start_date: clean(item.startDate),
+        end_date: clean(item.endDate),
+        current: item.current === true,
+      }))
+    : (full.employerHistory || [])
+        .filter(
+          (item: any) => item.isEmployer !== false && clean(item.employer),
+        )
+        .map((item: any) => ({
+          employer: clean(item.employer),
+          company: clean(item.employer),
+          title: clean(item.title),
+          start_date: clean(item.startDate),
+          end_date: clean(item.endDate),
+          current: item.isCurrent === true,
+          evidence_confidence: Number(item.confidence || 0),
+        }));
+  const canonicalProjects = (canonical.projectExperience || []).map(
+    (item: any) => ({
+      name: clean(item.name),
+      client: clean(item.client),
+      role: clean(item.role),
+      modules: Array.isArray(item.modules) ? item.modules : [],
+      location: clean(item.location),
+      description: clean(item.description),
+      start_date: clean(item.startDate),
+      end_date: clean(item.endDate),
+      project_type: clean(item.projectType),
+    }),
+  );
+  const explicitProjects = explicitProjectRecords(rawText);
+  const projects = canonicalProjects.some(
+    (item: any) =>
+      (item.name || item.client) &&
+      item.role &&
+      item.start_date &&
+      item.end_date,
+  )
+    ? canonicalProjects
+    : explicitProjects;
+  const education = explicitEducation.length
+    ? explicitEducation
+    : canonical.education || [];
+  const certifications = explicitCertifications.length
+    ? explicitCertifications
+    : canonical.certifications || [];
+  const languages = explicitLanguageValues.length
+    ? explicitLanguageValues
+    : canonical.languages || [];
+  const skills = unique([
+    ...(candidate.skills || []),
+    ...(canonical.skills || []),
+    ...(full.sapSkills || []),
+    ...(full.technicalKeywords || []),
+    ...(full.functionalKeywords || []),
+    ...(full.integrationKeywords || []),
+    ...(full.businessProcesses || []),
+    ...explicitSkills,
+  ]);
+  const location = clean(
+    [full.locationCity, full.locationCountry].filter(Boolean).join(", ") ||
+      candidate.location,
+  );
+
+  return {
+    ...candidate,
+    name:
+      full.extractedFullName && !full.isNameSuspicious
+        ? full.extractedFullName
+        : candidate.name,
+    email: full.extractedEmail || candidate.email,
+    phone: full.extractedPhone || candidate.phone,
+    linkedin_url: full.linkedInUrl || candidate.linkedin_url,
+    location,
+    country: full.locationCountry || candidate.country,
+    current_title:
+      full.extractedCurrentTitle && !full.isTitleSuspicious
+        ? full.extractedCurrentTitle
+        : candidate.current_title || candidate.currentTitle,
+    current_company:
+      full.extractedCurrentCompany &&
+      full.extractedCurrentCompany !== "Not disclosed" &&
+      !full.isCompanySuspicious
+        ? full.extractedCurrentCompany
+        : candidate.current_company || candidate.currentCompany,
+    primary_module:
+      full.primarySapModule && full.primarySapModule !== "UNKNOWN"
+        ? full.primarySapModule
+        : candidate.primary_module || candidate.primaryModule,
+    sap_modules: unique([
+      ...(candidate.sap_modules || candidate.sapModules || []),
+      ...(full.sapModules || []),
+    ]),
+    secondary_modules: unique([
+      ...(candidate.secondary_modules || candidate.secondaryModules || []),
+      ...(full.secondarySapModules || []),
+    ]),
+    skills,
+    experience,
+    employment_history: experience,
+    projects,
+    project_history: projects,
+    project_types: unique([
+      ...(candidate.project_types || []),
+      ...(full.projectTypes || []),
+    ]),
+    education,
+    certifications,
+    languages,
+    extraction_review_classification: full.reviewClassification,
+    extraction_review_reasons: full.reviewReasons,
+  };
+}

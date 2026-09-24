@@ -7,6 +7,16 @@ type UploadResult = {
   ok: boolean;
   candidate?: any;
   error?: string;
+  ingestionAction?:
+    | "create_new"
+    | "update_existing"
+    | "hold_for_identity_review";
+  extractionCoverage?: {
+    status: "complete_for_validation" | "incomplete_needs_review";
+    coveragePercent: number;
+    missedObservedSections: string[];
+    missingRequiredFields: string[];
+  };
 };
 
 type UploadResponse = {
@@ -14,15 +24,58 @@ type UploadResponse = {
   total: number;
   successCount: number;
   failCount: number;
+  createdCount?: number;
+  updatedCount?: number;
+  heldForReviewCount?: number;
+  incompleteExtractionCount?: number;
   results: UploadResult[];
   error?: string;
 };
+
+const UPLOAD_CHUNK_SIZE = 8;
+
+function chunks<T>(items: T[], size: number) {
+  return Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
+    items.slice(index * size, (index + 1) * size),
+  );
+}
+
+function mergeUploadResponses(responses: UploadResponse[]): UploadResponse {
+  const results = responses.flatMap((item) => item.results || []);
+  const successCount = results.filter((item) => item.ok).length;
+  const failCount = results.length - successCount;
+  return {
+    success: results.length > 0 && failCount === 0,
+    total: results.length,
+    successCount,
+    failCount,
+    createdCount: results.filter(
+      (item) => item.ingestionAction === "create_new",
+    ).length,
+    updatedCount: results.filter(
+      (item) => item.ingestionAction === "update_existing",
+    ).length,
+    heldForReviewCount: results.filter(
+      (item) => item.ingestionAction === "hold_for_identity_review",
+    ).length,
+    incompleteExtractionCount: results.filter(
+      (item) => item.extractionCoverage?.status === "incomplete_needs_review",
+    ).length,
+    results,
+  };
+}
 
 export default function UploadPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [response, setResponse] = useState<UploadResponse | null>(null);
   const [error, setError] = useState("");
+  const [progress, setProgress] = useState({
+    completed: 0,
+    total: 0,
+    batch: 0,
+    batches: 0,
+  });
 
   const totalSize = useMemo(() => {
     return files.reduce((sum, file) => sum + file.size, 0);
@@ -32,6 +85,12 @@ export default function UploadPage() {
     const picked = Array.from(event.target.files || []);
     setFiles(picked);
     setResponse(null);
+    setProgress({
+      completed: 0,
+      total: picked.length,
+      batch: 0,
+      batches: Math.ceil(picked.length / UPLOAD_CHUNK_SIZE),
+    });
     setError("");
   }
 
@@ -46,24 +105,35 @@ export default function UploadPage() {
     setResponse(null);
 
     try {
-      const formData = new FormData();
-
-      for (const file of files) {
-        formData.append("files", file);
-      }
-
-      const res = await fetch("/api/upload-cv", {
-        method: "POST",
-        body: formData,
+      const batches = chunks(files, UPLOAD_CHUNK_SIZE);
+      const completedResponses: UploadResponse[] = [];
+      setProgress({
+        completed: 0,
+        total: files.length,
+        batch: 0,
+        batches: batches.length,
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Upload failed.");
+      for (let index = 0; index < batches.length; index += 1) {
+        const formData = new FormData();
+        for (const file of batches[index]) formData.append("files", file);
+        const res = await fetch("/api/upload-cv", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok)
+          throw new Error(data.error || `Upload batch ${index + 1} failed.`);
+        completedResponses.push(data);
+        const merged = mergeUploadResponses(completedResponses);
+        setResponse(merged);
+        setProgress({
+          completed: merged.total,
+          total: files.length,
+          batch: index + 1,
+          batches: batches.length,
+        });
       }
-
-      setResponse(data);
     } catch (err: any) {
       setError(err?.message || "Upload failed.");
     } finally {
@@ -75,6 +145,7 @@ export default function UploadPage() {
     setFiles([]);
     setResponse(null);
     setError("");
+    setProgress({ completed: 0, total: 0, batch: 0, batches: 0 });
   }
 
   return (
@@ -170,7 +241,8 @@ export default function UploadPage() {
 
         {files.length > 0 && (
           <div style={{ marginTop: 18, color: "#a8b3c7" }}>
-            Selected: <b style={{ color: "#fff" }}>{files.length}</b> files · Total size:{" "}
+            Selected: <b style={{ color: "#fff" }}>{files.length}</b> files ·
+            Total size:{" "}
             <b style={{ color: "#fff" }}>
               {(totalSize / 1024 / 1024).toFixed(2)} MB
             </b>
@@ -233,9 +305,29 @@ export default function UploadPage() {
 
           <p style={{ color: "#a8b3c7", marginBottom: 18 }}>
             Total: <b style={{ color: "#fff" }}>{response.total}</b> · Success:{" "}
-            <b style={{ color: "#33f078" }}>{response.successCount}</b> · Failed:{" "}
-            <b style={{ color: "#ff6384" }}>{response.failCount}</b>
+            <b style={{ color: "#33f078" }}>{response.successCount}</b> ·
+            Failed: <b style={{ color: "#ff6384" }}>{response.failCount}</b>
+            {" · "}Created:{" "}
+            <b style={{ color: "#60a5fa" }}>{response.createdCount || 0}</b>
+            {" · "}Updated:{" "}
+            <b style={{ color: "#c084fc" }}>{response.updatedCount || 0}</b>
+            {" · "}Held for identity review:{" "}
+            <b style={{ color: "#fbbf24" }}>
+              {response.heldForReviewCount || 0}
+            </b>
+            {" · "}Incomplete extraction:{" "}
+            <b style={{ color: "#fb923c" }}>
+              {response.incompleteExtractionCount || 0}
+            </b>
           </p>
+
+          {uploading && progress.total > 0 && (
+            <p style={{ color: "#93c5fd", marginBottom: 18 }}>
+              Processing {progress.completed}/{progress.total} files · batch{" "}
+              {progress.batch}/{progress.batches}. Keep this page open;
+              completed batches will not be sent again.
+            </p>
+          )}
 
           <div style={{ display: "grid", gap: 12 }}>
             {(response.results || []).map((item, index) => {
@@ -320,6 +412,26 @@ export default function UploadPage() {
                         <b style={{ color: "#fff" }}>
                           {candidate.s4hana_projects || 0}
                         </b>
+                      </div>
+                      <div>
+                        Extraction coverage:{" "}
+                        <b
+                          style={{
+                            color:
+                              item.extractionCoverage?.status ===
+                              "complete_for_validation"
+                                ? "#33f078"
+                                : "#fbbf24",
+                          }}
+                        >
+                          {item.extractionCoverage?.coveragePercent ?? 0}%
+                        </b>
+                        {item.extractionCoverage?.missedObservedSections?.length
+                          ? ` · missed source sections: ${item.extractionCoverage.missedObservedSections.join(", ")}`
+                          : ""}
+                        {item.extractionCoverage?.missingRequiredFields?.length
+                          ? ` · required fields missing: ${item.extractionCoverage.missingRequiredFields.join(", ")}`
+                          : ""}
                       </div>
                     </div>
                   ) : (

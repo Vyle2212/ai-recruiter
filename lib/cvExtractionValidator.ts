@@ -51,7 +51,7 @@ const COUNTRIES: Array<[string, RegExp]> = [
   ["Saudi Arabia", /Saudi Arabia|KSA|Riyadh|Jeddah/i],
 ];
 
-const BAD_NAME_RE = /candidate profile pending validation|profile under review|personal particulars?|personal details|resume|curriculum vitae|monitoring compliance|external stakeholders|technical skills|professional summary|work experience|employment history|career objective|project experience|application development|^sap consultant$|^sap fico$|^sap hana$|robot framework/i;
+const BAD_NAME_RE = /candidate profile pending validation|profile under review|personal particulars?|personal details|resume|curriculum vitae|monitoring compliance|external stakeholders|customer request|technical skills|professional summary|work experience|employment history|career objective|project experience|application development|^sap consultant$|^sap fico$|^sap hana$|robot framework/i;
 const BAD_TITLE_RE = /^(?:\d{1,2}(?:\.\d)?\+?\s+years?\s+as\b)|implementation projects?|roll-?out projects?|support projects?|years as|experience in|worked as|recently worked|^i am\b/i;
 const BAD_COMPANY_RE = /(?:^\d{4}\s*-\s*(?:present|now|current)$)|(?:\bLocation:)|(?:^product group$)|(?:^led\s+it systems$)|(?:^business development\s*&\s*operation$)|(?:^director oversee)|(?:^welcome to\b)|^by\s+|achieving|requirements|analy[sz]ed|designed new solutions|implemented solutions|client name|^client\s+|date of birth|personal particulars?|professional objective|authorization concepts|sap ecc|hana system solutions|jul\s+\d{4}\s+to|flavor\s*&\s*fragrance\s+solutions|creating functional designs|action is growing fast|system solutions/i;
 

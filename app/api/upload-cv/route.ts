@@ -8,9 +8,20 @@ import {
   classifyCandidateText,
   normalizeCandidatePayloadForSapUpload,
 } from "@/lib/candidateFileGuards";
-import { evaluateResumeQualityGate, summarizeImportResults } from "@/lib/resumeQualityGate";
-import { archiveOriginalCv, discardUnlinkedOriginalCv } from "@/lib/originalCvArchive";
+import {
+  evaluateResumeQualityGate,
+  summarizeImportResults,
+} from "@/lib/resumeQualityGate";
+import {
+  archiveOriginalCv,
+  discardUnlinkedOriginalCv,
+} from "@/lib/originalCvArchive";
 import { commitCandidateWithArchivedCv } from "@/lib/originalCvArchiveCommit";
+import {
+  evaluateCandidateExtractionCoverage,
+  type CandidateExtractionCoverage,
+} from "@/lib/candidateExtractionCoverage";
+import { enrichCandidateUpload } from "@/lib/candidateUploadEnrichment";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +38,11 @@ type UploadResult = {
   recordType?: string;
   signals?: string[];
   parserQuality?: ReturnType<typeof evaluateResumeQualityGate>;
+  extractionCoverage?: CandidateExtractionCoverage;
+  ingestionAction?:
+    | "create_new"
+    | "update_existing"
+    | "hold_for_identity_review";
 };
 
 function isSupportedFile(fileName: string) {
@@ -49,7 +65,7 @@ export async function POST(req: NextRequest) {
     if (!files.length) {
       return NextResponse.json(
         { success: false, error: "No CV files uploaded." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -73,7 +89,8 @@ export async function POST(req: NextRequest) {
         const buffer = Buffer.from(arrayBuffer);
 
         const parsed = await parseCv(buffer, fileName);
-        const rawText = typeof parsed.rawText === "string" ? parsed.rawText : "";
+        const rawText =
+          typeof parsed.rawText === "string" ? parsed.rawText : "";
 
         const classification = classifyCandidateText(rawText, fileName);
 
@@ -99,10 +116,10 @@ export async function POST(req: NextRequest) {
             source_file: fileName,
             file_name: fileName,
           },
-          rawText
+          rawText,
         );
 
-        const candidatePayload = enrichCandidateWithSapTaxonomy({
+        const baseCandidatePayload = enrichCandidateWithSapTaxonomy({
           ...normalizedParsed,
           file_classification: classification,
           record_type: "SAP_CV",
@@ -110,6 +127,14 @@ export async function POST(req: NextRequest) {
           source_file: fileName,
           file_name: fileName,
         });
+        const candidatePayload = enrichCandidateUpload(
+          baseCandidatePayload,
+          rawText,
+        );
+        const extractionCoverage = evaluateCandidateExtractionCoverage(
+          rawText,
+          candidatePayload,
+        );
 
         const parserQuality = evaluateResumeQualityGate(candidatePayload);
 
@@ -119,10 +144,18 @@ export async function POST(req: NextRequest) {
             ok: false,
             rejected: true,
             recordType: "REJECTED_RESUME_QUALITY",
-            reason: parserQuality.rejectionReasons.join(", ") || "Rejected by Resume Quality Gate.",
-            signals: [...parserQuality.rejectionReasons, ...parserQuality.warnings],
+            reason:
+              parserQuality.rejectionReasons.join(", ") ||
+              "Rejected by Resume Quality Gate.",
+            signals: [
+              ...parserQuality.rejectionReasons,
+              ...parserQuality.warnings,
+            ],
             parserQuality,
-            error: parserQuality.rejectionReasons.join(", ") || "Rejected by Resume Quality Gate.",
+            extractionCoverage,
+            error:
+              parserQuality.rejectionReasons.join(", ") ||
+              "Rejected by Resume Quality Gate.",
           });
           continue;
         }
@@ -132,23 +165,66 @@ export async function POST(req: NextRequest) {
         // become another flattened, non-recoverable source.
         const saved = await commitCandidateWithArchivedCv(
           () => archiveOriginalCv(fileName, buffer),
-          archivedCvReference => saveCandidate({ ...candidatePayload,
-            archivedCvReference,
-            parser_quality: parserQuality,
-            profile_quality_score: parserQuality.parserQualityScore,
-            name_review_required: parserQuality.needsManualReview }),
+          (archivedCvReference) =>
+            saveCandidate({
+              ...candidatePayload,
+              archivedCvReference,
+              parser_quality: parserQuality,
+              extraction_coverage: extractionCoverage,
+              extraction_coverage_status: extractionCoverage.status,
+              extraction_missing_sections:
+                extractionCoverage.missedObservedSections,
+              profile_source_type: "admin_upload",
+              profile_quality_score: parserQuality.parserQualityScore,
+              name_review_required:
+                parserQuality.needsManualReview ||
+                extractionCoverage.missingRequiredFields.includes(
+                  "display_name",
+                ),
+            }),
           discardUnlinkedOriginalCv,
         );
 
-        if (saved?.skipped || saved?.rejected_noise || String(saved?.status || "").toLowerCase() === "rejected_noise") {
+        if (
+          saved?.skipped ||
+          saved?.rejected_noise ||
+          String(saved?.status || "").toLowerCase() === "rejected_noise"
+        ) {
           results.push({
             fileName,
             ok: false,
             rejected: true,
             recordType: "REJECTED_NOISE",
-            reason: Array.isArray(saved?.extraction_notes) ? saved.extraction_notes.join(", ") : "Rejected by recruiter-grade save gate.",
-            signals: Array.isArray(saved?.extraction_notes) ? saved.extraction_notes : [],
-            error: Array.isArray(saved?.extraction_notes) ? saved.extraction_notes.join(", ") : "Rejected by recruiter-grade save gate.",
+            reason: Array.isArray(saved?.extraction_notes)
+              ? saved.extraction_notes.join(", ")
+              : "Rejected by recruiter-grade save gate.",
+            signals: Array.isArray(saved?.extraction_notes)
+              ? saved.extraction_notes
+              : [],
+            error: Array.isArray(saved?.extraction_notes)
+              ? saved.extraction_notes.join(", ")
+              : "Rejected by recruiter-grade save gate.",
+          });
+          continue;
+        }
+
+        if (saved?.ingestion_action === "hold_for_identity_review") {
+          results.push({
+            fileName,
+            ok: true,
+            recordType: "IDENTITY_REVIEW_REQUIRED",
+            reason:
+              "The CV was preserved privately, but no candidate row was created or overwritten because identity evidence matched more than one profile.",
+            signals: Array.isArray(saved?.ingestion_reasons)
+              ? saved.ingestion_reasons
+              : [],
+            ingestionAction: "hold_for_identity_review",
+            candidate: {
+              status: saved.status,
+              competingCandidateCount: saved.competing_candidate_count,
+            },
+            sourceExtraction: parsed.sourceExtraction,
+            extractionCoverage,
           });
           continue;
         }
@@ -156,20 +232,35 @@ export async function POST(req: NextRequest) {
         results.push({
           fileName,
           ok: true,
-          recordType: "SAP_CV",
+          recordType:
+            extractionCoverage.status === "complete_for_validation"
+              ? "SAP_CV"
+              : "SAP_CV_INCOMPLETE_REVIEW",
           reason: classification.reason,
           candidate: saved,
+          ingestionAction: saved?.ingestion_action,
           sourceExtraction: parsed.sourceExtraction,
+          extractionCoverage,
         });
       } catch (error: any) {
         if (error instanceof CvSourceError) {
-          results.push({ fileName, ok: false, recordType: "SOURCE_REVIEW_REQUIRED", errorCode: error.code, error: error.message, reason: error.message, signals: [error.code] });
+          results.push({
+            fileName,
+            ok: false,
+            recordType: "SOURCE_REVIEW_REQUIRED",
+            errorCode: error.code,
+            error: error.message,
+            reason: error.message,
+            signals: [error.code],
+          });
           continue;
         }
         console.error("Upload CV failed:", error);
 
         const message = error?.message || "Failed to parse/save CV.";
-        const rejectedByGate = String(error?.code || "").startsWith("REJECTED_") || /^REJECTED_/i.test(message);
+        const rejectedByGate =
+          String(error?.code || "").startsWith("REJECTED_") ||
+          /^REJECTED_/i.test(message);
 
         results.push({
           fileName,
@@ -184,6 +275,18 @@ export async function POST(req: NextRequest) {
 
     const successCount = results.filter((r) => r.ok).length;
     const rejectedCount = results.filter((r) => r.rejected).length;
+    const createdCount = results.filter(
+      (r) => r.ingestionAction === "create_new",
+    ).length;
+    const updatedCount = results.filter(
+      (r) => r.ingestionAction === "update_existing",
+    ).length;
+    const heldForReviewCount = results.filter(
+      (r) => r.ingestionAction === "hold_for_identity_review",
+    ).length;
+    const incompleteExtractionCount = results.filter(
+      (r) => r.extractionCoverage?.status === "incomplete_needs_review",
+    ).length;
     const failCount = results.length - successCount;
 
     return NextResponse.json({
@@ -192,6 +295,10 @@ export async function POST(req: NextRequest) {
       total: results.length,
       successCount,
       rejectedCount,
+      createdCount,
+      updatedCount,
+      heldForReviewCount,
+      incompleteExtractionCount,
       failCount,
       results,
     });
@@ -203,7 +310,7 @@ export async function POST(req: NextRequest) {
         success: false,
         error: error?.message || "Upload CV failed.",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

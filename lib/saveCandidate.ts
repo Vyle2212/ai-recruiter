@@ -1,12 +1,27 @@
-﻿import { sanitizeCandidateForPersistence as sanitizeDeep, sanitizeCandidateSourceText } from "./candidateSourcePreservation";
+﻿import {
+  sanitizeCandidateForPersistence as sanitizeDeep,
+  sanitizeCandidateSourceText,
+} from "./candidateSourcePreservation";
 import crypto from "crypto";
 import { supabase } from "./supabase";
 import { buildCandidateProfile } from "./candidateProfile";
 import { validateCandidateNameV3 } from "./candidateValidationEngine";
-import { inferSapProfile, isWeakCandidateNameProduction, cleanPhoneProduction, fallbackNameFromEmail } from "./sapRecruiterRules";
-import { extractCandidateNameStrict, isWeakOrGarbageName as isWeakCandidateName } from "./candidateFileGuards";
-import { evaluateResumeQualityGate, sanitizeCompanyName } from "./resumeQualityGate";
+import {
+  inferSapProfile,
+  isWeakCandidateNameProduction,
+  cleanPhoneProduction,
+  fallbackNameFromEmail,
+} from "./sapRecruiterRules";
+import {
+  extractCandidateNameStrict,
+  isWeakOrGarbageName as isWeakCandidateName,
+} from "./candidateFileGuards";
+import {
+  evaluateResumeQualityGate,
+  sanitizeCompanyName,
+} from "./resumeQualityGate";
 import { originalCvReference } from "./originalCvArchiveKey";
+import { resolveCandidateIngestion } from "./candidateProfileIngestion";
 
 type AnyRecord = Record<string, any>;
 
@@ -38,7 +53,7 @@ function normalizeName(name: any) {
     .replace(/[^a-z\s]/g, " ")
     .replace(
       /\b(cv|resume|sap|fico|fi|co|consultant|senior|sr|profile|candidate|unknown|mobile|no|title)\b/g,
-      " "
+      " ",
     )
     .replace(/\s+/g, " ")
     .trim();
@@ -50,7 +65,7 @@ function normalizeTitle(title: any) {
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(
       /\b(sap|senior|sr|consultant|functional|certified|associate)\b/g,
-      " "
+      " ",
     )
     .replace(/\s+/g, " ")
     .trim();
@@ -60,7 +75,10 @@ function normalizeDisplayTitle(value: any) {
   let title = String(value || "")
     .replace(/^[-â€“â€”â€¢\s]+/, "")
     .replace(/\s+/g, " ")
-    .replace(/^(TITLE|POSITION|DESIGNATION|CURRENT POSITION|CURRENT TITLE|ROLE|JOB TITLE)\s*[:\-]\s*/i, "")
+    .replace(
+      /^(TITLE|POSITION|DESIGNATION|CURRENT POSITION|CURRENT TITLE|ROLE|JOB TITLE)\s*[:\-]\s*/i,
+      "",
+    )
     .trim();
 
   title = title
@@ -74,47 +92,81 @@ function normalizeDisplayTitle(value: any) {
     .replace(/\s+/g, " ")
     .trim();
 
-  const duplicateAt = title.match(/^(.+?)\s+at\s+([A-Za-z0-9&.,'â€™() -]{2,60})\s+at\s+\2$/i);
+  const duplicateAt = title.match(
+    /^(.+?)\s+at\s+([A-Za-z0-9&.,'â€™() -]{2,60})\s+at\s+\2$/i,
+  );
   if (duplicateAt) {
     title = `${duplicateAt[1].trim()} - ${duplicateAt[2].trim()}`;
   }
 
   if (title.length > 85) {
-    title = title.slice(0, 85).replace(/\s+\S*$/, "").trim();
+    title = title
+      .slice(0, 85)
+      .replace(/\s+\S*$/, "")
+      .trim();
   }
 
   return title;
 }
 
-
 function normalizeCandidateNameForSaveGate(value: any) {
-  return String(value || "").toLowerCase().replace(/[^\p{L}\p{N}\s.-]/gu, " ").replace(/\s+/g, " ").trim();
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s.-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 const ABSOLUTE_BAD_CANDIDATE_NAMES_FOR_SAVE = new Set([
-  "best practices", "best practices.", "powershell scripting", "powershell scripting.",
-  "academic qualifications", "academic qualification", "public - unrestricted access",
-  "public unrestricted access", "tdi apj", "job description", "agency non-disclosure agreement",
-  "non-disclosure agreement", "enterprise accounts segments", "enterprise accounts segments.",
-  "construction occupational safety", "dxc technology", "briefcase duration",
-  "configuring delta ods info cubes", "configuring delta, ods, info cubes",
-  "and driving overall operational improvements", "job description thailand managing director", "father name", "mother name"
+  "best practices",
+  "best practices.",
+  "powershell scripting",
+  "powershell scripting.",
+  "academic qualifications",
+  "academic qualification",
+  "public - unrestricted access",
+  "public unrestricted access",
+  "tdi apj",
+  "job description",
+  "agency non-disclosure agreement",
+  "non-disclosure agreement",
+  "enterprise accounts segments",
+  "enterprise accounts segments.",
+  "construction occupational safety",
+  "dxc technology",
+  "briefcase duration",
+  "configuring delta ods info cubes",
+  "configuring delta, ods, info cubes",
+  "and driving overall operational improvements",
+  "job description thailand managing director",
+  "father name",
+  "mother name",
 ]);
 
 function isAbsoluteBadCandidateNameForSave(value: any) {
   const key = normalizeCandidateNameForSaveGate(value);
   if (!key) return true;
   if (ABSOLUTE_BAD_CANDIDATE_NAMES_FOR_SAVE.has(key)) return true;
-  return /\b(best\s+practices|powershell\s+scripting|academic\s+qualifications?|public\s*-?\s*unrestricted\s+access|tdi\s+apj|job\s+description|non[-\s]?disclosure\s+agreement|enterprise\s+accounts\s+segments|father\s+name|mother\s+name|briefcase\s+duration|construction\s+occupational|configuring\s+delta|info\s+cubes|and\s+driving\s+overall\s+operational|green\s+channel\s+travel|year\s+level\s+institution|each\s+type|and\s+gas\s+projects|pt\.?\s+emerio|kone\s+industry|taman\s+ampang|professional\s+certification|educational\s+attainment|career\s+snapshot)\b/i.test(key);
+  return /\b(best\s+practices|powershell\s+scripting|academic\s+qualifications?|public\s*-?\s*unrestricted\s+access|tdi\s+apj|job\s+description|non[-\s]?disclosure\s+agreement|enterprise\s+accounts\s+segments|father\s+name|mother\s+name|briefcase\s+duration|construction\s+occupational|configuring\s+delta|info\s+cubes|and\s+driving\s+overall\s+operational|green\s+channel\s+travel|year\s+level\s+institution|each\s+type|and\s+gas\s+projects|pt\.?\s+emerio|kone\s+industry|taman\s+ampang|professional\s+certification|educational\s+attainment|career\s+snapshot)\b/i.test(
+    key,
+  );
 }
 
 function looksLikeHumanCandidateNameForSave(value: any) {
   const raw = String(value || "").trim();
   if (isAbsoluteBadCandidateNameForSave(raw)) return false;
   if (/@|https?:|www\.|\+?\d[\d\s().-]{5,}\d|[|]/.test(raw)) return false;
-  const words = raw.replace(/[.,]+$/g, "").split(/\s+/).filter(Boolean);
+  const words = raw
+    .replace(/[.,]+$/g, "")
+    .split(/\s+/)
+    .filter(Boolean);
   if (words.length < 2 || words.length > 6) return false;
-  if (/\b(SAP|FICO|FI\/CO|ABAP|BASIS|BW|BTP|MM|SD|EWM|TM|PP|PM|PS|CONSULTANT|MANAGER|DEVELOPER|ARCHITECT|ANALYST|SPECIALIST|PROJECT|JOB|DESCRIPTION|QUALIFICATION|ACCESS|PRACTICES|SCRIPTING|ENTERPRISE|ACCOUNTS|SEGMENTS)\b/i.test(raw)) return false;
+  if (
+    /\b(SAP|FICO|FI\/CO|ABAP|BASIS|BW|BTP|MM|SD|EWM|TM|PP|PM|PS|CONSULTANT|MANAGER|DEVELOPER|ARCHITECT|ANALYST|SPECIALIST|PROJECT|JOB|DESCRIPTION|QUALIFICATION|ACCESS|PRACTICES|SCRIPTING|ENTERPRISE|ACCOUNTS|SEGMENTS)\b/i.test(
+      raw,
+    )
+  )
+    return false;
   return words.every((word) => /^[A-Za-z][A-Za-z\'.-]*$/.test(word));
 }
 
@@ -129,7 +181,9 @@ function enforceCandidateSaveGate(candidate: AnyRecord) {
     throw err;
   }
   if (!email && !phone && !looksLikeHumanCandidateNameForSave(name)) {
-    const err: any = new Error(`REJECTED_WEAK_IDENTITY: ${name || "empty"} | ${title || "no title"}`);
+    const err: any = new Error(
+      `REJECTED_WEAK_IDENTITY: ${name || "empty"} | ${title || "no title"}`,
+    );
     err.code = "REJECTED_WEAK_IDENTITY";
     throw err;
   }
@@ -169,7 +223,6 @@ function uniqueStrings(values: any[]): string[] {
   );
 }
 
-
 function normalizeModuleKeyForSave(value: any): string {
   const module = sanitizeString(String(value || ""))
     .toUpperCase()
@@ -184,11 +237,20 @@ function normalizeModuleKeyForSave(value: any): string {
     .replace(/[\s/-]+/g, "_")
     .trim();
 
-  if (!module || ["UNKNOWN", "ALL", "ANY", "SAP", "SAP_GENERAL", "GENERAL_SAP"].includes(module)) return "";
+  if (
+    !module ||
+    ["UNKNOWN", "ALL", "ANY", "SAP", "SAP_GENERAL", "GENERAL_SAP"].includes(
+      module,
+    )
+  )
+    return "";
   return module;
 }
 
-function isSecondaryModuleAllowedForPrimarySave(primary: any, module: any): boolean {
+function isSecondaryModuleAllowedForPrimarySave(
+  primary: any,
+  module: any,
+): boolean {
   const p = normalizeModuleKeyForSave(primary);
   const m = normalizeModuleKeyForSave(module);
   if (!p || !m || m === p) return false;
@@ -196,12 +258,59 @@ function isSecondaryModuleAllowedForPrimarySave(primary: any, module: any): bool
   const allowedByPrimary: Record<string, Set<string>> = {
     // BTP secondary modules are visible BTP ecosystem skills only.
     // ABAP/HANA may support ranking but should not be persisted as BTP secondary chips.
-    BTP: new Set(["CPI", "FIORI", "UI5", "CAP", "RAP", "BAS", "BUILD", "KYMA", "INTEGRATION_SUITE"]),
-    SUCCESSFACTORS: new Set(["EC", "ECP", "RCM", "ONB", "LMS", "PMGM", "COMPENSATION", "HCM"]),
-    FICO: new Set(["FI", "CO", "GL", "AP", "AR", "AA", "COPA", "CFIN", "FSCM", "TRM", "BCM", "GR", "BPC", "RAR", "RE_FX", "PSM", "FM"]),
+    BTP: new Set([
+      "CPI",
+      "FIORI",
+      "UI5",
+      "CAP",
+      "RAP",
+      "BAS",
+      "BUILD",
+      "KYMA",
+      "INTEGRATION_SUITE",
+    ]),
+    SUCCESSFACTORS: new Set([
+      "EC",
+      "ECP",
+      "RCM",
+      "ONB",
+      "LMS",
+      "PMGM",
+      "COMPENSATION",
+      "HCM",
+    ]),
+    FICO: new Set([
+      "FI",
+      "CO",
+      "GL",
+      "AP",
+      "AR",
+      "AA",
+      "COPA",
+      "CFIN",
+      "FSCM",
+      "TRM",
+      "BCM",
+      "GR",
+      "BPC",
+      "RAR",
+      "RE_FX",
+      "PSM",
+      "FM",
+    ]),
     BW: new Set(["BI", "BW4HANA", "SAC", "DATASPHERE", "BPC", "BOBJ", "HANA"]),
     BASIS: new Set(["SECURITY", "GRC", "HANA", "SOLMAN", "NETWEAVER"]),
-    ABAP: new Set(["FIORI", "UI5", "CDS", "AMDP", "ODATA", "BAPI", "BADI", "IDOC", "FORMS"]),
+    ABAP: new Set([
+      "FIORI",
+      "UI5",
+      "CDS",
+      "AMDP",
+      "ODATA",
+      "BAPI",
+      "BADI",
+      "IDOC",
+      "FORMS",
+    ]),
     MM: new Set(["WM", "EWM", "ARIBA", "P2P", "SRM", "VIM"]),
     SD: new Set(["OTC", "O2C", "LE", "TM", "CRM", "C4C"]),
     PP: new Set(["QM", "PM", "PPDS", "APO"]),
@@ -214,35 +323,81 @@ function isSecondaryModuleAllowedForPrimarySave(primary: any, module: any): bool
   return Boolean(allowedByPrimary[p]?.has(m));
 }
 
-function filterSecondaryModulesForPrimarySave(primary: any, modules: any[]): string[] {
+function filterSecondaryModulesForPrimarySave(
+  primary: any,
+  modules: any[],
+): string[] {
   return Array.from(
     new Set(
       (modules || [])
         .map(normalizeModuleKeyForSave)
-        .filter((module) => isSecondaryModuleAllowedForPrimarySave(primary, module))
-    )
+        .filter((module) =>
+          isSecondaryModuleAllowedForPrimarySave(primary, module),
+        ),
+    ),
   ).slice(0, 8);
 }
 
 function hasSuccessFactorsPrimaryEvidence(value: any) {
   const text = String(value || "").toUpperCase();
-  return /\b(SAP\s+SUCCESSFACTORS|SUCCESSFACTORS|SUCCESS\s+FACTORS|SAP\s+SF\b|SF\s+CONSULTANT|SF\s+FUNCTIONAL|SUCCESSFACTORS\s+LEAD|SUCCESSFACTORS\s+SENIOR|EMPLOYEE\s+CENTRAL|SF\s+EC|SAP\s+SF\s+EC|HXM)\b/i.test(text);
+  return /\b(SAP\s+SUCCESSFACTORS|SUCCESSFACTORS|SUCCESS\s+FACTORS|SAP\s+SF\b|SF\s+CONSULTANT|SF\s+FUNCTIONAL|SUCCESSFACTORS\s+LEAD|SUCCESSFACTORS\s+SENIOR|EMPLOYEE\s+CENTRAL|SF\s+EC|SAP\s+SF\s+EC|HXM)\b/i.test(
+    text,
+  );
 }
 
 function successFactorsSecondaryModules(value: any) {
   const text = String(value || "").toUpperCase();
   const modules = new Set<string>();
-  if (/\b(SUCCESSFACTORS|SUCCESS\s+FACTORS|SF\s+CONSULTANT|SAP\s+HR|SAP\s+HCM|HCM|HXM|HIRE\s+TO\s+RETIRE|H2R)\b/i.test(text)) modules.add("SUCCESSFACTORS");
-  if (/\b(EMPLOYEE\s+CENTRAL|SUCCESSFACTORS\s+EC|SF\s+EC|SAP\s+SF\s+EC)\b/i.test(text)) modules.add("EC");
-  if (/\b(EMPLOYEE\s+CENTRAL\s+PAYROLL|ECP|SUCCESSFACTORS\s+PAYROLL|SF\s+PAYROLL)\b/i.test(text)) modules.add("ECP");
-  if (/\b(SUCCESSFACTORS\s+RECRUITING|SF\s+RECRUITING|RECRUITING\s+MANAGEMENT|RCM)\b/i.test(text)) modules.add("RCM");
-  if (/\b(SUCCESSFACTORS\s+ONBOARDING|SF\s+ONBOARDING|ONBOARDING|ONB)\b/i.test(text)) modules.add("ONB");
-  if (/\b(SUCCESSFACTORS\s+LEARNING|SF\s+LEARNING|LEARNING\s+MANAGEMENT|LMS)\b/i.test(text)) modules.add("LMS");
-  if (/\b(PERFORMANCE\s+AND\s+GOALS|PERFORMANCE\s+MANAGEMENT|GOALS\s+MANAGEMENT|PMGM)\b/i.test(text)) modules.add("PMGM");
-  if (/\b(SAP\s+HCM|HCM|SAP\s+HR|HR\s+MODULE|TIME\s+MANAGEMENT|PAYROLL)\b/i.test(text)) modules.add("HCM");
+  if (
+    /\b(SUCCESSFACTORS|SUCCESS\s+FACTORS|SF\s+CONSULTANT|SAP\s+HR|SAP\s+HCM|HCM|HXM|HIRE\s+TO\s+RETIRE|H2R)\b/i.test(
+      text,
+    )
+  )
+    modules.add("SUCCESSFACTORS");
+  if (
+    /\b(EMPLOYEE\s+CENTRAL|SUCCESSFACTORS\s+EC|SF\s+EC|SAP\s+SF\s+EC)\b/i.test(
+      text,
+    )
+  )
+    modules.add("EC");
+  if (
+    /\b(EMPLOYEE\s+CENTRAL\s+PAYROLL|ECP|SUCCESSFACTORS\s+PAYROLL|SF\s+PAYROLL)\b/i.test(
+      text,
+    )
+  )
+    modules.add("ECP");
+  if (
+    /\b(SUCCESSFACTORS\s+RECRUITING|SF\s+RECRUITING|RECRUITING\s+MANAGEMENT|RCM)\b/i.test(
+      text,
+    )
+  )
+    modules.add("RCM");
+  if (
+    /\b(SUCCESSFACTORS\s+ONBOARDING|SF\s+ONBOARDING|ONBOARDING|ONB)\b/i.test(
+      text,
+    )
+  )
+    modules.add("ONB");
+  if (
+    /\b(SUCCESSFACTORS\s+LEARNING|SF\s+LEARNING|LEARNING\s+MANAGEMENT|LMS)\b/i.test(
+      text,
+    )
+  )
+    modules.add("LMS");
+  if (
+    /\b(PERFORMANCE\s+AND\s+GOALS|PERFORMANCE\s+MANAGEMENT|GOALS\s+MANAGEMENT|PMGM)\b/i.test(
+      text,
+    )
+  )
+    modules.add("PMGM");
+  if (
+    /\b(SAP\s+HCM|HCM|SAP\s+HR|HR\s+MODULE|TIME\s+MANAGEMENT|PAYROLL)\b/i.test(
+      text,
+    )
+  )
+    modules.add("HCM");
   return Array.from(modules);
 }
-
 
 function normalizeVisaStatus(value: any, rawText = "") {
   const explicit = sanitizeString(String(value || ""));
@@ -253,15 +408,22 @@ function normalizeVisaStatus(value: any, rawText = "") {
   if (/employment pass|\bep\b/.test(text)) return "EP Holder";
   if (/dependent pass|dependant pass|\bdp\b/.test(text)) return "DP Holder";
   if (/work visa|work permit|visa holder/.test(text)) return "Work Visa";
-  if (/need sponsorship|requires sponsorship|visa required|require visa/.test(text)) return "Visa Required / Sponsorship";
+  if (
+    /need sponsorship|requires sponsorship|visa required|require visa/.test(
+      text,
+    )
+  )
+    return "Visa Required / Sponsorship";
   return null;
 }
 function normalizeRelocation(value: any, rawText = "") {
   const explicit = sanitizeString(String(value || ""));
   if (explicit) return explicit;
   const text = String(rawText || "").toLowerCase();
-  if (/willing to relocate|open to relocate|relocation/.test(text)) return "Open to Relocation";
-  if (/open to travel|travel readiness|willing to travel/.test(text)) return "Open to Travel";
+  if (/willing to relocate|open to relocate|relocation/.test(text))
+    return "Open to Relocation";
+  if (/open to travel|travel readiness|willing to travel/.test(text))
+    return "Open to Travel";
   if (/remote only/.test(text)) return "Remote Only";
   return null;
 }
@@ -273,7 +435,8 @@ function normalizeLanguages(value: any, rawText = "") {
   if (/english/i.test(raw)) out.push("English");
   if (/mandarin|chinese/i.test(raw)) out.push("Mandarin");
   const jlpt = raw.match(/\bN[1-5]\b/i)?.[0]?.toUpperCase();
-  if (/japanese|jlpt|\bN[1-5]\b/i.test(raw)) out.push(jlpt ? `Japanese ${jlpt}` : "Japanese");
+  if (/japanese|jlpt|\bN[1-5]\b/i.test(raw))
+    out.push(jlpt ? `Japanese ${jlpt}` : "Japanese");
   if (/korean/i.test(raw)) out.push("Korean");
   if (/thai/i.test(raw)) out.push("Thai");
   if (/bahasa indonesia|indonesian/i.test(raw)) out.push("Bahasa Indonesia");
@@ -287,7 +450,6 @@ function safeNumber(value: any, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-
 function normalizeForHash(value: any) {
   return sanitizeString(String(value || ""))
     .toLowerCase()
@@ -297,7 +459,10 @@ function normalizeForHash(value: any) {
 }
 
 function sha256(value: any) {
-  return crypto.createHash("sha256").update(String(value || ""), "utf8").digest("hex");
+  return crypto
+    .createHash("sha256")
+    .update(String(value || ""), "utf8")
+    .digest("hex");
 }
 
 function buildCvHash(rawText: any) {
@@ -307,10 +472,33 @@ function buildCvHash(rawText: any) {
 
 function compactTokens(value: any) {
   const stop = new Set([
-    "sap", "consultant", "senior", "sr", "junior", "functional", "technical",
-    "developer", "manager", "lead", "specialist", "profile", "resume", "cv",
-    "project", "experience", "summary", "professional", "current", "working",
-    "implementation", "support", "rollout", "migration", "s4hana", "s4", "hana",
+    "sap",
+    "consultant",
+    "senior",
+    "sr",
+    "junior",
+    "functional",
+    "technical",
+    "developer",
+    "manager",
+    "lead",
+    "specialist",
+    "profile",
+    "resume",
+    "cv",
+    "project",
+    "experience",
+    "summary",
+    "professional",
+    "current",
+    "working",
+    "implementation",
+    "support",
+    "rollout",
+    "migration",
+    "s4hana",
+    "s4",
+    "hana",
   ]);
 
   return normalizeForHash(value)
@@ -381,145 +569,22 @@ function hasMeaningfulName(name: any) {
 }
 
 async function findExistingCandidate(payload: AnyRecord) {
-  const email = normalizeEmail(payload.normalized_email || payload.email);
-  const phoneDigits = normalizePhone(payload.normalized_phone || payload.phone);
-  const nameKey = normalizeName(payload.normalized_name || payload.name);
-  const titleKey = normalizeTitle(payload.current_title || payload.title);
-  const years = safeNumber(payload.years || payload.years_experience);
-  const cvHash = sanitizeString(payload.cv_hash || "");
-  const primaryModule = sanitizeString(payload.primary_module || "").toUpperCase();
-  const rawText = sanitizeString(payload.raw_text || payload.resume_text || "");
-  const fingerprint = buildCandidateFingerprint(payload);
-
   const selectFields =
-    "id,name,email,phone,normalized_name,normalized_email,normalized_phone,cv_hash,years,years_experience,title,current_title,current_company,company,primary_module,raw_text,resume_text,duplicate_count,cv_version,status,updated_at";
-
-  // 1) Exact email match: highest confidence.
-  if (email) {
-    const { data } = await supabase
-      .from("candidates")
-      .select(selectFields)
-      .or(`normalized_email.eq.${email},email.eq.${email}`)
-      .limit(1)
-      .maybeSingle();
-
-    if (data?.id) return data;
-  }
-
-  // 2) Exact normalized phone / last 8 digits fallback.
-  if (phoneDigits) {
-    const { data } = await supabase
-      .from("candidates")
-      .select(selectFields)
-      .limit(3000);
-
-    const found = (data || []).find((row: any) => {
-      const rowPhone = normalizePhone(row.normalized_phone || row.phone);
-      return rowPhone && rowPhone.slice(-8) === phoneDigits.slice(-8);
-    });
-
-    if (found?.id) return found;
-  }
-
-  // 3) Exact CV hash: same parsed CV text uploaded again.
-  if (cvHash) {
-    const { data } = await supabase
-      .from("candidates")
-      .select(selectFields)
-      .eq("cv_hash", cvHash)
-      .limit(1)
-      .maybeSingle();
-
-    if (data?.id) return data;
-  }
-
-  // 4) Name-based scan. This catches CVs without email/phone.
-  if (hasMeaningfulName(payload.name)) {
-    const { data } = await supabase
-      .from("candidates")
-      .select(selectFields)
-      .limit(5000);
-
-    const rows = data || [];
-
-    const exactOrNearName = rows.find((row: any) => {
-      const rowName = normalizeName(row.normalized_name || row.name);
-      const rowTitle = normalizeTitle(row.current_title || row.title);
-      const rowYears = safeNumber(row.years || row.years_experience);
-      const rowModule = sanitizeString(row.primary_module || "").toUpperCase();
-      const rowCompany = normalizeName(row.current_company || row.company);
-      const company = normalizeName(payload.current_company || payload.company);
-
-      const nameSimilarity = normalizedNameSimilarity(rowName, nameKey);
-      const sameName = nameSimilarity >= 0.92;
-      const sameYears = years > 0 && rowYears > 0 && Math.abs(rowYears - years) <= 1;
-      const similarTitle =
-        titleKey &&
-        rowTitle &&
-        (rowTitle.includes(titleKey) || titleKey.includes(rowTitle) || jaccardSimilarity(rowTitle, titleKey) >= 0.55);
-      const sameModule = primaryModule && rowModule && primaryModule === rowModule;
-      const sameCompany = company && rowCompany && company === rowCompany;
-      const rowRaw = row.raw_text || row.resume_text || "";
-      const cvSimilarity = rawText && rowRaw ? jaccardSimilarity(rawText, rowRaw) : 0;
-
-      // Same person with updated CV: name + strong contextual signal.
-      if (sameName && (sameYears || similarTitle || sameCompany || sameModule)) return true;
-
-      // Same person without contact, but CV body is very similar.
-      if (sameName && cvSimilarity >= 0.55) return true;
-
-      return false;
-    });
-
-    if (exactOrNearName?.id) return exactOrNearName;
-
-    // 5) Fingerprint-like fallback, computed on the fly because schema has no candidate_fingerprint column.
-    if (fingerprint) {
-      const fpMatch = rows.find((row: any) => {
-        const candidate = {
-          name: row.normalized_name || row.name,
-          title: row.current_title || row.title,
-          primary_module: row.primary_module,
-          current_company: row.current_company || row.company,
-          years: row.years || row.years_experience,
-        };
-        return buildCandidateFingerprint(candidate) === fingerprint;
-      });
-
-      if (fpMatch?.id) return fpMatch;
-    }
-  }
-
-  // 6) Last fallback for unnamed CVs: title + years + high raw text similarity.
-  if (!hasMeaningfulName(payload.name) && titleKey && years > 0 && rawText) {
-    const { data } = await supabase
-      .from("candidates")
-      .select(selectFields)
-      .limit(5000);
-
-    const found = (data || []).find((row: any) => {
-      const rowTitle = normalizeTitle(row.current_title || row.title);
-      const rowYears = safeNumber(row.years || row.years_experience);
-      const rowRaw = row.raw_text || row.resume_text || "";
-      const rowEmail = normalizeEmail(row.normalized_email || row.email);
-      const rowPhone = normalizePhone(row.normalized_phone || row.phone);
-
-      return (
-        !rowEmail &&
-        !rowPhone &&
-        rowTitle &&
-        (rowTitle.includes(titleKey) || titleKey.includes(rowTitle)) &&
-        Math.abs(rowYears - years) <= 1 &&
-        jaccardSimilarity(rawText, rowRaw) >= 0.70
-      );
-    });
-
-    if (found?.id) return found;
-  }
-
-  return null;
+    "id,name,email,phone,normalized_name,normalized_email,normalized_phone,linkedin_url,cv_hash,years,years_experience,title,current_title,current_company,company,primary_module,raw_text,resume_text,experience,education,duplicate_count,cv_version,status,updated_at";
+  const { data, error } = await supabase
+    .from("candidates")
+    .select(selectFields)
+    .limit(5000);
+  if (error)
+    throw new Error(`CANDIDATE_IDENTITY_LOOKUP_FAILED: ${error.message}`);
+  const rows = data || [];
+  const resolution = resolveCandidateIngestion(payload, rows);
+  const candidate =
+    resolution.disposition === "update_existing"
+      ? rows.find((row: any) => row.id === resolution.candidateId) || null
+      : null;
+  return { candidate, resolution };
 }
-
 
 function isProductionInvalidPhone(value: any) {
   const s = String(value || "").trim();
@@ -539,15 +604,23 @@ function isProductionInvalidPhone(value: any) {
 }
 
 function cleanProductionPhone(value: any) {
-  return isProductionInvalidPhone(value) ? null : String(value || "").replace(/\s+/g, " ").trim();
+  return isProductionInvalidPhone(value)
+    ? null
+    : String(value || "")
+        .replace(/\s+/g, " ")
+        .trim();
 }
 
 function hasExplicitIsuSignal(text: string) {
   return (
     /\bSAP\s*IS[-\s]?U\b/i.test(text) ||
-    /\bIS[-\s]?U\s+(FUNCTIONAL|CONSULTANT|ANALYST|BILLING|DEVICE|DM|FICA|PRINT|INVOICING|METER|UTILITIES)\b/i.test(text) ||
+    /\bIS[-\s]?U\s+(FUNCTIONAL|CONSULTANT|ANALYST|BILLING|DEVICE|DM|FICA|PRINT|INVOICING|METER|UTILITIES)\b/i.test(
+      text,
+    ) ||
     /\bSAP\s+ISU\b/i.test(text) ||
-    /\bISU\s+(FUNCTIONAL|CONSULTANT|ANALYST|BILLING|DEVICE|DM|FICA|PRINT|INVOICING|METER|UTILITIES)\b/i.test(text)
+    /\bISU\s+(FUNCTIONAL|CONSULTANT|ANALYST|BILLING|DEVICE|DM|FICA|PRINT|INVOICING|METER|UTILITIES)\b/i.test(
+      text,
+    )
   );
 }
 
@@ -558,18 +631,26 @@ function isWeakProductionName(value: any) {
 
   const lowered = name.toLowerCase();
 
-  if (/^(unknown candidate|review required|candidate|consultant|manager|profile|resume|cv|no title)$/i.test(name)) {
-    return true;
-  }
-
   if (
-    /\b(how this resume is organized|currently working|worked as|working as|employment|requirement specification|profile summary|professional summary|personal details|administration information|core competencies|technical skills|application form|cover letter|curriculum vitae|resume is organized|fi ar asset|head management|assistant branch manager|assitant branch manager|mis manager|additional growth|senior manager assessment|manager assessment|sps upgrade|upgrade role)\b/i.test(name)
+    /^(unknown candidate|review required|candidate|consultant|manager|profile|resume|cv|no title)$/i.test(
+      name,
+    )
   ) {
     return true;
   }
 
   if (
-    /\b(consultant\s*:|candidate\s*:|name\s*:|employment\s+sap|primuspartners|primus partners|corporate business solution|insidesales|inside sales|relationship|remote|bwbihana years|bwbih ana years|material management|sapbw|sac specialist|prfoile|profile)\b/i.test(name)
+    /\b(how this resume is organized|currently working|worked as|working as|employment|requirement specification|profile summary|professional summary|personal details|administration information|core competencies|technical skills|application form|cover letter|curriculum vitae|resume is organized|fi ar asset|head management|assistant branch manager|assitant branch manager|mis manager|additional growth|senior manager assessment|manager assessment|sps upgrade|upgrade role)\b/i.test(
+      name,
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    /\b(consultant\s*:|candidate\s*:|name\s*:|employment\s+sap|primuspartners|primus partners|corporate business solution|insidesales|inside sales|relationship|remote|bwbihana years|bwbih ana years|material management|sapbw|sac specialist|prfoile|profile)\b/i.test(
+      name,
+    )
   ) {
     return true;
   }
@@ -586,18 +667,41 @@ function moduleSignalsFromText(rawInput: any) {
   const upper = raw.toUpperCase();
 
   return {
-    FICO: /\b(FICO|FI\/CO|FI CO|SAP FI\b|SAP CO\b|FI-CO|FINANCE|FINANCIAL|FSCM|TRM|FUNDS MANAGEMENT|CONTROLLING|CO-PA|COPA|GENERAL LEDGER|ACCOUNTS PAYABLE|ACCOUNTS RECEIVABLE|ASSET ACCOUNTING|BANK ACCOUNTING|TAX ACCOUNTING|NEW GL|SIMPLE FINANCE)\b/i.test(upper),
-    MM: /\b(MM|MATERIAL MANAGEMENT|MATERIALS MANAGEMENT|PROCUREMENT|PURCHASING|INVENTORY MANAGEMENT|INVENTORY|P2P|SOURCE TO PAY|MM\/WM|PURCHASE ORDER|GOODS RECEIPT|INVOICE VERIFICATION)\b/i.test(upper),
-    SD: /\b(SD|SALES\s+AND\s+DISTRIBUTION|SALES & DISTRIBUTION|ORDER TO CASH|OTC|O2C|PRICING|BILLING|DELIVERY|SALES ORDER|CUSTOMER MASTER|CREDIT MANAGEMENT)\b/i.test(upper),
-    ABAP: /\b(ABAP|BAPI|BADI|IDOC|SMARTFORMS|SMART FORMS|SAPSCRIPT|USER EXIT|ENHANCEMENT|RICEF|OOABAP|OBJECT ORIENTED ABAP|ADOBE FORMS|WEBDYNPRO|WEB DYNPRO|CDS VIEW|AMDP)\b/i.test(upper),
-    BASIS: /\b(BASIS|NETWEAVER|TRANSPORT MANAGEMENT|SAP SECURITY|GRC|AUTHORIZATION|AUTHORIZATIONS|SOLUTION MANAGER|SOLMAN|BTP ADMIN|HANA ADMIN|SYSTEM ADMINISTRATION|S\/4HANA CONVERSION TECHNICAL)\b/i.test(upper),
-    BW: /\b(BW|BI\b|BOBJ|WEBI|BUSINESS OBJECTS|ANALYTICS|SAC\b|SAP ANALYTICS CLOUD|DATASPHERE|DWC|HANA MODELING|BW\/4HANA|BPC|DATA WAREHOUSE|REPORTING)\b/i.test(upper),
+    FICO: /\b(FICO|FI\/CO|FI CO|SAP FI\b|SAP CO\b|FI-CO|FINANCE|FINANCIAL|FSCM|TRM|FUNDS MANAGEMENT|CONTROLLING|CO-PA|COPA|GENERAL LEDGER|ACCOUNTS PAYABLE|ACCOUNTS RECEIVABLE|ASSET ACCOUNTING|BANK ACCOUNTING|TAX ACCOUNTING|NEW GL|SIMPLE FINANCE)\b/i.test(
+      upper,
+    ),
+    MM: /\b(MM|MATERIAL MANAGEMENT|MATERIALS MANAGEMENT|PROCUREMENT|PURCHASING|INVENTORY MANAGEMENT|INVENTORY|P2P|SOURCE TO PAY|MM\/WM|PURCHASE ORDER|GOODS RECEIPT|INVOICE VERIFICATION)\b/i.test(
+      upper,
+    ),
+    SD: /\b(SD|SALES\s+AND\s+DISTRIBUTION|SALES & DISTRIBUTION|ORDER TO CASH|OTC|O2C|PRICING|BILLING|DELIVERY|SALES ORDER|CUSTOMER MASTER|CREDIT MANAGEMENT)\b/i.test(
+      upper,
+    ),
+    ABAP: /\b(ABAP|BAPI|BADI|IDOC|SMARTFORMS|SMART FORMS|SAPSCRIPT|USER EXIT|ENHANCEMENT|RICEF|OOABAP|OBJECT ORIENTED ABAP|ADOBE FORMS|WEBDYNPRO|WEB DYNPRO|CDS VIEW|AMDP)\b/i.test(
+      upper,
+    ),
+    BASIS:
+      /\b(BASIS|NETWEAVER|TRANSPORT MANAGEMENT|SAP SECURITY|GRC|AUTHORIZATION|AUTHORIZATIONS|SOLUTION MANAGER|SOLMAN|BTP ADMIN|HANA ADMIN|SYSTEM ADMINISTRATION|S\/4HANA CONVERSION TECHNICAL)\b/i.test(
+        upper,
+      ),
+    BW: /\b(BW|BI\b|BOBJ|WEBI|BUSINESS OBJECTS|ANALYTICS|SAC\b|SAP ANALYTICS CLOUD|DATASPHERE|DWC|HANA MODELING|BW\/4HANA|BPC|DATA WAREHOUSE|REPORTING)\b/i.test(
+      upper,
+    ),
     "IS-U": hasExplicitIsuSignal(raw),
-    TM: /\b(TM|TRANSPORTATION MANAGEMENT|FREIGHT|FORWARDING ORDER|TRANSPORTATION COCKPIT|CARRIER SELECTION)\b/i.test(upper),
-    EWM: /\b(EWM|EXTENDED WAREHOUSE|WAREHOUSE MANAGEMENT|WAREHOUSE|WMS|PUTAWAY|PICKING|PACKING|OUTBOUND DELIVERY ORDER)\b/i.test(upper),
-    PP: /\b(PP|PRODUCTION PLANNING|MRP\b|BOM\b|ROUTING|PRODUCTION ORDER|PLANNED ORDER|SHOP FLOOR)\b/i.test(upper),
-    PM: /\b(PM|PLANT MAINTENANCE|EAM|MAINTENANCE ORDER|EQUIPMENT MASTER|FUNCTIONAL LOCATION|NOTIFICATION)\b/i.test(upper),
-    PS: /\b(PS|PROJECT SYSTEM|PROJECT SYSTEMS|WBS|NETWORK ACTIVITY|PROJECT BUILDER|CJ20N|RESULTS ANALYSIS)\b/i.test(upper),
+    TM: /\b(TM|TRANSPORTATION MANAGEMENT|FREIGHT|FORWARDING ORDER|TRANSPORTATION COCKPIT|CARRIER SELECTION)\b/i.test(
+      upper,
+    ),
+    EWM: /\b(EWM|EXTENDED WAREHOUSE|WAREHOUSE MANAGEMENT|WAREHOUSE|WMS|PUTAWAY|PICKING|PACKING|OUTBOUND DELIVERY ORDER)\b/i.test(
+      upper,
+    ),
+    PP: /\b(PP|PRODUCTION PLANNING|MRP\b|BOM\b|ROUTING|PRODUCTION ORDER|PLANNED ORDER|SHOP FLOOR)\b/i.test(
+      upper,
+    ),
+    PM: /\b(PM|PLANT MAINTENANCE|EAM|MAINTENANCE ORDER|EQUIPMENT MASTER|FUNCTIONAL LOCATION|NOTIFICATION)\b/i.test(
+      upper,
+    ),
+    PS: /\b(PS|PROJECT SYSTEM|PROJECT SYSTEMS|WBS|NETWORK ACTIVITY|PROJECT BUILDER|CJ20N|RESULTS ANALYSIS)\b/i.test(
+      upper,
+    ),
   };
 }
 
@@ -630,18 +734,42 @@ function bestSapModuleFromText(rawInput: any, currentModule?: string) {
   if (scores[current] !== undefined) add(current, 5);
 
   // Explicit title/header signals are strongest.
-  if (/\bSAP\s*IS[-\s]?U\b|\bIS[-\s]?U\s+(FUNCTIONAL|CONSULTANT|ANALYST)\b|\bSAP\s+ISU\b|\bISU\s+(FUNCTIONAL|CONSULTANT|ANALYST)\b/i.test(title)) add("IS-U", 100);
-  if (/\bABAP|DEVELOPER|TECHNICAL CONSULTANT|RICEF|BAPI|BADI\b/i.test(title)) add("ABAP", 60);
-  if (/\bBASIS|SECURITY|SOLUTION MANAGER|SOLMAN|SYSTEM ADMIN/i.test(title)) add("BASIS", 60);
-  if (/\bBW|BI\b|BOBJ|SAC\b|DATASPHERE|ANALYTICS|BW\/4HANA|BPC\b/i.test(title)) add("BW", 55);
+  if (
+    /\bSAP\s*IS[-\s]?U\b|\bIS[-\s]?U\s+(FUNCTIONAL|CONSULTANT|ANALYST)\b|\bSAP\s+ISU\b|\bISU\s+(FUNCTIONAL|CONSULTANT|ANALYST)\b/i.test(
+      title,
+    )
+  )
+    add("IS-U", 100);
+  if (/\bABAP|DEVELOPER|TECHNICAL CONSULTANT|RICEF|BAPI|BADI\b/i.test(title))
+    add("ABAP", 60);
+  if (/\bBASIS|SECURITY|SOLUTION MANAGER|SOLMAN|SYSTEM ADMIN/i.test(title))
+    add("BASIS", 60);
+  if (/\bBW|BI\b|BOBJ|SAC\b|DATASPHERE|ANALYTICS|BW\/4HANA|BPC\b/i.test(title))
+    add("BW", 55);
   if (/\bTM|TRANSPORTATION MANAGEMENT\b/i.test(title)) add("TM", 55);
-  if (/\bEWM|EXTENDED WAREHOUSE|WAREHOUSE MANAGEMENT\b/i.test(title)) add("EWM", 55);
-  if (/\bMM|MATERIAL MANAGEMENT|MATERIALS MANAGEMENT|PROCUREMENT|PURCHASING|P2P\b/i.test(title)) add("MM", 55);
-  if (/\bSD|SALES\s+AND\s+DISTRIBUTION|SALES & DISTRIBUTION|ORDER TO CASH|OTC|O2C\b/i.test(title)) add("SD", 55);
+  if (/\bEWM|EXTENDED WAREHOUSE|WAREHOUSE MANAGEMENT\b/i.test(title))
+    add("EWM", 55);
+  if (
+    /\bMM|MATERIAL MANAGEMENT|MATERIALS MANAGEMENT|PROCUREMENT|PURCHASING|P2P\b/i.test(
+      title,
+    )
+  )
+    add("MM", 55);
+  if (
+    /\bSD|SALES\s+AND\s+DISTRIBUTION|SALES & DISTRIBUTION|ORDER TO CASH|OTC|O2C\b/i.test(
+      title,
+    )
+  )
+    add("SD", 55);
   if (/\bPP|PRODUCTION PLANNING|MRP\b/i.test(title)) add("PP", 50);
   if (/\bPM|PLANT MAINTENANCE|EAM\b/i.test(title)) add("PM", 50);
   if (/\bPS|PROJECT SYSTEM|PROJECT SYSTEMS|WBS\b/i.test(title)) add("PS", 50);
-  if (/\bFICO|FI\/CO|FI CO|SAP FI\b|SAP CO\b|FINANCE|FINANCIAL|FSCM|TRM|CO-PA|COPA\b/i.test(title)) add("FICO", 50);
+  if (
+    /\bFICO|FI\/CO|FI CO|SAP FI\b|SAP CO\b|FINANCE|FINANCIAL|FSCM|TRM|CO-PA|COPA\b/i.test(
+      title,
+    )
+  )
+    add("FICO", 50);
 
   const bodySignals = moduleSignalsFromText(all);
   for (const [module, present] of Object.entries(bodySignals)) {
@@ -649,13 +777,29 @@ function bestSapModuleFromText(rawInput: any, currentModule?: string) {
   }
 
   // FICO submodules support FICO, but should not beat explicit MM/SD/PS/BW title.
-  const ficoDepth =
-    (all.match(/\b(GL|AP|AR|AA|COPA|CO-PA|FSCM|TRM|CONTROLLING|GENERAL LEDGER|ACCOUNTS PAYABLE|ACCOUNTS RECEIVABLE|ASSET ACCOUNTING)\b/g) || []).length;
+  const ficoDepth = (
+    all.match(
+      /\b(GL|AP|AR|AA|COPA|CO-PA|FSCM|TRM|CONTROLLING|GENERAL LEDGER|ACCOUNTS PAYABLE|ACCOUNTS RECEIVABLE|ASSET ACCOUNTING)\b/g,
+    ) || []
+  ).length;
   add("FICO", Math.min(ficoDepth * 3, 24));
 
   // Priority hierarchy when evidence is close:
   // IS-U explicit > ABAP > BASIS > BW > TM > EWM > MM > SD > PP > PM > PS > FICO
-  const priority = ["IS-U", "ABAP", "BASIS", "BW", "TM", "EWM", "MM", "SD", "PP", "PM", "PS", "FICO"];
+  const priority = [
+    "IS-U",
+    "ABAP",
+    "BASIS",
+    "BW",
+    "TM",
+    "EWM",
+    "MM",
+    "SD",
+    "PP",
+    "PM",
+    "PS",
+    "FICO",
+  ];
 
   // If explicit non-FICO title exists, FICO must not override.
   const explicitNonFicoTitle = priority
@@ -675,7 +819,11 @@ function bestSapModuleFromText(rawInput: any, currentModule?: string) {
   return score > 0 ? winner : "UNKNOWN";
 }
 
-function cleanSecondaryModules(rawModules: any, primaryModule: string, evidenceText: any) {
+function cleanSecondaryModules(
+  rawModules: any,
+  primaryModule: string,
+  evidenceText: any,
+) {
   const evidence = String(evidenceText || "");
   const modules = new Set<string>();
 
@@ -683,20 +831,37 @@ function cleanSecondaryModules(rawModules: any, primaryModule: string, evidenceT
     if (!module || module === primaryModule || module === "UNKNOWN") return;
 
     const signals = moduleSignalsFromText(evidence);
-    if (signals[module as keyof ReturnType<typeof moduleSignalsFromText>]) modules.add(module);
+    if (signals[module as keyof ReturnType<typeof moduleSignalsFromText>])
+      modules.add(module);
   };
 
   if (Array.isArray(rawModules)) {
     for (const m of rawModules) addIfEvidence(String(m || "").toUpperCase());
   } else if (typeof rawModules === "string") {
-    for (const m of rawModules.split(/[,\|;/]+/)) addIfEvidence(String(m || "").trim().toUpperCase());
+    for (const m of rawModules.split(/[,\|;/]+/))
+      addIfEvidence(
+        String(m || "")
+          .trim()
+          .toUpperCase(),
+      );
   }
 
   // FICO submodules are allowed as secondary details for FICO profiles.
   const upper = evidence.toUpperCase();
   if (primaryModule === "FICO") {
-    for (const sub of ["GL", "AP", "AR", "AA", "COPA", "CO-PA", "FSCM", "TRM", "PS"]) {
-      if (new RegExp(`\\b${sub.replace("-", "[- ]?")}\\b`, "i").test(upper)) modules.add(sub === "CO-PA" ? "COPA" : sub);
+    for (const sub of [
+      "GL",
+      "AP",
+      "AR",
+      "AA",
+      "COPA",
+      "CO-PA",
+      "FSCM",
+      "TRM",
+      "PS",
+    ]) {
+      if (new RegExp(`\\b${sub.replace("-", "[- ]?")}\\b`, "i").test(upper))
+        modules.add(sub === "CO-PA" ? "COPA" : sub);
     }
   }
 
@@ -706,10 +871,11 @@ function cleanSecondaryModules(rawModules: any, primaryModule: string, evidenceT
     modules.delete("ISU");
   }
 
-  return filterSecondaryModulesForPrimarySave(primaryModule, Array.from(modules));
+  return filterSecondaryModulesForPrimarySave(
+    primaryModule,
+    Array.from(modules),
+  );
 }
-
-
 
 function forcePrimaryModuleFromHeader(rawInput: any) {
   const header = String(rawInput || "")
@@ -718,15 +884,60 @@ function forcePrimaryModuleFromHeader(rawInput: any) {
     .join(" ")
     .toUpperCase();
 
-  if (/\b(SAP\s+SECURITY|SECURITY\s*&\s*AUTHORI[ZS]ATION|SECURITY\s+AND\s+AUTHORI[ZS]ATION|AUTHORI[ZS]ATION|GRC)\b/.test(header)) return "BASIS";
-  if (/\b(SUCCESSFACTORS|SUCCESS\s+FACTORS|SAP\s+SF|EMPLOYEE\s+CENTRAL|SF\s+EC|HXM)\b/.test(header)) return "SUCCESSFACTORS";
-  if (/\b(SAP\s+BASIS|BASIS\s+CONSULTANT|SOLUTION\s+MANAGER|SOLMAN|NETWEAVER|HANA\s+ADMIN)\b/.test(header)) return "BASIS";
-  if (/\b(SAP\s+SD|SD\s+FUNCTIONAL|SALES\s+AND\s+DISTRIBUTION|ORDER\s+TO\s+CASH|OTC|O2C)\b/.test(header)) return "SD";
-  if (/\b(SAP\s+MM|MM\s+FUNCTIONAL|MATERIALS?\s+MANAGEMENT|PROCUREMENT|P2P|SOURCE\s+TO\s+PAY)\b/.test(header)) return "MM";
-  if (/\b(SAP\s+FICO|SAP\s+FI\/CO|FI\/CO|FICO|SAP\s+FI\b|SAP\s+CO\b|CFIN|CENTRAL\s+FINANCE)\b/.test(header)) return "FICO";
-  if (/\b(SAP\s+ABAP|ABAP\s+DEVELOPER|ABAP\s+CONSULTANT|TECHNICAL\s+CONSULTANT|RICEF|BAPI|BADI)\b/.test(header)) return "ABAP";
-  if (/\b(SAP\s+BW|SAP\s+BI|BI\s+CONSULTANT|SAP\s+BO|BOBJ|BUSINESS\s+OBJECTS|BW\/4HANA|SAP\s+ANALYTICS\s+CLOUD|SAC|DATASPHERE|BPC)\b/.test(header)) return "BW";
-  if (/\b(SAP\s+BTP|BUSINESS\s+TECHNOLOGY\s+PLATFORM|CAPM|CAP\s+MODEL|CLOUD\s+FOUNDRY|SAP\s+UI5|FIORI)\b/.test(header)) return "BTP";
+  if (
+    /\b(SAP\s+SECURITY|SECURITY\s*&\s*AUTHORI[ZS]ATION|SECURITY\s+AND\s+AUTHORI[ZS]ATION|AUTHORI[ZS]ATION|GRC)\b/.test(
+      header,
+    )
+  )
+    return "BASIS";
+  if (
+    /\b(SUCCESSFACTORS|SUCCESS\s+FACTORS|SAP\s+SF|EMPLOYEE\s+CENTRAL|SF\s+EC|HXM)\b/.test(
+      header,
+    )
+  )
+    return "SUCCESSFACTORS";
+  if (
+    /\b(SAP\s+BASIS|BASIS\s+CONSULTANT|SOLUTION\s+MANAGER|SOLMAN|NETWEAVER|HANA\s+ADMIN)\b/.test(
+      header,
+    )
+  )
+    return "BASIS";
+  if (
+    /\b(SAP\s+SD|SD\s+FUNCTIONAL|SALES\s+AND\s+DISTRIBUTION|ORDER\s+TO\s+CASH|OTC|O2C)\b/.test(
+      header,
+    )
+  )
+    return "SD";
+  if (
+    /\b(SAP\s+MM|MM\s+FUNCTIONAL|MATERIALS?\s+MANAGEMENT|PROCUREMENT|P2P|SOURCE\s+TO\s+PAY)\b/.test(
+      header,
+    )
+  )
+    return "MM";
+  if (
+    /\b(SAP\s+FICO|SAP\s+FI\/CO|FI\/CO|FICO|SAP\s+FI\b|SAP\s+CO\b|CFIN|CENTRAL\s+FINANCE)\b/.test(
+      header,
+    )
+  )
+    return "FICO";
+  if (
+    /\b(SAP\s+ABAP|ABAP\s+DEVELOPER|ABAP\s+CONSULTANT|TECHNICAL\s+CONSULTANT|RICEF|BAPI|BADI)\b/.test(
+      header,
+    )
+  )
+    return "ABAP";
+  if (
+    /\b(SAP\s+BW|SAP\s+BI|BI\s+CONSULTANT|SAP\s+BO|BOBJ|BUSINESS\s+OBJECTS|BW\/4HANA|SAP\s+ANALYTICS\s+CLOUD|SAC|DATASPHERE|BPC)\b/.test(
+      header,
+    )
+  )
+    return "BW";
+  if (
+    /\b(SAP\s+BTP|BUSINESS\s+TECHNOLOGY\s+PLATFORM|CAPM|CAP\s+MODEL|CLOUD\s+FOUNDRY|SAP\s+UI5|FIORI)\b/.test(
+      header,
+    )
+  )
+    return "BTP";
   if (/\b(SAP\s+EWM|EXTENDED\s+WAREHOUSE)\b/.test(header)) return "EWM";
   if (/\b(SAP\s+TM|TRANSPORTATION\s+MANAGEMENT)\b/.test(header)) return "TM";
   if (/\b(SAP\s+PP|PRODUCTION\s+PLANNING|MRP)\b/.test(header)) return "PP";
@@ -735,7 +946,6 @@ function forcePrimaryModuleFromHeader(rawInput: any) {
 
   return null;
 }
-
 
 function deriveRoleType(candidate: any, primaryModule?: string) {
   const module = String(primaryModule || "").toUpperCase();
@@ -758,7 +968,11 @@ function deriveRoleType(candidate: any, primaryModule?: string) {
   if (["ABAP", "BASIS", "BW"].includes(module)) return "Technical";
   if (module && module !== "UNKNOWN") return "SAP Functional";
 
-  if (/\b(ABAP|BASIS|BW|BI|BOBJ|TECHNICAL|DEVELOPER|RICEF|BAPI|BADI|IDOC)\b/i.test(text)) {
+  if (
+    /\b(ABAP|BASIS|BW|BI|BOBJ|TECHNICAL|DEVELOPER|RICEF|BAPI|BADI|IDOC)\b/i.test(
+      text,
+    )
+  ) {
     return "Technical";
   }
 
@@ -771,59 +985,115 @@ function deriveRoleType(candidate: any, primaryModule?: string) {
   return "Other";
 }
 
-
-
-function countProjectSignals(rawText: any, productionSap: any, signals: AnyRecord, cleanCandidate: AnyRecord) {
+function countProjectSignals(
+  rawText: any,
+  productionSap: any,
+  signals: AnyRecord,
+  cleanCandidate: AnyRecord,
+) {
   const text = sanitizeString(rawText).toUpperCase();
-  const count = (re: RegExp, cap = 12) => Math.min((text.match(re) || []).length, cap);
+  const count = (re: RegExp, cap = 12) =>
+    Math.min((text.match(re) || []).length, cap);
 
   const implementation =
-    safeNumber(signals.implementationProjects || cleanCandidate.implementation_project_count || cleanCandidate.implementation_projects) ||
+    safeNumber(
+      signals.implementationProjects ||
+        cleanCandidate.implementation_project_count ||
+        cleanCandidate.implementation_projects,
+    ) ||
     Math.max(
       safeNumber(productionSap?.projectAuthority?.implementation),
-      count(/\b(IMPLEMENTATION|IMPLEMENTED|FULL\s+CYCLE|FULL[-\s]?LIFE[-\s]?CYCLE|END[-\s]?TO[-\s]?END|E2E|GREENFIELD|BROWNFIELD|BLUEPRINT|CONFIGURATION)\b/g)
+      count(
+        /\b(IMPLEMENTATION|IMPLEMENTED|FULL\s+CYCLE|FULL[-\s]?LIFE[-\s]?CYCLE|END[-\s]?TO[-\s]?END|E2E|GREENFIELD|BROWNFIELD|BLUEPRINT|CONFIGURATION)\b/g,
+      ),
     );
 
   const rollout =
-    safeNumber(signals.rolloutProjects || cleanCandidate.rollout_project_count || cleanCandidate.rollout_projects) ||
+    safeNumber(
+      signals.rolloutProjects ||
+        cleanCandidate.rollout_project_count ||
+        cleanCandidate.rollout_projects,
+    ) ||
     Math.max(
       safeNumber(productionSap?.projectAuthority?.rollout),
-      count(/\b(ROLLOUT|ROLL\s*OUT|GLOBAL\s+TEMPLATE|LOCALI[ZS]ATION|COUNTRY\s+ROLL\s*OUT)\b/g)
+      count(
+        /\b(ROLLOUT|ROLL\s*OUT|GLOBAL\s+TEMPLATE|LOCALI[ZS]ATION|COUNTRY\s+ROLL\s*OUT)\b/g,
+      ),
     );
 
   const ams =
-    safeNumber(signals.amsProjects || cleanCandidate.ams_support_project_count || cleanCandidate.ams_project_count || cleanCandidate.ams_projects) ||
+    safeNumber(
+      signals.amsProjects ||
+        cleanCandidate.ams_support_project_count ||
+        cleanCandidate.ams_project_count ||
+        cleanCandidate.ams_projects,
+    ) ||
     Math.max(
-      safeNumber(productionSap?.projectAuthority?.ams) + safeNumber(productionSap?.projectAuthority?.support),
-      count(/\b(AMS|APPLICATION\s+MANAGED\s+SERVICES|APPLICATION\s+MAINTENANCE|SUPPORT|PRODUCTION\s+SUPPORT|HYPERCARE|L2|L3|INCIDENT|TICKET|CHANGE\s+REQUEST|CR)\b/g)
+      safeNumber(productionSap?.projectAuthority?.ams) +
+        safeNumber(productionSap?.projectAuthority?.support),
+      count(
+        /\b(AMS|APPLICATION\s+MANAGED\s+SERVICES|APPLICATION\s+MAINTENANCE|SUPPORT|PRODUCTION\s+SUPPORT|HYPERCARE|L2|L3|INCIDENT|TICKET|CHANGE\s+REQUEST|CR)\b/g,
+      ),
     );
 
   const migration =
-    safeNumber(signals.migrationProjects || cleanCandidate.migration_project_count || cleanCandidate.migration_projects) ||
+    safeNumber(
+      signals.migrationProjects ||
+        cleanCandidate.migration_project_count ||
+        cleanCandidate.migration_projects,
+    ) ||
     Math.max(
       safeNumber(productionSap?.projectAuthority?.migration),
-      count(/\b(MIGRATION|DATA\s+MIGRATION|CONVERSION|LTMC|LSMW|BODS)\b/g)
+      count(/\b(MIGRATION|DATA\s+MIGRATION|CONVERSION|LTMC|LSMW|BODS)\b/g),
     );
 
   const s4hana =
-    safeNumber(signals.s4hanaProjects || cleanCandidate.s4hana_project_count || cleanCandidate.s4hana_projects) ||
-    count(/\b(S\/4HANA|S4HANA|S4\s+HANA|SAP\s+S\/4|SAP\s+S4|PUBLIC\s+CLOUD|PRIVATE\s+CLOUD|RISE\s+WITH\s+SAP)\b/g);
+    safeNumber(
+      signals.s4hanaProjects ||
+        cleanCandidate.s4hana_project_count ||
+        cleanCandidate.s4hana_projects,
+    ) ||
+    count(
+      /\b(S\/4HANA|S4HANA|S4\s+HANA|SAP\s+S\/4|SAP\s+S4|PUBLIC\s+CLOUD|PRIVATE\s+CLOUD|RISE\s+WITH\s+SAP)\b/g,
+    );
 
   const s4Implementation =
-    safeNumber(signals.s4ImplementationProjects || cleanCandidate.s4_implementation_count || cleanCandidate.s4_implementation_projects) ||
-    count(/\b(S\/4HANA|S4HANA|S4\s+HANA|SAP\s+S\/4|SAP\s+S4).{0,80}\b(IMPLEMENTATION|GREENFIELD|BROWNFIELD|CONVERSION|MIGRATION)\b/g);
+    safeNumber(
+      signals.s4ImplementationProjects ||
+        cleanCandidate.s4_implementation_count ||
+        cleanCandidate.s4_implementation_projects,
+    ) ||
+    count(
+      /\b(S\/4HANA|S4HANA|S4\s+HANA|SAP\s+S\/4|SAP\s+S4).{0,80}\b(IMPLEMENTATION|GREENFIELD|BROWNFIELD|CONVERSION|MIGRATION)\b/g,
+    );
 
   const s4Support =
-    safeNumber(signals.s4AmsProjects || cleanCandidate.s4_support_count || cleanCandidate.s4_ams_projects) ||
-    count(/\b(S\/4HANA|S4HANA|S4\s+HANA|SAP\s+S\/4|SAP\s+S4).{0,80}\b(SUPPORT|AMS|HYPERCARE|MAINTENANCE)\b/g);
+    safeNumber(
+      signals.s4AmsProjects ||
+        cleanCandidate.s4_support_count ||
+        cleanCandidate.s4_ams_projects,
+    ) ||
+    count(
+      /\b(S\/4HANA|S4HANA|S4\s+HANA|SAP\s+S\/4|SAP\s+S4).{0,80}\b(SUPPORT|AMS|HYPERCARE|MAINTENANCE)\b/g,
+    );
 
   const greenfield =
-    safeNumber(cleanCandidate.s4_greenfield_count || cleanCandidate.greenfield_projects) ||
-    Math.max(safeNumber(productionSap?.projectAuthority?.greenfield), count(/\b(GREENFIELD|NEW\s+IMPLEMENTATION)\b/g));
+    safeNumber(
+      cleanCandidate.s4_greenfield_count || cleanCandidate.greenfield_projects,
+    ) ||
+    Math.max(
+      safeNumber(productionSap?.projectAuthority?.greenfield),
+      count(/\b(GREENFIELD|NEW\s+IMPLEMENTATION)\b/g),
+    );
 
   const brownfield =
-    safeNumber(cleanCandidate.s4_conversion_count || cleanCandidate.brownfield_projects) ||
-    Math.max(safeNumber(productionSap?.projectAuthority?.brownfield), count(/\b(BROWNFIELD|SYSTEM\s+CONVERSION|ECC\s+TO\s+S\/4)\b/g));
+    safeNumber(
+      cleanCandidate.s4_conversion_count || cleanCandidate.brownfield_projects,
+    ) ||
+    Math.max(
+      safeNumber(productionSap?.projectAuthority?.brownfield),
+      count(/\b(BROWNFIELD|SYSTEM\s+CONVERSION|ECC\s+TO\s+S\/4)\b/g),
+    );
 
   return {
     implementation,
@@ -839,42 +1109,97 @@ function countProjectSignals(rawText: any, productionSap: any, signals: AnyRecor
   };
 }
 
-
 function explicitPrimaryFromTitleForSave(value: any) {
   const title = sanitizeString(String(value || "")).toUpperCase();
 
-  if (/\b(SAP\s+FICO|FI\/CO|FICO|SAP\s+FI\b|SAP\s+CO\b|CFIN|CENTRAL\s+FINANCE|FI\s+CONSULTANT|CO\s+CONSULTANT)\b/i.test(title)) return "FICO";
-  if (/\b(SAP\s+SD\b|SD\s+CONSULTANT|SD\s+FUNCTIONAL|SALES\s+AND\s+DISTRIBUTION|ORDER\s+TO\s+CASH|O2C|OTC|Q2C)\b/i.test(title)) return "SD";
-  if (/\b(SAP\s+MM\b|MM\s+CONSULTANT|MM\s+FUNCTIONAL|MATERIALS?\s+MANAGEMENT|PROCUREMENT|P2P|SOURCE\s+TO\s+PAY)\b/i.test(title)) return "MM";
-  if (/\b(SAP\s+PM\b|PM\s+CONSULTANT|PLANT\s+MAINTENANCE|EAM)\b/i.test(title)) return "PM";
-  if (/\b(SAP\s+PS\b|PS\s+CONSULTANT|PROJECT\s+SYSTEMS?|WBS)\b/i.test(title)) return "PS";
-  if (/\b(SAP\s+BI|BI\s+CONSULTANT|SAP\s+BW|BW\/4HANA|BW4HANA|SAP\s+ANALYTICS|ANALYTICS\s+CONSULTANT|SAC|DATASPHERE|DWC|BOBJ|BUSINESS\s+OBJECTS|BPC)\b/i.test(title)) return "BW";
-  if (/\b(SAP\s+BASIS|BASIS\s+CONSULTANT|NETWEAVER|SOLMAN|SOLUTION\s+MANAGER|SAP\s+SECURITY|AUTHORI[ZS]ATION|GRC)\b/i.test(title)) return "BASIS";
-  if (/\b(SAP\s+ABAP|ABAP\s+DEVELOPER|ABAP\s+CONSULTANT|TECHNICAL\s+CONSULTANT|RICEF|WRICEF)\b/i.test(title)) return "ABAP";
-  if (/\b(SAP\s+BTP|BUSINESS\s+TECHNOLOGY\s+PLATFORM|SAP\s+CLOUD\s+PLATFORM|INTEGRATION\s+SUITE|SAP\s+CPI|CLOUD\s+FOUNDRY|CAP\s+MODEL)\b/i.test(title)) return "BTP";
-  if (/\b(SAP\s+BODS|BODS|DATA\s+SERVICES|DATA\s+MIGRATION\s+CONSULTANT)\b/i.test(title)) return "BODS";
-  if (/\b(SAP\s+IS[-\s]?U|IS[-\s]?U|SAP\s+ISU|DEVICE\s+MANAGEMENT|METER[-\s]?TO[-\s]?CASH)\b/i.test(title)) return "IS-U";
-  if (/\b(SAP\s+SUCCESSFACTORS|SUCCESSFACTORS|SUCCESS\s+FACTORS|SAP\s+SF\b|EMPLOYEE\s+CENTRAL|SF\s+EC|HXM)\b/i.test(title)) return "SUCCESSFACTORS";
+  if (
+    /\b(SAP\s+FICO|FI\/CO|FICO|SAP\s+FI\b|SAP\s+CO\b|CFIN|CENTRAL\s+FINANCE|FI\s+CONSULTANT|CO\s+CONSULTANT)\b/i.test(
+      title,
+    )
+  )
+    return "FICO";
+  if (
+    /\b(SAP\s+SD\b|SD\s+CONSULTANT|SD\s+FUNCTIONAL|SALES\s+AND\s+DISTRIBUTION|ORDER\s+TO\s+CASH|O2C|OTC|Q2C)\b/i.test(
+      title,
+    )
+  )
+    return "SD";
+  if (
+    /\b(SAP\s+MM\b|MM\s+CONSULTANT|MM\s+FUNCTIONAL|MATERIALS?\s+MANAGEMENT|PROCUREMENT|P2P|SOURCE\s+TO\s+PAY)\b/i.test(
+      title,
+    )
+  )
+    return "MM";
+  if (/\b(SAP\s+PM\b|PM\s+CONSULTANT|PLANT\s+MAINTENANCE|EAM)\b/i.test(title))
+    return "PM";
+  if (/\b(SAP\s+PS\b|PS\s+CONSULTANT|PROJECT\s+SYSTEMS?|WBS)\b/i.test(title))
+    return "PS";
+  if (
+    /\b(SAP\s+BI|BI\s+CONSULTANT|SAP\s+BW|BW\/4HANA|BW4HANA|SAP\s+ANALYTICS|ANALYTICS\s+CONSULTANT|SAC|DATASPHERE|DWC|BOBJ|BUSINESS\s+OBJECTS|BPC)\b/i.test(
+      title,
+    )
+  )
+    return "BW";
+  if (
+    /\b(SAP\s+BASIS|BASIS\s+CONSULTANT|NETWEAVER|SOLMAN|SOLUTION\s+MANAGER|SAP\s+SECURITY|AUTHORI[ZS]ATION|GRC)\b/i.test(
+      title,
+    )
+  )
+    return "BASIS";
+  if (
+    /\b(SAP\s+ABAP|ABAP\s+DEVELOPER|ABAP\s+CONSULTANT|TECHNICAL\s+CONSULTANT|RICEF|WRICEF)\b/i.test(
+      title,
+    )
+  )
+    return "ABAP";
+  if (
+    /\b(SAP\s+BTP|BUSINESS\s+TECHNOLOGY\s+PLATFORM|SAP\s+CLOUD\s+PLATFORM|INTEGRATION\s+SUITE|SAP\s+CPI|CLOUD\s+FOUNDRY|CAP\s+MODEL)\b/i.test(
+      title,
+    )
+  )
+    return "BTP";
+  if (
+    /\b(SAP\s+BODS|BODS|DATA\s+SERVICES|DATA\s+MIGRATION\s+CONSULTANT)\b/i.test(
+      title,
+    )
+  )
+    return "BODS";
+  if (
+    /\b(SAP\s+IS[-\s]?U|IS[-\s]?U|SAP\s+ISU|DEVICE\s+MANAGEMENT|METER[-\s]?TO[-\s]?CASH)\b/i.test(
+      title,
+    )
+  )
+    return "IS-U";
+  if (
+    /\b(SAP\s+SUCCESSFACTORS|SUCCESSFACTORS|SUCCESS\s+FACTORS|SAP\s+SF\b|EMPLOYEE\s+CENTRAL|SF\s+EC|HXM)\b/i.test(
+      title,
+    )
+  )
+    return "SUCCESSFACTORS";
 
   return null;
 }
 
 function strongSuccessFactorsTitleEvidenceForSave(value: any) {
-  return /\b(SAP\s+SUCCESSFACTORS|SUCCESSFACTORS|SUCCESS\s+FACTORS|SAP\s+SF\b|SF\s+CONSULTANT|EMPLOYEE\s+CENTRAL|SF\s+EC|HXM)\b/i.test(String(value || ""));
+  return /\b(SAP\s+SUCCESSFACTORS|SUCCESSFACTORS|SUCCESS\s+FACTORS|SAP\s+SF\b|SF\s+CONSULTANT|EMPLOYEE\s+CENTRAL|SF\s+EC|HXM)\b/i.test(
+    String(value || ""),
+  );
 }
 
 function hasTitleModuleSignalForSave(value: any) {
-  return /\b(SAP|FICO|FI\/CO|ABAP|BASIS|BW|BI|BTP|SUCCESSFACTORS|SUCCESS\s+FACTORS|MM|SD|PM|PS|PP|EWM|TM|FIORI|UI5|SECURITY|GRC|PLANT\s+MAINTENANCE|PROJECT\s+SYSTEMS?|MATERIALS?\s+MANAGEMENT|ORDER\s+TO\s+CASH|SALES\s+AND\s+DISTRIBUTION)\b/i.test(String(value || ""));
+  return /\b(SAP|FICO|FI\/CO|ABAP|BASIS|BW|BI|BTP|SUCCESSFACTORS|SUCCESS\s+FACTORS|MM|SD|PM|PS|PP|EWM|TM|FIORI|UI5|SECURITY|GRC|PLANT\s+MAINTENANCE|PROJECT\s+SYSTEMS?|MATERIALS?\s+MANAGEMENT|ORDER\s+TO\s+CASH|SALES\s+AND\s+DISTRIBUTION)\b/i.test(
+    String(value || ""),
+  );
 }
 
 function isGenericNonSapTitleForSave(value: any) {
   const title = sanitizeString(String(value || ""));
   if (!title) return true;
   if (hasTitleModuleSignalForSave(title)) return false;
-  return /\b(MIS\s+MANAGER|ASS?ISTANT\s+BRANCH\s+MANAGER|BRANCH\s+MANAGER|SALES\s+MANAGER|ACCOUNT\s+MANAGER|HR\s+MANAGER|ADMIN\s+MANAGER|FINANCE\s+MANAGER)\b/i.test(title);
+  return /\b(MIS\s+MANAGER|ASS?ISTANT\s+BRANCH\s+MANAGER|BRANCH\s+MANAGER|SALES\s+MANAGER|ACCOUNT\s+MANAGER|HR\s+MANAGER|ADMIN\s+MANAGER|FINANCE\s+MANAGER)\b/i.test(
+    title,
+  );
 }
-
-
 
 function isVeryGenericTitleForSave(value: any) {
   const title = sanitizeString(String(value || ""))
@@ -886,11 +1211,15 @@ function isVeryGenericTitleForSave(value: any) {
   if (!title) return true;
   if (explicitPrimaryFromTitleForSave(title)) return false;
 
-  return /^(manager|senior\s+manager|assistant\s+manager|assitant\s+manager|consultant|senior\s+consultant|lead\s+consultant|business\s+consultant|functional\s+consultant|technical\s+consultant|project\s+manager|it\s+project\s+manager|program\s+manager|product\s+manager|territory\s+manager|sales\s+manager|operation[s]?\s+manager|service\s+delivery\s+manager|client\s+service\s+manager|freelance\s+technical\s+consultant)$/i.test(title);
+  return /^(manager|senior\s+manager|assistant\s+manager|assitant\s+manager|consultant|senior\s+consultant|lead\s+consultant|business\s+consultant|functional\s+consultant|technical\s+consultant|project\s+manager|it\s+project\s+manager|program\s+manager|product\s+manager|territory\s+manager|sales\s+manager|operation[s]?\s+manager|service\s+delivery\s+manager|client\s+service\s+manager|freelance\s+technical\s+consultant)$/i.test(
+    title,
+  );
 }
 
 function hasStrongSapEvidenceForSave(value: any) {
-  return /\b(SAP\s+FICO|SAP\s+FI\b|SAP\s+CO\b|FI\/CO|FICO|CFIN|CENTRAL\s+FINANCE|SAP\s+SD\b|SAP\s+MM\b|SAP\s+PM\b|SAP\s+PS\b|SAP\s+PP\b|SAP\s+ABAP|SAP\s+BASIS|SAP\s+BW|SAP\s+BI|SAP\s+BTP|SAP\s+SECURITY|SUCCESSFACTORS|SUCCESS\s+FACTORS|SAP\s+SF\b|S\/4HANA|S4HANA|SAP\s+S4|SAP\s+HANA|SAP\s+EWM|SAP\s+TM|SAP\s+IS[-\s]?U|SAP\s+BODS)\b/i.test(String(value || ""));
+  return /\b(SAP\s+FICO|SAP\s+FI\b|SAP\s+CO\b|FI\/CO|FICO|CFIN|CENTRAL\s+FINANCE|SAP\s+SD\b|SAP\s+MM\b|SAP\s+PM\b|SAP\s+PS\b|SAP\s+PP\b|SAP\s+ABAP|SAP\s+BASIS|SAP\s+BW|SAP\s+BI|SAP\s+BTP|SAP\s+SECURITY|SUCCESSFACTORS|SUCCESS\s+FACTORS|SAP\s+SF\b|S\/4HANA|S4HANA|SAP\s+S4|SAP\s+HANA|SAP\s+EWM|SAP\s+TM|SAP\s+IS[-\s]?U|SAP\s+BODS)\b/i.test(
+    String(value || ""),
+  );
 }
 
 function isBadExtractedNameForSave(value: any) {
@@ -909,16 +1238,28 @@ function isBadExtractedNameForSave(value: any) {
   if (/@|https?:|www\.|\+?\d[\d\s().-]{5,}\d/.test(name)) return true;
   if (name.split(/\s+/).length > 6) return true;
 
-  if (/\b(candidate information|personal information|personal particulars|full name|review required|profile under review|core expertise|technical skills|professional summary|career summary|work experience|employment history|from date|to date|date of birth|year of birth|nationality|gender|nric|address|telephone|mobile no|email|academic qualification|academic qualifications|education|certification|project summary|projects as reference|shared services|data and system governance|team leader webmethod|about epicor|foundit|head management|to achieve|operational excellence|proactive and highly accountable|accounts and new account acquisition|collaboration and process optimization|greenfield neobank client|analytical problem solving abilities|risk analysis and mitigation planning|avoid recurrence|hotel web based system|construction occupational|reputable organization|release strategy|core modules|key accomplishments|bachelor in|device management|the better|heworldworks)\b/i.test(lower)) {
+  if (
+    /\b(candidate information|personal information|personal particulars|full name|review required|profile under review|core expertise|technical skills|professional summary|career summary|work experience|employment history|from date|to date|date of birth|year of birth|nationality|gender|nric|address|telephone|mobile no|email|academic qualification|academic qualifications|education|certification|project summary|projects as reference|shared services|data and system governance|team leader webmethod|about epicor|foundit|head management|to achieve|operational excellence|proactive and highly accountable|accounts and new account acquisition|collaboration and process optimization|greenfield neobank client|analytical problem solving abilities|risk analysis and mitigation planning|avoid recurrence|hotel web based system|construction occupational|reputable organization|release strategy|core modules|key accomplishments|bachelor in|device management|the better|heworldworks)\b/i.test(
+      lower,
+    )
+  ) {
     return true;
   }
 
-  if (/\b(manager|consultant|developer|architect|analyst|specialist|officer|executive|engineer|lead|head|director|project|program|product|territory|sales|service|delivery|operation|business|functional|technical|senior|junior|associate|position|title|role|level)\b/i.test(name) && name.split(/\s+/).length <= 3) {
+  if (
+    /\b(manager|consultant|developer|architect|analyst|specialist|officer|executive|engineer|lead|head|director|project|program|product|territory|sales|service|delivery|operation|business|functional|technical|senior|junior|associate|position|title|role|level)\b/i.test(
+      name,
+    ) &&
+    name.split(/\s+/).length <= 3
+  ) {
     return true;
   }
 
   // Sentence-like names are usually bad parser picks.
-  if (/\b(and|or|with|for|from|to|of|in|on|as|at|the|a)\b/i.test(name) && /[.!?]$/.test(String(value || "").trim())) {
+  if (
+    /\b(and|or|with|for|from|to|of|in|on|as|at|the|a)\b/i.test(name) &&
+    /[.!?]$/.test(String(value || "").trim())
+  ) {
     return true;
   }
 
@@ -926,9 +1267,10 @@ function isBadExtractedNameForSave(value: any) {
 }
 
 function normalizeFinalCandidateNameForSave(value: any) {
-  return isBadExtractedNameForSave(value) ? "Profile Under Review" : sanitizeString(value);
+  return isBadExtractedNameForSave(value)
+    ? "Profile Under Review"
+    : sanitizeString(value);
 }
-
 
 function financeDominatesBtpForSave(value: any) {
   const text = String(value || "").toUpperCase();
@@ -954,7 +1296,7 @@ function financeDominatesBtpForSave(value: any) {
     /\bTREASURY\b/g,
     /\bCENTRAL\s+FINANCE\b/g,
     /\bCFIN\b/g,
-  ].reduce((sum, rx) => sum + ((text.match(rx) || []).length), 0);
+  ].reduce((sum, rx) => sum + (text.match(rx) || []).length, 0);
 
   const btpStrongMatches = [
     /\bSAP\s+BTP\b/g,
@@ -964,7 +1306,7 @@ function financeDominatesBtpForSave(value: any) {
     /\bINTEGRATION\s+SUITE\b/g,
     /\bCAP\s+MODEL\b/g,
     /\bEXTENSION\s+SUITE\b/g,
-  ].reduce((sum, rx) => sum + ((text.match(rx) || []).length), 0);
+  ].reduce((sum, rx) => sum + (text.match(rx) || []).length, 0);
 
   return financeMatches >= 3 && financeMatches >= btpStrongMatches + 1;
 }
@@ -979,38 +1321,71 @@ function finalPrimaryModuleForSave(options: {
 }) {
   const title = sanitizeString(options.title);
   const explicit = explicitPrimaryFromTitleForSave(title);
-  const evidence = [title, options.rawText, options.productionPrimary, options.signalsPrimary, options.cleanPrimary].join("\n");
+  const evidence = [
+    title,
+    options.rawText,
+    options.productionPrimary,
+    options.signalsPrimary,
+    options.cleanPrimary,
+  ].join("\n");
 
   if (explicit) return explicit;
 
   if (financeDominatesBtpForSave(evidence)) return "FICO";
 
-  const generic = isVeryGenericTitleForSave(title) || isGenericNonSapTitleForSave(title);
+  const generic =
+    isVeryGenericTitleForSave(title) || isGenericNonSapTitleForSave(title);
 
   // If title is generic and raw text does not have strong SAP evidence, do not invent module.
-  if (generic && !hasStrongSapEvidenceForSave(options.rawText)) return "UNKNOWN";
+  if (generic && !hasStrongSapEvidenceForSave(options.rawText))
+    return "UNKNOWN";
 
   // SuccessFactors is only allowed with strong title evidence.
-  if (options.forceSuccessFactors && strongSuccessFactorsTitleEvidenceForSave(title)) return "SUCCESSFACTORS";
+  if (
+    options.forceSuccessFactors &&
+    strongSuccessFactorsTitleEvidenceForSave(title)
+  )
+    return "SUCCESSFACTORS";
 
   // For generic titles, even if body has SAP evidence, require production primary not from weak SF leak.
-  const candidatePrimary = sanitizeString(options.productionPrimary || options.signalsPrimary || options.cleanPrimary || "UNKNOWN").toUpperCase();
+  const candidatePrimary = sanitizeString(
+    options.productionPrimary ||
+      options.signalsPrimary ||
+      options.cleanPrimary ||
+      "UNKNOWN",
+  ).toUpperCase();
 
-  if (candidatePrimary === "BTP" && financeDominatesBtpForSave(evidence) && !/(SAP\s+BTP|BTP\s+(CONSULTANT|ARCHITECT|DEVELOPER|LEAD|SPECIALIST)|BUSINESS\s+TECHNOLOGY\s+PLATFORM)/i.test(title)) {
+  if (
+    candidatePrimary === "BTP" &&
+    financeDominatesBtpForSave(evidence) &&
+    !/(SAP\s+BTP|BTP\s+(CONSULTANT|ARCHITECT|DEVELOPER|LEAD|SPECIALIST)|BUSINESS\s+TECHNOLOGY\s+PLATFORM)/i.test(
+      title,
+    )
+  ) {
     return "FICO";
   }
 
-  if (generic && candidatePrimary === "SUCCESSFACTORS" && !strongSuccessFactorsTitleEvidenceForSave(title)) {
+  if (
+    generic &&
+    candidatePrimary === "SUCCESSFACTORS" &&
+    !strongSuccessFactorsTitleEvidenceForSave(title)
+  ) {
     return "UNKNOWN";
   }
 
   return candidatePrimary || "UNKNOWN";
 }
 
-function finalSecondaryModulesForSave(primary: string, modules: any[], title: any, rawText: any) {
+function finalSecondaryModulesForSave(
+  primary: string,
+  modules: any[],
+  title: any,
+  rawText: any,
+) {
   const source = [title, String(rawText || "").slice(0, 2500)].join("\n");
 
-  if (isVeryGenericTitleForSave(title) && !hasStrongSapEvidenceForSave(source)) return [];
+  if (isVeryGenericTitleForSave(title) && !hasStrongSapEvidenceForSave(source))
+    return [];
 
   // Recruiter-production rule:
   // secondary_modules are specializations within the primary SAP practice.
@@ -1035,11 +1410,17 @@ function containsHumanNameShape(value: any) {
   const parts = name.split(/\s+/).filter(Boolean);
   if (parts.length < 2 || parts.length > 5) return false;
 
-  const capitalizedParts = parts.filter((part) => /^[A-Z][A-Za-z\'.-]{1,}$/.test(part));
+  const capitalizedParts = parts.filter((part) =>
+    /^[A-Z][A-Za-z\'.-]{1,}$/.test(part),
+  );
   return capitalizedParts.length >= Math.min(2, parts.length);
 }
 
-function hasContactSignalForSave(payload: { email?: any; phone?: any; rawText?: any }) {
+function hasContactSignalForSave(payload: {
+  email?: any;
+  phone?: any;
+  rawText?: any;
+}) {
   const email = normalizeEmail(payload.email);
   const phone = normalizePhone(payload.phone);
   const raw = sanitizeString(payload.rawText || "");
@@ -1048,7 +1429,7 @@ function hasContactSignalForSave(payload: { email?: any; phone?: any; rawText?: 
     email ||
       phone ||
       /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(raw) ||
-      /\+?\d[\d\s().-]{7,}\d/.test(raw)
+      /\+?\d[\d\s().-]{7,}\d/.test(raw),
   );
 }
 
@@ -1064,33 +1445,50 @@ function hasResumeStructureForSave(rawInput: any) {
     /\b(CONTACT|EMAIL|MOBILE|PHONE|LINKEDIN)\b/,
   ];
 
-  const hits = positivePatterns.reduce((sum, re) => sum + (re.test(raw) ? 1 : 0), 0);
+  const hits = positivePatterns.reduce(
+    (sum, re) => sum + (re.test(raw) ? 1 : 0),
+    0,
+  );
   return hits >= 2;
 }
 
-function hasSapCandidateEvidenceForSave(rawInput: any, titleInput: any, primaryModule: any) {
+function hasSapCandidateEvidenceForSave(
+  rawInput: any,
+  titleInput: any,
+  primaryModule: any,
+) {
   const raw = sanitizeString(rawInput);
   const title = sanitizeString(titleInput);
   const combined = `${title}\n${raw}`;
 
   if (explicitPrimaryFromTitleForSave(title)) return true;
 
-  if (sanitizeString(primaryModule).toUpperCase() !== "UNKNOWN" && /\bSAP\b/i.test(combined)) return true;
+  if (
+    sanitizeString(primaryModule).toUpperCase() !== "UNKNOWN" &&
+    /\bSAP\b/i.test(combined)
+  )
+    return true;
 
-  return /\b(SAP\s+FICO|SAP\s+FI\b|SAP\s+CO\b|SAP\s+SD\b|SAP\s+MM\b|SAP\s+PM\b|SAP\s+PS\b|SAP\s+PP\b|SAP\s+ABAP|SAP\s+BASIS|SAP\s+BW|SAP\s+BI|SAP\s+BTP|SAP\s+SECURITY|SUCCESSFACTORS|SUCCESS\s+FACTORS|SAP\s+SF\b|S\/4HANA|S4HANA|SAP\s+HANA|SAP\s+EWM|SAP\s+TM|SAP\s+IS[-\s]?U|SAP\s+BODS)\b/i.test(combined);
+  return /\b(SAP\s+FICO|SAP\s+FI\b|SAP\s+CO\b|SAP\s+SD\b|SAP\s+MM\b|SAP\s+PM\b|SAP\s+PS\b|SAP\s+PP\b|SAP\s+ABAP|SAP\s+BASIS|SAP\s+BW|SAP\s+BI|SAP\s+BTP|SAP\s+SECURITY|SUCCESSFACTORS|SUCCESS\s+FACTORS|SAP\s+SF\b|S\/4HANA|S4HANA|SAP\s+HANA|SAP\s+EWM|SAP\s+TM|SAP\s+IS[-\s]?U|SAP\s+BODS)\b/i.test(
+    combined,
+  );
 }
 
 function isDocumentNoiseForSave(rawInput: any, titleInput: any) {
   const raw = sanitizeString(rawInput).toUpperCase();
   const title = sanitizeString(titleInput).toUpperCase();
 
-  if (hasResumeStructureForSave(raw) || hasSapCandidateEvidenceForSave(raw, title, "UNKNOWN")) {
+  if (
+    hasResumeStructureForSave(raw) ||
+    hasSapCandidateEvidenceForSave(raw, title, "UNKNOWN")
+  ) {
     return false;
   }
 
-  return /\b(EMPLOYMENT\s+CONTRACT|PRIVATE\s+&\s+CONFIDENTIAL|TERMS\s+AND\s+CONDITIONS|APPOINTMENT\s+AS|OFFER\s+LETTER|INVOICE|PAYMENT|PURCHASE\s+ORDER|JOB\s+DESCRIPTION|ROLE\s+POSTING|REQUIREMENT|SCOPE\s+OF\s+WORK|PROPOSAL|AGREEMENT|SERVICE\s+ORDER|STATEMENT\s+OF\s+WORK)\b/i.test(raw);
+  return /\b(EMPLOYMENT\s+CONTRACT|PRIVATE\s+&\s+CONFIDENTIAL|TERMS\s+AND\s+CONDITIONS|APPOINTMENT\s+AS|OFFER\s+LETTER|INVOICE|PAYMENT|PURCHASE\s+ORDER|JOB\s+DESCRIPTION|ROLE\s+POSTING|REQUIREMENT|SCOPE\s+OF\s+WORK|PROPOSAL|AGREEMENT|SERVICE\s+ORDER|STATEMENT\s+OF\s+WORK)\b/i.test(
+    raw,
+  );
 }
-
 
 function isTrivialGenericTitleForSave(value: any) {
   const title = sanitizeString(String(value || ""))
@@ -1105,33 +1503,61 @@ function isTrivialGenericTitleForSave(value: any) {
   if (!title) return true;
   if (explicitPrimaryFromTitleForSave(title)) return false;
 
-  return /^(manager|senior manager|assistant manager|assitant manager|consultant|senior consultant|lead consultant|associate consultant|business consultant|functional consultant|technical consultant|implementation consultant|integration consultant|project manager|it project manager|project manager officer|program manager|programme manager|product manager|territory manager|sales manager|operation manager|operations manager|service delivery manager|client service manager|business analyst|junior business analyst|freelance technical consultant|erp functional consultant|erp implementation consultant)$/i.test(title);
+  return /^(manager|senior manager|assistant manager|assitant manager|consultant|senior consultant|lead consultant|associate consultant|business consultant|functional consultant|technical consultant|implementation consultant|integration consultant|project manager|it project manager|project manager officer|program manager|programme manager|product manager|territory manager|sales manager|operation manager|operations manager|service delivery manager|client service manager|business analyst|junior business analyst|freelance technical consultant|erp functional consultant|erp implementation consultant)$/i.test(
+    title,
+  );
 }
 
 function isBadExtractedTitleForSave(value: any) {
-  const title = sanitizeString(String(value || "")).replace(/\s+/g, " ").trim();
+  const title = sanitizeString(String(value || ""))
+    .replace(/\s+/g, " ")
+    .trim();
   const lower = title.toLowerCase();
 
   if (!title) return true;
   if (title.length > 120) return true;
 
-  if (/^(manager|consultant|senior consultant|business consultant|functional consultant|technical consultant|project manager|it project manager)$/i.test(title)) return true;
+  if (
+    /^(manager|consultant|senior consultant|business consultant|functional consultant|technical consultant|project manager|it project manager)$/i.test(
+      title,
+    )
+  )
+    return true;
 
-  if (/\b(position title|current position title|role project management|level:\s*manager|manager position at|for consultant to be successful|possibly one day|tools\s*:|awarded as|well-versed with|involved to help|an experienced technical consultant|experienced human resources consultant|demonstrated history|a project manager managing both|project igfmas|1\. senior manager|2\) financial planner|deployment - test project|mqc - mercury|secondment stat|preferred consultant|for wide-range|worked on all aspect|all aspect of designing)\b/i.test(lower)) {
+  if (
+    /\b(position title|current position title|role project management|level:\s*manager|manager position at|for consultant to be successful|possibly one day|tools\s*:|awarded as|well-versed with|involved to help|an experienced technical consultant|experienced human resources consultant|demonstrated history|a project manager managing both|project igfmas|1\. senior manager|2\) financial planner|deployment - test project|mqc - mercury|secondment stat|preferred consultant|for wide-range|worked on all aspect|all aspect of designing)\b/i.test(
+      lower,
+    )
+  ) {
     return true;
   }
 
   // Sentence-like title from summary/project descriptions.
-  if (/\b(and|or|with|for|from|to|of|in|on|as|at|that|this|the|a)\b/i.test(title) && title.split(/\s+/).length >= 6 && !hasStrongSapEvidenceForSave(title)) {
+  if (
+    /\b(and|or|with|for|from|to|of|in|on|as|at|that|this|the|a)\b/i.test(
+      title,
+    ) &&
+    title.split(/\s+/).length >= 6 &&
+    !hasStrongSapEvidenceForSave(title)
+  ) {
     return true;
   }
 
   return false;
 }
 
-function hasRecruiterQualityContactOrIdentity(input: { name: any; email: any; phone: any; rawText: any }) {
+function hasRecruiterQualityContactOrIdentity(input: {
+  name: any;
+  email: any;
+  phone: any;
+  rawText: any;
+}) {
   const validName = containsHumanNameShape(input.name);
-  const contact = hasContactSignalForSave({ email: input.email, phone: input.phone, rawText: input.rawText });
+  const contact = hasContactSignalForSave({
+    email: input.email,
+    phone: input.phone,
+    rawText: input.rawText,
+  });
 
   return {
     validName,
@@ -1155,14 +1581,22 @@ function shouldHardRejectNoiseForSave(input: {
   const title = sanitizeString(input.title);
   const raw = sanitizeString(input.rawText);
   const primary = sanitizeString(input.primaryModule).toUpperCase();
-  const identity = hasRecruiterQualityContactOrIdentity({ name, email: input.email, phone: input.phone, rawText: raw });
+  const identity = hasRecruiterQualityContactOrIdentity({
+    name,
+    email: input.email,
+    phone: input.phone,
+    rawText: raw,
+  });
   const sapEvidence = hasSapCandidateEvidenceForSave(raw, title, primary);
   const resumeStructure = hasResumeStructureForSave(raw);
-  const genericTitle = isTrivialGenericTitleForSave(title) || isGenericNonSapTitleForSave(title);
+  const genericTitle =
+    isTrivialGenericTitleForSave(title) || isGenericNonSapTitleForSave(title);
   const badTitle = isBadExtractedTitleForSave(title);
   const badName = isBadExtractedNameForSave(name);
   const primaryUnknown = !primary || primary === "UNKNOWN";
-  const totalProjects = safeNumber(input.projectCounts?.total) + safeNumber(input.projectCounts?.s4hana);
+  const totalProjects =
+    safeNumber(input.projectCounts?.total) +
+    safeNumber(input.projectCounts?.s4hana);
   const reasons: string[] = [];
 
   if (isDocumentNoiseForSave(raw, title)) reasons.push("document_noise_not_cv");
@@ -1174,17 +1608,24 @@ function shouldHardRejectNoiseForSave(input: {
   if (primaryUnknown) reasons.push("unknown_primary_module");
 
   // Absolute reject patterns: parser picked headings, sentences, addresses, or generic title with no SAP proof.
-  if (badName && (genericTitle || badTitle || !sapEvidence || primaryUnknown)) return { reject: true, reasons };
-  if (badTitle && primaryUnknown && !sapEvidence) return { reject: true, reasons };
-  if (genericTitle && primaryUnknown && !sapEvidence) return { reject: true, reasons };
-  if (!identity.hasIdentity && (genericTitle || badTitle || !sapEvidence)) return { reject: true, reasons };
-  if (!resumeStructure && !identity.contact && !sapEvidence) return { reject: true, reasons };
+  if (badName && (genericTitle || badTitle || !sapEvidence || primaryUnknown))
+    return { reject: true, reasons };
+  if (badTitle && primaryUnknown && !sapEvidence)
+    return { reject: true, reasons };
+  if (genericTitle && primaryUnknown && !sapEvidence)
+    return { reject: true, reasons };
+  if (!identity.hasIdentity && (genericTitle || badTitle || !sapEvidence))
+    return { reject: true, reasons };
+  if (!resumeStructure && !identity.contact && !sapEvidence)
+    return { reject: true, reasons };
 
   // If there is no SAP evidence and title is not an explicit module title, do not save into SAP talent pool.
-  if (!sapEvidence && !explicitPrimaryFromTitleForSave(title)) return { reject: true, reasons };
+  if (!sapEvidence && !explicitPrimaryFromTitleForSave(title))
+    return { reject: true, reasons };
 
   // Unknown module with generic title and weak project signals should not be saved.
-  if (primaryUnknown && genericTitle && totalProjects === 0) return { reject: true, reasons };
+  if (primaryUnknown && genericTitle && totalProjects === 0)
+    return { reject: true, reasons };
 
   return { reject: false, reasons };
 }
@@ -1208,17 +1649,23 @@ function computeRecruiterNoiseDecision(input: {
   const primary = sanitizeString(input.primaryModule).toUpperCase();
   const years = safeNumber(input.years);
   const projectCounts = input.projectCounts || {};
-  const totalProjects = safeNumber(projectCounts.total) + safeNumber(projectCounts.s4hana);
+  const totalProjects =
+    safeNumber(projectCounts.total) + safeNumber(projectCounts.s4hana);
 
   const hardReject = shouldHardRejectNoiseForSave(input);
   reasons.push(...hardReject.reasons);
 
   const validName = containsHumanNameShape(name);
-  const contact = hasContactSignalForSave({ email: input.email, phone: input.phone, rawText: raw });
+  const contact = hasContactSignalForSave({
+    email: input.email,
+    phone: input.phone,
+    rawText: raw,
+  });
   const resumeStructure = hasResumeStructureForSave(raw);
   const sapEvidence = hasSapCandidateEvidenceForSave(raw, title, primary);
   const explicitTitle = Boolean(explicitPrimaryFromTitleForSave(title));
-  const genericTitle = isTrivialGenericTitleForSave(title) || isGenericNonSapTitleForSave(title);
+  const genericTitle =
+    isTrivialGenericTitleForSave(title) || isGenericNonSapTitleForSave(title);
   const badName = isBadExtractedNameForSave(name);
   const badTitle = isBadExtractedTitleForSave(title);
   const documentNoise = isDocumentNoiseForSave(raw, title);
@@ -1274,15 +1721,23 @@ function computeRecruiterNoiseDecision(input: {
   let action: RecruiterNoiseDecision["action"] = "SAVE";
 
   if (hardReject.reject || documentNoise || score < 35) action = "REJECT";
-  else if (score < 70 || !validName || primary === "UNKNOWN" || genericTitle || badTitle) action = "REVIEW";
+  else if (
+    score < 70 ||
+    !validName ||
+    primary === "UNKNOWN" ||
+    genericTitle ||
+    badTitle
+  )
+    action = "REVIEW";
 
   return { action, score, reasons: uniqueReasons };
 }
 
-
 function isProfileUnderReviewUnknownForSave(name: any, primaryModule: any) {
-  return /^profile\s+under\s+review$/i.test(sanitizeString(String(name || ""))) &&
-    sanitizeString(String(primaryModule || "")).toUpperCase() === "UNKNOWN";
+  return (
+    /^profile\s+under\s+review$/i.test(sanitizeString(String(name || ""))) &&
+    sanitizeString(String(primaryModule || "")).toUpperCase() === "UNKNOWN"
+  );
 }
 
 function profileUnderReviewUnknownDecision(): RecruiterNoiseDecision {
@@ -1310,8 +1765,12 @@ function rejectedNoiseResult(input: {
   return {
     id: `rejected_noise_${sha256(`${name}|${input.title}|${String(input.rawText).slice(0, 500)}`).slice(0, 24)}`,
     name: name || "Profile Under Review",
-    title: isBadExtractedTitleForSave(input.title) ? "Rejected Noise" : sanitizeString(input.title || "Rejected Noise"),
-    current_title: isBadExtractedTitleForSave(input.title) ? "Rejected Noise" : sanitizeString(input.title || "Rejected Noise"),
+    title: isBadExtractedTitleForSave(input.title)
+      ? "Rejected Noise"
+      : sanitizeString(input.title || "Rejected Noise"),
+    current_title: isBadExtractedTitleForSave(input.title)
+      ? "Rejected Noise"
+      : sanitizeString(input.title || "Rejected Noise"),
     primary_module: "UNKNOWN",
     secondary_modules: [],
     sap_modules: [],
@@ -1333,16 +1792,26 @@ export async function saveCandidate(candidate: any) {
   const cleanCandidate = sanitizeDeep(candidate || {});
   const signals: AnyRecord = buildCandidateProfile(cleanCandidate);
 
-  const nameValidation = validateCandidateNameV3(cleanCandidate.name || signals.name, cleanCandidate.email || signals.email, cleanCandidate.source_file || cleanCandidate.sourceFile);
+  const nameValidation = validateCandidateNameV3(
+    cleanCandidate.name || signals.name,
+    cleanCandidate.email || signals.email,
+    cleanCandidate.source_file || cleanCandidate.sourceFile,
+  );
 
   const productionSap: AnyRecord = inferSapProfile({
     ...cleanCandidate,
     name: signals.name,
-    title: signals.title || cleanCandidate.title || cleanCandidate.current_title,
+    title:
+      signals.title || cleanCandidate.title || cleanCandidate.current_title,
     current_title: cleanCandidate.current_title || cleanCandidate.title,
     primary_module: signals.primaryModule || cleanCandidate.primary_module,
-    secondary_modules: signals.secondaryModules || cleanCandidate.secondary_modules,
-    raw_text: cleanCandidate.raw_text || cleanCandidate.resume_text || cleanCandidate.raw_cv || cleanCandidate.rawText,
+    secondary_modules:
+      signals.secondaryModules || cleanCandidate.secondary_modules,
+    raw_text:
+      cleanCandidate.raw_text ||
+      cleanCandidate.resume_text ||
+      cleanCandidate.raw_cv ||
+      cleanCandidate.rawText,
   });
 
   const rawText = sanitizeCandidateSourceText(
@@ -1350,7 +1819,7 @@ export async function saveCandidate(candidate: any) {
       cleanCandidate.resume_text ||
       cleanCandidate.raw_cv ||
       cleanCandidate.rawText ||
-      ""
+      "",
   );
 
   const cleanPhone = normalizePhone(signals.phone || cleanCandidate.phone);
@@ -1378,14 +1847,17 @@ export async function saveCandidate(candidate: any) {
     cleanCandidate.primary_module,
   ].join("\n");
 
-  const forceSuccessFactorsPrimary = strongSuccessFactorsTitleEvidenceForSave(successFactorsTitleEvidenceText);
+  const forceSuccessFactorsPrimary = strongSuccessFactorsTitleEvidenceForSave(
+    successFactorsTitleEvidenceText,
+  );
 
-  
-  const emailNameFallback = signals.email ? fallbackNameFromEmail(signals.email) : null;
+  const emailNameFallback = signals.email
+    ? fallbackNameFromEmail(signals.email)
+    : null;
 
   const strictName = extractCandidateNameStrict(
     rawText,
-    cleanCandidate.email || signals.email
+    cleanCandidate.email || signals.email,
   );
 
   const finalName =
@@ -1412,14 +1884,19 @@ export async function saveCandidate(candidate: any) {
   const safeYears = safeNumber(
     cleanCandidate.years ||
       cleanCandidate.years_experience ||
-      cleanCandidate.yearsOfExperience
+      cleanCandidate.yearsOfExperience,
   );
 
-
-  const effectiveTitle = cleanCandidate.current_title || cleanCandidate.title || signals.title;
+  const effectiveTitle =
+    cleanCandidate.current_title || cleanCandidate.title || signals.title;
   const explicitTitlePrimary = explicitPrimaryFromTitleForSave(effectiveTitle);
   const genericNonSapTitle = isGenericNonSapTitleForSave(effectiveTitle);
-  const projectCounts = countProjectSignals(rawText, productionSap, signals, cleanCandidate);
+  const projectCounts = countProjectSignals(
+    rawText,
+    productionSap,
+    signals,
+    cleanCandidate,
+  );
 
   // Single source of truth for SAP module classification:
   // finalPrimaryModuleForSave decides primary. Secondary modules are then filtered by primary allowlist.
@@ -1439,26 +1916,36 @@ export async function saveCandidate(candidate: any) {
     cleanCandidate.secondary_modules,
     cleanCandidate.sap_modules,
     cleanCandidate.skills,
-    forceSuccessFactorsPrimary ? successFactorsSecondaryModules(successFactorsEvidenceText) : [],
+    forceSuccessFactorsPrimary
+      ? successFactorsSecondaryModules(successFactorsEvidenceText)
+      : [],
   ]);
 
   const finalSecondaryModules = finalSecondaryModulesForSave(
     finalPrimaryModule,
     safeSecondaryModules,
     effectiveTitle,
-    rawText
+    rawText,
   );
 
   const finalCandidateName = normalizeFinalCandidateNameForSave(
-    weakCandidateName ? "Profile Under Review" : finalName || cleanCandidate.name || "Profile Under Review"
+    weakCandidateName
+      ? "Profile Under Review"
+      : finalName || cleanCandidate.name || "Profile Under Review",
   );
 
   const resumeQualityGate = evaluateResumeQualityGate({
     ...cleanCandidate,
     ...signals,
     name: finalCandidateName,
-    currentCompany: signals.company || cleanCandidate.current_company || cleanCandidate.company,
-    current_company: signals.company || cleanCandidate.current_company || cleanCandidate.company,
+    currentCompany:
+      signals.company ||
+      cleanCandidate.current_company ||
+      cleanCandidate.company,
+    current_company:
+      signals.company ||
+      cleanCandidate.current_company ||
+      cleanCandidate.company,
     raw_text: rawText,
     resume_text: rawText,
     phone: safePhone,
@@ -1470,7 +1957,13 @@ export async function saveCandidate(candidate: any) {
       title: effectiveTitle,
       rawText,
       primaryModule: finalPrimaryModule,
-      decision: { action: "REJECT", score: resumeQualityGate.parserQualityScore, reasons: resumeQualityGate.rejectionReasons.length ? resumeQualityGate.rejectionReasons : ["Rejected by Resume Quality Gate"] },
+      decision: {
+        action: "REJECT",
+        score: resumeQualityGate.parserQualityScore,
+        reasons: resumeQualityGate.rejectionReasons.length
+          ? resumeQualityGate.rejectionReasons
+          : ["Rejected by Resume Quality Gate"],
+      },
     });
   }
 
@@ -1485,7 +1978,9 @@ export async function saveCandidate(candidate: any) {
     projectCounts,
   });
 
-  if (isProfileUnderReviewUnknownForSave(finalCandidateName, finalPrimaryModule)) {
+  if (
+    isProfileUnderReviewUnknownForSave(finalCandidateName, finalPrimaryModule)
+  ) {
     return rejectedNoiseResult({
       name: finalCandidateName,
       title: effectiveTitle,
@@ -1505,11 +2000,21 @@ export async function saveCandidate(candidate: any) {
     });
   }
 
-  const safeRoleType = forceSuccessFactorsPrimary ? "SAP Functional" : productionSap.roleType;
+  const safeRoleType = forceSuccessFactorsPrimary
+    ? "SAP Functional"
+    : productionSap.roleType;
 
   const payload = sanitizeDeep({
     name: finalCandidateName,
-    status: cleanCandidate.status || (resumeQualityGate.needsManualReview || recruiterNoiseDecision.action === "REVIEW" || weakCandidateName ? "needs_review" : null),
+    status:
+      cleanCandidate.status ||
+      (cleanCandidate.extraction_coverage_status ===
+        "incomplete_needs_review" ||
+      resumeQualityGate.needsManualReview ||
+      recruiterNoiseDecision.action === "REVIEW" ||
+      weakCandidateName
+        ? "needs_review"
+        : null),
     email: normalizeEmail(cleanCandidate.email || signals.email),
     phone: safePhone,
     normalized_email: normalizeEmail(cleanCandidate.email || signals.email),
@@ -1519,15 +2024,38 @@ export async function saveCandidate(candidate: any) {
     duplicate_count: 0,
     cv_version: 1,
     location: sanitizeString(cleanCandidate.location || signals.location || ""),
+    country: sanitizeString(cleanCandidate.country || ""),
+    linkedin_url: sanitizeString(cleanCandidate.linkedin_url || ""),
+    skills: cleanArray(cleanCandidate.skills),
+    experience:
+      cleanCandidate.experience || cleanCandidate.employment_history || [],
+    education: cleanCandidate.education || [],
+    certifications: cleanArray(cleanCandidate.certifications),
+    languages: cleanArray(cleanCandidate.languages),
+    language_skills: cleanArray(cleanCandidate.language_skills),
+    projects: cleanCandidate.projects || cleanCandidate.project_history || [],
+    project_types: cleanArray(cleanCandidate.project_types),
 
-    title: isBadExtractedTitleForSave(signals.title || cleanCandidate.title || cleanCandidate.current_title)
+    title: isBadExtractedTitleForSave(
+      signals.title || cleanCandidate.title || cleanCandidate.current_title,
+    )
       ? null
-      : normalizeDisplayTitle(signals.title || cleanCandidate.title || cleanCandidate.current_title) || null,
-    current_title: isBadExtractedTitleForSave(signals.title || cleanCandidate.current_title || cleanCandidate.title)
+      : normalizeDisplayTitle(
+          signals.title || cleanCandidate.title || cleanCandidate.current_title,
+        ) || null,
+    current_title: isBadExtractedTitleForSave(
+      signals.title || cleanCandidate.current_title || cleanCandidate.title,
+    )
       ? null
-      : normalizeDisplayTitle(signals.title || cleanCandidate.current_title || cleanCandidate.title) || null,
+      : normalizeDisplayTitle(
+          signals.title || cleanCandidate.current_title || cleanCandidate.title,
+        ) || null,
 
-    company: signals.company || cleanCandidate.company || cleanCandidate.current_company || null,
+    company:
+      signals.company ||
+      cleanCandidate.company ||
+      cleanCandidate.current_company ||
+      null,
     current_company:
       signals.company ||
       cleanCandidate.current_company ||
@@ -1540,9 +2068,16 @@ export async function saveCandidate(candidate: any) {
 
     primary_module: finalPrimaryModule,
     secondary_modules: finalSecondaryModules,
-    sap_modules: finalPrimaryModule === "UNKNOWN"
-      ? []
-      : Array.from(new Set([finalPrimaryModule, ...finalSecondaryModules].filter((module) => module && module !== "UNKNOWN").map(String))),
+    sap_modules:
+      finalPrimaryModule === "UNKNOWN"
+        ? []
+        : Array.from(
+            new Set(
+              [finalPrimaryModule, ...finalSecondaryModules]
+                .filter((module) => module && module !== "UNKNOWN")
+                .map(String),
+            ),
+          ),
 
     implementation_project_count: projectCounts.implementation,
     rollout_project_count: projectCounts.rollout,
@@ -1557,39 +2092,95 @@ export async function saveCandidate(candidate: any) {
     s4_greenfield_count: projectCounts.greenfield,
     s4_conversion_count: projectCounts.brownfield,
 
-    transformation_project_count: safeNumber(signals.transformationProjects || cleanCandidate.transformation_project_count),
-    fico_project_count: safeNumber(signals.ficoProjects || cleanCandidate.fico_project_count),
+    transformation_project_count: safeNumber(
+      signals.transformationProjects ||
+        cleanCandidate.transformation_project_count,
+    ),
+    fico_project_count: safeNumber(
+      signals.ficoProjects || cleanCandidate.fico_project_count,
+    ),
 
     // Persist both legacy and current authority columns.
     // Search UI / SQL checks module_authority, while older code used module_authority_score.
-    module_authority: forceSuccessFactorsPrimary ? 92 : safeNumber(productionSap.moduleConfidence || signals.moduleAuthority),
-    module_authority_score: forceSuccessFactorsPrimary ? 92 : safeNumber(productionSap.moduleConfidence || signals.moduleAuthority),
+    module_authority: forceSuccessFactorsPrimary
+      ? 92
+      : safeNumber(productionSap.moduleConfidence || signals.moduleAuthority),
+    module_authority_score: forceSuccessFactorsPrimary
+      ? 92
+      : safeNumber(productionSap.moduleConfidence || signals.moduleAuthority),
 
-    implementation_authority: safeNumber(productionSap.implementationAuthorityScore || signals.implementationAuthority),
-    domain_authority: safeNumber(productionSap.domainAuthorityScore || signals.domainAuthority),
-    project_ownership_score: safeNumber(productionSap.projectOwnershipScore || signals.projectOwnershipScore),
+    implementation_authority: safeNumber(
+      productionSap.implementationAuthorityScore ||
+        signals.implementationAuthority,
+    ),
+    domain_authority: safeNumber(
+      productionSap.domainAuthorityScore || signals.domainAuthority,
+    ),
+    project_ownership_score: safeNumber(
+      productionSap.projectOwnershipScore || signals.projectOwnershipScore,
+    ),
 
-    finance_depth_score: safeNumber(signals.financeDepth || productionSap.financeDepthScore),
-    consulting_dna_score: safeNumber(signals.consultingDNA || productionSap.consultingDNAScore),
-    consulting_dna: safeNumber(signals.consultingDNA || productionSap.consultingDNAScore),
-    employer_reputation_score: safeNumber(signals.employerReputationScore || productionSap.employerReputationScore),
-    employer_reputation: safeNumber(signals.employerReputationScore || productionSap.employerReputationScore),
+    finance_depth_score: safeNumber(
+      signals.financeDepth || productionSap.financeDepthScore,
+    ),
+    consulting_dna_score: safeNumber(
+      signals.consultingDNA || productionSap.consultingDNAScore,
+    ),
+    consulting_dna: safeNumber(
+      signals.consultingDNA || productionSap.consultingDNAScore,
+    ),
+    employer_reputation_score: safeNumber(
+      signals.employerReputationScore || productionSap.employerReputationScore,
+    ),
+    employer_reputation: safeNumber(
+      signals.employerReputationScore || productionSap.employerReputationScore,
+    ),
 
     role_type: safeRoleType,
     consulting_level: signals.consultingLevel,
 
-    expected_salary: safeNumber(cleanCandidate.expected_salary || signals.expectedSalary || cleanCandidate.salary_expectation),
+    expected_salary: safeNumber(
+      cleanCandidate.expected_salary ||
+        signals.expectedSalary ||
+        cleanCandidate.salary_expectation,
+    ),
 
-    name_review_required: safeNameReviewRequired || resumeQualityGate.needsManualReview,
-    profile_quality_score: Math.min(safeProfileQualityScore || 100, resumeQualityGate.parserQualityScore),
-    title_review_required: Boolean(cleanCandidate.title_review_required || signals.titleReviewRequired),
-    years_review_required: Boolean(cleanCandidate.years_review_required || signals.yearsReviewRequired || !safeYears),
+    name_review_required:
+      safeNameReviewRequired || resumeQualityGate.needsManualReview,
+    profile_quality_score: Math.min(
+      safeProfileQualityScore || 100,
+      resumeQualityGate.parserQualityScore,
+    ),
+    title_review_required: Boolean(
+      cleanCandidate.title_review_required || signals.titleReviewRequired,
+    ),
+    years_review_required: Boolean(
+      cleanCandidate.years_review_required ||
+        signals.yearsReviewRequired ||
+        !safeYears,
+    ),
     extraction_confidence:
+      cleanCandidate.extraction_coverage_status === "incomplete_needs_review" ||
       recruiterNoiseDecision.action === "REVIEW"
         ? "Needs Review"
-        : cleanCandidate.extraction_confidence || signals.extractionConfidence || null,
-    extraction_notes: cleanArray([...(signals.extractionWarnings || []), ...resumeQualityGate.warnings, ...resumeQualityGate.rejectionReasons, ...recruiterNoiseDecision.reasons,
-      ...(cleanCandidate.sourceExtraction?.method === "ocr" ? ["SOURCE_TEXT_RECOVERED_BY_DOCUMENT_OCR"] : [])]),
+        : cleanCandidate.extraction_confidence ||
+          signals.extractionConfidence ||
+          null,
+    extraction_notes: cleanArray([
+      ...(signals.extractionWarnings || []),
+      ...resumeQualityGate.warnings,
+      ...resumeQualityGate.rejectionReasons,
+      ...recruiterNoiseDecision.reasons,
+      ...(cleanCandidate.extraction_missing_sections || []).map(
+        (section: string) => `MISSED_SOURCE_SECTION:${section}`,
+      ),
+      ...(cleanCandidate.extraction_coverage?.missingRequiredFields || []).map(
+        (field: string) => `MISSING_REQUIRED_FIELD:${field}`,
+      ),
+      ...(cleanCandidate.sourceExtraction?.method === "ocr"
+        ? ["SOURCE_TEXT_RECOVERED_BY_DOCUMENT_OCR"]
+        : []),
+    ]),
 
     raw_text: rawText,
     resume_text: rawText,
@@ -1599,18 +2190,26 @@ export async function saveCandidate(candidate: any) {
 
     updated_at: new Date().toISOString(),
     latest_cv_uploaded_at: new Date().toISOString(),
+    extraction_coverage: cleanCandidate.extraction_coverage || {},
+    extraction_coverage_status:
+      cleanCandidate.extraction_coverage_status || null,
+    profile_source_type: cleanCandidate.profile_source_type || "admin_upload",
   });
-
 
   const CANDIDATES_COLUMNS = new Set([
     "name",
     "email",
     "phone",
     "location",
+    "country",
     "skills",
     "years",
     "raw_text",
     "education",
+    "certifications",
+    "languages",
+    "language_skills",
+    "projects",
     "summary",
     "experience",
     "resume_text",
@@ -1702,21 +2301,37 @@ export async function saveCandidate(candidate: any) {
     "name_review_required",
     "title_review_required",
     "years_review_required",
+    "extraction_coverage",
+    "extraction_coverage_status",
+    "profile_source_type",
   ]);
 
   const safePayload = Object.fromEntries(
-    Object.entries(payload).filter(([key]) => CANDIDATES_COLUMNS.has(key))
+    Object.entries(payload).filter(([key]) => CANDIDATES_COLUMNS.has(key)),
   );
 
   enforceCandidateSaveGate(safePayload);
 
-  const existingCandidate = await findExistingCandidate(safePayload);
+  const identity = await findExistingCandidate(safePayload);
+  const existingCandidate = identity.candidate;
+  if (identity.resolution.disposition === "hold_for_identity_review") {
+    return {
+      status: "identity_review_required",
+      source_file: safePayload.source_file,
+      skipped: false,
+      ingestion_action: "hold_for_identity_review",
+      ingestion_reasons: identity.resolution.reasons,
+      competing_candidate_count:
+        identity.resolution.competingCandidateIds.length,
+    };
+  }
 
   const dedupePayload = existingCandidate?.id
     ? {
         ...safePayload,
         duplicate_count: safeNumber(existingCandidate.duplicate_count) + 1,
-        cv_version: Math.max(1, safeNumber(existingCandidate.cv_version, 1)) + 1,
+        cv_version:
+          Math.max(1, safeNumber(existingCandidate.cv_version, 1)) + 1,
         latest_cv_uploaded_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }
@@ -1729,11 +2344,18 @@ export async function saveCandidate(candidate: any) {
         .eq("id", existingCandidate.id)
         .select("*")
         .single()
-    : await supabase.from("candidates").insert(dedupePayload).select("*").single();
+    : await supabase
+        .from("candidates")
+        .insert(dedupePayload)
+        .select("*")
+        .single();
 
   // Safety net: if a DB unique constraint catches an email duplicate before our lookup does,
   // update the existing candidate instead of failing the whole upload batch.
-  if (result.error?.code === "23505" && String(result.error.details || "").includes("(email)=")) {
+  if (
+    result.error?.code === "23505" &&
+    String(result.error.details || "").includes("(email)=")
+  ) {
     const email = normalizeEmail(safePayload.email);
 
     if (email) {
@@ -1750,7 +2372,8 @@ export async function saveCandidate(candidate: any) {
           .update({
             ...safePayload,
             duplicate_count: safeNumber(existingByEmail.duplicate_count) + 1,
-            cv_version: Math.max(1, safeNumber(existingByEmail.cv_version, 1)) + 1,
+            cv_version:
+              Math.max(1, safeNumber(existingByEmail.cv_version, 1)) + 1,
             latest_cv_uploaded_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           })
@@ -1768,8 +2391,11 @@ export async function saveCandidate(candidate: any) {
     throw new Error(error.message);
   }
 
-  return data;
+  return {
+    ...data,
+    ingestion_action: existingCandidate?.id ? "update_existing" : "create_new",
+    ingestion_reasons: identity.resolution.reasons,
+  };
 }
 
 export default saveCandidate;
-
