@@ -198,6 +198,7 @@ jobs:
           node --import tsx scripts/productionEmploymentAdditivePromotion.test.ts
           node --import tsx scripts/productionEmploymentPromotionBatch.test.ts
           NODE_OPTIONS=--conditions=react-server node --import tsx scripts/productionEmploymentPromotionSupabase.test.ts
+          NODE_OPTIONS=--conditions=react-server node --import tsx scripts/searchIndexRebuildPlan.test.ts
           node --import tsx scripts/productionEmploymentPromotionOperator.test.ts
           node --import tsx scripts/productionEmploymentReviewPack.test.ts
           node --import tsx scripts/productionEmploymentPromotionBackup.test.ts
