@@ -4,6 +4,7 @@ import {
   safeTalentSearchCompany,
 } from "./talentSearchDisplay";
 import { evaluateCandidateProfileCompletion } from "./candidateProfileIngestion";
+import { candidateSearchLifecycleDecision } from "./candidateSearchLifecycle";
 
 type AnyRecord = Record<string, any>;
 
@@ -146,6 +147,9 @@ function validationStatus(candidate: AnyRecord) {
 export function classifyCandidateSearchVisibility(
   candidate: AnyRecord,
 ): CandidateSearchVisibility {
+  const lifecycle = candidateSearchLifecycleDecision(candidate);
+  if (!lifecycle.visible && lifecycle.reason === "review_required")
+    return blocked("candidate-review-required");
   const name = rawName(candidate);
   const title = rawTitle(candidate);
   const company = rawCompany(candidate);

@@ -2,9 +2,9 @@ import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
 import { legacyIndexMutationRefusal } from "./legacyIndexMutationGate";
+import { candidateSearchLifecycleDecision } from "../candidateSearchLifecycle";
 
 const PAGE_SIZE = 300;
-const EXCLUDED_STATUSES = new Set(["deleted", "needs_review", "non_sap"]);
 
 function getAdminSupabase() {
   const url =
@@ -41,12 +41,7 @@ export async function auditSearchIndex() {
     if (error) throw error;
     const page = data || [];
     totalCandidates += page.filter(
-      ({ status }) =>
-        !EXCLUDED_STATUSES.has(
-          String(status || "")
-            .trim()
-            .toLowerCase(),
-        ),
+      ({ status }) => candidateSearchLifecycleDecision({ status }).visible,
     ).length;
     if (page.length < PAGE_SIZE) break;
   }

@@ -200,6 +200,7 @@ jobs:
           node --import tsx scripts/candidateProfileLifecycleBatch.test.ts
           node --import tsx scripts/candidateCvIngestionParity.test.ts
           node --import tsx scripts/candidateOwnedCvUpdate.test.ts
+          node --import tsx scripts/candidateSearchLifecycleConsistency.test.ts
           node --import tsx scripts/productionEmploymentGapInventory.test.ts
           node --import tsx scripts/productionEmploymentProjectionAudit.test.ts
           node --import tsx scripts/productionEmploymentAdditivePromotion.test.ts
@@ -226,7 +227,7 @@ jobs:
       - name: Scoped formatting check
         run: |
           npm run check:production-trust:format
-          npx prettier --check lib/search/legacyIndexMutationGate.ts lib/search/rebuildSearchIndex.ts lib/candidateCvIngestion.ts lib/candidateCvAuthorization.ts app/api/admin/rebuild-search-index/route.ts app/api/admin/rebuild-candidate/route.ts app/api/candidate-search-index/rebuild/route.ts app/api/candidate-search-index/sync/route.ts app/api/candidate/profile/cv/sign/route.ts app/api/candidate/profile/cv/route.ts scripts/legacyIndexMutationGate.test.ts scripts/rebuild-index.ts scripts/releaseDocumentationIntegrity.test.ts scripts/productionAuthFoundation.test.ts scripts/candidateCvIngestionParity.test.ts scripts/candidateOwnedCvUpdate.test.ts docs/precision-v131-production-readonly-reverification-20260924.md docs/precision-v135-production-auth-foundation-20260924.md docs/precision-v137-candidate-owned-cv-update-20260924.md
+          npx prettier --check lib/search/legacyIndexMutationGate.ts lib/search/rebuildSearchIndex.ts lib/candidateCvIngestion.ts lib/candidateCvAuthorization.ts lib/candidateSearchLifecycle.ts lib/candidateSearchVisibility.ts lib/searchV2CandidateLifecycle.ts app/api/admin/rebuild-search-index/route.ts app/api/admin/rebuild-candidate/route.ts app/api/candidate-search-index/rebuild/route.ts app/api/candidate-search-index/sync/route.ts app/api/candidate/profile/cv/sign/route.ts app/api/candidate/profile/cv/route.ts app/api/recruiter/search-v2/route.ts scripts/legacyIndexMutationGate.test.ts scripts/rebuild-index.ts scripts/releaseDocumentationIntegrity.test.ts scripts/productionAuthFoundation.test.ts scripts/candidateCvIngestionParity.test.ts scripts/candidateOwnedCvUpdate.test.ts scripts/candidateSearchLifecycleConsistency.test.ts docs/precision-v131-production-readonly-reverification-20260924.md docs/precision-v135-production-auth-foundation-20260924.md docs/precision-v137-candidate-owned-cv-update-20260924.md
           npm run check:acceptance:format
 
       - name: Commit whitespace check
