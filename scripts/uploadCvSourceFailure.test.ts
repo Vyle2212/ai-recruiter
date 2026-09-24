@@ -27,20 +27,38 @@ async function main() {
     "@/lib/saveCandidate": {
       saveCandidate: async (input: any) => {
         saved.push(input.name);
-        return { id: "synthetic", name: input.name, source_file: input.archivedCvReference };
+        return {
+          id: "synthetic",
+          name: input.name,
+          source_file: input.archivedCvReference,
+        };
       },
     },
     "@/lib/originalCvArchive": {
       archiveOriginalCv: async (name: string) => {
         archived.push(name);
         return {
-          reference: "candidate-original-cvs/00000000-0000-4000-8000-000000000000.pdf",
+          reference:
+            "candidate-original-cvs/00000000-0000-4000-8000-000000000000.pdf",
           objectKey: "00000000-0000-4000-8000-000000000000.pdf",
         };
       },
       discardUnlinkedOriginalCv: async () => {},
     },
     "@/lib/originalCvArchiveCommit": { commitCandidateWithArchivedCv },
+    "@/lib/candidateExtractionCoverage": {
+      evaluateCandidateExtractionCoverage: () => ({
+        status: "complete_for_validation",
+        coveragePercent: 100,
+        observedSections: [],
+        extractedSections: [],
+        missedObservedSections: [],
+        missingRequiredFields: [],
+      }),
+    },
+    "@/lib/candidateUploadEnrichment": {
+      enrichCandidateUpload: (candidate: unknown) => candidate,
+    },
     "@/lib/sapTalentTaxonomy": {
       enrichCandidateWithSapTaxonomy: (x: unknown) => x,
     },
@@ -92,7 +110,11 @@ async function main() {
     ["valid.pdf"],
     "An OCR failure must never reach saveCandidate",
   );
-  assert.deepEqual(archived, ["valid.pdf"], "An OCR failure must never archive invalid bytes");
+  assert.deepEqual(
+    archived,
+    ["valid.pdf"],
+    "An OCR failure must never archive invalid bytes",
+  );
   assert.equal(response.partialSuccess, true);
   assert.equal(response.successCount, 1);
   assert.equal(response.failCount, 1);
