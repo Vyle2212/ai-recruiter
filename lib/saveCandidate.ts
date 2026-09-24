@@ -2337,6 +2337,65 @@ export async function saveCandidate(candidate: any) {
 
   enforceCandidateSaveGate(safePayload);
 
+  const ownedUpdate = cleanCandidate.candidate_owned_update_context;
+  if (ownedUpdate) {
+    const authUserId = sanitizeString(ownedUpdate.auth_user_id);
+    const userProfileId = sanitizeString(ownedUpdate.user_profile_id);
+    const candidateId = sanitizeString(ownedUpdate.candidate_id);
+    const expectedUpdatedAt = sanitizeString(ownedUpdate.expected_updated_at);
+    const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+    if (
+      safePayload.profile_source_type !== "candidate_upload" ||
+      !uuid.test(authUserId) ||
+      !uuid.test(userProfileId) ||
+      !uuid.test(candidateId) ||
+      !expectedUpdatedAt ||
+      Number.isNaN(Date.parse(expectedUpdatedAt))
+    ) {
+      throw new Error("CANDIDATE_OWNED_UPDATE_CONTEXT_INVALID");
+    }
+
+    // CV text is not authority for account identity/contact. Those fields are
+    // fulfilled and confirmed explicitly in the candidate portal.
+    const candidateOwnedPayload = Object.fromEntries(
+      Object.entries(safePayload).filter(
+        ([key]) =>
+          ![
+            "email",
+            "phone",
+            "normalized_email",
+            "normalized_phone",
+            "status",
+            "updated_at",
+            "latest_cv_uploaded_at",
+            "cv_version",
+            "duplicate_count",
+          ].includes(key),
+      ),
+    );
+    const { data, error } = await supabase.rpc(
+      "apply_candidate_owned_cv_update",
+      {
+        p_auth_user_id: authUserId,
+        p_user_profile_id: userProfileId,
+        p_candidate_id: candidateId,
+        p_expected_updated_at: expectedUpdatedAt,
+        p_payload: candidateOwnedPayload,
+      },
+    );
+    if (error) {
+      const message = String(error.message || "candidate_owned_update_failed");
+      if (
+        /candidate_owned_cv_(?:stale|ownership|mapping|conflict)/i.test(message)
+      )
+        throw new Error(message.toUpperCase());
+      throw new Error("CANDIDATE_OWNED_UPDATE_FAILED");
+    }
+    if (!data || String(data.id || "") !== candidateId)
+      throw new Error("CANDIDATE_OWNED_UPDATE_READBACK_MISMATCH");
+    return { ...data, ingestion_action: "update_existing" };
+  }
+
   const identity = await findExistingCandidate(safePayload);
   const existingCandidate = identity.candidate;
   if (identity.resolution.disposition === "hold_for_identity_review") {
