@@ -147,6 +147,22 @@ assert.doesNotMatch(
 );
 assert.match(JSON.stringify(built.pack), /private-contact-alpha/);
 
+assert.throws(
+  () =>
+    buildPrivateEmploymentReviewPack({
+      candidates: [
+        {
+          ...candidates[0],
+          sourceUpdatedAt: "2026-09-24T06:01:01Z",
+        },
+      ],
+      capturedAt: "2026-09-24T06:01:00Z",
+      generatedAt: "2026-09-24T06:02:00Z",
+      targetCommitSha: commitSha,
+    }),
+  /snapshot predates a source version/,
+);
+
 const pendingPack = structuredClone(built.pack);
 assert.throws(
   () =>
@@ -156,6 +172,42 @@ assert.throws(
       expectedCommitSha: commitSha,
     }),
   /additive decisions are pending/,
+);
+
+assert.throws(
+  () =>
+    finalizePrivateEmploymentReviewPack({
+      pack: pendingPack,
+      finalizedAt: "2026-09-24T06:01:59Z",
+      expectedCommitSha: commitSha,
+    }),
+  /finalization predates review pack/,
+);
+
+const reviewPredatingPack = structuredClone(built.pack);
+for (const item of reviewPredatingPack.items) {
+  if (item.plan.queue === "empty_to_populated_review") {
+    item.review = {
+      decision: "approve_additions",
+      reviewedBy: "private-reviewer",
+      reviewedAt: "2026-09-24T06:01:30Z",
+    };
+  } else if (item.plan.queue === "existing_additive_review") {
+    item.review = {
+      decision: "reject",
+      reviewedBy: "private-reviewer",
+      reviewedAt: "2026-09-24T06:03:00Z",
+    };
+  }
+}
+assert.throws(
+  () =>
+    finalizePrivateEmploymentReviewPack({
+      pack: reviewPredatingPack,
+      finalizedAt: "2026-09-24T06:10:00Z",
+      expectedCommitSha: commitSha,
+    }),
+  /review predates source version or review pack/,
 );
 
 const reviewedPack = structuredClone(built.pack);

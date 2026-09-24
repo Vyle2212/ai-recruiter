@@ -312,6 +312,16 @@ export function buildPrivateEmploymentReviewPack(input: {
     throw new Error("Employment review pack refused: candidate ID missing");
   assertUnique(candidateIds, "employment review population");
 
+  const capturedAt = Date.parse(input.capturedAt);
+  const sourceVersionAfterCapture = input.candidates.some(
+    ({ sourceUpdatedAt }) =>
+      !validDate(sourceUpdatedAt) || Date.parse(sourceUpdatedAt) > capturedAt,
+  );
+  if (sourceVersionAfterCapture)
+    throw new Error(
+      "Employment review pack refused: snapshot predates a source version",
+    );
+
   const queueCounts = emptyQueueCounts();
   const items: PrivateEmploymentReviewItem[] = [];
   let proposedAdditions = 0;
@@ -397,6 +407,10 @@ export function finalizePrivateEmploymentReviewPack(input: {
     throw new Error(
       "Employment review finalization refused: invalid timestamp",
     );
+  if (Date.parse(input.finalizedAt) < Date.parse(pack.generatedAt))
+    throw new Error(
+      "Employment review finalization refused: finalization predates review pack",
+    );
 
   const approved: Array<{
     plan: EmploymentPromotionPlan;
@@ -420,10 +434,13 @@ export function finalizePrivateEmploymentReviewPack(input: {
         );
       if (
         Date.parse(item.review.reviewedAt) <
-        Date.parse(item.plan.sourceUpdatedAt)
+        Math.max(
+          Date.parse(item.plan.sourceUpdatedAt),
+          Date.parse(pack.generatedAt),
+        )
       )
         throw new Error(
-          "Employment review finalization refused: review predates source version",
+          "Employment review finalization refused: review predates source version or review pack",
         );
       if (Date.parse(input.finalizedAt) < Date.parse(item.review.reviewedAt))
         throw new Error(

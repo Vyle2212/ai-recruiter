@@ -1,5 +1,7 @@
 # Original CV layout verification — 2026-09-15
 
+> Latest review-integrity checkpoint: [v130 employment review temporal integrity](precision-v130-employment-review-temporal-integrity-20260924.md). The review pack now enforces chronological source, snapshot, review and finalization evidence. This does not replace original-layout review, live OCR, verified backup or authenticated acceptance. Production remains NO_GO.
+
 > Latest authorization checkpoint: [v119 private employment release authorization](precision-v119-private-employment-authorization-20260924.md). The reviewed additive path now requires a persisted private authorization bound to the exact commit, manifest, preflight, candidate/source state and verified v118 backup. Exact release-owner confirmation and disk readback are required; reports remain aggregate-only. No real private artifact or production write occurred, and all source/OCR/runtime gates remain outstanding. Production is NO_GO.
 
 > Latest backup checkpoint: [v118 private employment backup readback](precision-v118-private-employment-backup-readback-20260924.md). The reviewed additive set now has a fail-closed private backup step: exact current source versions and stored employment payloads must be recaptured, written owner-only outside the repository and successfully read back before backup evidence can enter the operator bundle. This is code-only preparation; no real snapshot, backup, database connection or write occurred, and production remains NO_GO.
