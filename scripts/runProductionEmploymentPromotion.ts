@@ -3,6 +3,11 @@ import "server-only";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import {
+  verifyPersistedEmploymentPromotionExecutionBundle,
+  type PrivateEmploymentPromotionAuthorizationArtifact,
+} from "../lib/productionEmploymentPromotionAuthorization";
+import type { PrivateEmploymentPromotionBackupArtifact } from "../lib/productionEmploymentPromotionBackup";
+import {
   assertPrivateEmploymentPromotionBundlePath,
   prepareEmploymentPromotionOperatorRun,
   validateEmploymentPromotionWriteControls,
@@ -30,6 +35,23 @@ function checkedOutCommit(repositoryRoot: string) {
   }).trim();
 }
 
+function readPrivateEvidence<T>(inputPath: string, repositoryRoot: string): T {
+  if (!inputPath.endsWith(".employment-promotion-private.json"))
+    throw new Error(
+      "Employment promotion operator refused: private evidence filename suffix required",
+    );
+  const resolved = fs.realpathSync(inputPath);
+  assertPrivateEmploymentPromotionBundlePath({
+    repositoryRoot,
+    bundlePath: resolved,
+  });
+  if ((fs.statSync(resolved).mode & 0o077) !== 0)
+    throw new Error(
+      "Employment promotion operator refused: private evidence must use owner-only permissions",
+    );
+  return JSON.parse(fs.readFileSync(resolved, "utf8")) as T;
+}
+
 async function main() {
   const repositoryRoot = process.cwd();
   const requestedBundlePath = required(
@@ -40,6 +62,13 @@ async function main() {
     repositoryRoot,
     bundlePath: fs.realpathSync(requestedBundlePath),
   });
+  if (
+    !bundlePath.endsWith(".employment-promotion-private.json") ||
+    (fs.statSync(bundlePath).mode & 0o077) !== 0
+  )
+    throw new Error(
+      "Employment promotion operator refused: private bundle must use owner-only permissions and private suffix",
+    );
   const bundle = JSON.parse(
     fs.readFileSync(bundlePath, "utf8"),
   ) as EmploymentPromotionOperatorBundle;
@@ -74,6 +103,26 @@ async function main() {
     throw new Error(
       "Employment promotion operator refused: verified backup and authorization are required for --write",
     );
+
+  const persistedBackup =
+    readPrivateEvidence<PrivateEmploymentPromotionBackupArtifact>(
+      required(argument("backup"), "promotion_private_backup_path_missing"),
+      repositoryRoot,
+    );
+  const persistedAuthorization =
+    readPrivateEvidence<PrivateEmploymentPromotionAuthorizationArtifact>(
+      required(
+        argument("authorization"),
+        "promotion_private_authorization_path_missing",
+      ),
+      repositoryRoot,
+    );
+  verifyPersistedEmploymentPromotionExecutionBundle({
+    bundle,
+    backup: persistedBackup,
+    authorization: persistedAuthorization,
+    expectedCommitSha: currentCommitSha,
+  });
 
   const [{ createClient }, { executeEmploymentPromotionBatchViaSupabase }] =
     await Promise.all([

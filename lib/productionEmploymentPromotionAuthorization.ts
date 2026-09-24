@@ -239,6 +239,45 @@ export function attachVerifiedEmploymentPromotionAuthorization(input: {
   };
 }
 
+export function verifyPersistedEmploymentPromotionExecutionBundle(input: {
+  bundle: EmploymentPromotionOperatorBundle;
+  backup: PrivateEmploymentPromotionBackupArtifact;
+  authorization: PrivateEmploymentPromotionAuthorizationArtifact;
+  expectedCommitSha: string;
+}) {
+  if (!input.bundle.backup || !input.bundle.authorization)
+    throw new Error(
+      "Employment promotion execution refused: backup and authorization must be present in the operator bundle",
+    );
+  const backupReadyBundle: EmploymentPromotionOperatorBundle = {
+    ...structuredClone(input.bundle),
+    authorization: undefined,
+  };
+  const verifiedBackup = verifyPrivateEmploymentPromotionBackup({
+    backup: input.backup,
+    bundle: backupReadyBundle,
+    expectedCommitSha: input.expectedCommitSha,
+  });
+  if (stableJson(input.bundle.backup) !== stableJson(verifiedBackup))
+    throw new Error(
+      "Employment promotion execution refused: operator backup differs from the persisted private artifact",
+    );
+  const verified = attachVerifiedEmploymentPromotionAuthorization({
+    bundle: backupReadyBundle,
+    backup: input.backup,
+    authorization: input.authorization,
+    expectedCommitSha: input.expectedCommitSha,
+  });
+  if (
+    stableJson(input.bundle.authorization) !==
+    stableJson(verified.bundle.authorization)
+  )
+    throw new Error(
+      "Employment promotion execution refused: operator authorization differs from the persisted private artifact",
+    );
+  return verified;
+}
+
 function authorizationReport(input: {
   authorization: PrivateEmploymentPromotionAuthorizationArtifact;
   entries: number;

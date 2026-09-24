@@ -5,6 +5,7 @@ import {
   attachVerifiedEmploymentPromotionAuthorization,
   buildPrivateEmploymentPromotionAuthorization,
   employmentPromotionAuthorizationConfirmation,
+  verifyPersistedEmploymentPromotionExecutionBundle,
 } from "../lib/productionEmploymentPromotionAuthorization";
 import {
   attachVerifiedEmploymentPromotionBackup,
@@ -126,6 +127,52 @@ assert.equal(
 );
 assert.equal(attached.report.readyForSingleTransactionRpc, true);
 assert.equal(attached.report.readyForWrite, false);
+assert.equal(
+  verifyPersistedEmploymentPromotionExecutionBundle({
+    bundle: attached.bundle,
+    backup: privateBackup.backup,
+    authorization: built.authorization,
+    expectedCommitSha: commitSha,
+  }).report.authorizationVerified,
+  true,
+);
+
+const forgedBackupEvidence = structuredClone(attached.bundle);
+forgedBackupEvidence.backup!.capturedAt = "2026-09-24T09:11:00Z";
+assert.throws(
+  () =>
+    verifyPersistedEmploymentPromotionExecutionBundle({
+      bundle: forgedBackupEvidence,
+      backup: privateBackup.backup,
+      authorization: built.authorization,
+      expectedCommitSha: commitSha,
+    }),
+  /operator backup differs from the persisted private artifact/,
+);
+const swappedAuthorization = structuredClone(attached.bundle);
+swappedAuthorization.authorization!.authorizedBy = "another-release-owner";
+assert.throws(
+  () =>
+    verifyPersistedEmploymentPromotionExecutionBundle({
+      bundle: swappedAuthorization,
+      backup: privateBackup.backup,
+      authorization: built.authorization,
+      expectedCommitSha: commitSha,
+    }),
+  /authorization content changed|operator authorization differs/,
+);
+const swappedBackupArtifact = structuredClone(privateBackup.backup);
+swappedBackupArtifact.capturedAt = "2026-09-24T09:11:00Z";
+assert.throws(
+  () =>
+    verifyPersistedEmploymentPromotionExecutionBundle({
+      bundle: attached.bundle,
+      backup: swappedBackupArtifact,
+      authorization: built.authorization,
+      expectedCommitSha: commitSha,
+    }),
+  /persisted backup content changed/,
+);
 
 assert.throws(
   () =>
@@ -208,4 +255,23 @@ assert.doesNotMatch(
   /console\.log\([^)]*(?:bundle|backup|authorization|candidates|rows)/,
 );
 
+const executionRunner = fs.readFileSync(
+  path.join(
+    path.resolve(__dirname, ".."),
+    "scripts/runProductionEmploymentPromotion.ts",
+  ),
+  "utf8",
+);
+assert.match(
+  executionRunner,
+  /verifyPersistedEmploymentPromotionExecutionBundle/,
+);
+assert.match(executionRunner, /owner-only permissions/);
+assert.match(executionRunner, /promotion_private_backup_path_missing/);
+assert.match(executionRunner, /promotion_private_authorization_path_missing/);
+assert.ok(
+  executionRunner.indexOf(
+    "verifyPersistedEmploymentPromotionExecutionBundle({",
+  ) < executionRunner.indexOf('import("@supabase/supabase-js")'),
+);
 console.log("Production employment private authorization regression passed.");

@@ -17,6 +17,8 @@ contains aggregate counts and fingerprints only.
 This step proves approval integrity but does not enable a write by itself.
 Runtime write controls, the exact Supabase project and service-role credential
 are still required separately by the dry-run-first operator.
+Fingerprints detect changed content; they are not a cryptographic proof of the
+release owner's identity. A human must verify the operator and private inputs.
 
 ## Fail-closed controls
 
