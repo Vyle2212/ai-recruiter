@@ -22,6 +22,16 @@ visit(root);
 const auditedFiles = files.filter((file) => {
   const relative = path.relative(root, file).split(path.sep).join("/");
   const source = readFileSync(file, "utf8");
+  const route =
+    "/api/" + path.relative(root, path.dirname(file)).split(path.sep).join("/");
+  const exportedMethods = [
+    ...source.matchAll(
+      /export\s+(?:async\s+function|const)\s+(GET|POST|PUT|PATCH|DELETE)\b/g,
+    ),
+  ].map((match) => match[1]);
+  const hasProxyPolicy = exportedMethods.some((method) =>
+    recruiterApiPolicyForRequest(route, method),
+  );
   const hasLocalBoundary =
     /requireRecruiter(?:ApiRoute|Search)Authorization/.test(source);
   const usesPrivilegedCandidateData =
@@ -30,6 +40,7 @@ const auditedFiles = files.filter((file) => {
     );
   return (
     relative.startsWith("recruiter/") ||
+    hasProxyPolicy ||
     [
       "admin/audit-search-index/route.ts",
       "admin/rebuild-search-index/route.ts",
@@ -58,6 +69,41 @@ const routeMethods = auditedFiles.flatMap((file) => {
   }));
 });
 
+const explicitPublicMethods = new Set(["GET /api/acceptance/release"]);
+const allRouteMethods = files.flatMap((file) => {
+  const source = readFileSync(file, "utf8");
+  const route =
+    "/api/" + path.relative(root, path.dirname(file)).split(path.sep).join("/");
+  return [
+    ...source.matchAll(
+      /export\s+(?:async\s+function|const)\s+(GET|POST|PUT|PATCH|DELETE)\b/g,
+    ),
+  ].map((match) => ({ route, method: match[1] as RecruiterApiMethod, source }));
+});
+const uncoveredRouteMethods = allRouteMethods.filter(
+  ({ route, method, source }) => {
+    if (explicitPublicMethods.has(`${method} ${route}`)) return false;
+    if (/requireRecruiter(?:ApiRoute|Search)Authorization/.test(source))
+      return false;
+    return !recruiterApiPolicyForRequest(route, method);
+  },
+);
+assert.deepEqual(
+  uncoveredRouteMethods.map(({ method, route }) => `${method} ${route}`),
+  [],
+  "Every API method must have a proxy policy, local recruiter authorization, or an explicit public exemption",
+);
+
+const acceptanceReleaseSource = readFileSync(
+  path.join(root, "acceptance/release/route.ts"),
+  "utf8",
+);
+assert.match(acceptanceReleaseSource, /APP_ENV\s*!==\s*["']acceptance["']/);
+assert.match(
+  acceptanceReleaseSource,
+  /ACCEPTANCE_TEST_MODE\s*!==\s*["']true["']/,
+);
+
 const recruiterFiles = auditedFiles.filter((file) =>
   path.relative(root, file).split(path.sep).join("/").startsWith("recruiter/"),
 );
@@ -71,8 +117,8 @@ assert.equal(
 );
 assert.equal(
   legacyServiceFiles.length,
-  39,
-  "Expected the audited 39 legacy privileged route files",
+  53,
+  "Expected the audited 53 legacy privileged route files",
 );
 assert.ok(
   routeMethods.length > auditedFiles.length,
@@ -169,6 +215,19 @@ for (const file of legacyServiceFiles) {
     assert.match(source, /auditSearchIndex|legacyIndexMutationResponse/);
     continue;
   }
+  const exportedMethods = [
+    ...source.matchAll(
+      /export\s+(?:async\s+function|const)\s+(GET|POST|PUT|PATCH|DELETE)\b/g,
+    ),
+  ].map((match) => match[1]);
+  const pathname = "/api/" + route.replace(/\/route\.ts$/, "");
+  if (
+    exportedMethods.length > 0 &&
+    exportedMethods.every((method) =>
+      recruiterApiPolicyForRequest(pathname, method),
+    )
+  )
+    continue;
   assert.match(
     source,
     /@\/lib\/supabase|SUPABASE_SERVICE_ROLE|createLazySupabaseServiceClient|createCandidateSupabaseAdminClient|\.from\(["']candidates["']\)/,
@@ -184,6 +243,9 @@ console.log(
       exportedMethods: routeMethods.length,
       policyEntries: RECRUITER_API_ROUTE_POLICIES.length,
       highRiskHandlerMethods: previousHighRiskRoutes.length,
+      allExportedMethods: allRouteMethods.length,
+      explicitPublicMethods: explicitPublicMethods.size,
+      uncoveredRouteMethods: uncoveredRouteMethods.length,
       missingPolicies: 0,
       duplicatePolicies: 0,
     },
