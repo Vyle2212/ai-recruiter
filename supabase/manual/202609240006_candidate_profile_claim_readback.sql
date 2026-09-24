@@ -19,8 +19,8 @@ begin
   if has_function_privilege('anon','private.claim_candidate_profile()','execute') then
     raise exception 'candidate claim RPC remains callable by anon/public';
   end if;
-  if not has_function_privilege('authenticated','private.claim_candidate_profile()','execute') then
-    raise exception 'candidate claim RPC is not callable by authenticated';
+  if has_function_privilege('authenticated','private.claim_candidate_profile()','execute') then
+    raise exception 'candidate claim is exposed before production signup acceptance';
   end if;
 end
 $readback$;

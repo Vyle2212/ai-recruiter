@@ -92,12 +92,23 @@ assert.match(claimSql, /role = 'candidate'/);
 assert.match(claimSql, /identity_review_required/);
 assert.match(claimSql, /security definer/);
 assert.match(claimSql, /set search_path = ''/);
+assert.match(claimSql, /u\.email_confirmed_at is not null/);
+assert.match(claimSql, /v_email is distinct from v_verified_auth_email/);
+assert.match(claimSql, /v_profile_candidate_id = v_candidate_id/);
+assert.match(claimSql, /v_owner_profile_id = v_profile_id/);
+assert.match(claimSql, /v_link_candidate_id = v_candidate_id/);
+assert.match(claimSql, /v_link_status = 'active'/);
+assert.match(claimSql, /already_claimed/);
+assert.match(claimSql, /on conflict do nothing/);
+assert.doesNotMatch(claimSql, /on conflict[\s\S]*?do update/i);
 assert.match(
   claimSql,
-  /revoke all on function private\.claim_candidate_profile\(\) from public, anon/,
+  /revoke all on function private\.claim_candidate_profile\(\) from public, anon, authenticated/,
 );
 assert.match(readbackSql, /begin transaction read only/);
 assert.match(readbackSql, /has_function_privilege\('anon'/);
+assert.match(readbackSql, /has_function_privilege\('authenticated'/);
+assert.doesNotMatch(readbackSql, /not has_function_privilege\('authenticated'/);
 assert.match(fullProfileSql, /add column if not exists certifications jsonb/);
 assert.match(fullProfileSql, /add column if not exists projects jsonb/);
 assert.match(fullProfileSql, /incomplete_needs_review/);

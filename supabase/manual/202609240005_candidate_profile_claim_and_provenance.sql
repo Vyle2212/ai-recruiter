@@ -1,6 +1,9 @@
 -- MANUAL, REVIEWED-RUN ONLY. DO NOT APPLY FROM CI.
--- Prepares admin re-upload provenance and candidate ownership claims without
--- allowing candidates to mutate the canonical candidates table directly.
+-- Prepares provenance and an INTERNAL claim primitive. This does not implement
+-- candidate signup or expose a callable claim endpoint. Production auth must
+-- first support an active, verified candidate user with no candidate_id;
+-- the staging-only ownership constraint/trigger does NOT support that state.
+-- Do not execute this artifact until that production contract is reviewed.
 begin;
 
 do $preflight$
@@ -69,19 +72,38 @@ declare
   v_auth_user_id uuid := (select auth.uid());
   v_profile_id uuid;
   v_email text;
+  v_verified_auth_email text;
   v_candidate_ids uuid[];
   v_candidate_id uuid;
+  v_profile_candidate_id uuid;
+  v_owner_profile_id uuid;
+  v_link_candidate_id uuid;
+  v_link_status text;
 begin
   if v_auth_user_id is null then raise exception 'authentication required'; end if;
-  select p.id, lower(btrim(p.email)) into v_profile_id, v_email
+  select lower(btrim(u.email)) into v_verified_auth_email
+  from auth.users u
+  where u.id = v_auth_user_id and u.email_confirmed_at is not null;
+  if v_verified_auth_email is null or v_verified_auth_email = '' then
+    raise exception 'verified email required';
+  end if;
+
+  select p.id, lower(btrim(p.email)), p.candidate_id
+    into v_profile_id, v_email, v_profile_candidate_id
   from public.user_profiles p
   where p.auth_user_id = v_auth_user_id and p.role = 'candidate' and p.status = 'active'
   for update;
   if v_profile_id is null then raise exception 'active candidate profile required'; end if;
+  if v_email is distinct from v_verified_auth_email then
+    raise exception 'verified profile email mismatch';
+  end if;
 
-  select array_agg(c.id order by c.id) into v_candidate_ids
-  from public.candidates c
-  where lower(btrim(c.email)) = v_email;
+  select array_agg(matched.id order by matched.id) into v_candidate_ids
+  from (
+    select c.id from public.candidates c
+    where lower(btrim(c.email)) = v_email
+    order by c.id for update
+  ) matched;
   if coalesce(cardinality(v_candidate_ids), 0) = 0 then
     return jsonb_build_object('status','no_exact_identity_match');
   end if;
@@ -89,11 +111,38 @@ begin
     return jsonb_build_object('status','identity_review_required','match_count',cardinality(v_candidate_ids));
   end if;
   v_candidate_id := v_candidate_ids[1];
+  select a.user_profile_id into v_owner_profile_id
+  from public.candidate_accounts a
+  where a.candidate_id = v_candidate_id for update;
+  select a.candidate_id, a.status into v_link_candidate_id, v_link_status
+  from public.candidate_accounts a
+  where a.user_profile_id = v_profile_id for update;
+  if v_profile_candidate_id is not null
+     or v_owner_profile_id is not null
+     or v_link_candidate_id is not null then
+    if v_profile_candidate_id = v_candidate_id
+       and v_owner_profile_id = v_profile_id
+       and v_link_candidate_id = v_candidate_id
+       and v_link_status = 'active' then
+      return jsonb_build_object('status','already_claimed','candidate_id',v_candidate_id);
+    end if;
+    -- Partially linked, inactive, or owned by someone else: never repair an
+    -- existing mapping automatically through a self-service claim.
+    return jsonb_build_object('status','identity_review_required');
+  end if;
 
   insert into public.candidate_accounts(user_profile_id,candidate_id,status)
   values (v_profile_id,v_candidate_id,'active')
-  on conflict (user_profile_id) do update
-    set candidate_id = excluded.candidate_id, status = 'active', updated_at = now();
+  on conflict do nothing;
+  -- Unique user/candidate constraints arbitrate races without ever reassigning
+  -- either side. An inactive ownership mapping must be reviewed, not revived.
+  if not exists (
+    select 1 from public.candidate_accounts a
+    where a.user_profile_id = v_profile_id
+      and a.candidate_id = v_candidate_id and a.status = 'active'
+  ) then
+    raise exception 'candidate claim conflict';
+  end if;
   update public.user_profiles set candidate_id = v_candidate_id, updated_at = now()
   where id = v_profile_id;
   update public.candidates
@@ -105,7 +154,8 @@ begin
 end
 $function$;
 
-revoke all on function private.claim_candidate_profile() from public, anon;
-grant execute on function private.claim_candidate_profile() to authenticated;
+revoke all on function private.claim_candidate_profile() from public, anon, authenticated;
+-- No EXECUTE grant until a reviewed, verified-email production signup and
+-- server-only claim adapter have passed ownership/RLS/runtime acceptance.
 
 commit;
