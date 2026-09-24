@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 
 export type CandidateCvAuthorization = {
   authUserId: string;
+  verifiedAuthEmail: string;
   userProfileId: string;
   candidateId: string;
   candidateUpdatedAt: string;
@@ -35,6 +36,29 @@ export function validateCandidateCvWriteRequest(request: Request) {
     contentLength > 4096
   )
     return { status: 413 as const, code: "candidate_cv_request_too_large" };
+  return null;
+}
+
+export function validateCandidateProfileWriteRequest(request: Request) {
+  const origin = request.headers.get("origin");
+  const expectedOrigin = new URL(request.url).origin;
+  if (
+    origin !== expectedOrigin ||
+    request.headers.get("sec-fetch-site") === "cross-site"
+  )
+    return { status: 403 as const, code: "same_origin_required" };
+  if (!request.headers.get("content-type")?.startsWith("application/json"))
+    return { status: 415 as const, code: "json_request_required" };
+  const contentLength = Number(request.headers.get("content-length") || 0);
+  if (
+    !Number.isSafeInteger(contentLength) ||
+    contentLength < 1 ||
+    contentLength > 1024 * 1024
+  )
+    return {
+      status: 413 as const,
+      code: "candidate_profile_request_too_large",
+    };
   return null;
 }
 
@@ -114,6 +138,9 @@ export async function authorizeCandidateCvUpload(): Promise<
     allowed: true,
     scope: {
       authUserId: user.id,
+      verifiedAuthEmail: String(user.email || "")
+        .trim()
+        .toLowerCase(),
       userProfileId: String(profile.id),
       candidateId: String(candidate.id),
       candidateUpdatedAt: String(candidate.updated_at),

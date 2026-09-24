@@ -145,15 +145,33 @@ function present(candidate: Record<string, unknown>, aliases: string[]) {
   );
 }
 
+function rowText(row: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = row[key];
+    if (value && typeof value === "object" && "value" in value) {
+      const nested = clean((value as { value?: unknown }).value);
+      if (nested) return nested;
+    }
+    const direct = clean(value);
+    if (direct && direct !== "[object Object]") return direct;
+  }
+  return "";
+}
+
 function validEmployment(value: unknown) {
   return list(value).some((item) => {
     if (!item || typeof item !== "object") return false;
     const row = item as Record<string, unknown>;
-    const employer = clean(row.employer || row.company || row.organization);
-    const title = clean(row.title || row.role || row.position);
-    const start = clean(row.start_date || row.startDate || row.from);
-    const end = clean(row.end_date || row.endDate || row.to);
-    return Boolean(employer && title && start && (end || row.current === true));
+    const employer = rowText(row, "employer", "company", "organization");
+    const title = rowText(row, "title", "role", "position");
+    const start = rowText(row, "start_date", "startDate", "from");
+    const end = rowText(row, "end_date", "endDate", "to");
+    return Boolean(
+      employer &&
+        title &&
+        start &&
+        (end || row.current === true || /^(?:current|present|now)$/i.test(end)),
+    );
   });
 }
 
@@ -161,13 +179,16 @@ function validProject(value: unknown) {
   return list(value).some((item) => {
     if (!item || typeof item !== "object") return false;
     const row = item as Record<string, unknown>;
-    const identity = clean(
-      row.project || row.name || row.client || row.customer,
+    const identity = rowText(row, "project", "name", "client", "customer");
+    const role = rowText(row, "role", "title", "position");
+    const start = rowText(row, "start_date", "startDate", "from");
+    const end = rowText(row, "end_date", "endDate", "to");
+    return Boolean(
+      identity &&
+        role &&
+        start &&
+        (end || row.current === true || /^(?:current|present|now)$/i.test(end)),
     );
-    const role = clean(row.role || row.title || row.position);
-    const start = clean(row.start_date || row.startDate || row.from);
-    const end = clean(row.end_date || row.endDate || row.to);
-    return Boolean(identity && role && start && end);
   });
 }
 
