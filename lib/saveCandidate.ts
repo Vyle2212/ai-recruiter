@@ -570,14 +570,39 @@ function hasMeaningfulName(name: any) {
 
 async function findExistingCandidate(payload: AnyRecord) {
   const selectFields =
-    "id,name,email,phone,normalized_name,normalized_email,normalized_phone,linkedin_url,cv_hash,years,years_experience,title,current_title,current_company,company,primary_module,raw_text,resume_text,experience,education,duplicate_count,cv_version,status,updated_at";
-  const { data, error } = await supabase
-    .from("candidates")
-    .select(selectFields)
-    .limit(5000);
-  if (error)
-    throw new Error(`CANDIDATE_IDENTITY_LOOKUP_FAILED: ${error.message}`);
-  const rows = data || [];
+    "id,name,email,phone,normalized_name,normalized_email,normalized_phone,linkedin_url,cv_hash,years,years_experience,title,current_title,current_company,company,primary_module,raw_text,resume_text,experience,education,duplicate_count,cv_version,status,updated_at,profile_confirmation_status,profile_source_state";
+  const email = normalizeEmail(payload.email || payload.normalized_email);
+  const phone = normalizePhone(payload.phone || payload.normalized_phone);
+  const name = sanitizeString(payload.name);
+  const cvHash = sanitizeString(payload.cv_hash);
+  const linkedIn = sanitizeString(payload.linkedin_url);
+  const signals = [
+    ["normalized_email", email],
+    ["email", email],
+    ["normalized_phone", phone],
+    ["cv_hash", cvHash],
+    ["normalized_name", normalizeName(name)],
+    ["name", name],
+    ["linkedin_url", linkedIn],
+  ].filter((item): item is [string, string] => Boolean(item[1]));
+  if (!signals.length) throw new Error("CANDIDATE_IDENTITY_EVIDENCE_REQUIRED");
+  // Fetch only plausible matches using indexed identity columns. Loading the
+  // first 1,000 candidates misses duplicates once the pool grows beyond 970.
+  const matches = await Promise.all(
+    signals.map(async ([column, value]) => {
+      const { data, error } = await supabase
+        .from("candidates")
+        .select(selectFields)
+        .eq(column, value)
+        .limit(101);
+      if (error || (data?.length || 0) > 100)
+        throw new Error("CANDIDATE_IDENTITY_LOOKUP_REVIEW_REQUIRED");
+      return data || [];
+    }),
+  );
+  const rows = Array.from(
+    new Map(matches.flat().map((row: any) => [row.id, row])).values(),
+  );
   const resolution = resolveCandidateIngestion(payload, rows);
   const candidate =
     resolution.disposition === "update_existing"
@@ -2326,6 +2351,28 @@ export async function saveCandidate(candidate: any) {
     };
   }
 
+  // An admin's re-upload must not overwrite a candidate-confirmed or
+  // recruiter-approved version. Keep the original privately for review.
+  const fieldSources = existingCandidate?.profile_source_state?.field_sources;
+  if (
+    existingCandidate?.profile_confirmation_status === "candidate_confirmed" ||
+    (fieldSources &&
+      typeof fieldSources === "object" &&
+      Object.values(fieldSources).some(
+        (source) =>
+          source === "candidate_confirmed" || source === "recruiter_approved",
+      ))
+  ) {
+    return {
+      status: "identity_review_required",
+      source_file: safePayload.source_file,
+      skipped: false,
+      ingestion_action: "hold_for_identity_review",
+      ingestion_reasons: ["existing_profile_contains_confirmed_fields"],
+      competing_candidate_count: 1,
+    };
+  }
+
   const dedupePayload = existingCandidate?.id
     ? {
         ...safePayload,
@@ -2350,38 +2397,13 @@ export async function saveCandidate(candidate: any) {
         .select("*")
         .single();
 
-  // Safety net: if a DB unique constraint catches an email duplicate before our lookup does,
-  // update the existing candidate instead of failing the whole upload batch.
+  // A concurrent insert or an incomplete identity lookup may hit this unique
+  // constraint. Never turn a failed create into an unreviewed full overwrite.
   if (
     result.error?.code === "23505" &&
     String(result.error.details || "").includes("(email)=")
   ) {
-    const email = normalizeEmail(safePayload.email);
-
-    if (email) {
-      const { data: existingByEmail } = await supabase
-        .from("candidates")
-        .select("id,duplicate_count,cv_version")
-        .eq("email", email)
-        .limit(1)
-        .maybeSingle();
-
-      if (existingByEmail?.id) {
-        result = await supabase
-          .from("candidates")
-          .update({
-            ...safePayload,
-            duplicate_count: safeNumber(existingByEmail.duplicate_count) + 1,
-            cv_version:
-              Math.max(1, safeNumber(existingByEmail.cv_version, 1)) + 1,
-            latest_cv_uploaded_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existingByEmail.id)
-          .select("*")
-          .single();
-      }
-    }
+    throw new Error("IDENTITY_EMAIL_CONFLICT_REVIEW_REQUIRED");
   }
 
   const { data, error } = result;

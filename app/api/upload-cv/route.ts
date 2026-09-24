@@ -22,6 +22,14 @@ import {
   type CandidateExtractionCoverage,
 } from "@/lib/candidateExtractionCoverage";
 import { enrichCandidateUpload } from "@/lib/candidateUploadEnrichment";
+import { requireRecruiterApiRouteAuthorization } from "@/lib/recruiterApiAuthorization";
+import { supabase } from "@/lib/supabase";
+import {
+  MAX_ORIGINAL_BYTES,
+  ORIGINAL_CV_BUCKET,
+  originalCvObjectKey,
+  ownedOriginalCvObjectKey,
+} from "@/lib/originalCvArchiveKey";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,7 +50,8 @@ type UploadResult = {
   ingestionAction?:
     | "create_new"
     | "update_existing"
-    | "hold_for_identity_review";
+    | "hold_for_identity_review"
+    | "already_processed";
 };
 
 function isSupportedFile(fileName: string) {
@@ -50,17 +59,122 @@ function isSupportedFile(fileName: string) {
 }
 
 export async function POST(req: NextRequest) {
+  const authorization = await requireRecruiterApiRouteAuthorization({
+    request: req,
+  });
+  if (!authorization.allowed) return authorization.response;
+
   try {
-    const formData = await req.formData();
-
-    const filesFromBulk = formData
-      .getAll("files")
-      .filter((item): item is File => item instanceof File);
-
-    const singleFile = formData.get("file");
-    const filesFromSingle = singleFile instanceof File ? [singleFile] : [];
-
-    const files = filesFromBulk.length > 0 ? filesFromBulk : filesFromSingle;
+    let files: Array<{
+      fileName: string;
+      buffer: Buffer;
+      archivedObjectKey?: string;
+    }>;
+    if (req.headers.get("content-type")?.startsWith("application/json")) {
+      // The browser uploads the bytes straight to a private Storage bucket;
+      // this small request parses only an object owned by the signed-in admin.
+      let input: { fileName?: unknown; objectKey?: unknown; size?: unknown };
+      try {
+        input = await req.json();
+      } catch {
+        return NextResponse.json(
+          { success: false, error: "Invalid upload request." },
+          { status: 400 },
+        );
+      }
+      const objectKey =
+        typeof input.objectKey === "string" ? input.objectKey : "";
+      const fileName = typeof input.fileName === "string" ? input.fileName : "";
+      if (
+        !ownedOriginalCvObjectKey(authorization.scope.subjectId, objectKey) ||
+        !isSupportedFile(fileName) ||
+        !Number.isSafeInteger(input.size) ||
+        Number(input.size) < 1 ||
+        Number(input.size) > MAX_ORIGINAL_BYTES ||
+        objectKey.split(".").at(-1)?.toLowerCase() !==
+          fileName.split(".").at(-1)?.toLowerCase()
+      ) {
+        return NextResponse.json(
+          { success: false, error: "Invalid CV reference." },
+          { status: 400 },
+        );
+      }
+      const { data, error } = await supabase.storage
+        .from(ORIGINAL_CV_BUCKET)
+        .download(objectKey);
+      if (error || !data) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Original CV was not found in private storage.",
+          },
+          { status: 404 },
+        );
+      }
+      const buffer = Buffer.from(await data.arrayBuffer());
+      if (buffer.length !== input.size || buffer.length > MAX_ORIGINAL_BYTES) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Uploaded CV size does not match the request.",
+          },
+          { status: 400 },
+        );
+      }
+      const reference = `${ORIGINAL_CV_BUCKET}/${objectKey}`;
+      const processed = await supabase
+        .from("candidates")
+        .select("id,name,current_title,primary_module")
+        .eq("source_file", reference)
+        .limit(2);
+      if (processed.error || (processed.data?.length || 0) > 1) {
+        return NextResponse.json(
+          { success: false, error: "CV upload readback needs review." },
+          { status: 409 },
+        );
+      }
+      if (processed.data?.length === 1) {
+        return NextResponse.json(
+          {
+            success: true,
+            total: 1,
+            successCount: 1,
+            failCount: 0,
+            createdCount: 0,
+            updatedCount: 0,
+            heldForReviewCount: 0,
+            incompleteExtractionCount: 0,
+            results: [
+              {
+                fileName,
+                ok: true,
+                ingestionAction: "already_processed",
+                candidate: processed.data[0],
+              },
+            ],
+          },
+          { headers: { "Cache-Control": "private, no-store" } },
+        );
+      }
+      files = [{ fileName, buffer, archivedObjectKey: objectKey }];
+    } else {
+      const formData = await req.formData();
+      const filesFromBulk = formData
+        .getAll("files")
+        .filter((item): item is File => item instanceof File);
+      const singleFile = formData.get("file");
+      const selected = filesFromBulk.length
+        ? filesFromBulk
+        : singleFile instanceof File
+          ? [singleFile]
+          : [];
+      files = await Promise.all(
+        selected.map(async (file) => ({
+          fileName: file.name || "unknown-file",
+          buffer: Buffer.from(await file.arrayBuffer()),
+        })),
+      );
+    }
 
     if (!files.length) {
       return NextResponse.json(
@@ -72,7 +186,7 @@ export async function POST(req: NextRequest) {
     const results: UploadResult[] = [];
 
     for (const file of files) {
-      const fileName = file.name || "unknown-file";
+      const { fileName, buffer, archivedObjectKey } = file;
 
       try {
         if (!isSupportedFile(fileName)) {
@@ -85,8 +199,7 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        const arrayBuffer = await file.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
+        originalCvObjectKey(fileName, buffer);
 
         const parsed = await parseCv(buffer, fileName);
         const rawText =
@@ -95,6 +208,8 @@ export async function POST(req: NextRequest) {
         const classification = classifyCandidateText(rawText, fileName);
 
         if (!classification.shouldSave) {
+          if (archivedObjectKey)
+            await discardUnlinkedOriginalCv(archivedObjectKey);
           results.push({
             fileName,
             ok: false,
@@ -139,6 +254,8 @@ export async function POST(req: NextRequest) {
         const parserQuality = evaluateResumeQualityGate(candidatePayload);
 
         if (parserQuality.rejected) {
+          if (archivedObjectKey)
+            await discardUnlinkedOriginalCv(archivedObjectKey);
           results.push({
             fileName,
             ok: false,
@@ -164,7 +281,13 @@ export async function POST(req: NextRequest) {
         // missing private bucket fails closed, so a new CV cannot silently
         // become another flattened, non-recoverable source.
         const saved = await commitCandidateWithArchivedCv(
-          () => archiveOriginalCv(fileName, buffer),
+          () =>
+            archivedObjectKey
+              ? Promise.resolve({
+                  reference: `${ORIGINAL_CV_BUCKET}/${archivedObjectKey}`,
+                  objectKey: archivedObjectKey,
+                })
+              : archiveOriginalCv(fileName, buffer),
           (archivedCvReference) =>
             saveCandidate({
               ...candidatePayload,
@@ -237,7 +360,19 @@ export async function POST(req: NextRequest) {
               ? "SAP_CV"
               : "SAP_CV_INCOMPLETE_REVIEW",
           reason: classification.reason,
-          candidate: saved,
+          candidate: {
+            id: saved?.id,
+            name: saved?.name,
+            current_title: saved?.current_title,
+            title: saved?.title,
+            primary_module: saved?.primary_module,
+            role_type: saved?.role_type,
+            consulting_level: saved?.consulting_level,
+            years: saved?.years,
+            implementation_projects: saved?.implementation_projects,
+            ams_projects: saved?.ams_projects,
+            s4hana_projects: saved?.s4hana_projects,
+          },
           ingestionAction: saved?.ingestion_action,
           sourceExtraction: parsed.sourceExtraction,
           extractionCoverage,

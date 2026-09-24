@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 
 type UploadResult = {
   fileName: string;
@@ -10,7 +11,8 @@ type UploadResult = {
   ingestionAction?:
     | "create_new"
     | "update_existing"
-    | "hold_for_identity_review";
+    | "hold_for_identity_review"
+    | "already_processed";
   extractionCoverage?: {
     status: "complete_for_validation" | "incomplete_needs_review";
     coveragePercent: number;
@@ -32,12 +34,18 @@ type UploadResponse = {
   error?: string;
 };
 
-const UPLOAD_CHUNK_SIZE = 8;
+const MAX_CV_BYTES = 10 * 1024 * 1024;
 
-function chunks<T>(items: T[], size: number) {
-  return Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
-    items.slice(index * size, (index + 1) * size),
-  );
+async function readUploadResponse(response: Response) {
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(
+      typeof body?.error === "string"
+        ? body.error
+        : body?.error?.message || `CV upload failed (${response.status}).`,
+    );
+  }
+  return body;
 }
 
 function mergeUploadResponses(responses: UploadResponse[]): UploadResponse {
@@ -89,7 +97,7 @@ export default function UploadPage() {
       completed: 0,
       total: picked.length,
       batch: 0,
-      batches: Math.ceil(picked.length / UPLOAD_CHUNK_SIZE),
+      batches: picked.length,
     });
     setError("");
   }
@@ -105,33 +113,84 @@ export default function UploadPage() {
     setResponse(null);
 
     try {
-      const batches = chunks(files, UPLOAD_CHUNK_SIZE);
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (!url || !key) throw new Error("Private CV upload is not configured.");
+      const storage = createClient(url, key).storage.from(
+        "candidate-original-cvs",
+      );
       const completedResponses: UploadResponse[] = [];
       setProgress({
         completed: 0,
         total: files.length,
         batch: 0,
-        batches: batches.length,
+        batches: files.length,
       });
 
-      for (let index = 0; index < batches.length; index += 1) {
-        const formData = new FormData();
-        for (const file of batches[index]) formData.append("files", file);
-        const res = await fetch("/api/upload-cv", {
-          method: "POST",
-          body: formData,
-        });
-        const data = await res.json();
-        if (!res.ok)
-          throw new Error(data.error || `Upload batch ${index + 1} failed.`);
-        completedResponses.push(data);
+      for (let index = 0; index < files.length; index += 1) {
+        const file = files[index];
+        try {
+          if (
+            !file.size ||
+            file.size > MAX_CV_BYTES ||
+            !/\.(pdf|docx|txt)$/i.test(file.name)
+          ) {
+            throw new Error(
+              "Only PDF, DOCX, or TXT files up to 10 MB can be uploaded.",
+            );
+          }
+          const signed = await readUploadResponse(
+            await fetch("/api/upload-cv/sign", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ fileName: file.name, size: file.size }),
+            }),
+          );
+          const { error: uploadError } = await storage.uploadToSignedUrl(
+            signed.objectKey,
+            signed.token,
+            file,
+            { contentType: signed.contentType },
+          );
+          if (uploadError)
+            throw new Error("Private CV transfer failed; retry this file.");
+          const data = await readUploadResponse(
+            await fetch("/api/upload-cv", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                fileName: file.name,
+                size: file.size,
+                objectKey: signed.objectKey,
+              }),
+            }),
+          );
+          completedResponses.push(data);
+        } catch (failure: any) {
+          const message = failure?.message || "CV upload failed.";
+          completedResponses.push({
+            success: false,
+            total: 1,
+            successCount: 0,
+            failCount: 1,
+            results: [{ fileName: file.name, ok: false, error: message }],
+          });
+          if (
+            /Authentication|Access is not permitted|not configured|Private CV storage is unavailable/i.test(
+              message,
+            )
+          ) {
+            setError(`${message} Upload stopped after ${index + 1} files.`);
+            break;
+          }
+        }
         const merged = mergeUploadResponses(completedResponses);
         setResponse(merged);
         setProgress({
           completed: merged.total,
           total: files.length,
           batch: index + 1,
-          batches: batches.length,
+          batches: files.length,
         });
       }
     } catch (err: any) {
@@ -323,9 +382,9 @@ export default function UploadPage() {
 
           {uploading && progress.total > 0 && (
             <p style={{ color: "#93c5fd", marginBottom: 18 }}>
-              Processing {progress.completed}/{progress.total} files · batch{" "}
+              Processing {progress.completed}/{progress.total} files · file{" "}
               {progress.batch}/{progress.batches}. Keep this page open;
-              completed batches will not be sent again.
+              completed files will not be sent again.
             </p>
           )}
 

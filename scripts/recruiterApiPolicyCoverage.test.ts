@@ -117,8 +117,8 @@ assert.equal(
 );
 assert.equal(
   legacyServiceFiles.length,
-  53,
-  "Expected the audited 53 legacy privileged route files",
+  54,
+  "Expected the audited 54 legacy privileged route files",
 );
 assert.ok(
   routeMethods.length > auditedFiles.length,

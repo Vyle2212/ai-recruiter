@@ -26,9 +26,21 @@ export function originalCvObjectKey(fileName: string, bytes: Buffer) {
 
 export function originalCvReference(value: unknown): string | undefined {
   const ref = typeof value === "string" ? value : "";
-  return /^candidate-original-cvs\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:pdf|docx|txt)$/i.test(
+  return /^candidate-original-cvs\/(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:pdf|docx|txt)$/i.test(
     ref,
   )
     ? ref
     : undefined;
+}
+
+export function ownedOriginalCvObjectKey(
+  ownerId: string,
+  objectKey: string,
+): boolean {
+  if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(ownerId))
+    return false;
+  return (
+    originalCvReference(`${ORIGINAL_CV_BUCKET}/${objectKey}`) !== undefined &&
+    objectKey.startsWith(`${ownerId}/`)
+  );
 }

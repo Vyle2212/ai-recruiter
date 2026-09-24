@@ -331,6 +331,14 @@ export const RECRUITER_API_ROUTE_POLICIES = [
     },
   ),
   p(
+    "legacy-upload-cv-sign",
+    "/api/upload-cv/sign",
+    ["POST"],
+    "recruiter.data_quality.apply",
+    "data_quality",
+    { persistentMutation: true, serviceRoleAccess: true },
+  ),
+  p(
     "legacy-favorites",
     "/api/favorites",
     ["GET"],

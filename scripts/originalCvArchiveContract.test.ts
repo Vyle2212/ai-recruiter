@@ -4,6 +4,7 @@ import {
   MAX_ORIGINAL_BYTES,
   originalCvObjectKey,
   originalCvReference,
+  ownedOriginalCvObjectKey,
 } from "../lib/originalCvArchiveKey";
 import { commitCandidateWithArchivedCv } from "../lib/originalCvArchiveCommit";
 
@@ -45,6 +46,19 @@ assert.equal(
 assert.equal(
   originalCvReference("candidate-original-cvs/applicant-name.pdf"),
   undefined,
+);
+const owner = "00000000-0000-4000-8000-000000000001";
+const other = "00000000-0000-4000-8000-000000000002";
+const ownedKey = `${owner}/00000000-0000-4000-8000-000000000003.pdf`;
+assert.equal(ownedOriginalCvObjectKey(owner, ownedKey), true);
+assert.equal(ownedOriginalCvObjectKey(other, ownedKey), false);
+assert.equal(
+  ownedOriginalCvObjectKey(owner, `${owner}/../../other.pdf`),
+  false,
+);
+assert.equal(
+  originalCvReference(`candidate-original-cvs/${ownedKey}`),
+  `candidate-original-cvs/${ownedKey}`,
 );
 
 const upload = fs.readFileSync("app/api/upload-cv/route.ts", "utf8");

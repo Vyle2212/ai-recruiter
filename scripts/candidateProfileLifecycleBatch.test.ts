@@ -48,8 +48,17 @@ const fullProfileReadbackSql = fs.readFileSync(
 
 assert.match(
   uploadPage,
-  /UPLOAD_CHUNK_SIZE = 8/,
-  "970+ CV uploads must be chunked instead of sent as one oversized request",
+  /storage\.uploadToSignedUrl\(/,
+  "CV bytes must bypass the Vercel function request-size limit",
+);
+assert.match(uploadPage, /MAX_CV_BYTES = 10 \* 1024 \* 1024/);
+assert.match(
+  uploadPage,
+  /for \(let index = 0; index < files\.length; index \+= 1\)/,
+);
+assert.match(
+  uploadRoute,
+  /ownedOriginalCvObjectKey\(authorization\.scope\.subjectId, objectKey\)/,
 );
 assert.match(uploadPage, /createdCount/);
 assert.match(uploadPage, /updatedCount/);
@@ -64,6 +73,18 @@ assert.doesNotMatch(
   saveCandidate,
   /slice\(-8\) === phoneDigits\.slice\(-8\)/,
   "unsafe last-eight phone auto-merge must stay removed",
+);
+assert.doesNotMatch(
+  saveCandidate,
+  /\.limit\(5000\)/,
+  "identity lookup must not rely on a truncated whole-table scan",
+);
+assert.match(saveCandidate, /\["normalized_email", email\]/);
+assert.match(saveCandidate, /existing_profile_contains_confirmed_fields/);
+assert.doesNotMatch(
+  saveCandidate,
+  /existingByEmail\.id/,
+  "a concurrent email conflict must not overwrite another profile",
 );
 
 assert.match(claimSql, /auth\.uid\(\)/);
@@ -90,6 +111,20 @@ const ambiguous = resolveCandidateIngestion(
   ],
 );
 assert.equal(ambiguous.disposition, "hold_for_identity_review");
+
+const lateMatch = resolveCandidateIngestion(
+  { name: "Last Applicant", email: "late@example.com" },
+  [
+    ...Array.from({ length: 1100 }, (_, index) => ({
+      id: `other-${index}`,
+      name: `Other Applicant ${index}`,
+      email: `other-${index}@example.com`,
+    })),
+    { id: "late", name: "Last Applicant", email: "late@example.com" },
+  ],
+);
+assert.equal(lateMatch.disposition, "update_existing");
+assert.equal(lateMatch.candidateId, "late");
 
 const adminComplete = evaluateCandidateProfileCompletion(
   {
