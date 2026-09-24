@@ -58,6 +58,26 @@ const source = fs.readFileSync(
   path.join(path.resolve(__dirname, ".."), "scripts/rebuildSearchIndexSafe.ts"),
   "utf8",
 );
+const packageScripts = JSON.parse(
+  fs.readFileSync(
+    path.join(path.resolve(__dirname, ".."), "package.json"),
+    "utf8",
+  ),
+).scripts as Record<string, string>;
+assert.match(
+  packageScripts["search-index:rebuild:plan"],
+  /^NODE_OPTIONS=--conditions=react-server node --import tsx scripts\/rebuildSearchIndexSafe\.ts$/,
+);
+const importProbe = spawnSync(
+  process.execPath,
+  ["--import", "tsx", "-e", 'import("./lib/candidateSearchIndex.ts")'],
+  {
+    cwd: path.resolve(__dirname, ".."),
+    encoding: "utf8",
+    env: { ...process.env, NODE_OPTIONS: "--conditions=react-server" },
+  },
+);
+assert.equal(importProbe.status, 0, importProbe.stderr);
 assert.doesNotMatch(
   source,
   /NEXT_PUBLIC_SUPABASE_ANON_KEY|buildCoverageSearchIndexRow/,

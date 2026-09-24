@@ -12,6 +12,9 @@ The rebuild now uses only `buildCandidateSearchIndexRow`, requires the server
 service-role key for reads, and reports aggregate counts without identifiers.
 The standalone command is read-only: `--write` is refused before connecting;
 the optional existing-row refresh only previews canonical eligibility.
+The package command supplies Next.js's server condition, so the canonical
+builder imports successfully during the read-only plan without making a
+database connection merely to run this import regression.
 Sanitized regression examples cover a
 valid primary module, skills-only input, a rejected profile, an untrusted name
 and an already indexed profile. No real search index or candidate was changed.
