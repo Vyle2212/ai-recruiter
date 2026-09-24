@@ -152,6 +152,7 @@ jobs:
         run: |
           npm run test:production-trust:search-security
           node --import tsx scripts/candidate360ContactBoundary.test.ts
+          node --import tsx scripts/candidateResponsePrivacy.test.ts
 
       - name: Internal and external Search V2 regressions
         run: npm run test:production-trust:search-regression
