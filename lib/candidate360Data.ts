@@ -642,7 +642,6 @@ export type Candidate360LoadTimings = {
 async function loadCandidate360ProfileInternal(
   candidateId: string,
   stageTimings: Candidate360LoadTimings | undefined,
-  redactContact: boolean,
 ) {
   const totalStartedAt = performance.now();
   const supabase = createCandidateSupabaseAdminClient();
@@ -756,14 +755,19 @@ async function loadCandidate360ProfileInternal(
       performance.now() - serializationStartedAt;
     stageTimings.totalMs = performance.now() - totalStartedAt;
   }
-  return redactContact ? redactCandidate360Contact(result) : result;
+  return result;
 }
 
-export function loadCandidate360Profile(
+export async function loadCandidate360Profile(
   candidateId: string,
   stageTimings?: Candidate360LoadTimings,
 ) {
-  return loadCandidate360ProfileInternal(candidateId, stageTimings, true);
+  const result = await loadCandidate360ProfileInternal(
+    candidateId,
+    stageTimings,
+  );
+  if (!result) return null;
+  return redactCandidate360Contact(result);
 }
 
 /** Candidate-owned view; caller must prove the authenticated ownership chain. */
@@ -771,5 +775,5 @@ export function loadCandidate360ProfileForOwner(
   candidateId: string,
   stageTimings?: Candidate360LoadTimings,
 ) {
-  return loadCandidate360ProfileInternal(candidateId, stageTimings, false);
+  return loadCandidate360ProfileInternal(candidateId, stageTimings);
 }
