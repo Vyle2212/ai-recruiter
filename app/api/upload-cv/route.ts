@@ -22,6 +22,7 @@ import {
   type CandidateExtractionCoverage,
 } from "@/lib/candidateExtractionCoverage";
 import { enrichCandidateUpload } from "@/lib/candidateUploadEnrichment";
+import { recordCandidateUploadReview } from "@/lib/candidateUploadReviewQueue";
 import { requireRecruiterApiRouteAuthorization } from "@/lib/recruiterApiAuthorization";
 import { supabase } from "@/lib/supabase";
 import {
@@ -332,12 +333,25 @@ export async function POST(req: NextRequest) {
         }
 
         if (saved?.ingestion_action === "hold_for_identity_review") {
+          const heldObjectKey = String(saved.source_file || "").replace(
+            `${ORIGINAL_CV_BUCKET}/`,
+            "",
+          );
+          await recordCandidateUploadReview({
+            objectKey: heldObjectKey,
+            fileName,
+            actorUserId: authorization.scope.subjectId,
+            reasonCodes: Array.isArray(saved.ingestion_reasons)
+              ? saved.ingestion_reasons
+              : ["identity_review_required"],
+          });
           results.push({
             fileName,
-            ok: true,
+            ok: false,
             recordType: "IDENTITY_REVIEW_REQUIRED",
             reason:
-              "The CV was preserved privately, but no candidate row was created or overwritten because identity evidence matched more than one profile.",
+              "The CV was preserved privately for review. No candidate record was created or overwritten.",
+            error: "Needs identity review; no candidate record changed.",
             signals: Array.isArray(saved?.ingestion_reasons)
               ? saved.ingestion_reasons
               : [],
@@ -379,6 +393,13 @@ export async function POST(req: NextRequest) {
         });
       } catch (error: any) {
         if (error instanceof CvSourceError) {
+          if (archivedObjectKey)
+            await recordCandidateUploadReview({
+              objectKey: archivedObjectKey,
+              fileName,
+              actorUserId: authorization.scope.subjectId,
+              reasonCodes: [error.code],
+            });
           results.push({
             fileName,
             ok: false,
@@ -391,6 +412,14 @@ export async function POST(req: NextRequest) {
           continue;
         }
         console.error("Upload CV failed:", error);
+
+        if (archivedObjectKey)
+          await recordCandidateUploadReview({
+            objectKey: archivedObjectKey,
+            fileName,
+            actorUserId: authorization.scope.subjectId,
+            reasonCodes: ["processing_failure"],
+          });
 
         const message = error?.message || "Failed to parse/save CV.";
         const rejectedByGate =

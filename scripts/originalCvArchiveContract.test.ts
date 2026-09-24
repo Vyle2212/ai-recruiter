@@ -149,6 +149,22 @@ const readback = fs.readFileSync(
 assert.match(readback, /BEGIN READ ONLY/);
 assert.match(readback, /bucket\.public IS DISTINCT FROM false/);
 assert.match(readback, /roles && ARRAY\['public', 'anon', 'authenticated'\]/);
+const reviewSchema = fs.readFileSync(
+  "supabase/manual/202609240009_candidate_upload_review_queue.sql",
+  "utf8",
+);
+assert.match(reviewSchema, /force row level security/i);
+assert.match(
+  reviewSchema,
+  /revoke all on public\.candidate_upload_reviews from public, anon, authenticated/i,
+);
+assert.match(reviewSchema, /source_file text not null unique/i);
+const reviewReadback = fs.readFileSync(
+  "supabase/manual/202609240010_candidate_upload_review_queue_readback.sql",
+  "utf8",
+);
+assert.match(reviewReadback, /transaction read only/i);
+assert.match(reviewReadback, /rls_forced/);
 verifyArchiveCommit().then(
   () => console.log("Original CV archive contract passed"),
   (error) => {

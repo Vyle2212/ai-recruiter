@@ -396,8 +396,13 @@ export default function UploadPage() {
                 <article
                   key={`${item.fileName}-${index}`}
                   style={{
-                    border: `1px solid ${item.ok ? "#236b3a" : "#733046"}`,
-                    background: item.ok ? "#08130d" : "#16080d",
+                    border: `1px solid ${item.ingestionAction === "hold_for_identity_review" ? "#8a641c" : item.ok ? "#236b3a" : "#733046"}`,
+                    background:
+                      item.ingestionAction === "hold_for_identity_review"
+                        ? "#1b1508"
+                        : item.ok
+                          ? "#08130d"
+                          : "#16080d",
                     borderRadius: 12,
                     padding: 14,
                   }}
@@ -413,11 +418,20 @@ export default function UploadPage() {
                     <strong>{item.fileName}</strong>
                     <span
                       style={{
-                        color: item.ok ? "#33f078" : "#ff6384",
+                        color:
+                          item.ingestionAction === "hold_for_identity_review"
+                            ? "#fbbf24"
+                            : item.ok
+                              ? "#33f078"
+                              : "#ff6384",
                         fontWeight: 900,
                       }}
                     >
-                      {item.ok ? "SUCCESS" : "FAILED"}
+                      {item.ingestionAction === "hold_for_identity_review"
+                        ? "REVIEW"
+                        : item.ok
+                          ? "SUCCESS"
+                          : "FAILED"}
                     </span>
                   </div>
 
@@ -494,7 +508,15 @@ export default function UploadPage() {
                       </div>
                     </div>
                   ) : (
-                    <p style={{ color: "#ff9db5", marginTop: 8 }}>
+                    <p
+                      style={{
+                        color:
+                          item.ingestionAction === "hold_for_identity_review"
+                            ? "#fbbf24"
+                            : "#ff9db5",
+                        marginTop: 8,
+                      }}
+                    >
                       {item.error || "Unknown error"}
                     </p>
                   )}

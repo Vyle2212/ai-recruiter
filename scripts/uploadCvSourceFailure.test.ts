@@ -8,6 +8,11 @@ import * as originalCvArchiveKey from "../lib/originalCvArchiveKey";
 async function main() {
   const saved: string[] = [];
   const archived: string[] = [];
+  const queued: string[] = [];
+  let processed = false;
+  let downloads = 0;
+  const ownerId = "00000000-0000-4000-8000-000000000001";
+  const signedObjectKey = `${ownerId}/00000000-0000-4000-8000-000000000002.pdf`;
   const stubs: Record<string, unknown> = {
     "next/server": { NextResponse: { json: (body: unknown) => body } },
     "@/lib/cvPdfOcr": { CvSourceError },
@@ -28,6 +33,15 @@ async function main() {
     "@/lib/saveCandidate": {
       saveCandidate: async (input: any) => {
         saved.push(input.name);
+        if (input.name === "held.pdf")
+          return {
+            status: "identity_review_required",
+            source_file: input.archivedCvReference,
+            ingestion_action: "hold_for_identity_review",
+            ingestion_reasons: ["existing_profile_contains_confirmed_fields"],
+            competing_candidate_count: 1,
+          };
+        processed = true;
         return {
           id: "synthetic",
           name: input.name,
@@ -48,13 +62,39 @@ async function main() {
     },
     "@/lib/originalCvArchiveCommit": { commitCandidateWithArchivedCv },
     "@/lib/originalCvArchiveKey": originalCvArchiveKey,
+    "@/lib/candidateUploadReviewQueue": {
+      recordCandidateUploadReview: async (input: { fileName: string }) => {
+        queued.push(input.fileName);
+      },
+    },
     "@/lib/recruiterApiAuthorization": {
       requireRecruiterApiRouteAuthorization: async () => ({
         allowed: true,
-        scope: { subjectId: "00000000-0000-4000-8000-000000000001" },
+        scope: { subjectId: ownerId },
       }),
     },
-    "@/lib/supabase": { supabase: {} },
+    "@/lib/supabase": {
+      supabase: {
+        storage: {
+          from: () => ({
+            download: async () => {
+              downloads++;
+              return { data: new Blob(["valid"]), error: null };
+            },
+          }),
+        },
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              limit: async () => ({
+                data: processed ? [{ id: "synthetic", name: "valid.pdf" }] : [],
+                error: null,
+              }),
+            }),
+          }),
+        }),
+      },
+    },
     "@/lib/candidateExtractionCoverage": {
       evaluateCandidateExtractionCoverage: () => ({
         status: "complete_for_validation",
@@ -133,8 +173,49 @@ async function main() {
   assert.equal(response.results[0].errorCode, "OCR_INCOMPLETE");
   assert.equal(response.results[0].recordType, "SOURCE_REVIEW_REQUIRED");
   assert.equal(response.results[1].sourceExtraction.method, "native");
+  processed = false;
+  const signedRequest = (objectKey: string) => ({
+    headers: new Headers({ "content-type": "application/json" }),
+    json: async () => ({ fileName: "valid.pdf", size: 5, objectKey }),
+  });
+  const invalid = await exports.POST(
+    signedRequest(
+      `00000000-0000-4000-8000-000000000009/00000000-0000-4000-8000-000000000002.pdf`,
+    ),
+  );
+  assert.equal(invalid.success, false);
+  assert.equal(downloads, 0, "Another admin's object cannot be downloaded");
+  const signed = await exports.POST(signedRequest(signedObjectKey));
+  assert.equal(signed.success, true);
+  assert.equal(saved.length, 2, "Signed original was parsed and saved once");
+  assert.deepEqual(
+    archived,
+    ["valid.pdf"],
+    "Signed original was not uploaded twice",
+  );
+  const retry = await exports.POST(signedRequest(signedObjectKey));
+  assert.equal(retry.results[0].ingestionAction, "already_processed");
+  assert.equal(
+    saved.length,
+    2,
+    "Retry cannot increment the candidate CV version",
+  );
+  const heldForm = new FormData();
+  heldForm.append("file", new File(["held"], "held.pdf"));
+  const held = await exports.POST({
+    headers: new Headers({ "content-type": "multipart/form-data" }),
+    formData: async () => heldForm,
+  });
+  assert.equal(held.successCount, 0);
+  assert.equal(held.heldForReviewCount, 1);
+  assert.equal(held.results[0].ok, false);
+  assert.deepEqual(
+    queued,
+    ["held.pdf"],
+    "Held original must enter a durable review queue",
+  );
   console.log(
-    "Upload route: failed OCR never saves, later valid file succeeds, source error remains explicit",
+    "Upload route: OCR failure isolation, signed original ownership and retry safety passed",
   );
 }
 main().catch((e) => {
