@@ -18,6 +18,7 @@ for (const [name, contents] of [
   ["production trust promotion", productionTrust],
 ] as const) {
   assert.match(contents, /precision-v131-production-readonly-reverification/);
+  assert.match(contents, /precision-v140-resumable-admin-cv-upload/);
   assert.match(contents, /production remains (?:\*\*)?NO_GO/i);
   assert.doesNotMatch(
     contents,

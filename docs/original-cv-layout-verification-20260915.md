@@ -1,5 +1,7 @@
 # Original CV layout verification — 2026-09-15
 
+> Full-collection upload checkpoint: [v140 resumable admin CV upload](precision-v140-resumable-admin-cv-upload-20260925.md). Original PDF/DOCX/TXT files are locally fingerprinted before transfer, exact byte duplicates are skipped, and the ordered one-at-a-time commit path prevents an older selected source from racing a newer source. A session-only checkpoint contains no file names, CV text, contacts or candidate IDs. The 970+ originals have not been uploaded or audited on this code, and live OCR remains required.
+
 > Candidate completion checkpoint: [v139 owned profile confirmation](precision-v139-candidate-profile-confirmation-20260925.md). Admin and candidate uploads now converge on the same parser, while the candidate portal requires review of employment, projects, education, languages, certifications, SAP modules and skills before an atomic searchable confirmation. This batch processed no original CV and does not change the 737/970 projection or the 233-source original-CV reprocessing queue. Live layout/OCR and full-population acceptance remain outstanding.
 
 > Search lifecycle safety: [v138 search lifecycle invalidation](precision-v138-search-lifecycle-invalidation-20260924.md). Candidate-owned uploads that enter `needs_review` can no longer remain visible through stale Search V2 projections/ranked caches or alternate legacy, vector, list, match and shortlist paths. No original CV was processed and no production data changed; real layout/OCR and full-population acceptance remain outstanding.

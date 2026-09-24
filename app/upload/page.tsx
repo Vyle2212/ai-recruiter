@@ -1,42 +1,53 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import {
+  buildAdminCvUploadPlan,
+  classifyAdminCvUploadResult,
+  parseAdminCvCheckpoint,
+  selectionFingerprintMaterial,
+  summarizeAdminCvPlan,
+  updateAdminCvCheckpoint,
+  type AdminCvCheckpoint,
+  type AdminCvDescriptor,
+  type AdminCvPlanItem,
+  type AdminCvUploadOutcome,
+  type AdminCvUploadResultLike,
+} from "@/lib/adminCvBulkUpload";
 
-type UploadResult = {
-  fileName: string;
-  ok: boolean;
-  candidate?: any;
-  error?: string;
-  ingestionAction?:
-    | "create_new"
-    | "update_existing"
-    | "hold_for_identity_review"
-    | "already_processed";
-  extractionCoverage?: {
-    status: "complete_for_validation" | "incomplete_needs_review";
-    coveragePercent: number;
-    missedObservedSections: string[];
-    missingRequiredFields: string[];
-  };
-};
-
-type UploadResponse = {
-  success: boolean;
-  total: number;
-  successCount: number;
-  failCount: number;
-  createdCount?: number;
-  updatedCount?: number;
-  heldForReviewCount?: number;
-  incompleteExtractionCount?: number;
-  results: UploadResult[];
+type PreparedItem = AdminCvPlanItem & {
+  file: File;
+  outcome?: AdminCvUploadOutcome;
   error?: string;
 };
 
-const MAX_CV_BYTES = 10 * 1024 * 1024;
+const CHECKPOINT_KEY = "ai-recruiter:admin-cv-upload:v1";
+const FATAL_UPLOAD_ERROR =
+  /Authentication|Access is not permitted|not configured|Private CV storage is unavailable/i;
 
-async function readUploadResponse(response: Response) {
+const cardStyle = {
+  background: "#15171c",
+  border: "1px solid #2b3038",
+  borderRadius: 14,
+  padding: 24,
+  marginBottom: 24,
+} as const;
+
+function bytesLabel(bytes: number) {
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
+async function sha256(input: ArrayBuffer | string) {
+  const bytes =
+    typeof input === "string" ? new TextEncoder().encode(input) : input;
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)]
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function readJson(response: Response) {
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error(
@@ -48,164 +59,220 @@ async function readUploadResponse(response: Response) {
   return body;
 }
 
-function mergeUploadResponses(responses: UploadResponse[]): UploadResponse {
-  const results = responses.flatMap((item) => item.results || []);
-  const successCount = results.filter((item) => item.ok).length;
-  const failCount = results.length - successCount;
-  return {
-    success: results.length > 0 && failCount === 0,
-    total: results.length,
-    successCount,
-    failCount,
-    createdCount: results.filter(
-      (item) => item.ingestionAction === "create_new",
-    ).length,
-    updatedCount: results.filter(
-      (item) => item.ingestionAction === "update_existing",
-    ).length,
-    heldForReviewCount: results.filter(
-      (item) => item.ingestionAction === "hold_for_identity_review",
-    ).length,
-    incompleteExtractionCount: results.filter(
-      (item) => item.extractionCoverage?.status === "incomplete_needs_review",
-    ).length,
-    results,
+function outcomeLabel(outcome?: AdminCvUploadOutcome) {
+  const labels: Record<AdminCvUploadOutcome, string> = {
+    created: "Created",
+    updated: "Updated",
+    already_processed: "Already processed",
+    incomplete_review: "Incomplete — review",
+    identity_review: "Identity review",
+    source_review: "OCR/source review",
+    non_sap_rejected: "Non-SAP rejected",
+    failed: "Retry required",
   };
+  return outcome ? labels[outcome] : "Ready";
 }
 
 export default function UploadPage() {
-  const [files, setFiles] = useState<File[]>([]);
+  const [items, setItems] = useState<PreparedItem[]>([]);
+  const [selectionFingerprint, setSelectionFingerprint] = useState("");
+  const [checkpoint, setCheckpoint] = useState<AdminCvCheckpoint | null>(null);
+  const [preparing, setPreparing] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [response, setResponse] = useState<UploadResponse | null>(null);
-  const [error, setError] = useState("");
-  const [progress, setProgress] = useState({
+  const [pauseRequested, setPauseRequested] = useState(false);
+  const [preparationProgress, setPreparationProgress] = useState({
     completed: 0,
     total: 0,
-    batch: 0,
-    batches: 0,
   });
+  const [activeName, setActiveName] = useState("");
+  const [error, setError] = useState("");
+  const pauseRef = useRef(false);
 
-  const totalSize = useMemo(() => {
-    return files.reduce((sum, file) => sum + file.size, 0);
-  }, [files]);
+  const planSummary = useMemo(() => summarizeAdminCvPlan(items), [items]);
+  const totalSize = useMemo(
+    () => items.reduce((sum, item) => sum + item.size, 0),
+    [items],
+  );
+  const outcomeCounts = useMemo(() => {
+    const counts = new Map<AdminCvUploadOutcome, number>();
+    for (const item of items) {
+      const outcome = item.outcome || item.priorOutcome;
+      if (outcome) counts.set(outcome, (counts.get(outcome) || 0) + 1);
+    }
+    return counts;
+  }, [items]);
+
+  async function prepareFiles(files: File[]) {
+    setPreparing(true);
+    setError("");
+    setItems([]);
+    setPreparationProgress({ completed: 0, total: files.length });
+    try {
+      const descriptors: AdminCvDescriptor[] = [];
+      for (let index = 0; index < files.length; index++) {
+        const file = files[index];
+        descriptors.push({
+          digest: await sha256(await file.arrayBuffer()),
+          name: file.name,
+          size: file.size,
+          lastModified: file.lastModified || 0,
+          selectionIndex: index,
+        });
+        setPreparationProgress({ completed: index + 1, total: files.length });
+      }
+      const fingerprint = await sha256(
+        selectionFingerprintMaterial(descriptors.map((item) => item.digest)),
+      );
+      const restored = parseAdminCvCheckpoint(
+        sessionStorage.getItem(CHECKPOINT_KEY),
+        fingerprint,
+      );
+      const plan = buildAdminCvUploadPlan(descriptors, restored);
+      setSelectionFingerprint(fingerprint);
+      setCheckpoint(restored);
+      setItems(
+        plan.map((item) => ({
+          ...item,
+          file: files[item.selectionIndex],
+          outcome: item.priorOutcome,
+        })),
+      );
+    } catch (failure) {
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : "Unable to prepare the CV collection.",
+      );
+    } finally {
+      setPreparing(false);
+    }
+  }
 
   function onPickFiles(event: React.ChangeEvent<HTMLInputElement>) {
     const picked = Array.from(event.target.files || []);
-    setFiles(picked);
-    setResponse(null);
-    setProgress({
-      completed: 0,
-      total: picked.length,
-      batch: 0,
-      batches: picked.length,
-    });
-    setError("");
+    if (!picked.length) return;
+    void prepareFiles(picked);
   }
 
-  async function uploadFiles() {
-    if (!files.length) {
-      setError("Please select at least one CV file.");
+  async function uploadOne(
+    file: File,
+    storage: ReturnType<typeof createClient>["storage"],
+  ): Promise<AdminCvUploadResultLike> {
+    const signed = await readJson(
+      await fetch("/api/upload-cv/sign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, size: file.size }),
+      }),
+    );
+    const { error: uploadError } = await storage
+      .from("candidate-original-cvs")
+      .uploadToSignedUrl(signed.objectKey, signed.token, file, {
+        contentType: signed.contentType,
+      });
+    if (uploadError)
+      throw new Error("Private CV transfer failed; retry this file.");
+    const response = await readJson(
+      await fetch("/api/upload-cv", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: file.name,
+          size: file.size,
+          objectKey: signed.objectKey,
+        }),
+      }),
+    );
+    const result = response?.results?.[0];
+    if (!result || response.total !== 1)
+      throw new Error("CV upload returned an invalid result.");
+    return result;
+  }
+
+  async function startOrResume() {
+    if (!items.some((item) => item.disposition === "ready")) return;
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !key) {
+      setError("Private CV upload is not configured.");
       return;
     }
 
     setUploading(true);
+    setPauseRequested(false);
+    pauseRef.current = false;
     setError("");
-    setResponse(null);
+    const storage = createClient(url, key).storage;
+    let nextCheckpoint = checkpoint;
 
-    try {
-      const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      if (!url || !key) throw new Error("Private CV upload is not configured.");
-      const storage = createClient(url, key).storage.from(
-        "candidate-original-cvs",
-      );
-      const completedResponses: UploadResponse[] = [];
-      setProgress({
-        completed: 0,
-        total: files.length,
-        batch: 0,
-        batches: files.length,
-      });
-
-      for (let index = 0; index < files.length; index += 1) {
-        const file = files[index];
-        try {
-          if (
-            !file.size ||
-            file.size > MAX_CV_BYTES ||
-            !/\.(pdf|docx|txt)$/i.test(file.name)
-          ) {
-            throw new Error(
-              "Only PDF, DOCX, or TXT files up to 10 MB can be uploaded.",
-            );
-          }
-          const signed = await readUploadResponse(
-            await fetch("/api/upload-cv/sign", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ fileName: file.name, size: file.size }),
-            }),
-          );
-          const { error: uploadError } = await storage.uploadToSignedUrl(
-            signed.objectKey,
-            signed.token,
-            file,
-            { contentType: signed.contentType },
-          );
-          if (uploadError)
-            throw new Error("Private CV transfer failed; retry this file.");
-          const data = await readUploadResponse(
-            await fetch("/api/upload-cv", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                fileName: file.name,
-                size: file.size,
-                objectKey: signed.objectKey,
-              }),
-            }),
-          );
-          completedResponses.push(data);
-        } catch (failure: any) {
-          const message = failure?.message || "CV upload failed.";
-          completedResponses.push({
-            success: false,
-            total: 1,
-            successCount: 0,
-            failCount: 1,
-            results: [{ fileName: file.name, ok: false, error: message }],
-          });
-          if (
-            /Authentication|Access is not permitted|not configured|Private CV storage is unavailable/i.test(
-              message,
-            )
-          ) {
-            setError(`${message} Upload stopped after ${index + 1} files.`);
-            break;
-          }
-        }
-        const merged = mergeUploadResponses(completedResponses);
-        setResponse(merged);
-        setProgress({
-          completed: merged.total,
-          total: files.length,
-          batch: index + 1,
-          batches: files.length,
-        });
+    for (const item of items) {
+      if (pauseRef.current || item.disposition !== "ready") break;
+      setActiveName(item.name);
+      let outcome: AdminCvUploadOutcome = "failed";
+      let message = "";
+      try {
+        outcome = classifyAdminCvUploadResult(
+          await uploadOne(item.file, storage),
+        );
+      } catch (failure) {
+        message =
+          failure instanceof Error ? failure.message : "CV upload failed.";
       }
-    } catch (err: any) {
-      setError(err?.message || "Upload failed.");
-    } finally {
-      setUploading(false);
+
+      nextCheckpoint = updateAdminCvCheckpoint({
+        checkpoint: nextCheckpoint,
+        selectionFingerprint,
+        digest: item.digest,
+        outcome,
+      });
+      sessionStorage.setItem(CHECKPOINT_KEY, JSON.stringify(nextCheckpoint));
+      setCheckpoint(nextCheckpoint);
+      setItems((current) =>
+        current.map((candidate) =>
+          candidate.digest === item.digest &&
+          candidate.selectionIndex === item.selectionIndex
+            ? {
+                ...candidate,
+                disposition: outcome === "failed" ? "ready" : "completed",
+                priorOutcome: outcome === "failed" ? undefined : outcome,
+                outcome,
+                error: message,
+              }
+            : candidate,
+        ),
+      );
+      if (message && FATAL_UPLOAD_ERROR.test(message)) {
+        setError(`${message} Upload stopped safely.`);
+        break;
+      }
     }
+
+    setActiveName("");
+    setUploading(false);
+    setPauseRequested(false);
+    pauseRef.current = false;
   }
 
-  function clearFiles() {
-    setFiles([]);
-    setResponse(null);
-    setError("");
-    setProgress({ completed: 0, total: 0, batch: 0, batches: 0 });
+  function requestPause() {
+    pauseRef.current = true;
+    setPauseRequested(true);
   }
+
+  function clearSession() {
+    sessionStorage.removeItem(CHECKPOINT_KEY);
+    setItems([]);
+    setCheckpoint(null);
+    setSelectionFingerprint("");
+    setError("");
+    setPreparationProgress({ completed: 0, total: 0 });
+  }
+
+  const visibleResults = items
+    .filter(
+      (item) =>
+        item.disposition !== "ready" || item.outcome || item.priorOutcome,
+    )
+    .slice(0, 250);
 
   return (
     <main
@@ -216,316 +283,119 @@ export default function UploadPage() {
         padding: 28,
       }}
     >
-      <h1 style={{ fontSize: 36, marginBottom: 8 }}>Bulk Upload CVs</h1>
-
-      <p style={{ color: "#a8b3c7", marginBottom: 28 }}>
-        Upload multiple SAP CVs at once. Supported formats: PDF, DOCX, TXT.
+      <h1 style={{ fontSize: 36, marginBottom: 8 }}>Bulk Upload SAP CVs</h1>
+      <p style={{ color: "#a8b3c7", marginBottom: 28, maxWidth: 900 }}>
+        Select the complete current collection. Files are checked locally, exact
+        byte duplicates are skipped, and candidate writes run in source
+        modification order so a newer CV is never raced by an older one.
       </p>
 
-      <section
-        style={{
-          background: "#15171c",
-          border: "1px solid #2b3038",
-          borderRadius: 14,
-          padding: 24,
-          marginBottom: 24,
-        }}
-      >
-        <label
-          style={{
-            display: "block",
-            fontWeight: 800,
-            marginBottom: 12,
-          }}
-        >
-          Select CV files
+      <section style={cardStyle}>
+        <label htmlFor="cv-collection" style={{ fontWeight: 800 }}>
+          Select all current CV files
         </label>
-
         <input
+          id="cv-collection"
           type="file"
           multiple
           accept=".pdf,.docx,.txt"
           onChange={onPickFiles}
-          disabled={uploading}
-          style={{
-            width: "100%",
-            padding: 14,
-            border: "1px solid #384150",
-            borderRadius: 10,
-            background: "#08090c",
-            color: "#fff",
-          }}
+          disabled={preparing || uploading}
+          style={{ display: "block", width: "100%", marginTop: 12 }}
         />
-
-        <div
-          style={{
-            display: "flex",
-            gap: 12,
-            marginTop: 18,
-            flexWrap: "wrap",
-          }}
-        >
+        {preparing ? (
+          <p aria-live="polite" style={{ color: "#a8b3c7" }}>
+            Checking {preparationProgress.completed}/{preparationProgress.total}{" "}
+            files…
+          </p>
+        ) : null}
+        {items.length ? (
+          <p style={{ color: "#a8b3c7" }}>
+            {planSummary.total} selected · {bytesLabel(totalSize)} ·{" "}
+            {planSummary.ready} ready · {planSummary.completed} restored ·{" "}
+            {planSummary.exactDuplicates} exact duplicates ·{" "}
+            {planSummary.invalid} invalid
+          </p>
+        ) : null}
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <button
-            onClick={uploadFiles}
-            disabled={uploading || !files.length}
-            style={{
-              padding: "12px 20px",
-              borderRadius: 10,
-              border: "none",
-              background: uploading || !files.length ? "#364152" : "#2563eb",
-              color: "#fff",
-              fontWeight: 800,
-              cursor: uploading || !files.length ? "not-allowed" : "pointer",
-            }}
+            type="button"
+            onClick={() => void startOrResume()}
+            disabled={preparing || uploading || planSummary.ready === 0}
           >
-            {uploading ? "Uploading..." : `Upload ${files.length || ""} CVs`}
+            {checkpoint ? "Resume safe upload" : "Start safe upload"}
           </button>
-
-          <button
-            onClick={clearFiles}
-            disabled={uploading}
-            style={{
-              padding: "12px 20px",
-              borderRadius: 10,
-              border: "1px solid #384150",
-              background: "#0b0d12",
-              color: "#fff",
-              fontWeight: 800,
-              cursor: uploading ? "not-allowed" : "pointer",
-            }}
-          >
-            Clear
+          {uploading ? (
+            <button
+              type="button"
+              onClick={requestPause}
+              disabled={pauseRequested}
+            >
+              {pauseRequested ? "Pausing…" : "Pause after current CV"}
+            </button>
+          ) : null}
+          <button type="button" onClick={clearSession} disabled={uploading}>
+            Clear session
           </button>
         </div>
-
-        {files.length > 0 && (
-          <div style={{ marginTop: 18, color: "#a8b3c7" }}>
-            Selected: <b style={{ color: "#fff" }}>{files.length}</b> files ·
-            Total size:{" "}
-            <b style={{ color: "#fff" }}>
-              {(totalSize / 1024 / 1024).toFixed(2)} MB
-            </b>
-          </div>
-        )}
-
-        {error && (
-          <p style={{ color: "#ff6384", marginTop: 18, fontWeight: 700 }}>
+        {activeName ? (
+          <p aria-live="polite" style={{ color: "#7dd3fc" }}>
+            Processing: {activeName}
+          </p>
+        ) : null}
+        {error ? (
+          <p role="alert" style={{ color: "#ff6384", fontWeight: 700 }}>
             {error}
           </p>
-        )}
+        ) : null}
       </section>
 
-      {files.length > 0 && (
-        <section
-          style={{
-            background: "#15171c",
-            border: "1px solid #2b3038",
-            borderRadius: 14,
-            padding: 24,
-            marginBottom: 24,
-          }}
-        >
-          <h2 style={{ fontSize: 20, marginBottom: 14 }}>Selected Files</h2>
-
+      {items.length ? (
+        <section style={cardStyle}>
+          <h2 style={{ fontSize: 20 }}>Batch results</h2>
+          <p style={{ color: "#a8b3c7" }}>
+            Created {outcomeCounts.get("created") || 0} · Updated{" "}
+            {outcomeCounts.get("updated") || 0} · Incomplete review{" "}
+            {outcomeCounts.get("incomplete_review") || 0} · Identity review{" "}
+            {outcomeCounts.get("identity_review") || 0} · Source review{" "}
+            {outcomeCounts.get("source_review") || 0} · Non-SAP rejected{" "}
+            {outcomeCounts.get("non_sap_rejected") || 0} · Retry required{" "}
+            {outcomeCounts.get("failed") || 0}
+          </p>
+          <p style={{ color: "#8da0b8", fontSize: 13 }}>
+            The resume checkpoint is session-only and contains content hashes
+            plus result codes—never CV names, text, contacts, or candidate IDs.
+          </p>
           <div style={{ display: "grid", gap: 8 }}>
-            {files.map((file, index) => (
+            {visibleResults.map((item) => (
               <div
-                key={`${file.name}-${index}`}
+                key={`${item.digest}-${item.selectionIndex}`}
                 style={{
                   background: "#090b10",
                   border: "1px solid #252b35",
                   borderRadius: 10,
                   padding: "10px 12px",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 16,
+                  contentVisibility: "auto",
                 }}
               >
-                <span>{file.name}</span>
-                <span style={{ color: "#a8b3c7" }}>
-                  {(file.size / 1024 / 1024).toFixed(2)} MB
-                </span>
+                <strong>{item.name}</strong> —{" "}
+                {item.disposition === "invalid"
+                  ? `Invalid: ${item.reason}`
+                  : item.disposition === "exact_duplicate"
+                    ? "Exact duplicate skipped"
+                    : outcomeLabel(item.outcome || item.priorOutcome)}
+                {item.error ? ` — ${item.error}` : ""}
               </div>
             ))}
           </div>
-        </section>
-      )}
-
-      {response && (
-        <section
-          style={{
-            background: "#15171c",
-            border: "1px solid #2b3038",
-            borderRadius: 14,
-            padding: 24,
-          }}
-        >
-          <h2 style={{ fontSize: 22, marginBottom: 10 }}>Upload Result</h2>
-
-          <p style={{ color: "#a8b3c7", marginBottom: 18 }}>
-            Total: <b style={{ color: "#fff" }}>{response.total}</b> · Success:{" "}
-            <b style={{ color: "#33f078" }}>{response.successCount}</b> ·
-            Failed: <b style={{ color: "#ff6384" }}>{response.failCount}</b>
-            {" · "}Created:{" "}
-            <b style={{ color: "#60a5fa" }}>{response.createdCount || 0}</b>
-            {" · "}Updated:{" "}
-            <b style={{ color: "#c084fc" }}>{response.updatedCount || 0}</b>
-            {" · "}Held for identity review:{" "}
-            <b style={{ color: "#fbbf24" }}>
-              {response.heldForReviewCount || 0}
-            </b>
-            {" · "}Incomplete extraction:{" "}
-            <b style={{ color: "#fb923c" }}>
-              {response.incompleteExtractionCount || 0}
-            </b>
-          </p>
-
-          {uploading && progress.total > 0 && (
-            <p style={{ color: "#93c5fd", marginBottom: 18 }}>
-              Processing {progress.completed}/{progress.total} files · file{" "}
-              {progress.batch}/{progress.batches}. Keep this page open;
-              completed files will not be sent again.
+          {visibleResults.length < items.length ? (
+            <p style={{ color: "#8da0b8" }}>
+              Showing {visibleResults.length} classified items. Aggregate totals
+              above cover the full collection.
             </p>
-          )}
-
-          <div style={{ display: "grid", gap: 12 }}>
-            {(response.results || []).map((item, index) => {
-              const candidate = item.candidate || {};
-
-              return (
-                <article
-                  key={`${item.fileName}-${index}`}
-                  style={{
-                    border: `1px solid ${item.ingestionAction === "hold_for_identity_review" ? "#8a641c" : item.ok ? "#236b3a" : "#733046"}`,
-                    background:
-                      item.ingestionAction === "hold_for_identity_review"
-                        ? "#1b1508"
-                        : item.ok
-                          ? "#08130d"
-                          : "#16080d",
-                    borderRadius: 12,
-                    padding: 14,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 12,
-                      alignItems: "center",
-                    }}
-                  >
-                    <strong>{item.fileName}</strong>
-                    <span
-                      style={{
-                        color:
-                          item.ingestionAction === "hold_for_identity_review"
-                            ? "#fbbf24"
-                            : item.ok
-                              ? "#33f078"
-                              : "#ff6384",
-                        fontWeight: 900,
-                      }}
-                    >
-                      {item.ingestionAction === "hold_for_identity_review"
-                        ? "REVIEW"
-                        : item.ok
-                          ? "SUCCESS"
-                          : "FAILED"}
-                    </span>
-                  </div>
-
-                  {item.ok ? (
-                    <div
-                      style={{
-                        marginTop: 8,
-                        color: "#c7d2e5",
-                        fontSize: 14,
-                        lineHeight: 1.7,
-                      }}
-                    >
-                      <div>
-                        Candidate:{" "}
-                        <b style={{ color: "#fff" }}>
-                          {candidate.name || "Unknown Candidate"}
-                        </b>
-                      </div>
-                      <div>
-                        Title:{" "}
-                        <b style={{ color: "#fff" }}>
-                          {candidate.current_title || candidate.title || "N/A"}
-                        </b>
-                      </div>
-                      <div>
-                        Module:{" "}
-                        <b style={{ color: "#fff" }}>
-                          {candidate.primary_module || "N/A"}
-                        </b>{" "}
-                        · Role:{" "}
-                        <b style={{ color: "#fff" }}>
-                          {candidate.role_type || "N/A"}
-                        </b>{" "}
-                        · Level:{" "}
-                        <b style={{ color: "#fff" }}>
-                          {candidate.consulting_level || "N/A"}
-                        </b>{" "}
-                        · Years:{" "}
-                        <b style={{ color: "#fff" }}>{candidate.years || 0}</b>
-                      </div>
-                      <div>
-                        Projects: Implementation{" "}
-                        <b style={{ color: "#fff" }}>
-                          {candidate.implementation_projects || 0}
-                        </b>{" "}
-                        · AMS{" "}
-                        <b style={{ color: "#fff" }}>
-                          {candidate.ams_projects || 0}
-                        </b>{" "}
-                        · S/4HANA{" "}
-                        <b style={{ color: "#fff" }}>
-                          {candidate.s4hana_projects || 0}
-                        </b>
-                      </div>
-                      <div>
-                        Extraction coverage:{" "}
-                        <b
-                          style={{
-                            color:
-                              item.extractionCoverage?.status ===
-                              "complete_for_validation"
-                                ? "#33f078"
-                                : "#fbbf24",
-                          }}
-                        >
-                          {item.extractionCoverage?.coveragePercent ?? 0}%
-                        </b>
-                        {item.extractionCoverage?.missedObservedSections?.length
-                          ? ` · missed source sections: ${item.extractionCoverage.missedObservedSections.join(", ")}`
-                          : ""}
-                        {item.extractionCoverage?.missingRequiredFields?.length
-                          ? ` · required fields missing: ${item.extractionCoverage.missingRequiredFields.join(", ")}`
-                          : ""}
-                      </div>
-                    </div>
-                  ) : (
-                    <p
-                      style={{
-                        color:
-                          item.ingestionAction === "hold_for_identity_review"
-                            ? "#fbbf24"
-                            : "#ff9db5",
-                        marginTop: 8,
-                      }}
-                    >
-                      {item.error || "Unknown error"}
-                    </p>
-                  )}
-                </article>
-              );
-            })}
-          </div>
+          ) : null}
         </section>
-      )}
+      ) : null}
     </main>
   );
 }
