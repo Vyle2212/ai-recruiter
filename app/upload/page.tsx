@@ -23,6 +23,7 @@ type PreparedItem = AdminCvPlanItem & {
 };
 
 const CHECKPOINT_KEY = "ai-recruiter:admin-cv-upload:v1";
+const MAX_CV_BYTES = 10 * 1024 * 1024;
 const FATAL_UPLOAD_ERROR =
   /Authentication|Access is not permitted|not configured|Private CV storage is unavailable/i;
 
@@ -101,6 +102,10 @@ export default function UploadPage() {
     }
     return counts;
   }, [items]);
+  const createdCount = outcomeCounts.get("created") || 0;
+  const updatedCount = outcomeCounts.get("updated") || 0;
+  const heldForReviewCount = outcomeCounts.get("identity_review") || 0;
+  const incompleteExtractionCount = outcomeCounts.get("incomplete_review") || 0;
 
   async function prepareFiles(files: File[]) {
     setPreparing(true);
@@ -109,10 +114,13 @@ export default function UploadPage() {
     setPreparationProgress({ completed: 0, total: files.length });
     try {
       const descriptors: AdminCvDescriptor[] = [];
-      for (let index = 0; index < files.length; index++) {
+      for (let index = 0; index < files.length; index += 1) {
         const file = files[index];
         descriptors.push({
-          digest: await sha256(await file.arrayBuffer()),
+          digest:
+            file.size > MAX_CV_BYTES
+              ? "0".repeat(64)
+              : await sha256(await file.arrayBuffer()),
           name: file.name,
           size: file.size,
           lastModified: file.lastModified || 0,
@@ -156,7 +164,7 @@ export default function UploadPage() {
 
   async function uploadOne(
     file: File,
-    storage: ReturnType<typeof createClient>["storage"],
+    storageClient: ReturnType<typeof createClient>["storage"],
   ): Promise<AdminCvUploadResultLike> {
     const signed = await readJson(
       await fetch("/api/upload-cv/sign", {
@@ -165,11 +173,15 @@ export default function UploadPage() {
         body: JSON.stringify({ fileName: file.name, size: file.size }),
       }),
     );
-    const { error: uploadError } = await storage
-      .from("candidate-original-cvs")
-      .uploadToSignedUrl(signed.objectKey, signed.token, file, {
+    const storage = storageClient.from("candidate-original-cvs");
+    const { error: uploadError } = await storage.uploadToSignedUrl(
+      signed.objectKey,
+      signed.token,
+      file,
+      {
         contentType: signed.contentType,
-      });
+      },
+    );
     if (uploadError)
       throw new Error("Private CV transfer failed; retry this file.");
     const response = await readJson(
@@ -354,13 +366,11 @@ export default function UploadPage() {
         <section style={cardStyle}>
           <h2 style={{ fontSize: 20 }}>Batch results</h2>
           <p style={{ color: "#a8b3c7" }}>
-            Created {outcomeCounts.get("created") || 0} · Updated{" "}
-            {outcomeCounts.get("updated") || 0} · Incomplete review{" "}
-            {outcomeCounts.get("incomplete_review") || 0} · Identity review{" "}
-            {outcomeCounts.get("identity_review") || 0} · Source review{" "}
-            {outcomeCounts.get("source_review") || 0} · Non-SAP rejected{" "}
-            {outcomeCounts.get("non_sap_rejected") || 0} · Retry required{" "}
-            {outcomeCounts.get("failed") || 0}
+            Created {createdCount} · Updated {updatedCount} · Incomplete review{" "}
+            {incompleteExtractionCount} · Identity review {heldForReviewCount} ·{" "}
+            Source review {outcomeCounts.get("source_review") || 0} · Non-SAP
+            rejected {outcomeCounts.get("non_sap_rejected") || 0} · Retry
+            required {outcomeCounts.get("failed") || 0}
           </p>
           <p style={{ color: "#8da0b8", fontSize: 13 }}>
             The resume checkpoint is session-only and contains content hashes
