@@ -78,6 +78,113 @@ function assertUniqueIdentifiers(values: string[], code: string) {
     throw new Error(code);
 }
 
+export function verifySearchIndexExactSetRepairRequest(
+  input: unknown,
+  expectedCommitSha?: string,
+): SearchIndexExactSetRepairRequest {
+  if (!input || typeof input !== "object" || Array.isArray(input))
+    throw new Error("search_index_repair_request_invalid");
+  const value = input as Record<string, unknown>;
+  if (
+    value.artifact !== "candidate_search_index_exact_set_repair_v1" ||
+    !COMMIT_SHA.test(String(value.targetCommitSha || ""))
+  )
+    throw new Error("search_index_repair_request_invalid");
+  if (
+    expectedCommitSha !== undefined &&
+    value.targetCommitSha !== expectedCommitSha
+  )
+    throw new Error("search_index_repair_commit_mismatch");
+  if (
+    !Array.isArray(value.candidateVersions) ||
+    !Array.isArray(value.indexVersions) ||
+    !Array.isArray(value.deleteCandidateIds)
+  )
+    throw new Error("search_index_repair_request_invalid");
+
+  const nonNegativeInteger = (item: unknown, code: string) => {
+    if (!Number.isSafeInteger(item) || Number(item) < 0) throw new Error(code);
+    return Number(item);
+  };
+  const candidateVersions = value.candidateVersions.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item))
+      throw new Error("search_index_repair_candidate_snapshot_invalid");
+    const row = item as Record<string, unknown>;
+    return {
+      candidateId: identifier(row.candidateId),
+      updatedAt: nullableTimestamp(row.updatedAt),
+    };
+  });
+  const indexVersions = value.indexVersions.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item))
+      throw new Error("search_index_repair_index_snapshot_invalid");
+    const row = item as Record<string, unknown>;
+    return {
+      candidateId: identifier(row.candidateId),
+      sourceUpdatedAt: nullableTimestamp(row.sourceUpdatedAt),
+      updatedAt: nullableTimestamp(row.updatedAt),
+    };
+  });
+  const deleteCandidateIds = value.deleteCandidateIds.map(identifier);
+  assertUniqueIdentifiers(
+    candidateVersions.map((row) => row.candidateId),
+    "search_index_repair_candidate_snapshot_invalid",
+  );
+  assertUniqueIdentifiers(
+    indexVersions.map((row) => row.candidateId),
+    "search_index_repair_index_snapshot_invalid",
+  );
+  assertUniqueIdentifiers(
+    deleteCandidateIds,
+    "search_index_repair_delete_set_invalid",
+  );
+
+  const expectedCandidateCount = nonNegativeInteger(
+    value.expectedCandidateCount,
+    "search_index_repair_count_invalid",
+  );
+  const expectedIndexCount = nonNegativeInteger(
+    value.expectedIndexCount,
+    "search_index_repair_count_invalid",
+  );
+  const expectedDeleteCount = nonNegativeInteger(
+    value.expectedDeleteCount,
+    "search_index_repair_count_invalid",
+  );
+  const expectedRemainingIndexCount = nonNegativeInteger(
+    value.expectedRemainingIndexCount,
+    "search_index_repair_count_invalid",
+  );
+  const indexedIds = new Set(indexVersions.map((row) => row.candidateId));
+  if (
+    expectedCandidateCount !== candidateVersions.length ||
+    expectedIndexCount !== indexVersions.length ||
+    expectedDeleteCount !== deleteCandidateIds.length ||
+    expectedDeleteCount <= 0 ||
+    expectedRemainingIndexCount + expectedDeleteCount !== expectedIndexCount ||
+    deleteCandidateIds.some((candidateId) => !indexedIds.has(candidateId))
+  )
+    throw new Error("search_index_repair_count_invalid");
+
+  const planBasis = {
+    artifact: "candidate_search_index_exact_set_repair_v1" as const,
+    targetCommitSha: String(value.targetCommitSha),
+    expectedCandidateCount,
+    expectedIndexCount,
+    expectedDeleteCount,
+    expectedRemainingIndexCount,
+    candidateVersions,
+    indexVersions,
+    deleteCandidateIds,
+  };
+  const planFingerprint = String(value.planFingerprint || "");
+  if (!/^[0-9a-f]{64}$/.test(planFingerprint))
+    throw new Error("search_index_repair_fingerprint_invalid");
+  if (fingerprint(planBasis) !== planFingerprint)
+    throw new Error("search_index_repair_fingerprint_mismatch");
+  return { ...planBasis, planFingerprint };
+}
+
 export function buildSearchIndexExactSetRepair(input: {
   candidates: AnyRecord[];
   indexRows: AnyRecord[];
