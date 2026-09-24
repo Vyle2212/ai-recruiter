@@ -118,6 +118,11 @@ export type EmploymentPromotionBackupGateInput = Omit<
   "authorization"
 >;
 
+export type EmploymentPromotionBackupReadback = {
+  evidence: EmploymentPromotionBackupEvidence;
+  candidates: EmploymentPromotionCandidateState[];
+};
+
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -403,6 +408,78 @@ export function assertEmploymentPromotionBackupEvidence(
     throw new Error(
       "Employment promotion execution refused: backup predates the reviewed source state",
     );
+}
+
+export function buildEmploymentPromotionBackupEvidenceFromReadback(input: {
+  preflight: EmploymentPromotionBatchPreflight;
+  candidates: readonly EmploymentPromotionCandidateState[];
+  capturedAt: string;
+  expectedCommitSha: string;
+}): EmploymentPromotionBackupReadback {
+  const { preflight } = input;
+  assertSha(input.expectedCommitSha, "expectedCommitSha");
+  assertPreflightIntegrity(preflight);
+  if (!validDate(input.capturedAt))
+    throw new Error(
+      "Employment promotion backup refused: invalid capture timestamp",
+    );
+  if (preflight.targetCommitSha !== input.expectedCommitSha)
+    throw new Error(
+      "Employment promotion backup refused: target commit mismatch",
+    );
+
+  const snapshotIds = input.candidates.map(({ candidateId }) =>
+    clean(candidateId),
+  );
+  if (snapshotIds.some((candidateId) => !candidateId))
+    throw new Error(
+      "Employment promotion backup refused: candidate ID missing",
+    );
+  assertUnique(snapshotIds, "backup readback");
+  if (snapshotIds.length !== preflight.entries)
+    throw new Error(
+      "Employment promotion backup refused: candidate set is incomplete",
+    );
+
+  const snapshotById = new Map(
+    input.candidates.map((candidate) => [
+      clean(candidate.candidateId),
+      candidate,
+    ]),
+  );
+  const candidates = preflight.operations.map(({ candidateId }) => {
+    const candidate = snapshotById.get(candidateId);
+    if (!candidate)
+      throw new Error(
+        "Employment promotion backup refused: candidate set mismatch",
+      );
+    return structuredClone(candidate);
+  });
+  if (
+    candidateSetFingerprint(snapshotIds) !== preflight.candidateSetFingerprint
+  )
+    throw new Error(
+      "Employment promotion backup refused: candidate set mismatch",
+    );
+  if (fingerprint(candidates) !== preflight.sourceStateFingerprint)
+    throw new Error(
+      "Employment promotion backup refused: source state does not match reviewed preflight",
+    );
+
+  const evidence: EmploymentPromotionBackupEvidence = {
+    artifact: "verified_candidate_backup_v1",
+    capturedAt: input.capturedAt,
+    candidateCount: candidates.length,
+    candidateSetFingerprint: preflight.candidateSetFingerprint,
+    sourceStateFingerprint: preflight.sourceStateFingerprint,
+    verification: "readback_verified",
+  };
+  assertEmploymentPromotionBackupEvidence({
+    preflight,
+    backup: evidence,
+    expectedCommitSha: input.expectedCommitSha,
+  });
+  return { evidence, candidates };
 }
 
 export function assertEmploymentPromotionExecutionGate(
