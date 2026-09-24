@@ -5,6 +5,7 @@ import {
   recruiterSearchPrivateNoStoreHeaders,
   requireRecruiterSearchAuthorization,
 } from "@/lib/recruiterSearchAuthorization";
+import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
 
 export async function GET() {
   const authorization = await requireRecruiterSearchAuthorization({
@@ -17,7 +18,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from("candidates")
     // The list endpoint has no valid need for raw CV, contact, or notes fields.
-    .select("id,name,current_title,current_company,location,primary_module,years,profile_quality_score,updated_at")
+    .select("id,name,current_title,current_company,location,primary_module,years,profile_quality_score,updated_at,status")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -27,5 +28,8 @@ export async function GET() {
     );
   }
 
-  return NextResponse.json(data || [], { headers: recruiterSearchPrivateNoStoreHeaders });
+  const visible = (data || [])
+    .filter((candidate: any) => candidateSearchLifecycleDecision(candidate).visible)
+    .map(({ status: _status, ...candidate }: any) => candidate);
+  return NextResponse.json(visible, { headers: recruiterSearchPrivateNoStoreHeaders });
 }

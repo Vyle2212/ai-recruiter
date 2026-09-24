@@ -4,6 +4,7 @@ import {
   normalizeText,
   parseSkills,
 } from "@/lib/candidate-utils";
+import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
 
 export async function GET(
   request: Request,
@@ -54,7 +55,9 @@ export async function GET(
     // MATCHING
     // =========================
 
-    const matches = candidates.map(
+    const matches = candidates
+      .filter((candidate: any) => candidateSearchLifecycleDecision(candidate).visible)
+      .map(
       (candidate: any) => {
         const candidateSkills = parseSkills(
           candidate.skills

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
 import { recruiterSearchAuthorizationDenied, recruiterSearchPrivateNoStoreHeaders, requireRecruiterSearchAuthorization } from "@/lib/recruiterSearchAuthorization";
+import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
 
 const supabase = createLazySupabaseServiceClient();
 
@@ -14,9 +15,16 @@ export async function POST(req: NextRequest) {
 
     const { data: candidate } = await supabase
       .from("candidates")
-      .select("id,name,email,raw_text")
+      .select("id,name,email,raw_text,status")
       .eq("id", candidate_id)
       .single();
+
+    if (!candidate || !candidateSearchLifecycleDecision(candidate).visible) {
+      return NextResponse.json(
+        { error: "Candidate is not eligible for shortlisting." },
+        { status: 409, headers: recruiterSearchPrivateNoStoreHeaders },
+      );
+    }
 
     const { data, error } = await supabase
       .from("shortlisted")

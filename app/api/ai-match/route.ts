@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
 
 export async function POST(req: Request) {
   try {
@@ -11,6 +12,19 @@ export async function POST(req: Request) {
       score,
       reason,
     } = body;
+
+    const { data: candidate, error: candidateError } = await supabase
+      .from("candidates")
+      .select("id,status")
+      .eq("id", candidate_id)
+      .single();
+
+    if (candidateError || !candidate || !candidateSearchLifecycleDecision(candidate).visible) {
+      return NextResponse.json(
+        { error: "Candidate is not eligible for matching." },
+        { status: 409 },
+      );
+    }
 
     const { data, error } =
       await supabase

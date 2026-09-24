@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { createEmbedding } from "@/lib/embedding";
 import { modulesForKeyword } from "@/lib/candidateSearchIndex";
+import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,6 +56,7 @@ export async function POST(req: NextRequest) {
       .from("candidates")
       .select(`
         id,
+        status,
         name,
         email,
         phone,
@@ -92,8 +94,9 @@ export async function POST(req: NextRequest) {
     const orderById = new Map(ids.map((id: string, idx: number) => [id, idx]));
 
     const results = (candidates || [])
+      .filter((candidate: any) => candidateSearchLifecycleDecision(candidate).visible)
       .sort((a: any, b: any) => Number(orderById.get(a.id) ?? 999999) - Number(orderById.get(b.id) ?? 999999))
-      .map((c: any) => ({
+      .map(({ status: _status, ...c }: any) => ({
         ...c,
         candidate_id: c.id,
         vectorFit: fitById.get(c.id) || 0,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dedupeByCanonicalIdentity } from "@/lib/identityResolution";
 import { classifyCandidateSearchVisibility } from "@/lib/candidateSearchVisibility";
+import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
 import { buildTalentSearchPaginationMeta } from "@/lib/talentSearchPagination";
 import { buildSearchIndexAudit } from "@/lib/searchIndexAudit";
 import { candidateProfileTimestampLabels } from "@/lib/candidateDuplicateIdentity";
@@ -422,10 +423,13 @@ function hasStrongSapTitleEvidenceForSearch(value: any) {
 }
 
 function hiddenReasonForRecruiterSearch(candidate: AnyRecord, showReview = false) {
-  if (showReview) {
-    const status = cleanSearchKey(candidate.status);
-    if (SEARCH_HIDDEN_STATUSES.has(status)) return "archivedOrInactive";
-  }
+  const lifecycle = candidateSearchLifecycleDecision(candidate, {
+    includeReview: showReview,
+  });
+  if (!lifecycle.visible)
+    return lifecycle.reason === "review_required"
+      ? "visibility"
+      : "archivedOrInactive";
   const visibility = classifyCandidateSearchVisibility(candidate);
   return visibility.blocked_from_recruiter_search ? visibility.validation_queue_reason : "";
 }
@@ -1693,7 +1697,6 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-
 
 
 

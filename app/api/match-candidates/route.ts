@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createLazyOpenAiClient, createLazySupabaseServiceClient } from "@/lib/runtimeClients";
+import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
 
 const openai = createLazyOpenAiClient();
 const supabase = createLazySupabaseServiceClient();
@@ -29,7 +30,9 @@ export async function POST(req: NextRequest) {
 
     const matches = [];
 
-    for (const candidate of candidates || []) {
+    for (const candidate of (candidates || []).filter(
+      (row: any) => candidateSearchLifecycleDecision(row).visible,
+    )) {
       const prompt = `
       Compare candidate and job.
 
@@ -84,6 +87,8 @@ export async function POST(req: NextRequest) {
         reason: parsed.reason || "",
       });
     }
+
+    if (!matches.length) return NextResponse.json(matches);
 
     const { error } = await supabase
       .from("matches")

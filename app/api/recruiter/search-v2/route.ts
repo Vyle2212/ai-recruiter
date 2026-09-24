@@ -790,15 +790,13 @@ export async function POST(request: NextRequest) {
             .join("|"),
         ).slice(0, 12);
     }
-    if (cacheable) {
-      const lifecycle = await applyCurrentCandidateSearchLifecycle(
-        documents,
-        request.signal,
-      );
-      documents = lifecycle.documents;
-      lifecycleBlockedCount = lifecycle.blockedCount;
-      datasetRevision = `${datasetRevision}:lifecycle-${lifecycle.visibilityRevision}`;
-    }
+    const lifecycle = await applyCurrentCandidateSearchLifecycle(
+      documents,
+      request.signal,
+    );
+    documents = lifecycle.documents;
+    lifecycleBlockedCount = lifecycle.blockedCount;
+    datasetRevision = `${datasetRevision}:lifecycle-${lifecycle.visibilityRevision}`;
     unifiedIntent = confirmSearchV2IdentityIntent(
       documents,
       body.query,
