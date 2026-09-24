@@ -34,23 +34,25 @@ const auditedFiles = files.filter((file) => {
   );
   const hasLocalBoundary =
     /requireRecruiter(?:ApiRoute|Search)Authorization/.test(source);
+  const hasCandidateBoundary = /authorizeCandidateCvUpload/.test(source);
   const usesPrivilegedCandidateData =
     /SUPABASE_SERVICE_ROLE|createLazySupabaseServiceClient|createCandidateSupabaseAdminClient|\.from\(["']candidates["']\)/.test(
       source,
     );
   return (
-    relative.startsWith("recruiter/") ||
-    hasProxyPolicy ||
-    [
-      "admin/audit-search-index/route.ts",
-      "admin/rebuild-search-index/route.ts",
-      "admin/rebuild-candidate/route.ts",
-      "candidate-search-index/rebuild/route.ts",
-      "candidate-search-index/sync/route.ts",
-      "embed-candidate/route.ts",
-    ].includes(relative) ||
-    source.includes("@/lib/supabase") ||
-    (!hasLocalBoundary && usesPrivilegedCandidateData)
+    !hasCandidateBoundary &&
+    (relative.startsWith("recruiter/") ||
+      hasProxyPolicy ||
+      [
+        "admin/audit-search-index/route.ts",
+        "admin/rebuild-search-index/route.ts",
+        "admin/rebuild-candidate/route.ts",
+        "candidate-search-index/rebuild/route.ts",
+        "candidate-search-index/sync/route.ts",
+        "embed-candidate/route.ts",
+      ].includes(relative) ||
+      source.includes("@/lib/supabase") ||
+      (!hasLocalBoundary && usesPrivilegedCandidateData))
   );
 });
 
@@ -83,7 +85,11 @@ const allRouteMethods = files.flatMap((file) => {
 const uncoveredRouteMethods = allRouteMethods.filter(
   ({ route, method, source }) => {
     if (explicitPublicMethods.has(`${method} ${route}`)) return false;
-    if (/requireRecruiter(?:ApiRoute|Search)Authorization/.test(source))
+    if (
+      /requireRecruiter(?:ApiRoute|Search)Authorization|authorizeCandidateCvUpload/.test(
+        source,
+      )
+    )
       return false;
     return !recruiterApiPolicyForRequest(route, method);
   },
