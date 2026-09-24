@@ -4,6 +4,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import { CvSourceError } from "../lib/cvPdfOcr";
 import { commitCandidateWithArchivedCv } from "../lib/originalCvArchiveCommit";
+import * as originalCvArchiveKey from "../lib/originalCvArchiveKey";
 async function main() {
   const saved: string[] = [];
   const archived: string[] = [];
@@ -46,6 +47,14 @@ async function main() {
       discardUnlinkedOriginalCv: async () => {},
     },
     "@/lib/originalCvArchiveCommit": { commitCandidateWithArchivedCv },
+    "@/lib/originalCvArchiveKey": originalCvArchiveKey,
+    "@/lib/recruiterApiAuthorization": {
+      requireRecruiterApiRouteAuthorization: async () => ({
+        allowed: true,
+        scope: { subjectId: "00000000-0000-4000-8000-000000000001" },
+      }),
+    },
+    "@/lib/supabase": { supabase: {} },
     "@/lib/candidateExtractionCoverage": {
       evaluateCandidateExtractionCoverage: () => ({
         status: "complete_for_validation",
@@ -104,7 +113,10 @@ async function main() {
   const form = new FormData();
   form.append("files", new File(["broken"], "failed.pdf"));
   form.append("files", new File(["valid"], "valid.pdf"));
-  const response = await exports.POST({ formData: async () => form });
+  const response = await exports.POST({
+    headers: new Headers({ "content-type": "multipart/form-data" }),
+    formData: async () => form,
+  });
   assert.deepEqual(
     saved,
     ["valid.pdf"],
