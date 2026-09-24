@@ -235,19 +235,26 @@ async function main() {
   };
   const authRuntime = await import("../lib/recruiterSearchAuthorization");
   const providerRuntime = await import("../lib/externalTalentProviderRegistry");
+  const lifecycleRuntime = await import("../lib/searchV2CandidateLifecycle");
   const searchRoute = await import("../app/api/recruiter/search-v2/route");
-  const detailRoute =
-    await import("../app/api/recruiter/search-v2/candidate-details/[candidateId]/route");
-  const analysisRoute =
-    await import("../app/api/recruiter/search-v2/external-analysis/route");
-  const importRoute =
-    await import("../app/api/recruiter/search-v2/external-profile-import/route");
-  const guidedIntentRoute =
-    await import("../app/api/recruiter/search-v2/guided-intent/route");
-  const guidedSourceRoute =
-    await import("../app/api/recruiter/search-v2/guided-source/route");
-  const historyRoute =
-    await import("../app/api/recruiter/search-v2/history/route");
+  const detailRoute = await import(
+    "../app/api/recruiter/search-v2/candidate-details/[candidateId]/route"
+  );
+  const analysisRoute = await import(
+    "../app/api/recruiter/search-v2/external-analysis/route"
+  );
+  const importRoute = await import(
+    "../app/api/recruiter/search-v2/external-profile-import/route"
+  );
+  const guidedIntentRoute = await import(
+    "../app/api/recruiter/search-v2/guided-intent/route"
+  );
+  const guidedSourceRoute = await import(
+    "../app/api/recruiter/search-v2/guided-source/route"
+  );
+  const historyRoute = await import(
+    "../app/api/recruiter/search-v2/history/route"
+  );
   let capabilityCalls = 0;
   let providerSearchCalls = 0;
   providerRuntime.setExternalTalentProviderForTests({
@@ -418,6 +425,7 @@ async function main() {
   const previousTestPayloads = process.env.SEARCH_V2_TEST_PAYLOADS_ENABLED;
   Reflect.set(process.env, "NODE_ENV", "test");
   process.env.SEARCH_V2_TEST_PAYLOADS_ENABLED = "true";
+  lifecycleRuntime.setCurrentBlockedCandidatesResolverForTests(async () => []);
   authRuntime.setRecruiterSearchAuthorizationResolverForTests(async () => ({
     allowed: true,
     scope: {
@@ -460,6 +468,7 @@ async function main() {
   if (previousTestPayloads === undefined)
     delete process.env.SEARCH_V2_TEST_PAYLOADS_ENABLED;
   else process.env.SEARCH_V2_TEST_PAYLOADS_ENABLED = previousTestPayloads;
+  lifecycleRuntime.setCurrentBlockedCandidatesResolverForTests(null);
 
   authRuntime.setRecruiterSearchAuthorizationResolverForTests(null);
   providerRuntime.setExternalTalentProviderForTests(null);

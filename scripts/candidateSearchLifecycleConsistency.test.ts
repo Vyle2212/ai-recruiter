@@ -80,6 +80,8 @@ assert.match(lifecycleAdapter, /\.from\("candidates"\)/);
 assert.match(lifecycleAdapter, /\.select\("id,status"\)/);
 assert.match(lifecycleAdapter, /CANDIDATE_SEARCH_BLOCKED_STATUSES/);
 assert.match(lifecycleAdapter, /documents\.filter\(/);
+assert.match(lifecycleAdapter, /setCurrentBlockedCandidatesResolverForTests/);
+assert.match(lifecycleAdapter, /process\.env\.NODE_ENV !== "test"/);
 assert.match(searchVisibility, /candidateSearchLifecycleDecision\(candidate\)/);
 assert.match(legacySearch, /candidateSearchLifecycleDecision\(candidate/);
 assert.match(generateMatches, /candidateSearchLifecycleDecision\(candidate\)/);
