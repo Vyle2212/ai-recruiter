@@ -5,6 +5,7 @@ import {
   CANDIDATE_SEARCH_BLOCKED_STATUSES,
   candidateSearchLifecycleDecision,
 } from "../lib/candidateSearchLifecycle";
+import { buildSearchIndexAudit } from "../lib/searchIndexAudit";
 
 const blocked = [
   "deleted",
@@ -46,10 +47,73 @@ for (const status of ["deleted", "non_sap", "rejected_noise"]) {
 }
 assert.deepEqual([...CANDIDATE_SEARCH_BLOCKED_STATUSES].sort(), blocked.sort());
 
+const reconciliation = buildSearchIndexAudit({
+  candidates: [
+    {
+      id: "eligible-current",
+      status: "active",
+      updated_at: "2026-09-25T00:00:00.000Z",
+    },
+    {
+      id: "eligible-missing",
+      status: "active",
+      updated_at: "2026-09-25T00:00:00.000Z",
+    },
+    {
+      id: "blocked-review",
+      status: "needs_review",
+      updated_at: "2026-09-25T00:00:00.000Z",
+    },
+  ],
+  indexRows: [
+    {
+      candidate_id: "eligible-current",
+      source_updated_at: "2026-09-24T00:00:00.000Z",
+    },
+    { candidate_id: "blocked-review" },
+    { candidate_id: "orphan-index-row" },
+    { candidate_id: "" },
+  ],
+  sampleSize: 10,
+});
+assert.equal(reconciliation.eligibleCandidates, 2);
+assert.equal(reconciliation.blockedCandidates, 1);
+assert.equal(reconciliation.missingIndexRows, 1);
+assert.equal(reconciliation.staleIndexRows, 1);
+assert.equal(reconciliation.blockedCandidateIndexRows, 1);
+assert.equal(reconciliation.orphanIndexRows, 1);
+assert.equal(reconciliation.malformedIndexRows, 1);
+assert.equal(reconciliation.unexpectedIndexedCandidates, 2);
+assert.equal(reconciliation.exactSetAligned, false);
+assert.deepEqual(reconciliation.sampleMissingCandidateIds, [
+  "eligible-missing",
+]);
+assert.deepEqual(reconciliation.sampleBlockedCandidateIds, ["blocked-review"]);
+assert.deepEqual(reconciliation.sampleOrphanCandidateIds, ["orphan-index-row"]);
+
+const aligned = buildSearchIndexAudit({
+  candidates: [
+    {
+      id: "eligible-current",
+      status: "active",
+      updated_at: "2026-09-25T00:00:00.000Z",
+    },
+    { id: "blocked-review", status: "needs_review" },
+  ],
+  indexRows: [
+    {
+      candidate_id: "eligible-current",
+      source_updated_at: "2026-09-25T00:00:00.000Z",
+    },
+  ],
+});
+assert.equal(aligned.exactSetAligned, true);
+
 const read = (path: string) =>
   fs.readFileSync(new URL(path, import.meta.url), "utf8");
 const searchV2 = read("../app/api/recruiter/search-v2/route.ts");
 const lifecycleAdapter = read("../lib/searchV2CandidateLifecycle.ts");
+const searchIndexReadback = read("../lib/search/rebuildSearchIndex.ts");
 const searchVisibility = read("../lib/candidateSearchVisibility.ts");
 const legacySearch = read("../app/api/search-candidates/route.ts");
 const generateMatches = read("../app/api/generate-matches/route.ts");
@@ -82,6 +146,10 @@ assert.match(lifecycleAdapter, /CANDIDATE_SEARCH_BLOCKED_STATUSES/);
 assert.match(lifecycleAdapter, /documents\.filter\(/);
 assert.match(lifecycleAdapter, /setCurrentBlockedCandidatesResolverForTests/);
 assert.match(lifecycleAdapter, /process\.env\.NODE_ENV !== "test"/);
+assert.match(searchIndexReadback, /\.select\("id,status,updated_at"\)/);
+assert.match(searchIndexReadback, /buildSearchIndexAudit\(\{/);
+assert.match(searchIndexReadback, /reconciliation\.exactSetAligned/);
+assert.match(searchIndexReadback, /readyForSearch/);
 assert.match(searchVisibility, /candidateSearchLifecycleDecision\(candidate\)/);
 assert.match(legacySearch, /candidateSearchLifecycleDecision\(candidate/);
 assert.match(generateMatches, /candidateSearchLifecycleDecision\(candidate\)/);

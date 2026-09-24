@@ -2,7 +2,7 @@ import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
 import { legacyIndexMutationRefusal } from "./legacyIndexMutationGate";
-import { candidateSearchLifecycleDecision } from "../candidateSearchLifecycle";
+import { buildSearchIndexAudit } from "../searchIndexAudit";
 
 const PAGE_SIZE = 300;
 
@@ -32,72 +32,30 @@ export async function rebuildSearchIndex(): Promise<never> {
 
 export async function auditSearchIndex() {
   const db = getAdminSupabase();
-  let totalCandidates = 0;
+  const candidates: Array<Record<string, any>> = [];
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data, error } = await db
       .from("candidates")
-      .select("status")
+      .select("id,status,updated_at")
       .range(from, from + PAGE_SIZE - 1);
     if (error) throw error;
     const page = data || [];
-    totalCandidates += page.filter(
-      ({ status }) => candidateSearchLifecycleDecision({ status }).visible,
-    ).length;
+    candidates.push(...page);
     if (page.length < PAGE_SIZE) break;
   }
 
-  const index = db.from("candidate_search_index");
-  const [
-    indexedResult,
-    moduleResult,
-    nameResult,
-    quality50Result,
-    quality60Result,
-    reviewResult,
-  ] = await Promise.all([
-    index.select("candidate_id", { count: "exact", head: true }),
-    db
-      .from("candidate_search_index")
-      .select("candidate_id", { count: "exact", head: true })
-      .or("primary_module.is.null,primary_module.eq.UNKNOWN"),
-    db
-      .from("candidate_search_index")
-      .select("candidate_id", { count: "exact", head: true })
-      .or(
-        "display_name.is.null,display_name.eq.Review Required,display_name.eq.Profile Under Review",
-      ),
-    db
-      .from("candidate_search_index")
-      .select("candidate_id", { count: "exact", head: true })
-      .lt("quality_score", 50),
-    db
-      .from("candidate_search_index")
-      .select("candidate_id", { count: "exact", head: true })
-      .lt("quality_score", 60),
-    db
-      .from("candidate_search_index")
-      .select("candidate_id", { count: "exact", head: true })
-      .ilike("display_name", "%review%"),
-  ]);
-  for (const result of [
-    indexedResult,
-    moduleResult,
-    nameResult,
-    quality50Result,
-    quality60Result,
-    reviewResult,
-  ]) {
-    if (result.error) throw result.error;
-  }
-
+  const indexRows: Array<Record<string, any>> = [];
   const byModule: Record<string, number> = {};
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data, error } = await db
       .from("candidate_search_index")
-      .select("primary_module")
+      .select(
+        "candidate_id,source_updated_at,updated_at,primary_module,display_name,quality_score",
+      )
       .range(from, from + PAGE_SIZE - 1);
     if (error) throw error;
     const page = data || [];
+    indexRows.push(...page);
     for (const { primary_module } of page) {
       const moduleName = primary_module || "NULL";
       byModule[moduleName] = (byModule[moduleName] || 0) + 1;
@@ -105,14 +63,45 @@ export async function auditSearchIndex() {
     if (page.length < PAGE_SIZE) break;
   }
 
+  const reconciliation = buildSearchIndexAudit({
+    candidates,
+    indexRows,
+    sampleSize: 20,
+  });
+  const missingPrimaryModule = indexRows.filter(
+    (row) => !row.primary_module || row.primary_module === "UNKNOWN",
+  ).length;
+  const missingDisplayName = indexRows.filter((row) =>
+    ["", "Review Required", "Profile Under Review"].includes(
+      String(row.display_name || ""),
+    ),
+  ).length;
+  const qualityBelow50 = indexRows.filter(
+    (row) => Number(row.quality_score || 0) < 50,
+  ).length;
+  const qualityBelow60 = indexRows.filter(
+    (row) => Number(row.quality_score || 0) < 60,
+  ).length;
+  const reviewNames = indexRows.filter((row) =>
+    /review/i.test(String(row.display_name || "")),
+  ).length;
+  const readyForSearch =
+    reconciliation.exactSetAligned &&
+    missingPrimaryModule === 0 &&
+    missingDisplayName === 0 &&
+    qualityBelow50 === 0 &&
+    reviewNames === 0;
+
   return {
-    totalCandidates,
-    indexed: indexedResult.count || 0,
-    missingPrimaryModule: moduleResult.count || 0,
-    missingDisplayName: nameResult.count || 0,
-    qualityBelow50: quality50Result.count || 0,
-    qualityBelow60: quality60Result.count || 0,
-    reviewNames: reviewResult.count || 0,
+    readyForSearch,
+    totalCandidates: reconciliation.eligibleCandidates,
+    indexed: reconciliation.searchIndexRows,
+    missingPrimaryModule,
+    missingDisplayName,
+    qualityBelow50,
+    qualityBelow60,
+    reviewNames,
     byModule,
+    reconciliation,
   };
 }
