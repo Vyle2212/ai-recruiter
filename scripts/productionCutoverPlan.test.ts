@@ -49,7 +49,7 @@ const plan = buildProductionCutoverPlan({
   currentCommitSha: commit,
   now,
 });
-assert.equal(plan.steps.length, 19);
+assert.equal(plan.steps.length, 20);
 assert.equal(plan.recoveryVerified, true);
 assert.equal(plan.databaseRestoreVerified, true);
 assert.equal(plan.originalCvCollectionVerified, true);

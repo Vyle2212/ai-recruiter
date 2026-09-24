@@ -78,6 +78,7 @@
         "audit:display:preview": "tsx scripts/previewCandidateDisplayRepairs.ts",
         "audit:display:apply": "tsx scripts/applyCandidateDisplayRepairs.ts",
         "audit:search-index": "tsx scripts/auditSearchIndex.ts",
+        "prepare:search-index-exact-set-repair": "node --import tsx scripts/prepareSearchIndexExactSetRepair.ts",
         "audit:extraction": "tsx scripts/auditCandidateExtractionQuality.ts",
         "search-index:rebuild:plan": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/rebuildSearchIndexSafe.ts",
         "test:search": "tsx scripts/guidedSourcingSources.test.ts && tsx scripts/guidedSourcingEnterpriseReview.test.ts && tsx scripts/guidedSourcingRuntime.test.ts && tsx scripts/guidedSourcingUxCleanup.test.ts && tsx scripts/searchV2HistoryAutocomplete.test.ts && tsx scripts/searchV2RouteConsolidation.test.ts && tsx scripts/searchQualityGate.test.ts && tsx scripts/searchV2ResponseContract.test.ts && tsx scripts/searchV2EncodingSessionMigration.test.ts && tsx scripts/recruiterSearchSnapshot.test.ts && tsx scripts/nicheTargetEvidenceQualification.test.ts && tsx scripts/searchV2V18ProfessionalContext.test.ts && tsx scripts/searchV2ClientBoundary.test.ts && tsx scripts/searchV2V19ExecutionProfile.test.ts && tsx scripts/guidedSourcingSafety.test.ts && tsx scripts/guidedSourcingTimeout.test.ts && tsx scripts/guidedSourcingUi.test.ts && tsx scripts/searchV2PrecisionHardening.test.ts && tsx scripts/sapNichePrecisionRegression.test.ts",

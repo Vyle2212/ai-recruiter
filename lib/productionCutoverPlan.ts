@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 export const PRODUCTION_CUTOVER_SQL_SEQUENCE = [
   "supabase/manual/202609240002_reviewed_employment_promotion_transaction.sql",
+  "supabase/manual/202609250000_candidate_search_index_exact_set_repair.sql",
   "supabase/manual/202609230000_production_private_data_rls_snapshot.sql",
   "supabase/manual/202609230001_production_private_data_rls_cutover.sql",
   "supabase/manual/202609230002_production_private_data_rls_readback.sql",
