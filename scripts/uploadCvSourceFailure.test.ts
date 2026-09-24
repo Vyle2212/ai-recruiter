@@ -3,8 +3,10 @@ import fs from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 import { CvSourceError } from "../lib/cvPdfOcr";
+import { commitCandidateWithArchivedCv } from "../lib/originalCvArchiveCommit";
 async function main() {
   const saved: string[] = [];
+  const archived: string[] = [];
   const stubs: Record<string, unknown> = {
     "next/server": { NextResponse: { json: (body: unknown) => body } },
     "@/lib/cvPdfOcr": { CvSourceError },
@@ -25,9 +27,20 @@ async function main() {
     "@/lib/saveCandidate": {
       saveCandidate: async (input: any) => {
         saved.push(input.name);
-        return { id: "synthetic", name: input.name };
+        return { id: "synthetic", name: input.name, source_file: input.archivedCvReference };
       },
     },
+    "@/lib/originalCvArchive": {
+      archiveOriginalCv: async (name: string) => {
+        archived.push(name);
+        return {
+          reference: "candidate-original-cvs/00000000-0000-4000-8000-000000000000.pdf",
+          objectKey: "00000000-0000-4000-8000-000000000000.pdf",
+        };
+      },
+      discardUnlinkedOriginalCv: async () => {},
+    },
+    "@/lib/originalCvArchiveCommit": { commitCandidateWithArchivedCv },
     "@/lib/sapTalentTaxonomy": {
       enrichCandidateWithSapTaxonomy: (x: unknown) => x,
     },
@@ -79,6 +92,7 @@ async function main() {
     ["valid.pdf"],
     "An OCR failure must never reach saveCandidate",
   );
+  assert.deepEqual(archived, ["valid.pdf"], "An OCR failure must never archive invalid bytes");
   assert.equal(response.partialSuccess, true);
   assert.equal(response.successCount, 1);
   assert.equal(response.failCount, 1);
