@@ -72,6 +72,7 @@ declare
   v_auth_user_id uuid := (select auth.uid());
   v_profile_id uuid;
   v_email text;
+  v_profile_status text;
   v_verified_auth_email text;
   v_candidate_ids uuid[];
   v_candidate_id uuid;
@@ -88,12 +89,13 @@ begin
     raise exception 'verified email required';
   end if;
 
-  select p.id, lower(btrim(p.email)), p.candidate_id
-    into v_profile_id, v_email, v_profile_candidate_id
+  select p.id, lower(btrim(p.email)), p.status, p.candidate_id
+    into v_profile_id, v_email, v_profile_status, v_profile_candidate_id
   from public.user_profiles p
-  where p.auth_user_id = v_auth_user_id and p.role = 'candidate' and p.status = 'active'
+  where p.auth_user_id = v_auth_user_id and p.role = 'candidate'
+    and p.status in ('pending_claim','active')
   for update;
-  if v_profile_id is null then raise exception 'active candidate profile required'; end if;
+  if v_profile_id is null then raise exception 'candidate claim profile required'; end if;
   if v_email is distinct from v_verified_auth_email then
     raise exception 'verified profile email mismatch';
   end if;
@@ -120,7 +122,8 @@ begin
   if v_profile_candidate_id is not null
      or v_owner_profile_id is not null
      or v_link_candidate_id is not null then
-    if v_profile_candidate_id = v_candidate_id
+    if v_profile_status = 'active'
+       and v_profile_candidate_id = v_candidate_id
        and v_owner_profile_id = v_profile_id
        and v_link_candidate_id = v_candidate_id
        and v_link_status = 'active' then
@@ -143,7 +146,8 @@ begin
   ) then
     raise exception 'candidate claim conflict';
   end if;
-  update public.user_profiles set candidate_id = v_candidate_id, updated_at = now()
+  update public.user_profiles
+  set candidate_id = v_candidate_id, status = 'active', updated_at = now()
   where id = v_profile_id;
   update public.candidates
   set profile_confirmation_status = 'claimed_incomplete',

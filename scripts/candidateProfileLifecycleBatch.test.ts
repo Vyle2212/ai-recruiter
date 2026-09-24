@@ -94,6 +94,8 @@ assert.match(claimSql, /security definer/);
 assert.match(claimSql, /set search_path = ''/);
 assert.match(claimSql, /u\.email_confirmed_at is not null/);
 assert.match(claimSql, /v_email is distinct from v_verified_auth_email/);
+assert.match(claimSql, /p\.status in \('pending_claim','active'\)/);
+assert.match(claimSql, /status = 'active', updated_at = now\(\)/);
 assert.match(claimSql, /v_profile_candidate_id = v_candidate_id/);
 assert.match(claimSql, /v_owner_profile_id = v_profile_id/);
 assert.match(claimSql, /v_link_candidate_id = v_candidate_id/);
