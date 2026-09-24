@@ -71,4 +71,8 @@ reports/candidate-reextraction-review.json
 
 # AI extraction cache
 reports/ai-extraction-cache/
+
+# Private production employment promotion inputs (never commit candidate data)
+employment-promotion-private/
+*.employment-promotion-private.json
 !docs/staging-phase5-runtime-evidence-schema-v6.json

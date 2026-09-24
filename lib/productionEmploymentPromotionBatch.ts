@@ -113,6 +113,11 @@ export type EmploymentPromotionExecutionGateInput = {
   expectedCommitSha: string;
 };
 
+export type EmploymentPromotionBackupGateInput = Omit<
+  EmploymentPromotionExecutionGateInput,
+  "authorization"
+>;
+
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -365,34 +370,15 @@ export function preflightEmploymentPromotionBatch(input: {
   };
 }
 
-export function assertEmploymentPromotionExecutionGate(
-  input: EmploymentPromotionExecutionGateInput,
+export function assertEmploymentPromotionBackupEvidence(
+  input: EmploymentPromotionBackupGateInput,
 ) {
-  const { preflight, backup, authorization } = input;
+  const { preflight, backup } = input;
   assertSha(input.expectedCommitSha, "expectedCommitSha");
   assertPreflightIntegrity(preflight);
-  if (
-    preflight.targetCommitSha !== input.expectedCommitSha ||
-    authorization.targetCommitSha !== input.expectedCommitSha
-  )
+  if (preflight.targetCommitSha !== input.expectedCommitSha)
     throw new Error(
       "Employment promotion execution refused: target commit mismatch",
-    );
-  if (
-    authorization.decision !== "authorize_reviewed_additive_backfill" ||
-    !clean(authorization.authorizedBy) ||
-    !validDate(authorization.authorizedAt)
-  )
-    throw new Error(
-      "Employment promotion execution refused: authorization missing",
-    );
-  if (authorization.manifestFingerprint !== preflight.manifestFingerprint)
-    throw new Error(
-      "Employment promotion execution refused: authorization is for another manifest",
-    );
-  if (authorization.preflightFingerprint !== preflight.preflightFingerprint)
-    throw new Error(
-      "Employment promotion execution refused: authorization is for another preflight",
     );
   if (
     backup.artifact !== "verified_candidate_backup_v1" ||
@@ -416,6 +402,33 @@ export function assertEmploymentPromotionExecutionGate(
   )
     throw new Error(
       "Employment promotion execution refused: backup predates the reviewed source state",
+    );
+}
+
+export function assertEmploymentPromotionExecutionGate(
+  input: EmploymentPromotionExecutionGateInput,
+) {
+  const { preflight, backup, authorization } = input;
+  assertEmploymentPromotionBackupEvidence(input);
+  if (authorization.targetCommitSha !== input.expectedCommitSha)
+    throw new Error(
+      "Employment promotion execution refused: target commit mismatch",
+    );
+  if (
+    authorization.decision !== "authorize_reviewed_additive_backfill" ||
+    !clean(authorization.authorizedBy) ||
+    !validDate(authorization.authorizedAt)
+  )
+    throw new Error(
+      "Employment promotion execution refused: authorization missing",
+    );
+  if (authorization.manifestFingerprint !== preflight.manifestFingerprint)
+    throw new Error(
+      "Employment promotion execution refused: authorization is for another manifest",
+    );
+  if (authorization.preflightFingerprint !== preflight.preflightFingerprint)
+    throw new Error(
+      "Employment promotion execution refused: authorization is for another preflight",
     );
   if (Date.parse(backup.capturedAt) > Date.parse(authorization.authorizedAt))
     throw new Error(
