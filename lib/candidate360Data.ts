@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { createCandidateSupabaseAdminClient } from "./candidateSupabase";
+import { redactCandidate360Contact } from "./candidate360ContactBoundary";
 
 import { buildCandidate360Profile } from "./candidate360Profile";
 import { normalizeActualCandidateSchema } from "./candidate360SchemaNormalize";
@@ -754,5 +755,5 @@ export async function loadCandidate360Profile(
       performance.now() - serializationStartedAt;
     stageTimings.totalMs = performance.now() - totalStartedAt;
   }
-  return result;
+  return redactCandidate360Contact(result);
 }
