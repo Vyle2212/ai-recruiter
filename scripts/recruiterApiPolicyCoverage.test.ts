@@ -30,6 +30,13 @@ const auditedFiles = files.filter((file) => {
     );
   return (
     relative.startsWith("recruiter/") ||
+    [
+      "admin/audit-search-index/route.ts",
+      "admin/rebuild-search-index/route.ts",
+      "admin/rebuild-candidate/route.ts",
+      "candidate-search-index/rebuild/route.ts",
+      "candidate-search-index/sync/route.ts",
+    ].includes(relative) ||
     source.includes("@/lib/supabase") ||
     (!hasLocalBoundary && usesPrivilegedCandidateData)
   );
@@ -63,8 +70,8 @@ assert.equal(
 );
 assert.equal(
   legacyServiceFiles.length,
-  36,
-  "Expected the audited 36 legacy privileged route files",
+  39,
+  "Expected the audited 39 legacy privileged route files",
 );
 assert.ok(
   routeMethods.length > auditedFiles.length,
@@ -147,6 +154,19 @@ assert.match(proxySource, /recruiterApiPolicyForRequest/);
 assert.match(proxySource, /"\/api\/:path\*"/);
 for (const file of legacyServiceFiles) {
   const source = readFileSync(file, "utf8");
+  const route = path.relative(root, file).split(path.sep).join("/");
+  if (
+    [
+      "admin/audit-search-index/route.ts",
+      "admin/rebuild-search-index/route.ts",
+      "admin/rebuild-candidate/route.ts",
+      "candidate-search-index/rebuild/route.ts",
+      "candidate-search-index/sync/route.ts",
+    ].includes(route)
+  ) {
+    assert.match(source, /auditSearchIndex|legacyIndexMutationResponse/);
+    continue;
+  }
   assert.match(
     source,
     /@\/lib\/supabase|SUPABASE_SERVICE_ROLE|createLazySupabaseServiceClient|createCandidateSupabaseAdminClient|\.from\(["']candidates["']\)/,

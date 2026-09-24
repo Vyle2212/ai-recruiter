@@ -83,6 +83,44 @@ export const RECRUITER_API_ROUTE_POLICIES = [
   // the proxy applies the same authenticated recruiter boundary before their
   // server-only service-role database client can run.
   p(
+    "legacy-admin-index-audit",
+    "/api/admin/audit-search-index",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+    { serviceRoleAccess: true },
+  ),
+  p(
+    "legacy-admin-index-rebuild-read",
+    "/api/admin/rebuild-search-index",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "legacy-admin-index-rebuild-write",
+    "/api/admin/rebuild-search-index",
+    ["POST"],
+    "recruiter.data_quality.apply",
+    "data_quality",
+    { persistentMutation: true },
+  ),
+  p(
+    "legacy-admin-candidate-rebuild-read",
+    "/api/admin/rebuild-candidate",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "data_quality",
+  ),
+  p(
+    "legacy-admin-candidate-rebuild-write",
+    "/api/admin/rebuild-candidate",
+    ["POST"],
+    "recruiter.data_quality.apply",
+    "data_quality",
+    { persistentMutation: true },
+  ),
+  p(
     "legacy-admin-repair-candidate-data",
     "/api/admin/repair-candidate-data",
     ["POST"],

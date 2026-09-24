@@ -199,6 +199,7 @@ jobs:
           node --import tsx scripts/productionEmploymentPromotionBatch.test.ts
           NODE_OPTIONS=--conditions=react-server node --import tsx scripts/productionEmploymentPromotionSupabase.test.ts
           NODE_OPTIONS=--conditions=react-server node --import tsx scripts/searchIndexRebuildPlan.test.ts
+          NODE_OPTIONS=--conditions=react-server node --import tsx scripts/legacyIndexMutationGate.test.ts
           node --import tsx scripts/productionEmploymentPromotionOperator.test.ts
           node --import tsx scripts/productionEmploymentReviewPack.test.ts
           node --import tsx scripts/privateReviewFilePermissions.test.ts
@@ -217,6 +218,7 @@ jobs:
       - name: Scoped formatting check
         run: |
           npm run check:production-trust:format
+          npx prettier --check lib/search/legacyIndexMutationGate.ts lib/search/rebuildSearchIndex.ts app/api/admin/rebuild-search-index/route.ts app/api/admin/rebuild-candidate/route.ts app/api/candidate-search-index/rebuild/route.ts app/api/candidate-search-index/sync/route.ts scripts/legacyIndexMutationGate.test.ts scripts/rebuild-index.ts
           npm run check:acceptance:format
 
       - name: Commit whitespace check
