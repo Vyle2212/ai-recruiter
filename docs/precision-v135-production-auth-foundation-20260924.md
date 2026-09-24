@@ -1,6 +1,6 @@
 # Precision v135 — production Auth foundation
 
-Date: 2026-09-24  
+Date: 2026-09-24
 Scope: code and reviewed-run artifacts only; no Supabase/Vercel configuration or production write
 
 ## Outcome
