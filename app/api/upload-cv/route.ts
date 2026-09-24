@@ -9,6 +9,8 @@ import {
   normalizeCandidatePayloadForSapUpload,
 } from "@/lib/candidateFileGuards";
 import { evaluateResumeQualityGate, summarizeImportResults } from "@/lib/resumeQualityGate";
+import { archiveOriginalCv, discardUnlinkedOriginalCv } from "@/lib/originalCvArchive";
+import { commitCandidateWithArchivedCv } from "@/lib/originalCvArchiveCommit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -125,7 +127,18 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        const saved = await saveCandidate({ ...candidatePayload, parser_quality: parserQuality, profile_quality_score: parserQuality.parserQualityScore, name_review_required: parserQuality.needsManualReview });
+        // Preserve the actual document before committing its parsed text. A
+        // missing private bucket fails closed, so a new CV cannot silently
+        // become another flattened, non-recoverable source.
+        const saved = await commitCandidateWithArchivedCv(
+          () => archiveOriginalCv(fileName, buffer),
+          archivedCvReference => saveCandidate({ ...candidatePayload,
+            archivedCvReference,
+            parser_quality: parserQuality,
+            profile_quality_score: parserQuality.parserQualityScore,
+            name_review_required: parserQuality.needsManualReview }),
+          discardUnlinkedOriginalCv,
+        );
 
         if (saved?.skipped || saved?.rejected_noise || String(saved?.status || "").toLowerCase() === "rejected_noise") {
           results.push({
@@ -153,7 +166,7 @@ export async function POST(req: NextRequest) {
           results.push({ fileName, ok: false, recordType: "SOURCE_REVIEW_REQUIRED", errorCode: error.code, error: error.message, reason: error.message, signals: [error.code] });
           continue;
         }
-        console.error(`Upload CV failed for ${fileName}:`, error);
+        console.error("Upload CV failed:", error);
 
         const message = error?.message || "Failed to parse/save CV.";
         const rejectedByGate = String(error?.code || "").startsWith("REJECTED_") || /^REJECTED_/i.test(message);
@@ -194,5 +207,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-
-

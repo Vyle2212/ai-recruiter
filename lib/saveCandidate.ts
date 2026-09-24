@@ -6,6 +6,7 @@ import { validateCandidateNameV3 } from "./candidateValidationEngine";
 import { inferSapProfile, isWeakCandidateNameProduction, cleanPhoneProduction, fallbackNameFromEmail } from "./sapRecruiterRules";
 import { extractCandidateNameStrict, isWeakOrGarbageName as isWeakCandidateName } from "./candidateFileGuards";
 import { evaluateResumeQualityGate, sanitizeCompanyName } from "./resumeQualityGate";
+import { originalCvReference } from "./originalCvArchiveKey";
 
 type AnyRecord = Record<string, any>;
 
@@ -1593,6 +1594,9 @@ export async function saveCandidate(candidate: any) {
     raw_text: rawText,
     resume_text: rawText,
 
+    // A server-side archive step supplies this opaque private Storage path.
+    source_file: originalCvReference(cleanCandidate.archivedCvReference),
+
     updated_at: new Date().toISOString(),
     latest_cv_uploaded_at: new Date().toISOString(),
   });
@@ -1610,6 +1614,7 @@ export async function saveCandidate(candidate: any) {
     "summary",
     "experience",
     "resume_text",
+    "source_file",
     "years_experience",
     "status",
     "company",
@@ -1767,7 +1772,4 @@ export async function saveCandidate(candidate: any) {
 }
 
 export default saveCandidate;
-
-
-
 
