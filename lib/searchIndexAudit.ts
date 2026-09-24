@@ -5,6 +5,8 @@ type AnyRecord = Record<string, any>;
 export type SearchIndexAuditInput = {
   candidates: AnyRecord[];
   indexRows: AnyRecord[];
+  /** Exact IDs for which the canonical row builder returned a row. */
+  indexableCandidateIds?: string[];
   sampleSize?: number;
 };
 
@@ -55,10 +57,16 @@ export function buildSearchIndexAudit(
       .filter(([id]) => Boolean(id)) as [string, AnyRecord][],
   );
   const candidateIds = new Set(candidateById.keys());
+  const canonicalIndexableIds =
+    input.indexableCandidateIds === undefined
+      ? null
+      : new Set(input.indexableCandidateIds.map(idOf).filter(Boolean));
   const eligibleCandidateIds = new Set(
     [...candidateById.entries()]
       .filter(
-        ([, candidate]) => candidateSearchLifecycleDecision(candidate).visible,
+        ([candidateId, candidate]) =>
+          candidateSearchLifecycleDecision(candidate).visible &&
+          (!canonicalIndexableIds || canonicalIndexableIds.has(candidateId)),
       )
       .map(([candidateId]) => candidateId),
   );
@@ -127,11 +135,11 @@ export function buildSearchIndexAudit(
   const recommendationParts: string[] = [];
   if (missing.length)
     recommendationParts.push(
-      "Rebuild candidate_search_index for missing eligible candidates before relying on index-only search coverage.",
+      "Rebuild candidate_search_index for missing canonically indexable candidates before relying on index-only search coverage.",
     );
   if (blockedCandidateIds.length)
     recommendationParts.push(
-      "Remove lifecycle-blocked candidates from candidate_search_index.",
+      "Remove lifecycle- or quality-blocked candidates from candidate_search_index.",
     );
   if (orphanCandidateIds.length)
     recommendationParts.push(
@@ -151,7 +159,7 @@ export function buildSearchIndexAudit(
     );
   if (!recommendationParts.length)
     recommendationParts.push(
-      "Search index is an exact, current set of lifecycle-eligible candidate ids.",
+      "Search index is an exact, current set of canonically indexable candidate ids.",
     );
 
   return {

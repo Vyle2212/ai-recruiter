@@ -1,8 +1,9 @@
 import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
-import { legacyIndexMutationRefusal } from "./legacyIndexMutationGate";
+import { buildCandidateSearchIndexRow } from "../candidateSearchIndex";
 import { buildSearchIndexAudit } from "../searchIndexAudit";
+import { legacyIndexMutationRefusal } from "./legacyIndexMutationGate";
 
 const PAGE_SIZE = 300;
 
@@ -36,7 +37,7 @@ export async function auditSearchIndex() {
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data, error } = await db
       .from("candidates")
-      .select("id,status,updated_at")
+      .select("*")
       .range(from, from + PAGE_SIZE - 1);
     if (error) throw error;
     const page = data || [];
@@ -63,9 +64,14 @@ export async function auditSearchIndex() {
     if (page.length < PAGE_SIZE) break;
   }
 
+  const indexableCandidateIds = candidates.flatMap((candidate) => {
+    const row = buildCandidateSearchIndexRow(candidate);
+    return row ? [String(row.candidate_id)] : [];
+  });
   const reconciliation = buildSearchIndexAudit({
     candidates,
     indexRows,
+    indexableCandidateIds,
     sampleSize: 20,
   });
   const missingPrimaryModule = indexRows.filter(
