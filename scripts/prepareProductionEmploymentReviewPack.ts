@@ -43,6 +43,10 @@ function outsideRepository(inputPath: string, repositoryRoot: string) {
     throw new Error(
       "Employment review refused: private artifacts must remain outside the repository",
     );
+  if ((fs.statSync(resolved).mode & 0o077) !== 0)
+    throw new Error(
+      "Employment review refused: private input must use owner-only permissions",
+    );
   return resolved;
 }
 
