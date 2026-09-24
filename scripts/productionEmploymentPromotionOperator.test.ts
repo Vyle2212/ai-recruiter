@@ -7,7 +7,10 @@ import {
   validateEmploymentPromotionWriteControls,
   type EmploymentPromotionOperatorBundle,
 } from "../lib/productionEmploymentPromotionOperator";
-import { preflightEmploymentPromotionBatch } from "../lib/productionEmploymentPromotionBatch";
+import {
+  buildEmploymentPromotionExecutionAuthorization,
+  preflightEmploymentPromotionBatch,
+} from "../lib/productionEmploymentPromotionBatch";
 import {
   buildEmploymentPromotionPlan,
   type EmploymentPromotionApproval,
@@ -99,14 +102,13 @@ assert.equal(backupOnly.report.backupVerified, true);
 assert.equal(backupOnly.report.authorizationVerified, false);
 assert.equal(backupOnly.report.readyForSingleTransactionRpc, false);
 
-bundle.authorization = {
-  decision: "authorize_reviewed_additive_backfill",
+bundle.authorization = buildEmploymentPromotionExecutionAuthorization({
+  preflight: fingerprintSource,
+  backup: bundle.backup,
   authorizedBy: "synthetic-release-owner",
   authorizedAt: "2026-09-24T03:15:00Z",
-  targetCommitSha: commitSha,
-  manifestFingerprint: fingerprintSource.manifestFingerprint,
-  preflightFingerprint: fingerprintSource.preflightFingerprint,
-};
+  expectedCommitSha: commitSha,
+});
 
 const prepared = prepareEmploymentPromotionOperatorRun({
   bundle,

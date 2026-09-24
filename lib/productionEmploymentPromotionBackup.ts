@@ -154,7 +154,7 @@ export function buildPrivateEmploymentPromotionBackup(input: {
   return { backup, report: backupReport(backup) };
 }
 
-function verifyBackupArtifact(input: {
+export function verifyPrivateEmploymentPromotionBackup(input: {
   backup: PrivateEmploymentPromotionBackupArtifact;
   bundle: EmploymentPromotionOperatorBundle;
   expectedCommitSha: string;
@@ -207,7 +207,7 @@ export function attachVerifiedEmploymentPromotionBackup(input: {
     throw new Error(
       "Employment promotion backup refused: bundle already has backup or authorization",
     );
-  const evidence = verifyBackupArtifact(input);
+  const evidence = verifyPrivateEmploymentPromotionBackup(input);
   const bundle: EmploymentPromotionOperatorBundle = {
     ...structuredClone(input.bundle),
     backup: evidence,

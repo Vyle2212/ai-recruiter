@@ -63,12 +63,15 @@ export type EmploymentPromotionBackupEvidence = {
 };
 
 export type EmploymentPromotionExecutionAuthorization = {
+  artifact: "verified_employment_promotion_authorization_v1";
   decision: "authorize_reviewed_additive_backfill";
   authorizedBy: string;
   authorizedAt: string;
   targetCommitSha: string;
   manifestFingerprint: string;
   preflightFingerprint: string;
+  backupEvidenceFingerprint: string;
+  authorizationFingerprint: string;
 };
 
 export type EmploymentPromotionTransaction = {
@@ -148,6 +151,52 @@ function fingerprint(value: unknown) {
 
 function candidateSetFingerprint(candidateIds: readonly string[]) {
   return fingerprint([...candidateIds].sort());
+}
+
+function authorizationFingerprintContents(
+  authorization: Omit<
+    EmploymentPromotionExecutionAuthorization,
+    "authorizationFingerprint"
+  >,
+) {
+  return authorization;
+}
+
+export function buildEmploymentPromotionExecutionAuthorization(input: {
+  preflight: EmploymentPromotionBatchPreflight;
+  backup: EmploymentPromotionBackupEvidence;
+  authorizedBy: string;
+  authorizedAt: string;
+  expectedCommitSha: string;
+}): EmploymentPromotionExecutionAuthorization {
+  assertEmploymentPromotionBackupEvidence(input);
+  if (!clean(input.authorizedBy) || !validDate(input.authorizedAt))
+    throw new Error(
+      "Employment promotion authorization refused: release owner and timestamp required",
+    );
+  if (Date.parse(input.backup.capturedAt) > Date.parse(input.authorizedAt))
+    throw new Error(
+      "Employment promotion authorization refused: authorization predates backup",
+    );
+  const contents: Omit<
+    EmploymentPromotionExecutionAuthorization,
+    "authorizationFingerprint"
+  > = {
+    artifact: "verified_employment_promotion_authorization_v1",
+    decision: "authorize_reviewed_additive_backfill",
+    authorizedBy: clean(input.authorizedBy),
+    authorizedAt: input.authorizedAt,
+    targetCommitSha: input.expectedCommitSha,
+    manifestFingerprint: input.preflight.manifestFingerprint,
+    preflightFingerprint: input.preflight.preflightFingerprint,
+    backupEvidenceFingerprint: fingerprint(input.backup),
+  };
+  return {
+    ...contents,
+    authorizationFingerprint: fingerprint(
+      authorizationFingerprintContents(contents),
+    ),
+  };
 }
 
 function assertSha(value: string, label: string) {
@@ -492,12 +541,26 @@ export function assertEmploymentPromotionExecutionGate(
       "Employment promotion execution refused: target commit mismatch",
     );
   if (
+    authorization.artifact !==
+      "verified_employment_promotion_authorization_v1" ||
     authorization.decision !== "authorize_reviewed_additive_backfill" ||
     !clean(authorization.authorizedBy) ||
     !validDate(authorization.authorizedAt)
   )
     throw new Error(
       "Employment promotion execution refused: authorization missing",
+    );
+  const { authorizationFingerprint, ...authorizationContents } = authorization;
+  if (
+    fingerprint(authorizationFingerprintContents(authorizationContents)) !==
+    authorizationFingerprint
+  )
+    throw new Error(
+      "Employment promotion execution refused: authorization content changed",
+    );
+  if (authorization.backupEvidenceFingerprint !== fingerprint(backup))
+    throw new Error(
+      "Employment promotion execution refused: authorization is for another backup",
     );
   if (authorization.manifestFingerprint !== preflight.manifestFingerprint)
     throw new Error(

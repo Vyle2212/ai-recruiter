@@ -6,6 +6,7 @@ import {
   type EmploymentPromotionSupabaseClient,
 } from "../lib/productionEmploymentPromotionSupabase";
 import {
+  buildEmploymentPromotionExecutionAuthorization,
   preflightEmploymentPromotionBatch,
   type EmploymentPromotionManifest,
 } from "../lib/productionEmploymentPromotionBatch";
@@ -109,14 +110,13 @@ const backup = {
   sourceStateFingerprint: preflight.sourceStateFingerprint,
   verification: "readback_verified" as const,
 };
-const authorization = {
-  decision: "authorize_reviewed_additive_backfill" as const,
+const authorization = buildEmploymentPromotionExecutionAuthorization({
+  preflight,
+  backup,
   authorizedBy: "synthetic-release-owner",
   authorizedAt: "2026-09-24T02:15:00Z",
-  targetCommitSha: commitSha,
-  manifestFingerprint: preflight.manifestFingerprint,
-  preflightFingerprint: preflight.preflightFingerprint,
-};
+  expectedCommitSha: commitSha,
+});
 
 async function main() {
   const calls: Array<{ functionName: string; parameters: unknown }> = [];

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  buildEmploymentPromotionExecutionAuthorization,
   executeEmploymentPromotionBatch,
   preflightEmploymentPromotionBatch,
   serializeEmploymentPromotionPreflightReport,
@@ -220,14 +221,13 @@ const backup = {
   sourceStateFingerprint: preflight.sourceStateFingerprint,
   verification: "readback_verified" as const,
 };
-const authorization = {
-  decision: "authorize_reviewed_additive_backfill" as const,
+const authorization = buildEmploymentPromotionExecutionAuthorization({
+  preflight,
+  backup,
   authorizedBy: "synthetic-release-owner",
   authorizedAt,
-  targetCommitSha: commitSha,
-  manifestFingerprint: preflight.manifestFingerprint,
-  preflightFingerprint: preflight.preflightFingerprint,
-};
+  expectedCommitSha: commitSha,
+});
 
 async function main() {
   const repository = new MemoryRepository();
@@ -285,7 +285,7 @@ async function main() {
         },
         expectedCommitSha: commitSha,
       }),
-    /authorization is for another preflight/,
+    /authorization content changed/,
   );
   const sameVersionPayloadChange = new MemoryRepository();
   sameVersionPayloadChange.states.set("synthetic-additive", {

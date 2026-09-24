@@ -201,6 +201,7 @@ jobs:
           node --import tsx scripts/productionEmploymentPromotionOperator.test.ts
           node --import tsx scripts/productionEmploymentReviewPack.test.ts
           node --import tsx scripts/productionEmploymentPromotionBackup.test.ts
+          node --import tsx scripts/productionEmploymentPromotionAuthorization.test.ts
           node --import tsx scripts/candidateDetailAuthorization.test.ts
           node --import tsx scripts/cvPdfOcr.test.ts
           node --import tsx scripts/uploadCvSourceFailure.test.ts
