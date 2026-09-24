@@ -6,6 +6,7 @@ import {
   ORIGINAL_CV_BUCKET,
   originalCvObjectKey,
 } from "@/lib/originalCvArchiveKey";
+import { normalizeCvContentDigest } from "@/lib/serverCvContentDigest";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +19,11 @@ export async function POST(request: NextRequest) {
   });
   if (!authorization.allowed) return authorization.response;
 
-  let input: { fileName?: unknown; size?: unknown };
+  let input: {
+    fileName?: unknown;
+    size?: unknown;
+    contentDigest?: unknown;
+  };
   try {
     input = await request.json();
   } catch {
@@ -30,6 +35,7 @@ export async function POST(request: NextRequest) {
   const fileName = typeof input.fileName === "string" ? input.fileName : "";
   const size = input.size;
   if (
+    !normalizeCvContentDigest(input.contentDigest) ||
     !Number.isSafeInteger(size) ||
     Number(size) < 1 ||
     Number(size) > MAX_ORIGINAL_BYTES

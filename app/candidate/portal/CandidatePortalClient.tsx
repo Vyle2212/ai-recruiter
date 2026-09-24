@@ -27,6 +27,16 @@ function dateValue(value: any) {
   return String(value?.value ?? value ?? "").trim();
 }
 
+async function cvContentDigest(file: File) {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    await file.arrayBuffer(),
+  );
+  return [...new Uint8Array(digest)]
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 function editableRows(raw: unknown) {
   if (Array.isArray(raw)) return raw as Record<string, any>[];
   if (typeof raw !== "string") return [];
@@ -305,11 +315,16 @@ export default function CandidatePortalClient() {
     try {
       if (!/\.(pdf|docx|txt)$/i.test(file.name) || file.size > 10 * 1024 * 1024)
         throw new Error("Use one PDF, DOCX, or TXT CV up to 10 MB.");
+      const contentDigest = await cvContentDigest(file);
       const signed = await json(
         await fetch("/api/candidate/profile/cv/sign", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ fileName: file.name, size: file.size }),
+          body: JSON.stringify({
+            fileName: file.name,
+            size: file.size,
+            contentDigest,
+          }),
         }),
       );
       const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -334,6 +349,7 @@ export default function CandidatePortalClient() {
             fileName: file.name,
             size: file.size,
             objectKey: signed.objectKey,
+            contentDigest,
           }),
         }),
       );

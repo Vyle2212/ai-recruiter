@@ -130,6 +130,7 @@ assert.equal(classifyAdminCvUploadResult({ errorCode: "NETWORK" }), "failed");
 const page = fs.readFileSync("app/upload/page.tsx", "utf8");
 assert.match(page, /sessionStorage/);
 assert.match(page, /crypto\.subtle\.digest/);
+assert.match(page, /contentDigest/);
 assert.match(page, /buildAdminCvUploadPlan/);
 assert.match(page, /lastModified/);
 assert.match(page, /Pause after current CV/);
@@ -138,5 +139,14 @@ assert.doesNotMatch(
   /localStorage/,
   "private batch progress must not outlive the browser session",
 );
+
+const uploadRoute = fs.readFileSync("app/api/upload-cv/route.ts", "utf8");
+assert.match(uploadRoute, /cvContentDigestMatches\(buffer, contentDigest\)/);
+assert.ok(
+  uploadRoute.indexOf("cvContentDigestMatches(buffer, contentDigest)") <
+    uploadRoute.indexOf("prepareCandidateCv({"),
+  "server must verify the exact uploaded bytes before parser or DB writes",
+);
+assert.match(uploadRoute, /content_digest_mismatch/);
 
 console.log("adminCvBulkUpload.test.ts passed");

@@ -23,6 +23,10 @@ import {
   originalCvObjectKey,
   ownedOriginalCvObjectKey,
 } from "@/lib/originalCvArchiveKey";
+import {
+  cvContentDigestMatches,
+  normalizeCvContentDigest,
+} from "@/lib/serverCvContentDigest";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,7 +70,12 @@ export async function POST(req: NextRequest) {
     if (req.headers.get("content-type")?.startsWith("application/json")) {
       // The browser uploads the bytes straight to a private Storage bucket;
       // this small request parses only an object owned by the signed-in admin.
-      let input: { fileName?: unknown; objectKey?: unknown; size?: unknown };
+      let input: {
+        fileName?: unknown;
+        objectKey?: unknown;
+        size?: unknown;
+        contentDigest?: unknown;
+      };
       try {
         input = await req.json();
       } catch {
@@ -78,7 +87,9 @@ export async function POST(req: NextRequest) {
       const objectKey =
         typeof input.objectKey === "string" ? input.objectKey : "";
       const fileName = typeof input.fileName === "string" ? input.fileName : "";
+      const contentDigest = normalizeCvContentDigest(input.contentDigest);
       if (
+        !contentDigest ||
         !ownedOriginalCvObjectKey(authorization.scope.subjectId, objectKey) ||
         !isSupportedFile(fileName) ||
         !Number.isSafeInteger(input.size) ||
@@ -112,6 +123,32 @@ export async function POST(req: NextRequest) {
             error: "Uploaded CV size does not match the request.",
           },
           { status: 400 },
+        );
+      }
+      if (!cvContentDigestMatches(buffer, contentDigest)) {
+        try {
+          await recordCandidateUploadReview({
+            objectKey,
+            fileName,
+            actorUserId: authorization.scope.subjectId,
+            reasonCodes: ["content_digest_mismatch"],
+          });
+        } catch {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "CV integrity review queue is unavailable.",
+            },
+            { status: 503 },
+          );
+        }
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Uploaded CV content changed after selection and was preserved for review.",
+          },
+          { status: 409 },
         );
       }
       const reference = `${ORIGINAL_CV_BUCKET}/${objectKey}`;
@@ -149,7 +186,13 @@ export async function POST(req: NextRequest) {
           { headers: { "Cache-Control": "private, no-store" } },
         );
       }
-      files = [{ fileName, buffer, archivedObjectKey: objectKey }];
+      files = [
+        {
+          fileName,
+          buffer,
+          archivedObjectKey: objectKey,
+        },
+      ];
     } else {
       const formData = await req.formData();
       const filesFromBulk = formData

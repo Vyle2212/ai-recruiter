@@ -164,13 +164,18 @@ export default function UploadPage() {
 
   async function uploadOne(
     file: File,
+    contentDigest: string,
     storageClient: ReturnType<typeof createClient>["storage"],
   ): Promise<AdminCvUploadResultLike> {
     const signed = await readJson(
       await fetch("/api/upload-cv/sign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName: file.name, size: file.size }),
+        body: JSON.stringify({
+          fileName: file.name,
+          size: file.size,
+          contentDigest,
+        }),
       }),
     );
     const storage = storageClient.from("candidate-original-cvs");
@@ -192,6 +197,7 @@ export default function UploadPage() {
           fileName: file.name,
           size: file.size,
           objectKey: signed.objectKey,
+          contentDigest,
         }),
       }),
     );
@@ -224,7 +230,7 @@ export default function UploadPage() {
       let message = "";
       try {
         outcome = classifyAdminCvUploadResult(
-          await uploadOne(item.file, storage),
+          await uploadOne(item.file, item.digest, storage),
         );
       } catch (failure) {
         message =

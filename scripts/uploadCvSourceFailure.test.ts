@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
+import { createHash } from "node:crypto";
 import { CvSourceError } from "../lib/cvPdfOcr";
 import { commitCandidateWithArchivedCv } from "../lib/originalCvArchiveCommit";
 import * as originalCvArchiveKey from "../lib/originalCvArchiveKey";
@@ -13,6 +14,7 @@ async function main() {
   let downloads = 0;
   const ownerId = "00000000-0000-4000-8000-000000000001";
   const signedObjectKey = `${ownerId}/00000000-0000-4000-8000-000000000002.pdf`;
+  const validDigest = createHash("sha256").update("valid").digest("hex");
   const stubs: Record<string, unknown> = {
     "next/server": { NextResponse: { json: (body: unknown) => body } },
     "@/lib/cvPdfOcr": { CvSourceError },
@@ -100,6 +102,14 @@ async function main() {
     },
     "@/lib/originalCvArchiveCommit": { commitCandidateWithArchivedCv },
     "@/lib/originalCvArchiveKey": originalCvArchiveKey,
+    "@/lib/serverCvContentDigest": {
+      normalizeCvContentDigest: (value: unknown) =>
+        typeof value === "string" && /^[0-9a-f]{64}$/i.test(value)
+          ? value.toLowerCase()
+          : null,
+      cvContentDigestMatches: (bytes: Buffer, claimed: string) =>
+        createHash("sha256").update(bytes).digest("hex") === claimed,
+    },
     "@/lib/candidateUploadReviewQueue": {
       recordCandidateUploadReview: async (input: { fileName: string }) => {
         queued.push(input.fileName);
@@ -237,9 +247,14 @@ async function main() {
   );
 
   processed = false;
-  const signedRequest = (objectKey: string) => ({
+  const signedRequest = (objectKey: string, contentDigest = validDigest) => ({
     headers: new Headers({ "content-type": "application/json" }),
-    json: async () => ({ fileName: "valid.pdf", size: 5, objectKey }),
+    json: async () => ({
+      fileName: "valid.pdf",
+      size: 5,
+      objectKey,
+      contentDigest,
+    }),
   });
   const invalid = await exports.POST(
     signedRequest(
@@ -248,6 +263,20 @@ async function main() {
   );
   assert.equal(invalid.success, false);
   assert.equal(downloads, 0, "Another admin's object cannot be downloaded");
+  const mismatched = await exports.POST(
+    signedRequest(signedObjectKey, "0".repeat(64)),
+  );
+  assert.equal(mismatched.success, false);
+  assert.equal(
+    saved.filter((name) => name === "valid.pdf").length,
+    1,
+    "Digest mismatch must fail before parsing or saving",
+  );
+  assert.deepEqual(
+    queued,
+    ["failed.pdf", "error.pdf", "valid.pdf"],
+    "Digest mismatch must preserve the private object for review",
+  );
   const signed = await exports.POST(signedRequest(signedObjectKey));
   assert.equal(signed.success, true);
   assert.equal(
@@ -278,7 +307,7 @@ async function main() {
   assert.equal(held.results[0].ok, false);
   assert.deepEqual(
     queued,
-    ["failed.pdf", "error.pdf", "held.pdf"],
+    ["failed.pdf", "error.pdf", "valid.pdf", "held.pdf"],
     "Held original must enter a durable review queue",
   );
   console.log(

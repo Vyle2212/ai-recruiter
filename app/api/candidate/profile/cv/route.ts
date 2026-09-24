@@ -20,6 +20,10 @@ import {
 } from "@/lib/originalCvArchiveKey";
 import { saveCandidate } from "@/lib/saveCandidate";
 import { supabase } from "@/lib/supabase";
+import {
+  cvContentDigestMatches,
+  normalizeCvContentDigest,
+} from "@/lib/serverCvContentDigest";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,7 +49,12 @@ export async function POST(request: NextRequest) {
   if (!authorization.allowed)
     return responseError(authorization.code, authorization.status);
 
-  let input: { fileName?: unknown; objectKey?: unknown; size?: unknown };
+  let input: {
+    fileName?: unknown;
+    objectKey?: unknown;
+    size?: unknown;
+    contentDigest?: unknown;
+  };
   try {
     input = await request.json();
   } catch {
@@ -54,8 +63,10 @@ export async function POST(request: NextRequest) {
 
   const fileName = typeof input.fileName === "string" ? input.fileName : "";
   const objectKey = typeof input.objectKey === "string" ? input.objectKey : "";
+  const contentDigest = normalizeCvContentDigest(input.contentDigest);
   const extension = fileName.split(".").at(-1)?.toLowerCase();
   if (
+    !contentDigest ||
     !ownedOriginalCvObjectKey(authorization.scope.authUserId, objectKey) ||
     !Number.isSafeInteger(input.size) ||
     Number(input.size) < 1 ||
@@ -91,6 +102,20 @@ export async function POST(request: NextRequest) {
   const buffer = Buffer.from(await downloaded.data.arrayBuffer());
   if (buffer.length !== input.size || buffer.length > MAX_ORIGINAL_BYTES)
     return responseError("Uploaded CV size does not match the request.", 400);
+
+  if (!cvContentDigestMatches(buffer, contentDigest)) {
+    try {
+      await recordCandidateUploadReview({
+        objectKey,
+        fileName,
+        actorUserId: authorization.scope.authUserId,
+        reasonCodes: ["content_digest_mismatch"],
+      });
+    } catch {
+      return responseError("candidate_cv_review_queue_unavailable", 503);
+    }
+    return responseError("candidate_cv_content_digest_mismatch", 409);
+  }
 
   try {
     const prepared = await prepareCandidateCv({

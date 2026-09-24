@@ -50,6 +50,13 @@ assert.match(processRoute, /evaluateCandidateProfileCompletion\(saved/);
 assert.match(processRoute, /missingRequiredFields/);
 assert.match(processRoute, /candidateSourceFile === sourceReference/);
 assert.match(processRoute, /alreadyProcessed: true/);
+assert.match(processRoute, /cvContentDigestMatches\(buffer, contentDigest\)/);
+assert.ok(
+  processRoute.indexOf("cvContentDigestMatches(buffer, contentDigest)") <
+    processRoute.indexOf("prepareCandidateCv({"),
+  "candidate parser must not run before exact-byte integrity verification",
+);
+assert.match(processRoute, /content_digest_mismatch/);
 assert.doesNotMatch(
   processRoute,
   /input\.(?:candidateId|candidate_id)/,
@@ -57,6 +64,11 @@ assert.doesNotMatch(
 );
 assert.match(signRoute, /authorization\.scope\.authUserId/);
 assert.match(signRoute, /createSignedUploadUrl\(objectKey\)/);
+assert.match(signRoute, /normalizeCvContentDigest\(input\.contentDigest\)/);
+
+const portal = read("../app/candidate/portal/CandidatePortalClient.tsx");
+assert.match(portal, /crypto\.subtle\.digest/);
+assert.match(portal, /contentDigest/);
 
 assert.match(saveCandidate, /apply_candidate_owned_cv_update/);
 assert.match(
