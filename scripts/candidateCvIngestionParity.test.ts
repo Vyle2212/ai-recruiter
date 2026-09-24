@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
-import { prepareCandidateCv } from "../lib/candidateCvIngestion";
+import {
+  candidateCvRejectedOriginalPolicy,
+  prepareCandidateCv,
+} from "../lib/candidateCvIngestion";
 
 const source = `
 Jane Doe
@@ -70,13 +73,31 @@ async function main() {
   );
   assert.deepEqual(admin.extractionCoverage, candidate.extractionCoverage);
   assert.deepEqual(admin.parserQuality, candidate.parserQuality);
+  assert.deepEqual(candidateCvRejectedOriginalPolicy("resume_quality"), {
+    action: "hold_for_review",
+    reasonCodes: ["resume_quality_rejected"],
+  });
+  assert.deepEqual(candidateCvRejectedOriginalPolicy("non_sap_or_non_cv"), {
+    action: "discard",
+    reasonCodes: ["non_sap_or_non_cv"],
+  });
 
   const uploadRoute = fs.readFileSync(
     new URL("../app/api/upload-cv/route.ts", import.meta.url),
     "utf8",
   );
   assert.match(uploadRoute, /prepareCandidateCv\(\{/);
+  assert.match(uploadRoute, /candidateCvRejectedOriginalPolicy\(/);
+  assert.match(uploadRoute, /recordCandidateUploadReview\(\{/);
   assert.doesNotMatch(uploadRoute, /parseCv\(buffer, fileName\)/);
+
+  const candidateRoute = fs.readFileSync(
+    new URL("../app/api/candidate/profile/cv/route.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(candidateRoute, /prepareCandidateCv\(\{/);
+  assert.match(candidateRoute, /candidateCvRejectedOriginalPolicy\(/);
+  assert.match(candidateRoute, /recordCandidateUploadReview\(\{/);
 
   console.log("candidateCvIngestionParity.test.ts passed");
 }

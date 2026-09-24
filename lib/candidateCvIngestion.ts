@@ -40,6 +40,34 @@ export type RejectedCandidateCv = {
   extractionCoverage?: CandidateExtractionCoverage;
 };
 
+export type CandidateCvRejectedOriginalPolicy = {
+  action: "discard" | "hold_for_review";
+  reasonCodes: string[];
+};
+
+/**
+ * Original-file handling must stay identical for admin and candidate uploads.
+ * A definite non-SAP/non-CV classification may be discarded, while a parser
+ * quality rejection remains private and recoverable for human review.
+ *
+ * Review codes are deliberately fixed rather than derived from CV text or
+ * parser messages, so the queue cannot accidentally copy candidate data into
+ * operational metadata.
+ */
+export function candidateCvRejectedOriginalPolicy(
+  rejectionType: RejectedCandidateCv["rejectionType"],
+): CandidateCvRejectedOriginalPolicy {
+  return rejectionType === "resume_quality"
+    ? {
+        action: "hold_for_review",
+        reasonCodes: ["resume_quality_rejected"],
+      }
+    : {
+        action: "discard",
+        reasonCodes: ["non_sap_or_non_cv"],
+      };
+}
+
 /**
  * The single source-to-structured-profile pipeline for every CV origin.
  * Authorization, ownership, archiving and persistence stay in their route/

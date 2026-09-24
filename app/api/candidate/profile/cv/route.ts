@@ -5,8 +5,13 @@ import {
   candidateCvUploadRuntimeEnabled,
   validateCandidateCvWriteRequest,
 } from "@/lib/candidateCvAuthorization";
-import { prepareCandidateCv } from "@/lib/candidateCvIngestion";
+import {
+  candidateCvRejectedOriginalPolicy,
+  prepareCandidateCv,
+} from "@/lib/candidateCvIngestion";
 import { evaluateCandidateProfileCompletion } from "@/lib/candidateProfileIngestion";
+import { recordCandidateUploadReview } from "@/lib/candidateUploadReviewQueue";
+import { CvSourceError } from "@/lib/cvPdfOcr";
 import { discardUnlinkedOriginalCv } from "@/lib/originalCvArchive";
 import {
   MAX_ORIGINAL_BYTES,
@@ -94,13 +99,31 @@ export async function POST(request: NextRequest) {
       source: "candidate_upload",
     });
     if (!prepared.accepted) {
-      await discardUnlinkedOriginalCv(objectKey);
+      const originalPolicy = candidateCvRejectedOriginalPolicy(
+        prepared.rejectionType,
+      );
+      if (originalPolicy.action === "discard") {
+        await discardUnlinkedOriginalCv(objectKey);
+      } else {
+        try {
+          await recordCandidateUploadReview({
+            objectKey,
+            fileName,
+            actorUserId: authorization.scope.authUserId,
+            reasonCodes: originalPolicy.reasonCodes,
+          });
+        } catch {
+          return responseError("candidate_cv_review_queue_unavailable", 503);
+        }
+      }
       return NextResponse.json(
         {
           accepted: false,
           recordType: prepared.recordType,
           reason: prepared.reason,
           signals: prepared.signals,
+          originalPreserved: originalPolicy.action === "hold_for_review",
+          reviewRequired: originalPolicy.action === "hold_for_review",
         },
         { status: 422, headers: privateHeaders },
       );
@@ -134,6 +157,28 @@ export async function POST(request: NextRequest) {
       { headers: privateHeaders },
     );
   } catch (error) {
+    if (error instanceof CvSourceError) {
+      try {
+        await recordCandidateUploadReview({
+          objectKey,
+          fileName,
+          actorUserId: authorization.scope.authUserId,
+          reasonCodes: [error.code],
+        });
+      } catch {
+        return responseError("candidate_cv_review_queue_unavailable", 503);
+      }
+      return NextResponse.json(
+        {
+          accepted: false,
+          recordType: "SOURCE_REVIEW_REQUIRED",
+          error: error.code,
+          originalPreserved: true,
+          reviewRequired: true,
+        },
+        { status: 422, headers: privateHeaders },
+      );
+    }
     const code =
       error instanceof Error ? error.message : "candidate_cv_update_failed";
     const status = /STALE|VERSION|OWNERSHIP|MAPPING|CONFLICT/.test(code)
@@ -141,6 +186,20 @@ export async function POST(request: NextRequest) {
       : 500;
     // Keep the private object on ambiguous failures. Deleting here could erase
     // the only original after a transaction committed but the response failed.
+    try {
+      await recordCandidateUploadReview({
+        objectKey,
+        fileName,
+        actorUserId: authorization.scope.authUserId,
+        reasonCodes: [
+          status === 409
+            ? "candidate_cv_update_conflict"
+            : "candidate_cv_processing_failure",
+        ],
+      });
+    } catch {
+      return responseError("candidate_cv_review_queue_unavailable", 503);
+    }
     return responseError(code, status);
   }
 }

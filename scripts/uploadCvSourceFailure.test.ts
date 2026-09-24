@@ -69,6 +69,8 @@ async function main() {
     "@/lib/saveCandidate": {
       saveCandidate: async (input: any) => {
         saved.push(input.name);
+        if (input.name === "error.pdf")
+          throw new Error("synthetic save failure");
         if (input.name === "held.pdf")
           return {
             status: "identity_review_required",
@@ -200,8 +202,13 @@ async function main() {
   );
   assert.deepEqual(
     archived,
-    ["valid.pdf"],
-    "An OCR failure must never archive invalid bytes",
+    ["failed.pdf", "valid.pdf"],
+    "An OCR failure must preserve the private original before review",
+  );
+  assert.deepEqual(
+    queued,
+    ["failed.pdf"],
+    "An OCR failure must enter the durable review queue",
   );
   assert.equal(response.partialSuccess, true);
   assert.equal(response.successCount, 1);
@@ -209,6 +216,26 @@ async function main() {
   assert.equal(response.results[0].errorCode, "OCR_INCOMPLETE");
   assert.equal(response.results[0].recordType, "SOURCE_REVIEW_REQUIRED");
   assert.equal(response.results[1].sourceExtraction.method, "native");
+
+  const errorForm = new FormData();
+  errorForm.append("file", new File(["error"], "error.pdf"));
+  const saveFailure = await exports.POST({
+    headers: new Headers({ "content-type": "multipart/form-data" }),
+    formData: async () => errorForm,
+  });
+  assert.equal(saveFailure.successCount, 0);
+  assert.equal(saveFailure.failCount, 1);
+  assert.equal(
+    archived.filter((name) => name === "error.pdf").length,
+    1,
+    "An ambiguous save failure must not create a second private original",
+  );
+  assert.deepEqual(
+    queued,
+    ["failed.pdf", "error.pdf"],
+    "An ambiguous save failure must queue the already archived original",
+  );
+
   processed = false;
   const signedRequest = (objectKey: string) => ({
     headers: new Headers({ "content-type": "application/json" }),
@@ -223,16 +250,20 @@ async function main() {
   assert.equal(downloads, 0, "Another admin's object cannot be downloaded");
   const signed = await exports.POST(signedRequest(signedObjectKey));
   assert.equal(signed.success, true);
-  assert.equal(saved.length, 2, "Signed original was parsed and saved once");
+  assert.equal(
+    saved.filter((name) => name === "valid.pdf").length,
+    2,
+    "Signed original was parsed and saved once after the multipart fixture",
+  );
   assert.deepEqual(
     archived,
-    ["valid.pdf"],
+    ["failed.pdf", "valid.pdf", "error.pdf"],
     "Signed original was not uploaded twice",
   );
   const retry = await exports.POST(signedRequest(signedObjectKey));
   assert.equal(retry.results[0].ingestionAction, "already_processed");
   assert.equal(
-    saved.length,
+    saved.filter((name) => name === "valid.pdf").length,
     2,
     "Retry cannot increment the candidate CV version",
   );
@@ -247,7 +278,7 @@ async function main() {
   assert.equal(held.results[0].ok, false);
   assert.deepEqual(
     queued,
-    ["held.pdf"],
+    ["failed.pdf", "error.pdf", "held.pdf"],
     "Held original must enter a durable review queue",
   );
   console.log(

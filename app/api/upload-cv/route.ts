@@ -10,6 +10,7 @@ import {
 import { commitCandidateWithArchivedCv } from "@/lib/originalCvArchiveCommit";
 import type { CandidateExtractionCoverage } from "@/lib/candidateExtractionCoverage";
 import {
+  candidateCvRejectedOriginalPolicy,
   prepareCandidateCv,
   type CandidateCvParserQuality,
 } from "@/lib/candidateCvIngestion";
@@ -179,6 +180,7 @@ export async function POST(req: NextRequest) {
 
     for (const file of files) {
       const { fileName, buffer, archivedObjectKey } = file;
+      let reviewObjectKey = archivedObjectKey;
 
       try {
         if (!isSupportedFile(fileName)) {
@@ -200,8 +202,23 @@ export async function POST(req: NextRequest) {
         });
 
         if (!prepared.accepted) {
-          if (archivedObjectKey)
-            await discardUnlinkedOriginalCv(archivedObjectKey);
+          const originalPolicy = candidateCvRejectedOriginalPolicy(
+            prepared.rejectionType,
+          );
+          if (originalPolicy.action === "discard") {
+            if (reviewObjectKey)
+              await discardUnlinkedOriginalCv(reviewObjectKey);
+          } else {
+            if (!reviewObjectKey)
+              reviewObjectKey = (await archiveOriginalCv(fileName, buffer))
+                .objectKey;
+            await recordCandidateUploadReview({
+              objectKey: reviewObjectKey,
+              fileName,
+              actorUserId: authorization.scope.subjectId,
+              reasonCodes: originalPolicy.reasonCodes,
+            });
+          }
           results.push({
             fileName,
             ok: false,
@@ -228,13 +245,16 @@ export async function POST(req: NextRequest) {
         // missing private bucket fails closed, so a new CV cannot silently
         // become another flattened, non-recoverable source.
         const saved = await commitCandidateWithArchivedCv(
-          () =>
-            archivedObjectKey
-              ? Promise.resolve({
-                  reference: `${ORIGINAL_CV_BUCKET}/${archivedObjectKey}`,
-                  objectKey: archivedObjectKey,
-                })
-              : archiveOriginalCv(fileName, buffer),
+          async () => {
+            if (reviewObjectKey)
+              return {
+                reference: `${ORIGINAL_CV_BUCKET}/${reviewObjectKey}`,
+                objectKey: reviewObjectKey,
+              };
+            const archived = await archiveOriginalCv(fileName, buffer);
+            reviewObjectKey = archived.objectKey;
+            return archived;
+          },
           (archivedCvReference) =>
             saveCandidate({
               ...candidatePayload,
@@ -327,9 +347,12 @@ export async function POST(req: NextRequest) {
         });
       } catch (error: any) {
         if (error instanceof CvSourceError) {
-          if (archivedObjectKey)
+          if (!reviewObjectKey)
+            reviewObjectKey = (await archiveOriginalCv(fileName, buffer))
+              .objectKey;
+          if (reviewObjectKey)
             await recordCandidateUploadReview({
-              objectKey: archivedObjectKey,
+              objectKey: reviewObjectKey,
               fileName,
               actorUserId: authorization.scope.subjectId,
               reasonCodes: [error.code],
@@ -347,9 +370,12 @@ export async function POST(req: NextRequest) {
         }
         console.error("Upload CV failed:", error);
 
-        if (archivedObjectKey)
+        if (!reviewObjectKey)
+          reviewObjectKey = (await archiveOriginalCv(fileName, buffer))
+            .objectKey;
+        if (reviewObjectKey)
           await recordCandidateUploadReview({
-            objectKey: archivedObjectKey,
+            objectKey: reviewObjectKey,
             fileName,
             actorUserId: authorization.scope.subjectId,
             reasonCodes: ["processing_failure"],
