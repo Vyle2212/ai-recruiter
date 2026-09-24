@@ -1,6 +1,6 @@
-import { supabase } from "@/lib/supabase";
 import { textOf } from "@/lib/sapRecruiterRules";
 import { canonicalSapKey, parseSapModulesFromKeyword } from "@/lib/sapCanonicalModuleEngine";
+import { legacyIndexMutationRefusal } from "@/lib/search/legacyIndexMutationGate";
 
 type AnyRecord = Record<string, any>;
 
@@ -455,33 +455,14 @@ export function buildCandidateSearchIndexRow(candidate: AnyRecord) {
 }
 
 export async function upsertCandidateSearchIndex(candidate: AnyRecord) {
-  if (!candidate?.id) return { error: new Error("Missing candidate id") };
-  const row = buildCandidateSearchIndexRow(candidate);
-  if (!row) return { error: new Error("Candidate is not SAP/search-index eligible") };
-  return supabase.from("candidate_search_index").upsert(row, { onConflict: "candidate_id" });
+  void candidate;
+  legacyIndexMutationRefusal();
 }
 
 export async function syncCandidateSearchIndexSince(sinceIso?: string, limit = 2000) {
-  let query = supabase
-    .from("candidates")
-    .select("*")
-    .order("updated_at", { ascending: false })
-    .order("id", { ascending: true })
-    .limit(limit);
-
-  if (sinceIso) query = query.gte("updated_at", sinceIso);
-
-  const { data, error } = await query;
-  if (error) return { error, count: 0 };
-
-  const rows = (data || []).map(buildCandidateSearchIndexRow).filter((row): row is NonNullable<ReturnType<typeof buildCandidateSearchIndexRow>> => row !== null);
-  if (!rows.length) return { count: 0 };
-
-  const { error: upsertError } = await supabase
-    .from("candidate_search_index")
-    .upsert(rows, { onConflict: "candidate_id" });
-
-  return { error: upsertError, count: rows.length };
+  void sinceIso;
+  void limit;
+  legacyIndexMutationRefusal();
 }
 
 export function modulesForKeyword(keyword: string) {

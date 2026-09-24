@@ -36,6 +36,7 @@ const auditedFiles = files.filter((file) => {
       "admin/rebuild-candidate/route.ts",
       "candidate-search-index/rebuild/route.ts",
       "candidate-search-index/sync/route.ts",
+      "embed-candidate/route.ts",
     ].includes(relative) ||
     source.includes("@/lib/supabase") ||
     (!hasLocalBoundary && usesPrivilegedCandidateData)
@@ -162,6 +163,7 @@ for (const file of legacyServiceFiles) {
       "admin/rebuild-candidate/route.ts",
       "candidate-search-index/rebuild/route.ts",
       "candidate-search-index/sync/route.ts",
+      "embed-candidate/route.ts",
     ].includes(route)
   ) {
     assert.match(source, /auditSearchIndex|legacyIndexMutationResponse/);

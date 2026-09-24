@@ -12,6 +12,11 @@ import {
 } from "../app/api/admin/rebuild-candidate/route";
 import { POST as legacyBulkPost } from "../app/api/candidate-search-index/rebuild/route";
 import { POST as legacySyncPost } from "../app/api/candidate-search-index/sync/route";
+import { POST as legacyEmbedPost } from "../app/api/embed-candidate/route";
+import {
+  upsertCandidateSearchIndex,
+  syncCandidateSearchIndexSince,
+} from "../lib/candidateSearchIndex";
 import {
   rebuildOneCandidate,
   rebuildSearchIndex,
@@ -43,6 +48,7 @@ async function main() {
     adminSinglePost,
     legacyBulkPost,
     legacySyncPost,
+    legacyEmbedPost,
   ]) {
     const response = await action();
     assert.equal(response.status, 503);
@@ -64,12 +70,21 @@ async function main() {
     rebuildOneCandidate("example"),
     /Legacy search-index writes are disabled/,
   );
+  await assert.rejects(
+    upsertCandidateSearchIndex({ id: "example" }),
+    /Legacy search-index writes are disabled/,
+  );
+  await assert.rejects(
+    syncCandidateSearchIndexSince(),
+    /Legacy search-index writes are disabled/,
+  );
 
   for (const pathname of [
     "/api/admin/rebuild-search-index",
     "/api/admin/rebuild-candidate",
     "/api/candidate-search-index/rebuild",
     "/api/candidate-search-index/sync",
+    "/api/embed-candidate",
   ]) {
     assert.equal(
       recruiterApiPolicyForRequest(pathname, "POST")?.requiredPermission,
