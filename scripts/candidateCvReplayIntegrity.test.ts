@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
+import { candidateCvRejectedOriginalPolicy } from "../lib/candidateCvIngestion";
 
 const bytes = Buffer.from("synthetic candidate CV bytes");
 const digest = createHash("sha256").update(bytes).digest("hex");
@@ -12,6 +13,8 @@ const sourceReference = `candidate-original-cvs/${objectKey}`;
 let stored: Buffer | null = null;
 let reviewCalls = 0;
 let saveCalls = 0;
+let linkedSource: string | null = sourceReference;
+let classificationRejected = false;
 
 const stubs: Record<string, unknown> = {
   "next/server": {
@@ -30,7 +33,7 @@ const stubs: Record<string, unknown> = {
       scope: {
         authUserId: owner,
         candidateId: "synthetic-candidate",
-        candidateSourceFile: sourceReference,
+        candidateSourceFile: linkedSource,
         candidateCvVersion: 2,
         extractionCoverageStatus: "complete_for_validation",
         profileConfirmationStatus: "needs_review",
@@ -38,9 +41,19 @@ const stubs: Record<string, unknown> = {
     }),
   },
   "@/lib/candidateCvIngestion": {
-    prepareCandidateCv: () => {
-      throw new Error("replays must not enter the parser");
-    },
+    prepareCandidateCv: () =>
+      classificationRejected
+        ? {
+            accepted: false,
+            rejectionType: "non_sap_or_non_cv",
+            recordType: "UNKNOWN",
+            reason: "SAP evidence needs review.",
+            signals: ["sap_score:0"],
+          }
+        : (() => {
+            throw new Error("replays must not enter the parser");
+          })(),
+    candidateCvRejectedOriginalPolicy,
   },
   "@/lib/candidateProfileIngestion": {},
   "@/lib/candidateUploadReviewQueue": {
@@ -129,6 +142,15 @@ async function main() {
   assert.equal(intact.status, 200);
   assert.equal(intact.body.alreadyProcessed, true);
   assert.equal(saveCalls, 0, "a valid replay must not update the candidate");
+  linkedSource = null;
+  classificationRejected = true;
+  const uncertain = await request();
+  assert.equal(uncertain.status, 422);
+  assert.equal(uncertain.body.recordType, "UNKNOWN");
+  assert.equal(uncertain.body.originalPreserved, true);
+  assert.equal(uncertain.body.reviewRequired, true);
+  assert.equal(reviewCalls, 2);
+  assert.equal(saveCalls, 0, "uncertain CVs cannot update candidate profiles");
   console.log("Candidate CV replay byte-integrity regression passed");
 }
 

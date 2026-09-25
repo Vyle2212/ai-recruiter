@@ -152,6 +152,14 @@ assert.equal(
   }),
   "source_review",
 );
+assert.equal(
+  classifyAdminCvUploadResult({ rejected: true, recordType: "UNKNOWN" }),
+  "source_review",
+);
+assert.equal(
+  classifyAdminCvUploadResult({ rejected: true, recordType: "JD" }),
+  "source_review",
+);
 assert.equal(classifyAdminCvUploadResult({ errorCode: "NETWORK" }), "failed");
 
 const page = fs.readFileSync("app/upload/page.tsx", "utf8");

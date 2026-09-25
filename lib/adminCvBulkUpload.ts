@@ -150,6 +150,8 @@ export function classifyAdminCvUploadResult(
     return "non_sap_rejected";
   if (
     recordType === "SOURCE_REVIEW_REQUIRED" ||
+    recordType === "UNKNOWN" ||
+    recordType === "JD" ||
     errorCode.startsWith("CV_SOURCE_")
   )
     return "source_review";

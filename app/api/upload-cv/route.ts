@@ -3,10 +3,7 @@ import { CvSourceError } from "@/lib/cvPdfOcr";
 import type { CvSourceExtraction } from "@/lib/cvPdfExtraction";
 import { saveCandidate } from "@/lib/saveCandidate";
 import { summarizeImportResults } from "@/lib/resumeQualityGate";
-import {
-  archiveOriginalCv,
-  discardUnlinkedOriginalCv,
-} from "@/lib/originalCvArchive";
+import { archiveOriginalCv } from "@/lib/originalCvArchive";
 import { commitCandidateWithArchivedCv } from "@/lib/originalCvArchiveCommit";
 import type { CandidateExtractionCoverage } from "@/lib/candidateExtractionCoverage";
 import {
@@ -248,20 +245,15 @@ export async function POST(req: NextRequest) {
           const originalPolicy = candidateCvRejectedOriginalPolicy(
             prepared.rejectionType,
           );
-          if (originalPolicy.action === "discard") {
-            if (reviewObjectKey)
-              await discardUnlinkedOriginalCv(reviewObjectKey);
-          } else {
-            if (!reviewObjectKey)
-              reviewObjectKey = (await archiveOriginalCv(fileName, buffer))
-                .objectKey;
-            await recordCandidateUploadReview({
-              objectKey: reviewObjectKey,
-              fileName,
-              actorUserId: authorization.scope.subjectId,
-              reasonCodes: originalPolicy.reasonCodes,
-            });
-          }
+          if (!reviewObjectKey)
+            reviewObjectKey = (await archiveOriginalCv(fileName, buffer))
+              .objectKey;
+          await recordCandidateUploadReview({
+            objectKey: reviewObjectKey,
+            fileName,
+            actorUserId: authorization.scope.subjectId,
+            reasonCodes: originalPolicy.reasonCodes,
+          });
           results.push({
             fileName,
             ok: false,
@@ -303,7 +295,6 @@ export async function POST(req: NextRequest) {
               ...candidatePayload,
               archivedCvReference,
             }),
-          discardUnlinkedOriginalCv,
         );
 
         if (
@@ -311,6 +302,13 @@ export async function POST(req: NextRequest) {
           saved?.rejected_noise ||
           String(saved?.status || "").toLowerCase() === "rejected_noise"
         ) {
+          if (reviewObjectKey)
+            await recordCandidateUploadReview({
+              objectKey: reviewObjectKey,
+              fileName,
+              actorUserId: authorization.scope.subjectId,
+              reasonCodes: ["save_gate_rejected"],
+            });
           results.push({
             fileName,
             ok: false,

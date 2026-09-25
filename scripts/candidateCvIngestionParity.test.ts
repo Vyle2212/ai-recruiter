@@ -78,9 +78,39 @@ async function main() {
     reasonCodes: ["resume_quality_rejected"],
   });
   assert.deepEqual(candidateCvRejectedOriginalPolicy("non_sap_or_non_cv"), {
-    action: "discard",
-    reasonCodes: ["non_sap_or_non_cv"],
+    action: "hold_for_review",
+    reasonCodes: ["candidate_classification_review_required"],
   });
+
+  const lowEvidence = Buffer.from(
+    [
+      "SYNTHETIC CANDIDATE",
+      "PROFESSIONAL SUMMARY",
+      "Enterprise consultant supporting client transformation and operations.",
+      "WORK EXPERIENCE",
+      "Consultant at Synthetic Consulting from January 2020 to June 2025.",
+      "EDUCATION",
+      "Bachelor of Information Systems. Email candidate@example.invalid.",
+    ].join("\n"),
+  );
+  for (const sourceType of ["admin_upload", "candidate_upload"] as const) {
+    const uncertain = await prepareCandidateCv({
+      buffer: lowEvidence,
+      fileName: "synthetic-low-evidence.txt",
+      source: sourceType,
+    });
+    assert.equal(uncertain.accepted, false);
+    if (uncertain.accepted) throw new Error("low-evidence CV was accepted");
+    assert.equal(uncertain.recordType, "UNKNOWN");
+    assert.deepEqual(
+      candidateCvRejectedOriginalPolicy(uncertain.rejectionType),
+      {
+        action: "hold_for_review",
+        reasonCodes: ["candidate_classification_review_required"],
+      },
+      "neither upload role may delete an uncertain original",
+    );
+  }
 
   const uploadRoute = fs.readFileSync(
     new URL("../app/api/upload-cv/route.ts", import.meta.url),

@@ -69,7 +69,7 @@ function outcomeLabel(outcome?: AdminCvUploadOutcome) {
     incomplete_review: "Incomplete — review",
     identity_review: "Identity review",
     source_review: "OCR/source review",
-    non_sap_rejected: "Non-SAP rejected",
+    non_sap_rejected: "Non-SAP — original held for review",
     failed: "Retry required",
   };
   return outcome ? labels[outcome] : "Ready";
@@ -383,7 +383,7 @@ export default function UploadPage() {
             Created {createdCount} · Updated {updatedCount} · Incomplete review{" "}
             {incompleteExtractionCount} · Identity review {heldForReviewCount} ·{" "}
             Source review {outcomeCounts.get("source_review") || 0} · Non-SAP
-            rejected {outcomeCounts.get("non_sap_rejected") || 0} · Retry
+            held for review {outcomeCounts.get("non_sap_rejected") || 0} · Retry
             required {outcomeCounts.get("failed") || 0}
           </p>
           <p style={{ color: "#8da0b8", fontSize: 13 }}>

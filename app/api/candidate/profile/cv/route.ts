@@ -12,7 +12,6 @@ import {
 import { evaluateCandidateProfileCompletion } from "@/lib/candidateProfileIngestion";
 import { recordCandidateUploadReview } from "@/lib/candidateUploadReviewQueue";
 import { CvSourceError } from "@/lib/cvPdfOcr";
-import { discardUnlinkedOriginalCv } from "@/lib/originalCvArchive";
 import {
   MAX_ORIGINAL_BYTES,
   ORIGINAL_CV_BUCKET,
@@ -129,19 +128,15 @@ export async function POST(request: NextRequest) {
       const originalPolicy = candidateCvRejectedOriginalPolicy(
         prepared.rejectionType,
       );
-      if (originalPolicy.action === "discard") {
-        await discardUnlinkedOriginalCv(objectKey);
-      } else {
-        try {
-          await recordCandidateUploadReview({
-            objectKey,
-            fileName,
-            actorUserId: authorization.scope.authUserId,
-            reasonCodes: originalPolicy.reasonCodes,
-          });
-        } catch {
-          return responseError("candidate_cv_review_queue_unavailable", 503);
-        }
+      try {
+        await recordCandidateUploadReview({
+          objectKey,
+          fileName,
+          actorUserId: authorization.scope.authUserId,
+          reasonCodes: originalPolicy.reasonCodes,
+        });
+      } catch {
+        return responseError("candidate_cv_review_queue_unavailable", 503);
       }
       return NextResponse.json(
         {
@@ -149,8 +144,8 @@ export async function POST(request: NextRequest) {
           recordType: prepared.recordType,
           reason: prepared.reason,
           signals: prepared.signals,
-          originalPreserved: originalPolicy.action === "hold_for_review",
-          reviewRequired: originalPolicy.action === "hold_for_review",
+          originalPreserved: true,
+          reviewRequired: true,
         },
         { status: 422, headers: privateHeaders },
       );

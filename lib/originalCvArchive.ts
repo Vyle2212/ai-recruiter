@@ -17,9 +17,3 @@ export async function archiveOriginalCv(fileName: string, bytes: Buffer) {
   if (error) throw new Error("CV_ORIGINAL_ARCHIVE_UNAVAILABLE");
   return { reference: `${ORIGINAL_CV_BUCKET}/${objectKey}`, objectKey };
 }
-
-export async function discardUnlinkedOriginalCv(objectKey: string) {
-  // Never remove an object already linked to a candidate; call only before a
-  // successful candidate save. A failed cleanup leaves a private orphan.
-  await supabase.storage.from(ORIGINAL_CV_BUCKET).remove([objectKey]);
-}

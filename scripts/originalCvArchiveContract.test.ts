@@ -63,16 +63,17 @@ assert.equal(
 
 const upload = fs.readFileSync("app/api/upload-cv/route.ts", "utf8");
 assert.match(upload, /commitCandidateWithArchivedCv\(/);
+assert.doesNotMatch(
+  fs.readFileSync("lib/originalCvArchive.ts", "utf8"),
+  /\.remove\(/,
+  "automatic upload processing cannot delete a rejected original",
+);
 const ref = "candidate-original-cvs/00000000-0000-4000-8000-000000000000.pdf";
 async function verifyArchiveCommit() {
   const archive = async () => ({
     reference: ref,
     objectKey: "00000000-0000-4000-8000-000000000000.pdf",
   });
-  let discarded = 0;
-  const discard = async () => {
-    discarded++;
-  };
   await assert.rejects(
     commitCandidateWithArchivedCv(
       async () => {
@@ -81,53 +82,33 @@ async function verifyArchiveCommit() {
       async () => {
         throw Error("save must not run");
       },
-      discard,
     ),
     /storage unavailable/,
   );
   await assert.rejects(
-    commitCandidateWithArchivedCv(
-      archive,
-      async () => {
-        throw Error("ambiguous database failure");
-      },
-      discard,
-    ),
+    commitCandidateWithArchivedCv(archive, async () => {
+      throw Error("ambiguous database failure");
+    }),
     /ambiguous database failure/,
   );
-  assert.equal(
-    discarded,
-    0,
-    "ambiguous DB failure must never delete a possibly linked original",
-  );
   await assert.rejects(
-    commitCandidateWithArchivedCv(
-      archive,
-      async () => ({ source_file: "" }),
-      discard,
-    ),
+    commitCandidateWithArchivedCv(archive, async () => ({ source_file: "" })),
     /CV_ORIGINAL_REFERENCE_MISMATCH/,
   );
-  assert.equal(discarded, 0, "readback mismatch keeps the private original");
   assert.equal(
     (
-      await commitCandidateWithArchivedCv(
-        archive,
-        async (reference) => ({ source_file: reference }),
-        discard,
-      )
+      await commitCandidateWithArchivedCv(archive, async (reference) => ({
+        source_file: reference,
+      }))
     ).source_file,
     ref,
   );
-  await commitCandidateWithArchivedCv(
-    archive,
-    async () => ({ skipped: true }),
-    discard,
-  );
-  assert.equal(
-    discarded,
-    1,
-    "explicitly rejected save removes its unlinked original",
+  await commitCandidateWithArchivedCv(archive, async () => ({ skipped: true }));
+  assert.ok(
+    !fs
+      .readFileSync("lib/originalCvArchiveCommit.ts", "utf8")
+      .includes("discardRejected"),
+    "a save-gate rejection must retain the original for private review",
   );
 }
 const save = fs.readFileSync("lib/saveCandidate.ts", "utf8");

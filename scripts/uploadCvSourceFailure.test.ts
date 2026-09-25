@@ -4,12 +4,14 @@ import vm from "node:vm";
 import ts from "typescript";
 import { createHash } from "node:crypto";
 import { CvSourceError } from "../lib/cvPdfOcr";
+import { candidateCvRejectedOriginalPolicy } from "../lib/candidateCvIngestion";
 import { commitCandidateWithArchivedCv } from "../lib/originalCvArchiveCommit";
 import * as originalCvArchiveKey from "../lib/originalCvArchiveKey";
 async function main() {
   const saved: string[] = [];
   const archived: string[] = [];
   const queued: string[] = [];
+  const discarded: string[] = [];
   let processed = false;
   let downloads = 0;
   const ownerId = "00000000-0000-4000-8000-000000000001";
@@ -25,6 +27,15 @@ async function main() {
             "OCR_INCOMPLETE",
             "OCR did not return all pages.",
           );
+        if (fileName === "low-evidence.pdf")
+          return {
+            accepted: false,
+            rejectionType: "non_sap_or_non_cv",
+            recordType: "UNKNOWN",
+            reason: "SAP evidence could not be confirmed.",
+            signals: ["sap_score:0"],
+            sourceExtraction: { method: "native", pageCount: 1, reason: "" },
+          };
         return {
           accepted: true,
           rawText: "Synthetic CV",
@@ -53,6 +64,7 @@ async function main() {
           },
         };
       },
+      candidateCvRejectedOriginalPolicy,
     },
     "@/lib/cv-parser": {
       parseCv: async (_: Buffer, name: string) => {
@@ -73,6 +85,8 @@ async function main() {
         saved.push(input.name);
         if (input.name === "error.pdf")
           throw new Error("synthetic save failure");
+        if (input.name === "gate.pdf")
+          return { skipped: true, extraction_notes: ["quality_gate_rejected"] };
         if (input.name === "held.pdf")
           return {
             status: "identity_review_required",
@@ -98,7 +112,9 @@ async function main() {
           objectKey: "00000000-0000-4000-8000-000000000000.pdf",
         };
       },
-      discardUnlinkedOriginalCv: async () => {},
+      discardUnlinkedOriginalCv: async (objectKey: string) => {
+        discarded.push(objectKey);
+      },
     },
     "@/lib/originalCvArchiveCommit": { commitCandidateWithArchivedCv },
     "@/lib/originalCvArchiveKey": originalCvArchiveKey,
@@ -310,6 +326,31 @@ async function main() {
     ["failed.pdf", "error.pdf", "valid.pdf", "held.pdf"],
     "Held original must enter a durable review queue",
   );
+  const uncertainForm = new FormData();
+  uncertainForm.append("file", new File(["low evidence"], "low-evidence.pdf"));
+  const uncertain = await exports.POST({
+    headers: new Headers({ "content-type": "multipart/form-data" }),
+    formData: async () => uncertainForm,
+  });
+  assert.equal(uncertain.results[0].recordType, "UNKNOWN");
+  assert.ok(archived.includes("low-evidence.pdf"));
+  assert.equal(queued.at(-1), "low-evidence.pdf");
+  assert.deepEqual(
+    discarded,
+    [],
+    "a missing SAP keyword must not delete an uncertain original",
+  );
+  assert.ok(!saved.includes("low-evidence.pdf"));
+  const gateForm = new FormData();
+  gateForm.append("file", new File(["SAP synthetic CV"], "gate.pdf"));
+  const gate = await exports.POST({
+    headers: new Headers({ "content-type": "multipart/form-data" }),
+    formData: async () => gateForm,
+  });
+  assert.equal(gate.results[0].recordType, "REJECTED_NOISE");
+  assert.ok(archived.includes("gate.pdf"));
+  assert.equal(queued.at(-1), "gate.pdf");
+  assert.deepEqual(discarded, [], "a save-gate rejection keeps the original");
   console.log(
     "Upload route: OCR failure isolation, signed original ownership and retry safety passed",
   );

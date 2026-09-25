@@ -42,14 +42,15 @@ export type RejectedCandidateCv = {
 };
 
 export type CandidateCvRejectedOriginalPolicy = {
-  action: "discard" | "hold_for_review";
+  action: "hold_for_review";
   reasonCodes: string[];
 };
 
 /**
  * Original-file handling must stay identical for admin and candidate uploads.
- * A definite non-SAP/non-CV classification may be discarded, while a parser
- * quality rejection remains private and recoverable for human review.
+ * Classification is not proof that the original is non-SAP. Missing tokens,
+ * weak OCR and mixed histories can make a real SAP CV look non-SAP or like a
+ * job description, so every rejected original remains private for review.
  *
  * Review codes are deliberately fixed rather than derived from CV text or
  * parser messages, so the queue cannot accidentally copy candidate data into
@@ -58,15 +59,13 @@ export type CandidateCvRejectedOriginalPolicy = {
 export function candidateCvRejectedOriginalPolicy(
   rejectionType: RejectedCandidateCv["rejectionType"],
 ): CandidateCvRejectedOriginalPolicy {
-  return rejectionType === "resume_quality"
-    ? {
-        action: "hold_for_review",
-        reasonCodes: ["resume_quality_rejected"],
-      }
-    : {
-        action: "discard",
-        reasonCodes: ["non_sap_or_non_cv"],
-      };
+  return {
+    action: "hold_for_review",
+    reasonCodes:
+      rejectionType === "resume_quality"
+        ? ["resume_quality_rejected"]
+        : ["candidate_classification_review_required"],
+  };
 }
 
 /**

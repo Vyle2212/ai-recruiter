@@ -13,7 +13,6 @@ export async function commitCandidateWithArchivedCv<
 >(
   archive: () => Promise<ArchivedCv>,
   save: (reference: string) => Promise<T>,
-  discardRejected: (objectKey: string) => Promise<void>,
 ): Promise<T> {
   const uploaded = await archive();
   const result = await save(uploaded.reference);
@@ -22,11 +21,8 @@ export async function commitCandidateWithArchivedCv<
     result?.rejected_noise ||
     String(result?.status || "").toLowerCase() === "rejected_noise"
   ) {
-    try {
-      await discardRejected(uploaded.objectKey);
-    } catch {
-      /* private orphan */
-    }
+    // A save gate is not proof the file is not a CV. Keep the original so the
+    // caller can place it in private review without losing the source bytes.
     return result;
   }
   if (result?.source_file !== uploaded.reference) {
