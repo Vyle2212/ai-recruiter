@@ -1,5 +1,7 @@
 # Production Trust release promotion
 
+> Latest parser-data evidence: [v146 private Word-source inventory](precision-v146-private-word-source-inventory-20260925.md). It is aggregate-only and contains no candidate data. The measured subset is not the complete 970+ collection; 171 legacy DOC/RTF files remain unsupported and the PDF archive transfer did not complete. This evidence cannot satisfy the full-collection, OCR, restore, RLS/Storage or runtime gates, so production remains NO_GO.
+
 > Parser data gate update (2026-09-25): [v145](precision-v145-system-wide-private-cv-parser-audit-20260925.md) requires a commit-bound, aggregate-only run of the current shared parser over at least 970 unique original CVs and a same-population before/after comparison for parser batches. The tooling exists but no complete original-file evidence does; restore, runtime OCR, Auth/RLS/Storage, backfill/search and authenticated acceptance gates remain open.
 
 > Latest code-only checkpoint: [v140 resumable admin CV upload](precision-v140-resumable-admin-cv-upload-20260925.md). The complete admin collection now has deterministic preflight, exact-byte deduplication, oldest-to-newest commits, pause/refresh recovery and fail-closed outcome categories without persisting names or candidate data in the browser checkpoint. No production runtime, schema, Storage or data was changed. Production remains NO_GO until supervised foundation/RLS installation and readback plus a small authenticated live OCR acceptance run succeed before the 970+ upload.

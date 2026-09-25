@@ -28,7 +28,7 @@ function validBaseline(value: unknown): value is OfflineCvAudit {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const report = value as Partial<OfflineCvAudit>;
   return (
-    report.artifact === "offline_cv_parser_audit_v2" &&
+    report.artifact === "offline_cv_parser_audit_v3" &&
     typeof report.targetCommitSha === "string" &&
     /^[a-f0-9]{40}$/.test(report.targetCommitSha) &&
     typeof report.collectionFingerprint === "string" &&
@@ -89,7 +89,7 @@ async function main() {
       }
       if (
         !stat.isFile() ||
-        !/\.(?:pdf|docx|txt)$/i.test(name) ||
+        !/\.(?:pdf|docx|txt|doc|rtf)$/i.test(name) ||
         stat.size < 1 ||
         stat.size > MAX_ORIGINAL_BYTES ||
         audit.report.files >= MAX_FILES

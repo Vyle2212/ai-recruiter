@@ -33,12 +33,20 @@ const EMPLOYMENT_GAP_QUEUES = [
 type EmploymentGapQueue = (typeof EMPLOYMENT_GAP_QUEUES)[number];
 
 export type OfflineCvAudit = {
-  artifact: "offline_cv_parser_audit_v2";
+  artifact: "offline_cv_parser_audit_v3";
   targetCommitSha: string;
   collectionFingerprint: string;
   files: number;
   uniqueFiles: number;
   duplicateFiles: number;
+  sourceFormats: {
+    pdf: number;
+    docx: number;
+    txt: number;
+    doc: number;
+    rtf: number;
+  };
+  unsupportedLegacyFiles: number;
   completeForValidation: number;
   needsReview: number;
   classificationReview: number;
@@ -101,6 +109,19 @@ function zeroGapQueues(): Record<EmploymentGapQueue, number> {
   ) as Record<EmploymentGapQueue, number>;
 }
 
+function sourceFormat(
+  fileName: string,
+): keyof OfflineCvAudit["sourceFormats"] | null {
+  const extension = fileName.toLowerCase().split(".").pop();
+  return extension === "pdf" ||
+    extension === "docx" ||
+    extension === "txt" ||
+    extension === "doc" ||
+    extension === "rtf"
+    ? extension
+    : null;
+}
+
 /** Private aggregate only. Never return filenames, hashes, source text or
  * parser errors: those may contain candidate data. This audit has no writes.
  */
@@ -109,7 +130,7 @@ export function createOfflineCvAudit(
 ) {
   const hashes = new Set<string>();
   const report: OfflineCvAudit = {
-    artifact: "offline_cv_parser_audit_v2",
+    artifact: "offline_cv_parser_audit_v3",
     targetCommitSha: options.targetCommitSha || "",
     collectionFingerprint: createHash("sha256")
       .update("[]", "utf8")
@@ -117,6 +138,8 @@ export function createOfflineCvAudit(
     files: 0,
     uniqueFiles: 0,
     duplicateFiles: 0,
+    sourceFormats: { pdf: 0, docx: 0, txt: 0, doc: 0, rtf: 0 },
+    unsupportedLegacyFiles: 0,
     completeForValidation: 0,
     needsReview: 0,
     classificationReview: 0,
@@ -154,9 +177,18 @@ export function createOfflineCvAudit(
       }
       hashes.add(hash);
       report.uniqueFiles++;
+      const format = sourceFormat(fileName);
+      if (format) report.sourceFormats[format]++;
       report.collectionFingerprint = createHash("sha256")
         .update(JSON.stringify([...hashes].sort()), "utf8")
         .digest("hex");
+      if (format === "doc" || format === "rtf") {
+        // Fail closed instead of turning binary/control data into plausible
+        // candidate text. Uploads remain limited to PDF, DOCX and TXT.
+        report.unsupportedLegacyFiles++;
+        report.sourceFailures++;
+        return;
+      }
       try {
         const prepared = await prepareCandidateCv({
           buffer,

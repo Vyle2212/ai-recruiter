@@ -1,5 +1,7 @@
 # Original CV layout verification — 2026-09-15
 
+> 2026-09-25 private archive inventory: [v146 Word-source inventory](precision-v146-private-word-source-inventory-20260925.md) measures 192 DOCX, 170 DOC and one RTF. The shared parser audit covered all 192 DOCX without a source-read failure and grouped 50 accepted no-employment outcomes by the existing six layout queues. DOC/RTF remain fail-closed, and the complete PDF/970+ comparison is still blocked.
+
 > 2026-09-25 update: [v145](precision-v145-system-wide-private-cv-parser-audit-20260925.md) requires one aggregate audit of the complete 970+ unique original-CV population through the current shared parser, with the six employment layout queues and same-population before/after deltas. It does not publish filenames, hashes, excerpts or candidate data. No complete original-file run is claimed yet.
 
 > Full-collection upload checkpoint: [v140 resumable admin CV upload](precision-v140-resumable-admin-cv-upload-20260925.md). Original PDF/DOCX/TXT files are locally fingerprinted before transfer, exact byte duplicates are skipped, and the ordered one-at-a-time commit path prevents an older selected source from racing a newer source. A session-only checkpoint contains no file names, CV text, contacts or candidate IDs. The 970+ originals have not been uploaded or audited on this code, and live OCR remains required.

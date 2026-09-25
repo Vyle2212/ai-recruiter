@@ -69,17 +69,33 @@ async function main() {
   );
   await audit.process(Buffer.from("not a valid docx"), "private-name-4.docx");
   await audit.process(scannedSyntheticPdf(), "private-name-5.pdf");
+  await audit.process(
+    Buffer.from("legacy binary placeholder"),
+    "private-name-6.doc",
+  );
+  await audit.process(
+    Buffer.from("{\\rtf1 legacy placeholder}"),
+    "private-name-7.rtf",
+  );
   const r = audit.report;
-  assert.equal(r.files, 6);
-  assert.equal(r.uniqueFiles, 5);
+  assert.equal(r.files, 8);
+  assert.equal(r.uniqueFiles, 7);
   assert.equal(r.duplicateFiles, 1);
-  assert.equal(r.sourceFailures, 1);
+  assert.equal(r.sourceFailures, 3);
+  assert.equal(r.unsupportedLegacyFiles, 2);
+  assert.deepEqual(r.sourceFormats, {
+    pdf: 1,
+    docx: 1,
+    txt: 3,
+    doc: 1,
+    rtf: 1,
+  });
   assert.equal(r.ocrRequired, 1);
   assert.equal(r.employmentLayoutUnresolved, 0);
   assert.equal(r.classificationReview, 1);
   assert.equal(r.classificationByType.UNKNOWN, 1);
   assert.equal(r.completeForValidation + r.needsReview, 2);
-  assert.equal(r.artifact, "offline_cv_parser_audit_v2");
+  assert.equal(r.artifact, "offline_cv_parser_audit_v3");
   assert.match(r.collectionFingerprint, /^[a-f0-9]{64}$/);
   assert.equal(r.databaseWrites, 0);
   assert.equal(r.readyForBulkUpload, false);
@@ -100,6 +116,8 @@ async function main() {
   );
   try {
     fs.writeFileSync(path.join(outsideRepo, "synthetic.txt"), complete);
+    fs.writeFileSync(path.join(outsideRepo, "legacy.doc"), "legacy doc");
+    fs.writeFileSync(path.join(outsideRepo, "legacy.rtf"), "{\\rtf1 legacy}");
     const run = spawnSync(
       process.execPath,
       [
@@ -119,7 +137,12 @@ async function main() {
       "aggregate audit should accept an external folder",
     );
     const cli = JSON.parse(run.stdout);
-    assert.equal(cli.files, 1);
+    assert.equal(cli.files, 3);
+    assert.equal(cli.sourceFormats.txt, 1);
+    assert.equal(cli.sourceFormats.doc, 1);
+    assert.equal(cli.sourceFormats.rtf, 1);
+    assert.equal(cli.unsupportedLegacyFiles, 2);
+    assert.equal(cli.sourceFailures, 2);
     assert.match(cli.targetCommitSha, /^[a-f0-9]{40}$/);
     assert.equal(cli.readyForBulkUpload, false);
     assert.doesNotMatch(
@@ -171,6 +194,8 @@ async function main() {
     fs.rmdirSync(baselineDirectory);
   } finally {
     fs.unlinkSync(path.join(outsideRepo, "synthetic.txt"));
+    fs.unlinkSync(path.join(outsideRepo, "legacy.doc"));
+    fs.unlinkSync(path.join(outsideRepo, "legacy.rtf"));
     fs.rmdirSync(outsideRepo);
   }
 
