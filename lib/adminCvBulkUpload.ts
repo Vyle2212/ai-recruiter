@@ -47,7 +47,7 @@ export type AdminCvUploadResultLike = {
   extractionCoverage?: { status?: unknown } | null;
 };
 
-const SUPPORTED_CV = /\.(?:pdf|docx|txt)$/i;
+const SUPPORTED_CV = /\.(?:pdf|docx|doc|txt)$/i;
 const TERMINAL_OUTCOMES = new Set<AdminCvUploadOutcome>([
   "created",
   "updated",

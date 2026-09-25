@@ -182,9 +182,9 @@ export function createOfflineCvAudit(
       report.collectionFingerprint = createHash("sha256")
         .update(JSON.stringify([...hashes].sort()), "utf8")
         .digest("hex");
-      if (format === "doc" || format === "rtf") {
+      if (format === "rtf") {
         // Fail closed instead of turning binary/control data into plausible
-        // candidate text. Uploads remain limited to PDF, DOCX and TXT.
+        // candidate text. RTF remains inventoried but unsupported.
         report.unsupportedLegacyFiles++;
         report.sourceFailures++;
         return;

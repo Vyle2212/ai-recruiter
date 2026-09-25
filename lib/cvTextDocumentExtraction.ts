@@ -4,8 +4,13 @@ import type { CvSourceExtraction } from "./cvPdfExtraction";
 type TextEncoding = "utf8" | "utf16le" | "utf16be";
 
 export type CvTextDocumentExtractionOptions = {
+  extractDoc?: (buffer: Buffer) => Promise<string>;
   extractDocx?: (buffer: Buffer) => Promise<string>;
 };
+
+const OLE_COMPOUND_FILE_MAGIC = Buffer.from([
+  0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1,
+]);
 
 function sourceError(code: string, message: string): never {
   throw new CvSourceError(code, message);
@@ -57,6 +62,22 @@ function validateReadableText(text: string, code: string): string {
     );
 
   return withoutBom;
+}
+
+async function extractLegacyDocText(buffer: Buffer): Promise<string> {
+  const { default: WordExtractor } = await import("word-extractor");
+  const document = await new WordExtractor().extract(buffer);
+  const sections = [
+    document.getHeaders(),
+    document.getBody(),
+    document.getTextboxes({
+      includeHeadersAndFooters: true,
+      includeBody: true,
+    }),
+  ]
+    .map((section) => section.trim())
+    .filter((section, index, all) => section && all.indexOf(section) === index);
+  return sections.join("\n");
 }
 
 export function decodeCvTxt(buffer: Buffer): {
@@ -147,8 +168,41 @@ export async function extractCvTextDocument(
     }
   }
 
+  if (extension === "doc") {
+    if (
+      buffer.length < OLE_COMPOUND_FILE_MAGIC.length ||
+      !buffer
+        .subarray(0, OLE_COMPOUND_FILE_MAGIC.length)
+        .equals(OLE_COMPOUND_FILE_MAGIC)
+    )
+      sourceError(
+        "CV_SOURCE_DOC_INVALID",
+        "The DOC file is not a valid Word binary document. The original file needs review; no partial CV was saved.",
+      );
+    try {
+      const extractDoc = options.extractDoc || extractLegacyDocText;
+      return {
+        text: validateReadableText(
+          await extractDoc(buffer),
+          "CV_SOURCE_DOC_TEXT_INVALID",
+        ),
+        sourceExtraction: {
+          method: "native",
+          pageCount: 0,
+          reason: "LEGACY_DOC_NATIVE",
+        },
+      };
+    } catch (error) {
+      if (error instanceof CvSourceError) throw error;
+      sourceError(
+        "CV_SOURCE_DOC_INVALID",
+        "The DOC file could not be read safely. The original file needs review; no partial CV was saved.",
+      );
+    }
+  }
+
   return sourceError(
     "CV_SOURCE_UNSUPPORTED",
-    "Only PDF, DOCX, and TXT CV files are supported. No candidate data was saved.",
+    "Only PDF, DOCX, DOC, and TXT CV files are supported. No candidate data was saved.",
   );
 }

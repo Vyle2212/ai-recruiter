@@ -1,5 +1,7 @@
 # Original CV layout verification — 2026-09-15
 
+> Legacy Word extraction checkpoint: [v147 system-wide DOC extraction](precision-v147-system-wide-legacy-doc-extraction-20260925.md). On the same 357-source Word fingerprint, 165 of 167 unique legacy DOC files now reach the shared parser instead of failing before extraction. Valid aggregate output rises from 484 to 798 employment rows and from 196 to 332 project rows. The two unreadable DOC sources and one RTF remain private review failures; PDF/OCR and the complete 970+ comparison remain outstanding, so production is NO_GO.
+
 > 2026-09-25 private archive inventory: [v146 Word-source inventory](precision-v146-private-word-source-inventory-20260925.md) measures 192 DOCX, 170 DOC and one RTF. The shared parser audit covered all 192 DOCX without a source-read failure and grouped 50 accepted no-employment outcomes by the existing six layout queues. DOC/RTF remain fail-closed, and the complete PDF/970+ comparison is still blocked.
 
 > 2026-09-25 update: [v145](precision-v145-system-wide-private-cv-parser-audit-20260925.md) requires one aggregate audit of the complete 970+ unique original-CV population through the current shared parser, with the six employment layout queues and same-population before/after deltas. It does not publish filenames, hashes, excerpts or candidate data. No complete original-file run is claimed yet.

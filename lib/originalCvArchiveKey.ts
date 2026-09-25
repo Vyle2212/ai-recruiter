@@ -4,6 +4,7 @@ export const ORIGINAL_CV_BUCKET = "candidate-original-cvs";
 export const MAX_ORIGINAL_BYTES = 10 * 1024 * 1024;
 const TYPES: Record<string, string> = {
   pdf: "application/pdf",
+  doc: "application/msword",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   txt: "text/plain",
 };
@@ -26,7 +27,7 @@ export function originalCvObjectKey(fileName: string, bytes: Buffer) {
 
 export function originalCvReference(value: unknown): string | undefined {
   const ref = typeof value === "string" ? value : "";
-  return /^candidate-original-cvs\/(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:pdf|docx|txt)$/i.test(
+  return /^candidate-original-cvs\/(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:pdf|docx|doc|txt)$/i.test(
     ref,
   )
     ? ref

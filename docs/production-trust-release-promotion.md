@@ -1,5 +1,7 @@
 # Production Trust release promotion
 
+> Legacy Word extraction checkpoint: [v147 system-wide DOC extraction](precision-v147-system-wide-legacy-doc-extraction-20260925.md). The shared admin/candidate source layer now validates and reads OLE Word `.doc` files, and a same-fingerprint private comparison opened 165 previously blocked sources without serializing candidate data. Two DOC and one RTF source remain fail-closed. This is code and private aggregate evidence only; it does not satisfy the complete 970+ audit, live OCR, fresh restore, production RLS/Storage cutover/readback, backfill or runtime acceptance gates. Production remains NO_GO.
+
 > Latest parser-data evidence: [v146 private Word-source inventory](precision-v146-private-word-source-inventory-20260925.md). It is aggregate-only and contains no candidate data. The measured subset is not the complete 970+ collection; 171 legacy DOC/RTF files remain unsupported and the PDF archive transfer did not complete. This evidence cannot satisfy the full-collection, OCR, restore, RLS/Storage or runtime gates, so production remains NO_GO.
 
 > Parser data gate update (2026-09-25): [v145](precision-v145-system-wide-private-cv-parser-audit-20260925.md) requires a commit-bound, aggregate-only run of the current shared parser over at least 970 unique original CVs and a same-population before/after comparison for parser batches. The tooling exists but no complete original-file evidence does; restore, runtime OCR, Auth/RLS/Storage, backfill/search and authenticated acceptance gates remain open.
