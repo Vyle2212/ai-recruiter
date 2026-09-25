@@ -46,8 +46,9 @@ function present(candidate: Record<string, unknown>, aliases: string[]) {
 
 function structuredRecordCount(value: unknown): number {
   if (Array.isArray(value)) return value.filter(Boolean).length;
-  if (value && typeof value === "object")
-    return Object.values(value).filter(Boolean).length;
+  // A single row object has many nonempty fields, not many records. Unknown
+  // object shapes cannot prove that all source entries were extracted.
+  if (value && typeof value === "object") return 0;
   if (typeof value !== "string") return 0;
   try {
     const parsed: unknown = JSON.parse(value);

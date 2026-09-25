@@ -251,6 +251,13 @@ const partialProjects = evaluateCandidateExtractionCoverage(
 );
 assert.equal(partialProjects.status, "incomplete_needs_review");
 assert.ok(partialProjects.missedObservedSections.includes("projects"));
+assert.ok(
+  evaluateCandidateExtractionCoverage(multipleProjectSource, {
+    ...multipleProjectCandidate,
+    projects: oneProject,
+  }).missedObservedSections.includes("projects"),
+  "one project object must not be counted as several projects via its fields",
+);
 assert.equal(
   evaluateCandidateExtractionCoverage(multipleProjectSource, {
     ...multipleProjectCandidate,
@@ -306,6 +313,13 @@ const partialEmployment = evaluateCandidateExtractionCoverage(
 );
 assert.equal(partialEmployment.status, "incomplete_needs_review");
 assert.ok(partialEmployment.missedObservedSections.includes("employment"));
+assert.ok(
+  evaluateCandidateExtractionCoverage(multipleEmploymentSource, {
+    ...multipleEmploymentCandidate,
+    experience: firstEmployment,
+  }).missedObservedSections.includes("employment"),
+  "one employment object must not be counted as several jobs via its fields",
+);
 assert.equal(
   evaluateCandidateExtractionCoverage(multipleEmploymentSource, {
     ...multipleEmploymentCandidate,
