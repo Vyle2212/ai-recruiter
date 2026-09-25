@@ -119,6 +119,48 @@ function explicitProjectRecords(rawText: string) {
       project_type: projectType,
     });
   }
+  // Some DOCX layouts put the label and its value on separate lines. Keep
+  // each Client/Project/Role group bounded by the next Client so dates and
+  // roles from a neighbouring assignment cannot complete a partial entry.
+  const lines = normalized
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const clientHeadings = lines.flatMap((line, index) =>
+    /^(?:client|customer)$/i.test(line) ? [index] : [],
+  );
+  const labelValue = (block: string[], label: RegExp) => {
+    const index = block.findIndex((line) => label.test(line));
+    const value = index < 0 ? "" : clean(block[index + 1]);
+    return value &&
+      value.length <= 160 &&
+      !/^(?:client|customer|project|role|position|designation)$/i.test(value)
+      ? value
+      : "";
+  };
+  for (const [index, start] of clientHeadings.entries()) {
+    const end = clientHeadings[index + 1] ?? lines.length;
+    const block = lines.slice(start, end);
+    const clientLine = labelValue(block, /^(?:client|customer)$/i);
+    const name = labelValue(block, /^project$/i);
+    const role = labelValue(block, /^(?:role|position|designation)$/i);
+    // The date must be in the client value itself. Dates deeper in the
+    // description may describe unrelated activities or other assignments.
+    const range = (block[1] || "").match(rangePattern);
+    const client = clean(
+      clientLine.replace(range?.[0] || /$^/, "").replace(/[\s,;|–—-]+$/, ""),
+    );
+    if (!client || !name || !role || !range) continue;
+    records.push({
+      name,
+      client,
+      role,
+      start_date: clean(range[1]),
+      end_date: clean(range[2]),
+      modules: [],
+      project_type: "",
+    });
+  }
   return records;
 }
 

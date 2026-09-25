@@ -80,14 +80,22 @@ function explicitEmploymentCount(rawText: string): number {
 function explicitProjectCount(rawText: string): number {
   const labels = ["(?:client|customer)(?: name)?", "project(?: name| title)?"];
   return Math.max(
-    ...labels.map(
-      (label) =>
-        (
-          rawText.match(
-            new RegExp(`^[ \\t]*${label}[ \\t]*:[ \\t]*\\S`, "gim"),
-          ) || []
-        ).length,
-    ),
+    ...labels.map((label) => {
+      const colon = (
+        rawText.match(
+          new RegExp(`^[ \\t]*${label}[ \\t]*:[ \\t]*\\S`, "gim"),
+        ) || []
+      ).length;
+      const nextLine = (
+        rawText.match(
+          new RegExp(
+            `^[ \\t]*${label}[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n){0,2}[ \\t]*\\S`,
+            "gim",
+          ),
+        ) || []
+      ).length;
+      return colon + nextLine;
+    }),
   );
 }
 

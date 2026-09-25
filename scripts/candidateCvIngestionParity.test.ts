@@ -73,6 +73,78 @@ async function main() {
   );
   assert.deepEqual(admin.extractionCoverage, candidate.extractionCoverage);
   assert.deepEqual(admin.parserQuality, candidate.parserQuality);
+  const multilineProjects = Buffer.from(`
+Jane Doe
+Email: jane.doe@example.com
+Location: Singapore
+SAP MM consultant with SAP S/4HANA procurement and implementation experience.
+WORK EXPERIENCE
+SAP MM Consultant | Example Consulting | Jan 2020 - Present
+PROJECT EXPERIENCE
+Client
+Synthetic Manufacturing - Jan 2021 – Dec 2022
+Project
+Procurement rollout
+Role
+SAP MM Consultant
+Client
+Synthetic Logistics - Jan 2023 – Dec 2024
+Project
+Inventory migration
+Role
+SAP MM Lead
+EDUCATION
+Bachelor of Computing
+SKILLS
+SAP MM, S/4HANA
+LANGUAGES
+English
+`);
+  for (const sourceType of ["admin_upload", "candidate_upload"] as const) {
+    const prepared = await prepareCandidateCv({
+      buffer: multilineProjects,
+      fileName: "synthetic-multiline-projects.txt",
+      source: sourceType,
+    });
+    assert.equal(prepared.accepted, true);
+    if (!prepared.accepted) throw new Error("multiline fixture rejected");
+    assert.equal(prepared.candidatePayload.project_history.length, 2);
+    assert.equal(
+      prepared.candidatePayload.project_history[0].client,
+      "Synthetic Manufacturing",
+    );
+    assert.equal(
+      prepared.candidatePayload.project_history[0].name,
+      "Procurement rollout",
+    );
+    assert.equal(
+      prepared.candidatePayload.project_history[0].start_date,
+      "Jan 2021",
+    );
+    assert.equal(
+      prepared.candidatePayload.project_history[1].role,
+      "SAP MM Lead",
+    );
+    const partial = await prepareCandidateCv({
+      buffer: Buffer.from(
+        multilineProjects
+          .toString()
+          .replace(
+            "Synthetic Logistics - Jan 2023 – Dec 2024",
+            "Synthetic Logistics",
+          ),
+      ),
+      fileName: "synthetic-multiline-projects.txt",
+      source: sourceType,
+    });
+    assert.equal(partial.accepted, true);
+    if (!partial.accepted) throw new Error("partial fixture rejected");
+    assert.equal(partial.candidatePayload.project_history.length, 1);
+    assert.ok(
+      partial.extractionCoverage.missedObservedSections.includes("projects"),
+    );
+    assert.equal(partial.extractionCoverage.status, "incomplete_needs_review");
+  }
   assert.deepEqual(candidateCvRejectedOriginalPolicy("resume_quality"), {
     action: "hold_for_review",
     reasonCodes: ["resume_quality_rejected"],
