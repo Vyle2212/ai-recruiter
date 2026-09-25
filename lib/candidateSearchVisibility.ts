@@ -148,8 +148,12 @@ export function classifyCandidateSearchVisibility(
   candidate: AnyRecord,
 ): CandidateSearchVisibility {
   const lifecycle = candidateSearchLifecycleDecision(candidate);
-  if (!lifecycle.visible && lifecycle.reason === "review_required")
-    return blocked("candidate-review-required");
+  if (!lifecycle.visible)
+    return blocked(
+      lifecycle.reason === "review_required"
+        ? "candidate-review-required"
+        : "candidate-inactive",
+    );
   const name = rawName(candidate);
   const title = rawTitle(candidate);
   const company = rawCompany(candidate);

@@ -3,6 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { buildCandidateSearchIndexRow } from "../lib/candidateSearchIndex";
+import { classifyCandidateSearchVisibility } from "../lib/candidateSearchVisibility";
+import { buildSearchIndexAudit } from "../lib/searchIndexAudit";
 import { planCanonicalSearchIndexRebuild } from "../lib/searchIndexRebuildPlan";
 
 const eligible = {
@@ -38,6 +40,65 @@ assert.deepEqual(
   [eligible.id],
 );
 assert.equal(plan.rowsToWrite[0]?.primary_module, "SD");
+
+for (const status of [
+  "needs_review",
+  "hidden",
+  "archived",
+  "deleted",
+  "non_sap",
+  "rejected_noise",
+]) {
+  assert.equal(
+    buildCandidateSearchIndexRow({ ...eligible, status }),
+    null,
+    `${status} must never acquire a search index row even with a trusted name and module`,
+  );
+  assert.equal(
+    classifyCandidateSearchVisibility({ ...eligible, status })
+      .search_visibility,
+    "VALIDATION_QUEUE",
+    `${status} must never be shown in normal recruiter search`,
+  );
+}
+assert.equal(
+  buildCandidateSearchIndexRow({
+    ...eligible,
+    status: "active",
+    extraction_coverage_status: "incomplete_needs_review",
+  }),
+  null,
+  "active profile with incomplete source extraction must not enter index",
+);
+assert.ok(
+  buildCandidateSearchIndexRow({
+    ...eligible,
+    status: "active",
+    extraction_coverage_status: "complete_for_validation",
+  }),
+  "eligible profile must remain indexable",
+);
+const reviewWithOldIndex = {
+  ...eligible,
+  id: "synthetic-review-indexed",
+  status: "needs_review",
+};
+const exactSet = buildSearchIndexAudit({
+  candidates: [eligible, reviewWithOldIndex],
+  indexRows: [
+    { candidate_id: eligible.id, source_updated_at: eligible.updated_at },
+    {
+      candidate_id: reviewWithOldIndex.id,
+      source_updated_at: eligible.updated_at,
+    },
+  ],
+  indexableCandidateIds: [eligible, reviewWithOldIndex].flatMap((candidate) => {
+    const row = buildCandidateSearchIndexRow(candidate);
+    return row ? [String(row.candidate_id)] : [];
+  }),
+});
+assert.equal(exactSet.blockedCandidateIndexRows, 1);
+assert.equal(exactSet.exactSetAligned, false);
 
 const indexed = planCanonicalSearchIndexRebuild({
   candidates: [eligible],
