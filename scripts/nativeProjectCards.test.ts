@@ -55,4 +55,44 @@ assert.equal(
   1,
 );
 assert.equal(nativeProjectCards(source + "REFERENCES\n" + second).length, 1);
+
+const labelled = `PROJECTS
+Project Name:
+Finance Transformation
+Client: Example Bank
+Role: SAP FICO Consultant
+Duration: Jan 2020 to Dec 2021
+Responsibilities:
+Configured SAP FICO and supported integration testing and cutover.
+`;
+const labelledCard = nativeProjectCards(labelled);
+assert.equal(labelledCard.length, 1);
+assert.equal(labelledCard[0].name, "Finance Transformation");
+assert.equal(labelledCard[0].client, "Example Bank");
+assert.equal(labelledCard[0].role, "SAP FICO Consultant");
+assert.equal(labelledCard[0].start, "Jan 2020");
+assert.equal(labelledCard[0].end, "Dec 2021");
+assert.equal(
+  nativeProjectCards(labelled.replace("Client: Example Bank\n", "")).length,
+  0,
+);
+assert.equal(
+  nativeProjectCards(
+    labelled.replace("Jan 2020 to Dec 2021", "Jan 2022 to Dec 2021"),
+  ).length,
+  0,
+);
+const clientOnly = labelled
+  .replace("PROJECTS", "PROJECT EXPERIENCE")
+  .replace("Project Name:\nFinance Transformation\n", "");
+assert.equal(nativeProjectCards(clientOnly).length, 1);
+assert.equal(nativeProjectCards(clientOnly)[0].name, "");
+const flattened = labelled.replace(/\n/g, " ");
+assert.equal(nativeProjectCards(flattened).length, 0);
+const flattenedUnderHeading = `PROJECT HISTORY\n${flattened}`;
+assert.equal(nativeProjectCards(flattenedUnderHeading).length, 1);
+assert.equal(
+  nativeProjectCards(flattenedUnderHeading)[0].client,
+  "Example Bank",
+);
 console.log("Native project card ownership and section boundaries: PASS");

@@ -149,7 +149,7 @@ const OBSERVED_PATTERNS: Record<
   employment:
     /(?:^|\n)\s*(?:work|professional|career|employment)\s+(?:experience|history)\b|\b(?:19|20)\d{2}\s*(?:-|–|—|to)\s*(?:present|current|(?:19|20)\d{2})\b/im,
   projects:
-    /(?:^|\n)\s*(?:project|client|customer)\s+(?:experience|history|details|portfolio)\b|(?:^|\n)\s*(?:project|client|customer)\s*:/im,
+    /(?:^|\n)\s*projects?\s*:?(?:\n|$)|(?:^|\n)\s*(?:project|client|customer)\s+(?:experience|history|details|portfolio)\b|(?:^|\n)\s*(?:project|client|customer)\s*:/im,
   education:
     /(?:^|\n)\s*(?:education|academic background|academic qualification|qualifications?)\s*:?(?:\n|$)/im,
   certifications:
@@ -209,33 +209,28 @@ export function evaluateCandidateExtractionCoverage(
       extracted.add(section as CandidateExtractionSection);
   }
 
-  if (
-    employmentAnchors > 1 &&
-    Math.max(
-      structuredRecordCount(candidate.experience, isValidEmploymentEntry),
-      structuredRecordCount(candidate.employment, isValidEmploymentEntry),
-      structuredRecordCount(
-        candidate.employment_history,
-        isValidEmploymentEntry,
-      ),
-      structuredRecordCount(
-        candidate.employmentHistory,
-        isValidEmploymentEntry,
-      ),
-    ) < employmentAnchors
-  )
+  const validEmploymentRows = Math.max(
+    structuredRecordCount(candidate.experience, isValidEmploymentEntry),
+    structuredRecordCount(candidate.employment, isValidEmploymentEntry),
+    structuredRecordCount(candidate.employment_history, isValidEmploymentEntry),
+    structuredRecordCount(candidate.employmentHistory, isValidEmploymentEntry),
+  );
+  const validProjectRows = Math.max(
+    structuredRecordCount(candidate.projects, isValidProjectEntry),
+    structuredRecordCount(candidate.project_history, isValidProjectEntry),
+    structuredRecordCount(candidate.projectHistory, isValidProjectEntry),
+  );
+  if (observed.has("employment") && validEmploymentRows === 0)
+    extracted.delete("employment");
+  if (observed.has("projects") && validProjectRows === 0)
+    extracted.delete("projects");
+
+  if (employmentAnchors > 1 && validEmploymentRows < employmentAnchors)
     extracted.delete("employment");
 
   // Section presence is not enough when the source explicitly enumerates
   // multiple projects. One extracted record must not hide omitted projects.
-  if (
-    projectAnchors > 1 &&
-    Math.max(
-      structuredRecordCount(candidate.projects, isValidProjectEntry),
-      structuredRecordCount(candidate.project_history, isValidProjectEntry),
-      structuredRecordCount(candidate.projectHistory, isValidProjectEntry),
-    ) < projectAnchors
-  )
+  if (projectAnchors > 1 && validProjectRows < projectAnchors)
     extracted.delete("projects");
 
   // Two equally dated assignments with the same named project and role but

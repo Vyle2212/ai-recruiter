@@ -393,6 +393,16 @@ assert.ok(emptyStructuredEducation.missingRequiredFields.includes("education"));
 assert.equal(partialProjects.status, "incomplete_needs_review");
 assert.ok(partialProjects.missedObservedSections.includes("projects"));
 assert.ok(
+  evaluateCandidateExtractionCoverage(
+    "Synthetic SAP profile\nPROJECTS\nUndated internal activity",
+    {
+      ...multipleProjectCandidate,
+      projects: [{ name: "Undated internal activity" }],
+    },
+  ).missedObservedSections.includes("projects"),
+  "a nonempty but invalid project row must not hide a bare PROJECTS section gap",
+);
+assert.ok(
   evaluateCandidateExtractionCoverage(multipleProjectSource, {
     ...multipleProjectCandidate,
     projects: oneProject,

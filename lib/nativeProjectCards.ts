@@ -6,16 +6,18 @@ export function nativeProjectCards(source: string) {
   const heading = source.search(
     /^\s*(?:DETAILED WORK EXPERIENCES|PROJECT (?:PROFILE|HISTORY|EXPERIENCES?))\s*:?\s*$/im,
   );
-  if (heading < 0) return [];
-  const section = source
-    .slice(heading)
-    .replace(/^\s*Page\s+\d+\s+of\s+\d+\s*$/gim, "");
-  const bounded = section.split(
-    /^\s*(?:EDUCATION|ACADEMIC QUALIFICATIONS|REFERENCES|PERSONAL DETAILS)\s*:?\s*$/im,
-  )[0];
+  const output = [];
   const pattern =
     /^Project\s*:[ \t]*([^\n]+)\n[ \t]*Environment\s*:[ \t]*([^\n]+)\n[ \t]*Client\s*:[ \t]*([^\n]+)\n[ \t]*(?:Project\s+)?Duration\s*:[ \t]*([^\n]+)\n[ \t]*Roles?\s*&\s*Responsibilities\s*:[ \t]*\n[ \t]*[•●▪-][ \t]*([^\n]+)/gim;
-  const output = [];
+  const bounded =
+    heading < 0
+      ? ""
+      : source
+          .slice(heading)
+          .replace(/^\s*Page\s+\d+\s+of\s+\d+\s*$/gim, "")
+          .split(
+            /^\s*(?:EDUCATION|ACADEMIC QUALIFICATIONS|REFERENCES|PERSONAL DETAILS)\s*:?\s*$/im,
+          )[0];
   for (const match of bounded.matchAll(pattern)) {
     const dates = match[4]
       .trim()
@@ -53,5 +55,168 @@ export function nativeProjectCards(source: string) {
       excerpt: match[0],
     });
   }
-  return output;
+  const broadHeading = source.search(
+    /^\s*(?:PROJECTS?|PROJECT\s+(?:PROFILE|HISTORY|EXPERIENCES?|DETAILS|PORTFOLIO))\s*:?\s*$/im,
+  );
+  if (broadHeading >= 0) {
+    const broadSection = source
+      .slice(broadHeading)
+      .replace(/^\s*Page\s+\d+\s+of\s+\d+\s*$/gim, "")
+      .split(
+        /^\s*(?:EDUCATION|ACADEMIC QUALIFICATIONS|CERTIFICATIONS?|SKILLS|LANGUAGES|REFERENCES|PERSONAL DETAILS)\s*:?\s*$/im,
+      )[0];
+    const projectAnchors = [
+      ...broadSection.matchAll(
+        /^\s*(?:Project(?:\s+(?:Name|Title))?)\s*:\s*(?:\S.*)?$/gim,
+      ),
+    ];
+    const anchors = projectAnchors.length
+      ? projectAnchors
+      : [
+          ...broadSection.matchAll(
+            /^\s*(?:Client|Customer(?:\s+Name)?)\s*:\s*(?:\S.*)?$/gim,
+          ),
+        ];
+    const value = (block: string, label: string) =>
+      block
+        .match(
+          new RegExp(
+            `^\\s*(?:${label})\\s*:\\s*(?:([^\\n]+)|\\n\\s*([^\\n]+))`,
+            "im",
+          ),
+        )
+        ?.slice(1)
+        .find((item) => item?.trim())
+        ?.trim() || "";
+    const range = (block: string) => {
+      const labelled = value(
+        block,
+        "Project\\s+Duration|Duration|Period|From\\s*\\/\\s*To",
+      );
+      const text = labelled || block;
+      return text.match(
+        /\b((?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+)?(?:19|20)\d{2})\s*(?:-|–|—|to)\s*((?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+)?(?:19|20)\d{2}|Present|Current|Now|Till date|To date)\b/i,
+      );
+    };
+    anchors.forEach((anchor, index) => {
+      const startOffset = anchor.index || 0;
+      const block = broadSection.slice(
+        startOffset,
+        anchors[index + 1]?.index ?? broadSection.length,
+      );
+      if (block.length > 3000) return;
+      const name = value(block, "Project(?:\\s+(?:Name|Title))?");
+      const client = value(block, "Client|Customer(?:\\s+Name)?");
+      const role = value(block, "Role|Position|Designation");
+      const dates = range(block);
+      const responsibility = value(
+        block,
+        "Roles?\\s*(?:&|and)\\s*Responsibilities|Responsibilities|Scope|Activities",
+      );
+      const deliveryText = `${name} ${role} ${responsibility} ${block}`;
+      if (
+        !client ||
+        !role ||
+        !dates ||
+        !/\bSAP\b/i.test(deliveryText) ||
+        !/\b(?:support|implement|rollout|migration|upgrade|enhancement|integration|configuration|testing|cutover|go-live|deployment)\b/i.test(
+          deliveryText,
+        )
+      )
+        return;
+      const from = careerMonthIndex(dates[1]);
+      const to = careerMonthIndex(
+        dates[2],
+        /^(?:present|current|now|till date|to date)$/i.test(dates[2]),
+      );
+      if (from === null || to === null || from > to) return;
+      output.push({
+        name,
+        environment: value(block, "Environment|System|Platform"),
+        client,
+        role,
+        start: dates[1],
+        end: dates[2],
+        responsibility,
+        excerpt: block,
+      });
+    });
+
+    const inlineSection = broadSection.replace(/\s+/g, " ");
+    const inlineProjectAnchors = [
+      ...inlineSection.matchAll(/\bProject(?:\s+(?:Name|Title))?\s*:/gi),
+    ];
+    const inlineAnchors = inlineProjectAnchors.length
+      ? inlineProjectAnchors
+      : [...inlineSection.matchAll(/\b(?:Client|Customer(?:\s+Name)?)\s*:/gi)];
+    const inlineLabels =
+      "Project(?:\\s+(?:Name|Title))?|Client|Customer(?:\\s+Name)?|Role|Position|Designation|Project\\s+Duration|Duration|Period|From\\s*\\/\\s*To|Roles?\\s*(?:&|and)\\s*Responsibilities|Responsibilities|Scope|Activities|Environment|System|Platform";
+    const inlineValue = (block: string, label: string) =>
+      block
+        .match(
+          new RegExp(
+            `\\b(?:${label})\\s*:\\s*([\\s\\S]{1,300}?)(?=\\s+\\b(?:${inlineLabels})\\s*:|$)`,
+            "i",
+          ),
+        )?.[1]
+        ?.trim() || "";
+    inlineAnchors.forEach((anchor, index) => {
+      const block = inlineSection.slice(
+        anchor.index || 0,
+        inlineAnchors[index + 1]?.index ?? inlineSection.length,
+      );
+      if (block.length > 3000) return;
+      const name = inlineValue(block, "Project(?:\\s+(?:Name|Title))?");
+      const client = inlineValue(block, "Client|Customer(?:\\s+Name)?");
+      const role = inlineValue(block, "Role|Position|Designation");
+      const duration = inlineValue(
+        block,
+        "Project\\s+Duration|Duration|Period|From\\s*\\/\\s*To",
+      );
+      const dates = (duration || block).match(
+        /\b((?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+)?(?:19|20)\d{2})\s*(?:-|–|—|to)\s*((?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+)?(?:19|20)\d{2}|Present|Current|Now|Till date|To date)\b/i,
+      );
+      const responsibility = inlineValue(
+        block,
+        "Roles?\\s*(?:&|and)\\s*Responsibilities|Responsibilities|Scope|Activities",
+      );
+      const deliveryText = `${name} ${role} ${responsibility} ${block}`;
+      if (
+        !client ||
+        !role ||
+        !dates ||
+        !/\bSAP\b/i.test(deliveryText) ||
+        !/\b(?:support|implement|rollout|migration|upgrade|enhancement|integration|configuration|testing|cutover|go-live|deployment)\b/i.test(
+          deliveryText,
+        )
+      )
+        return;
+      const from = careerMonthIndex(dates[1]);
+      const to = careerMonthIndex(
+        dates[2],
+        /^(?:present|current|now|till date|to date)$/i.test(dates[2]),
+      );
+      if (from === null || to === null || from > to) return;
+      output.push({
+        name,
+        environment: inlineValue(block, "Environment|System|Platform"),
+        client,
+        role,
+        start: dates[1],
+        end: dates[2],
+        responsibility,
+        excerpt: block,
+      });
+    });
+  }
+  return [
+    ...new Map(
+      output.map((card) => [
+        [card.name, card.client, card.role, card.start, card.end]
+          .join("|")
+          .toLowerCase(),
+        card,
+      ]),
+    ).values(),
+  ];
 }
