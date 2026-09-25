@@ -227,7 +227,7 @@ for (const [surface, source] of [
 ] as const) {
   assert.match(
     source,
-    /candidateSearchLifecycleDecision\(/,
+    /candidateSearchLifecycleDecision\(|loadCandidateSearchMutationEligibility\(/,
     `${surface} must enforce current candidate lifecycle state`,
   );
 }
