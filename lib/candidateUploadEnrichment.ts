@@ -476,14 +476,10 @@ export function enrichCandidateUpload(
       full.extractedCurrentTitle && !full.isTitleSuspicious
         ? full.extractedCurrentTitle
         : candidate.current_title || candidate.currentTitle,
-    current_company:
-      full.extractedCurrentCompany &&
-      full.extractedCurrentCompany !== "Not disclosed" &&
-      !full.isCompanySuspicious
-        ? full.extractedCurrentCompany
-        : clean(currentExperience?.employer) ||
-          candidate.current_company ||
-          candidate.currentCompany,
+    // Current employer is a temporal claim. Only an explicitly open-ended
+    // canonical employment row may populate it; stale upstream fields and
+    // undated labels remain review evidence instead of current facts.
+    current_company: clean(currentExperience?.employer) || null,
     primary_module:
       full.primarySapModule && full.primarySapModule !== "UNKNOWN"
         ? full.primarySapModule

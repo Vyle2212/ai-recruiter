@@ -141,6 +141,18 @@ async function main() {
       null,
       "a completed employment card must not be promoted to current employer",
     );
+    const staleHistorical = enrichCandidateUpload(
+      {
+        ...historical.candidatePayload,
+        current_company: "Example Consulting",
+      },
+      historical.rawText,
+    );
+    assert.equal(
+      staleHistorical.current_company,
+      null,
+      "a stale upstream current_company cannot override closed employment evidence",
+    );
   }
   const projectSource = `SAP MM Consultant
 PROJECT EXPERIENCE
