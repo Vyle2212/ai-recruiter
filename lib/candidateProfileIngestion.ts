@@ -2,6 +2,7 @@ import {
   classifyCandidateDuplicate,
   type CandidateIdentityRecord,
 } from "./candidateDuplicateIdentity";
+import { careerMonthIndex } from "./candidateCareerExperience";
 
 export type CandidateIngestionSource =
   | "admin_upload"
@@ -185,12 +186,24 @@ export function isValidEmploymentEntry(item: unknown): boolean {
     employer &&
       title &&
       start &&
-      (end || row.current === true || /^(?:current|present|now)$/i.test(end)),
+      validDatedRange(start, end, row.current === true),
   );
 }
 
 function validEmployment(value: unknown) {
   return list(value).some(isValidEmploymentEntry);
+}
+
+function validDatedRange(start: string, end: string, current: boolean) {
+  const from = careerMonthIndex(start);
+  const to = end
+    ? /^(?:till date|to date)$/i.test(end)
+      ? careerMonthIndex("", true)
+      : careerMonthIndex(end)
+    : current
+      ? careerMonthIndex("", true)
+      : null;
+  return from !== null && to !== null && to >= from;
 }
 
 export function isValidProjectEntry(item: unknown): boolean {
@@ -204,7 +217,7 @@ export function isValidProjectEntry(item: unknown): boolean {
     identity &&
       role &&
       start &&
-      (end || row.current === true || /^(?:current|present|now)$/i.test(end)),
+      validDatedRange(start, end, row.current === true),
   );
 }
 

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import {
   evaluateCandidateProfileCompletion,
+  isValidEmploymentEntry,
+  isValidProjectEntry,
   mergeCandidateProfileVersion,
   resolveCandidateIngestion,
 } from "../lib/candidateProfileIngestion";
@@ -91,6 +93,70 @@ const complete = evaluateCandidateProfileCompletion({
   ],
 });
 assert.equal(complete.searchable, true);
+assert.equal(
+  isValidProjectEntry({
+    client: "Example Client",
+    role: "SAP Consultant",
+    start_date: "11/2012",
+    end_date: "03/2012",
+  }),
+  false,
+  "a reversed range cannot qualify a project for search",
+);
+assert.equal(
+  isValidProjectEntry({
+    client: "Example Client",
+    role: "SAP Consultant",
+    start_date: "05/2012",
+    end_date: "10/2012",
+  }),
+  true,
+);
+assert.equal(
+  isValidEmploymentEntry({
+    company: "Example Consulting",
+    title: "SAP Consultant",
+    start_date: "2023-12",
+    end_date: "2022-01",
+  }),
+  false,
+  "reversed employment cannot qualify a profile for search",
+);
+assert.equal(
+  evaluateCandidateProfileCompletion({
+    ...{
+      name: "Jane Doe",
+      email: "jane@example.com",
+      location: "Malaysia",
+      current_title: "SAP MM Consultant",
+      current_company: "Acme",
+      skills: ["Procurement"],
+      education: ["Bachelor of Computing"],
+      languages: ["English"],
+      primary_module: "MM",
+      is_sap_profile: true,
+      candidate_confirmed: true,
+      experience: [
+        {
+          company: "Acme",
+          title: "SAP MM Consultant",
+          start_date: "2022-01",
+          current: true,
+        },
+      ],
+    },
+    projects: [
+      {
+        client: "Example Client",
+        role: "SAP MM Consultant",
+        start_date: "2023-12",
+        end_date: "2022-01",
+      },
+    ],
+  }).searchable,
+  false,
+  "a reversed project date must block searchable completeness",
+);
 for (const placeholder of [[], [""], [{}], "[]", "[{}]", "N/A"]) {
   const incomplete = evaluateCandidateProfileCompletion(
     {

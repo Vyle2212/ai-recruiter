@@ -193,7 +193,9 @@ function explicitProjectRecords(rawText: string) {
       project_type: "",
     });
   }
-  return records;
+  // A source can show a reversed or unparseable date range. Leave that
+  // assignment in the original CV for review instead of structuring it.
+  return records.filter(isValidProjectEntry);
 }
 
 /** Enriches the lightweight upload parser with the repository's deterministic

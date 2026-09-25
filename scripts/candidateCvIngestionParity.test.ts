@@ -6,6 +6,7 @@ import {
   prepareCandidateCv,
 } from "../lib/candidateCvIngestion";
 import { enrichCandidateUpload } from "../lib/candidateUploadEnrichment";
+import { isValidProjectEntry } from "../lib/candidateProfileIngestion";
 
 const source = `
 Jane Doe
@@ -103,6 +104,15 @@ Jan 2023 - Dec 2024`;
     moreExplicitProjects.project_history.length,
     2,
     "one canonical project must not hide a second explicitly labelled project",
+  );
+  const reversed = enrichCandidateUpload(
+    { name: "Jane Doe" },
+    `SAP MM Consultant\nPROJECT EXPERIENCE\nProject Title: Synthetic Reversed\nClient: Synthetic Manufacturing\nRole: SAP MM Consultant\nNov 2022 - Mar 2022`,
+  );
+  assert.equal(
+    reversed.project_history.filter(isValidProjectEntry).length,
+    0,
+    "reversed source dates must never create a qualified project",
   );
   const mixedRoleLabels = enrichCandidateUpload(
     { name: "Jane Doe" },
