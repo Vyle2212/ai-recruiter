@@ -2147,15 +2147,27 @@ function resumeEmployment(resumeText: string) {
     item.company && item.title && item.start && item.end &&
     supportedRange(item.start, item.end, item.current));
   if (!hasCompleteEmployment) {
+    const broadensKnownEmployer = (row: { company: string; start: string; end: string }) => {
+      const start = monthIndex(row.start);
+      const current = /^(?:present|current|now|till\s+(?:to\s+)?date)$/i.test(row.end);
+      const end = monthIndex(row.end, current);
+      if (start === null || end === null) return false;
+      return output.some(known => {
+        if (normalized(known.company) !== normalized(row.company)) return false;
+        const knownStart = monthIndex(known.start);
+        const knownEnd = monthIndex(known.end, known.current);
+        return knownStart !== null && knownEnd !== null && knownStart >= start && knownEnd <= end;
+      });
+    };
     for (const [index, row] of labelledEmploymentFieldCards(resumeText).entries()) {
       const parsed = entry({ ...row, sourceRef: `resume.labelledEmploymentFieldCard.${index + 1}`,
         sourceType: "parsed_resume", confidence: 95 });
-      if (parsed) output.push(parsed);
+      if (parsed && !broadensKnownEmployer(row)) output.push(parsed);
     }
     for (const [index, row] of multilineEmploymentTriples(resumeText).entries()) {
       const parsed = entry({ ...row, sourceRef: `resume.multilineEmploymentTriple.${index + 1}`,
         sourceType: "parsed_resume", confidence: 95 });
-      if (parsed) output.push(parsed);
+      if (parsed && !broadensKnownEmployer(row)) output.push(parsed);
     }
   }
   return output;
