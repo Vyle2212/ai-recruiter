@@ -7,6 +7,7 @@ export type PdfExtractionOptions = {
     buffer: Buffer,
     pages: number,
     pagesRequiringOcrText?: number[],
+    fallbackReason?: string,
   ) => Promise<string>;
 };
 export type CvSourceExtraction = {
@@ -80,10 +81,13 @@ export async function extractCvPdf(
       { length: document.numPages },
       (_, index) => index + 1,
     );
-    const text = await (options.ocr || googlePdfOcr)(
+    const runOcr: NonNullable<PdfExtractionOptions["ocr"]> =
+      options.ocr || googlePdfOcr;
+    const text = await runOcr(
       buffer,
       document.numPages,
       pagesRequiringOcrText,
+      reason,
     );
     if (
       pdfOcrReason(text) ||

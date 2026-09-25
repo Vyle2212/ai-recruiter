@@ -11,7 +11,10 @@ node --import tsx scripts/auditOfflineCvParser.ts --directory /private/path/to/o
 The command reads files and reports aggregate counts only. It does not upload
 the collection, write candidate records, log filenames, include extracted text
 in the report, or invoke external OCR by default. `ocrRequired` counts PDFs
-whose native text could not be trusted. `--allow-ocr` explicitly enables the
+whose text, encoding or page extraction needs OCR. `employmentLayoutUnresolved`
+counts readable PDFs where the employment structure was not recovered; those
+need parser investigation and may invoke OCR in the live upload pipeline.
+`--allow-ocr` explicitly enables the
 same Google Vision fallback used by uploads; use only in an approved private
 environment with configured credentials and expected processing costs.
 
@@ -24,7 +27,10 @@ The JSON is bound to the exact parser commit and a single aggregate collection
 fingerprint, and counts unique file bytes separately from duplicate copies.
 Per-file hashes are never emitted. Each
 unique file has exactly one outcome: `completeForValidation`, `needsReview`,
-`classificationReview`, `qualityRejected`, `ocrRequired` or `sourceFailures`.
+`classificationReview`, `qualityRejected`, `ocrRequired`,
+`employmentLayoutUnresolved` or `sourceFailures`.
+`classificationByType` distinguishes uncertain SAP evidence from confidently
+non-SAP documents and job descriptions; no file is deleted by this audit.
 Missing required fields and source sections are aggregated across files.
 Employment gaps are grouped into the same six layout/cause queues used by the
 970-source stored-text audit, and valid employment/project row totals are

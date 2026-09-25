@@ -75,7 +75,9 @@ async function main() {
   assert.equal(r.duplicateFiles, 1);
   assert.equal(r.sourceFailures, 1);
   assert.equal(r.ocrRequired, 1);
+  assert.equal(r.employmentLayoutUnresolved, 0);
   assert.equal(r.classificationReview, 1);
+  assert.equal(r.classificationByType.UNKNOWN, 1);
   assert.equal(r.completeForValidation + r.needsReview, 2);
   assert.equal(r.artifact, "offline_cv_parser_audit_v2");
   assert.match(r.collectionFingerprint, /^[a-f0-9]{64}$/);

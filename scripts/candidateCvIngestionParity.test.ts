@@ -5,6 +5,7 @@ import {
   candidateCvRejectedOriginalPolicy,
   prepareCandidateCv,
 } from "../lib/candidateCvIngestion";
+import { enrichCandidateUpload } from "../lib/candidateUploadEnrichment";
 
 const source = `
 Jane Doe
@@ -73,6 +74,45 @@ async function main() {
   );
   assert.deepEqual(admin.extractionCoverage, candidate.extractionCoverage);
   assert.deepEqual(admin.parserQuality, candidate.parserQuality);
+  const projectSource = `SAP MM Consultant
+PROJECT EXPERIENCE
+Project Title: Synthetic Alpha
+Client: Synthetic Manufacturing
+Role: SAP MM Consultant
+Jan 2021 - Dec 2022
+Project Title: Synthetic Beta
+Client: Synthetic Logistics
+Role: SAP MM Lead
+Jan 2023 - Dec 2024`;
+  const moreExplicitProjects = enrichCandidateUpload(
+    {
+      name: "Jane Doe",
+      projects: [
+        {
+          name: "Synthetic Alpha",
+          client: "Synthetic Manufacturing",
+          role: "SAP MM Consultant",
+          start_date: "Jan 2021",
+          end_date: "Dec 2022",
+        },
+      ],
+    },
+    projectSource,
+  );
+  assert.equal(
+    moreExplicitProjects.project_history.length,
+    2,
+    "one canonical project must not hide a second explicitly labelled project",
+  );
+  const mixedRoleLabels = enrichCandidateUpload(
+    { name: "Jane Doe" },
+    `${projectSource}\nRole\nAdditional SAP MM Consultant`,
+  );
+  assert.equal(
+    mixedRoleLabels.project_history.length,
+    2,
+    "a second role label must not invalidate an explicitly dated project",
+  );
   const multilineProjects = Buffer.from(`
 Jane Doe
 Email: jane.doe@example.com
@@ -144,6 +184,125 @@ English
       partial.extractionCoverage.missedObservedSections.includes("projects"),
     );
     assert.equal(partial.extractionCoverage.status, "incomplete_needs_review");
+    const dateBeforeClient = await prepareCandidateCv({
+      buffer: Buffer.from(
+        multilineProjects
+          .toString()
+          .replace(
+            "Client\nSynthetic Logistics - Jan 2023 – Dec 2024",
+            "Jan 2023 – Dec 2024\nClient\nSynthetic Logistics",
+          ),
+      ),
+      fileName: "synthetic-date-before-client.txt",
+      source: sourceType,
+    });
+    assert.equal(dateBeforeClient.accepted, true);
+    if (!dateBeforeClient.accepted) throw new Error("dated fixture rejected");
+    assert.equal(dateBeforeClient.candidatePayload.project_history.length, 2);
+    assert.equal(
+      dateBeforeClient.candidatePayload.project_history[1].start_date,
+      "Jan 2023",
+    );
+    const unrelatedYear = await prepareCandidateCv({
+      buffer: Buffer.from(
+        multilineProjects
+          .toString()
+          .replace(
+            "Client\nSynthetic Logistics - Jan 2023 – Dec 2024",
+            "Delivered activity Jan 2023 – Dec 2024\nClient\nSynthetic Logistics",
+          ),
+      ),
+      fileName: "synthetic-unrelated-year.txt",
+      source: sourceType,
+    });
+    assert.equal(unrelatedYear.accepted, true);
+    if (!unrelatedYear.accepted) throw new Error("undated fixture rejected");
+    assert.equal(unrelatedYear.candidatePayload.project_history.length, 1);
+    assert.ok(
+      unrelatedYear.extractionCoverage.missedObservedSections.includes(
+        "projects",
+      ),
+    );
+    const labelledDuration = await prepareCandidateCv({
+      buffer: Buffer.from(`Jane Doe
+Email: jane.doe@example.com
+Location: Singapore
+SAP MM consultant delivering SAP S/4HANA implementations.
+WORK EXPERIENCE
+SAP MM Consultant | Example Consulting | Jan 2020 - Present
+PROJECT EXPERIENCE
+Project Title: Synthetic Procurement Rollout
+Customer
+Synthetic Manufacturing
+Duration
+Jan 2021 - Dec 2022
+Role
+SAP MM Consultant
+Project Title: Synthetic Inventory Migration
+Customer
+Synthetic Logistics
+Duration
+Jan 2023 - Dec 2024
+Role
+SAP MM Lead
+EDUCATION
+Bachelor of Computing
+SKILLS
+SAP MM, S/4HANA
+LANGUAGES
+English`),
+      fileName: "synthetic-separated-labels.txt",
+      source: sourceType,
+    });
+    assert.equal(labelledDuration.accepted, true);
+    if (!labelledDuration.accepted)
+      throw new Error("duration fixture rejected");
+    assert.equal(labelledDuration.candidatePayload.project_history.length, 2);
+    assert.equal(
+      labelledDuration.candidatePayload.project_history[0].name,
+      "Synthetic Procurement Rollout",
+    );
+    const missingDuration = await prepareCandidateCv({
+      buffer: Buffer.from(
+        labelledDuration.rawText.replace(
+          "Duration\nJan 2023 - Dec 2024",
+          "Delivered activity Jan 2023 - Dec 2024",
+        ),
+      ),
+      fileName: "synthetic-separated-labels.txt",
+      source: sourceType,
+    });
+    assert.equal(missingDuration.accepted, true);
+    if (!missingDuration.accepted) throw new Error("missing duration rejected");
+    assert.equal(missingDuration.candidatePayload.project_history.length, 1);
+    assert.ok(
+      missingDuration.extractionCoverage.missedObservedSections.includes(
+        "projects",
+      ),
+    );
+    const quotedMonths = await prepareCandidateCv({
+      buffer: Buffer.from(
+        multilineProjects
+          .toString()
+          .replace(
+            "Client\nSynthetic Logistics - Jan 2023 – Dec 2024",
+            "Jan’ 2023 to Dec’2024\nClient\nSynthetic Logistics",
+          ),
+      ),
+      fileName: "synthetic-quoted-months.txt",
+      source: sourceType,
+    });
+    assert.equal(quotedMonths.accepted, true);
+    if (!quotedMonths.accepted) throw new Error("quoted months rejected");
+    assert.equal(quotedMonths.candidatePayload.project_history.length, 2);
+    assert.equal(
+      quotedMonths.candidatePayload.project_history[1].start_date,
+      "Jan 2023",
+    );
+    assert.equal(
+      quotedMonths.candidatePayload.project_history[1].end_date,
+      "Dec 2024",
+    );
   }
   assert.deepEqual(candidateCvRejectedOriginalPolicy("resume_quality"), {
     action: "hold_for_review",

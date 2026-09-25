@@ -1,5 +1,6 @@
 import { extractFullCandidateProfile } from "./fullCandidateExtractionEngine";
 import { normalizeActualCandidateSchema } from "./candidate360SchemaNormalize";
+import { isValidProjectEntry } from "./candidateProfileIngestion";
 
 const clean = (value: unknown) =>
   String(value ?? "")
@@ -70,11 +71,21 @@ function explicitProjectRecords(rawText: string) {
   ];
   const markers = projectMarkers.length ? projectMarkers : clientMarkers;
   const dateToken =
-    "(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s+)?(?:19|20)\\d{2}|(?:0?[1-9]|1[0-2])[/-](?:19|20)?\\d{2}";
+    "(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[’']?\\s*)?(?:19|20)\\d{2}|(?:0?[1-9]|1[0-2])[/-](?:19|20)?\\d{2}";
   const rangePattern = new RegExp(
     `(${dateToken})\\s*(?:-|–|—|to)\\s*(${dateToken}|Present|Current|Till Date|To Date)`,
     "i",
   );
+  const dateValue = (value: string) => clean(value.replace(/[’']/g, " "));
+  const nextLabelLine = (block: string, labels: string) =>
+    clean(
+      block.match(
+        new RegExp(
+          `(?:^|\\n)[ \\t]*(?:${labels})[ \\t]*\\n(?:[ \\t]*\\n){0,2}[ \\t]*([^\\n]{2,160})`,
+          "im",
+        ),
+      )?.[1],
+    );
   const records: Array<Record<string, unknown>> = [];
   for (const [index, marker] of markers.entries()) {
     const start = marker.index || 0;
@@ -87,14 +98,27 @@ function explicitProjectRecords(rawText: string) {
       )?.[1],
     );
     const client = clean(
-      block.match(/(?:^|\n)\s*(?:client|customer)\s*:\s*([^\n]{2,160})/im)?.[1],
+      block.match(
+        /(?:^|\n)\s*(?:client|customer)\s*:\s*([^\n]{2,160})/im,
+      )?.[1] || nextLabelLine(block, "client|customer"),
     );
-    const role = clean(
+    const multilineRole = nextLabelLine(
+      block,
+      "project[ \\t]+role|role|position|designation",
+    );
+    const colonRole = clean(
       block.match(
         /(?:^|\n)\s*(?:project\s+role|role|position|designation)\s*:\s*([^\n]{2,160})/im,
       )?.[1],
     );
-    const range = block.match(rangePattern);
+    const role = colonRole || multilineRole;
+    const duration = nextLabelLine(
+      block,
+      "duration|period|project[ \\t]+dates?",
+    );
+    const range =
+      duration.match(rangePattern) ||
+      (colonRole ? block.match(rangePattern) : null);
     if (!(name || client) || !role || !range) continue;
     const moduleLine = clean(
       block.match(
@@ -113,8 +137,8 @@ function explicitProjectRecords(rawText: string) {
       name,
       client,
       role,
-      start_date: clean(range[1]),
-      end_date: clean(range[2]),
+      start_date: dateValue(range[1]),
+      end_date: dateValue(range[2]),
       modules: unique(moduleLine.split(/[,;|/]+/)),
       project_type: projectType,
     });
@@ -144,19 +168,27 @@ function explicitProjectRecords(rawText: string) {
     const clientLine = labelValue(block, /^(?:client|customer)$/i);
     const name = labelValue(block, /^project$/i);
     const role = labelValue(block, /^(?:role|position|designation)$/i);
-    // The date must be in the client value itself. Dates deeper in the
-    // description may describe unrelated activities or other assignments.
-    const range = (block[1] || "").match(rangePattern);
+    // Some project cards put a date-only line immediately before Client.
+    // Never borrow a date embedded in preceding prose or in a later task.
+    const precedingLine = lines[start - 1] || "";
+    const precedingRange = precedingLine.match(rangePattern);
+    const dateOnlyBeforeClient =
+      precedingRange && !precedingLine.replace(precedingRange[0], "").trim()
+        ? precedingRange
+        : null;
+    const range = (block[1] || "").match(rangePattern) || dateOnlyBeforeClient;
     const client = clean(
-      clientLine.replace(range?.[0] || /$^/, "").replace(/[\s,;|–—-]+$/, ""),
+      clientLine
+        .replace((block[1] || "").match(rangePattern)?.[0] || /$^/, "")
+        .replace(/[\s,;|–—-]+$/, ""),
     );
     if (!client || !name || !role || !range) continue;
     records.push({
       name,
       client,
       role,
-      start_date: clean(range[1]),
-      end_date: clean(range[2]),
+      start_date: dateValue(range[1]),
+      end_date: dateValue(range[2]),
       modules: [],
       project_type: "",
     });
@@ -231,15 +263,17 @@ export function enrichCandidateUpload(
     }),
   );
   const explicitProjects = explicitProjectRecords(rawText);
-  const projects = canonicalProjects.some(
-    (item: any) =>
-      (item.name || item.client) &&
-      item.role &&
-      item.start_date &&
-      item.end_date,
-  )
-    ? canonicalProjects
-    : explicitProjects;
+  // The canonical projection can recover one project while missing other
+  // explicitly labelled assignments. Keep the better complete set; never
+  // silently discard more source-backed rows merely because one row parsed.
+  const canonicalCompleteProjects =
+    canonicalProjects.filter(isValidProjectEntry).length;
+  const projects =
+    !canonicalCompleteProjects ||
+    explicitProjects.filter(isValidProjectEntry).length >
+      canonicalCompleteProjects
+      ? explicitProjects
+      : canonicalProjects;
   const education = explicitEducation.length
     ? explicitEducation
     : canonical.education || [];

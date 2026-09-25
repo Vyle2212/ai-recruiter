@@ -66,6 +66,11 @@ async function main() {
   const root = outsideRepository(directory, repo);
   if (!fs.statSync(root).isDirectory()) throw Error(DIRECTORY_ERROR);
 
+  // PDF/font libraries may print document-derived warnings to the console.
+  // Only the aggregate report may leave this private audit process.
+  console.log = () => undefined;
+  console.warn = () => undefined;
+  console.error = () => undefined;
   const targetCommitSha = execFileSync("git", ["rev-parse", "HEAD"], {
     cwd: repo,
     encoding: "utf8",

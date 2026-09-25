@@ -42,8 +42,10 @@ export type OfflineCvAudit = {
   completeForValidation: number;
   needsReview: number;
   classificationReview: number;
+  classificationByType: { NON_SAP_CV: number; JD: number; UNKNOWN: number };
   qualityRejected: number;
   ocrRequired: number;
+  employmentLayoutUnresolved: number;
   sourceFailures: number;
   employmentRows: number;
   projectRows: number;
@@ -118,8 +120,10 @@ export function createOfflineCvAudit(
     completeForValidation: 0,
     needsReview: 0,
     classificationReview: 0,
+    classificationByType: { NON_SAP_CV: 0, JD: 0, UNKNOWN: 0 },
     qualityRejected: 0,
     ocrRequired: 0,
+    employmentLayoutUnresolved: 0,
     sourceFailures: 0,
     employmentRows: 0,
     projectRows: 0,
@@ -162,17 +166,25 @@ export function createOfflineCvAudit(
           // accident. An explicit operator choice enables the real OCR path.
           pdfOcr: allowOcr
             ? undefined
-            : async () => {
+            : async (_buffer, _pages, _requiredPages, reason) => {
                 throw new CvSourceError(
-                  "OFFLINE_OCR_REQUIRED",
-                  "OCR required for offline audit",
+                  reason === "PDF_EMPLOYMENT_UNRESOLVED"
+                    ? "OFFLINE_EMPLOYMENT_UNRESOLVED"
+                    : "OFFLINE_OCR_REQUIRED",
+                  "PDF requires supervised fallback for offline audit",
                 );
               },
         });
         if (!prepared.accepted) {
           if (prepared.rejectionType === "resume_quality")
             report.qualityRejected++;
-          else report.classificationReview++;
+          else {
+            report.classificationReview++;
+            if (prepared.recordType in report.classificationByType)
+              report.classificationByType[
+                prepared.recordType as keyof typeof report.classificationByType
+              ]++;
+          }
         } else if (
           prepared.extractionCoverage.status === "complete_for_validation" &&
           !prepared.parserQuality.needsManualReview
@@ -222,6 +234,11 @@ export function createOfflineCvAudit(
           error.code === "OFFLINE_OCR_REQUIRED"
         )
           report.ocrRequired++;
+        else if (
+          error instanceof CvSourceError &&
+          error.code === "OFFLINE_EMPLOYMENT_UNRESOLVED"
+        )
+          report.employmentLayoutUnresolved++;
         else report.sourceFailures++;
       }
     },

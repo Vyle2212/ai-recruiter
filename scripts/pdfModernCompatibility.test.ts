@@ -79,10 +79,11 @@ async function main() {
   const recovered = await extractCvPdf(
     syntheticPdf(["SCANNED IMAGE PLACEHOLDER"]),
     {
-      ocr: async (buffer, pages) => {
+      ocr: async (buffer, pages, _requiredPages, fallbackReason) => {
         ocrCalls++;
         assert.ok(buffer.length > 100);
         assert.equal(pages, 1);
+        assert.equal(fallbackReason, "PDF_TEXT_EMPTY_OR_TOO_SHORT");
         return [
           "SYNTHETIC SAP CONSULTANT",
           "Employment History",
