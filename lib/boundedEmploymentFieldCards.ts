@@ -86,7 +86,7 @@ export function labelledEmploymentFieldCards(input: string): BoundedCareerTableR
   const text = input.normalize("NFKC").replace(/\s+/g, " ");
   const employmentHeading = /\b(?:Professional\s+(?:Work\s+)?Experience|Employment\s+History|Career\s+History|Working\s+Experiences?|Work\s+Experience)\b\s*:?\s*/gi;
   const headings = [...text.matchAll(employmentHeading)];
-  const stop = /\b(?:Project\s+(?:Experience|History|Details)|Projects?\s*:|Client\s+Experience|Education|Academic\s+Qualifications?|Certifications?|Technical\s+Skills?|Languages?|References?)\b\s*:?/i;
+  const stop = /\b(?:Project\s+(?:Experience|History|Details)|Project\s+\d+\b|Projects?\s*:|Client\s+Experience|Education|Academic\s+Qualifications?|Certifications?|Technical\s+Skills?|Languages?|References?)\b\s*:?/i;
   const sections = headings.map((heading, index) => {
     const start = (heading.index || 0) + heading[0].length;
     const raw = text.slice(start, headings[index + 1]?.index);

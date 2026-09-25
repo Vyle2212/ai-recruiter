@@ -2136,6 +2136,13 @@ function resumeEmployment(resumeText: string) {
       if (parsed) output.push(parsed);
     }
   }
+  if (!output.length) {
+    for (const [index, row] of labelledCompanySpells(resumeText).entries()) {
+      const parsed = entry({ ...row, sourceRef: `resume.labelledCompanySpell.${index + 1}`,
+        sourceType: "parsed_resume", confidence: 94 });
+      if (parsed) output.push(parsed);
+    }
+  }
   const hasCompleteEmployment = output.some(item =>
     item.company && item.title && item.start && item.end &&
     supportedRange(item.start, item.end, item.current));
@@ -2148,13 +2155,6 @@ function resumeEmployment(resumeText: string) {
     for (const [index, row] of multilineEmploymentTriples(resumeText).entries()) {
       const parsed = entry({ ...row, sourceRef: `resume.multilineEmploymentTriple.${index + 1}`,
         sourceType: "parsed_resume", confidence: 95 });
-      if (parsed) output.push(parsed);
-    }
-  }
-  if (!output.length) {
-    for (const [index, row] of labelledCompanySpells(resumeText).entries()) {
-      const parsed = entry({ ...row, sourceRef: `resume.labelledCompanySpell.${index + 1}`,
-        sourceType: "parsed_resume", confidence: 94 });
       if (parsed) output.push(parsed);
     }
   }

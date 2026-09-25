@@ -59,6 +59,7 @@ assert.deepEqual(labelledEmploymentFieldCards(labelled).map(item => [item.compan
   ["Example Beta Pte Ltd", "SAP Analyst", "Mar 2017", "Dec 2019"],
 ]);
 assert.deepEqual(labelledEmploymentFieldCards("PROJECT EXPERIENCE Company: Synthetic Customer Ltd Role: SAP Consultant Duration: Jan 2021 - Dec 2022"), []);
+assert.deepEqual(labelledEmploymentFieldCards("Project 2 Duration: From March 2011 to July 2011 Client: Buyer One Ltd Employer: Example Consulting Sdn Bhd Role: SAP Application Specialist Project 1 Duration: From August 2011 to December 2011 Client: Buyer Two Ltd Employer: Example Consulting Sdn Bhd Role: SAP Application Specialist"), []);
 assert.deepEqual(labelledEmploymentFieldCards("EMPLOYMENT HISTORY Company: Example Reversed Ltd Role: SAP Consultant Duration: Dec 2024 - Jan 2024"), []);
 assert.deepEqual(labelledEmploymentFieldCards("EMPLOYMENT HISTORY Company: Example Numeric Ltd Role: SAP Consultant Period: 03/2019 - 12/2022").map(item => [item.company, item.title, item.start, item.end]), [
   ["Example Numeric Ltd", "SAP Consultant", "03/2019", "12/2022"],
