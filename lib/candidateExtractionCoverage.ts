@@ -1,4 +1,9 @@
-import { evaluateCandidateProfileCompletion } from "./candidateProfileIngestion";
+import {
+  evaluateCandidateProfileCompletion,
+  hasMeaningfulCandidateValue,
+  isValidEmploymentEntry,
+  isValidProjectEntry,
+} from "./candidateProfileIngestion";
 
 export type CandidateExtractionSection =
   | "identity"
@@ -20,39 +25,22 @@ export type CandidateExtractionCoverage = {
   missingRequiredFields: string[];
 };
 
-const clean = (value: unknown) =>
-  String(value ?? "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-function values(value: unknown): unknown[] {
-  if (Array.isArray(value)) return value;
-  if (value && typeof value === "object") return Object.values(value);
-  if (!clean(value)) return [];
-  try {
-    const parsed = JSON.parse(clean(value));
-    return Array.isArray(parsed) ? parsed : [parsed];
-  } catch {
-    return clean(value)
-      .split(/[,;|\n]+/)
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-}
-
 function present(candidate: Record<string, unknown>, aliases: string[]) {
-  return aliases.some((alias) => values(candidate[alias]).some(Boolean));
+  return aliases.some((alias) => hasMeaningfulCandidateValue(candidate[alias]));
 }
 
-function structuredRecordCount(value: unknown): number {
-  if (Array.isArray(value)) return value.filter(Boolean).length;
+function structuredRecordCount(
+  value: unknown,
+  validEntry: (entry: unknown) => boolean,
+): number {
+  if (Array.isArray(value)) return value.filter(validEntry).length;
   // A single row object has many nonempty fields, not many records. Unknown
   // object shapes cannot prove that all source entries were extracted.
   if (value && typeof value === "object") return 0;
   if (typeof value !== "string") return 0;
   try {
     const parsed: unknown = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.filter(Boolean).length : 0;
+    return Array.isArray(parsed) ? parsed.filter(validEntry).length : 0;
   } catch {
     return 0;
   }
@@ -175,10 +163,16 @@ export function evaluateCandidateExtractionCoverage(
   if (
     employmentAnchors > 1 &&
     Math.max(
-      structuredRecordCount(candidate.experience),
-      structuredRecordCount(candidate.employment),
-      structuredRecordCount(candidate.employment_history),
-      structuredRecordCount(candidate.employmentHistory),
+      structuredRecordCount(candidate.experience, isValidEmploymentEntry),
+      structuredRecordCount(candidate.employment, isValidEmploymentEntry),
+      structuredRecordCount(
+        candidate.employment_history,
+        isValidEmploymentEntry,
+      ),
+      structuredRecordCount(
+        candidate.employmentHistory,
+        isValidEmploymentEntry,
+      ),
     ) < employmentAnchors
   )
     extracted.delete("employment");
@@ -188,9 +182,9 @@ export function evaluateCandidateExtractionCoverage(
   if (
     projectAnchors > 1 &&
     Math.max(
-      structuredRecordCount(candidate.projects),
-      structuredRecordCount(candidate.project_history),
-      structuredRecordCount(candidate.projectHistory),
+      structuredRecordCount(candidate.projects, isValidProjectEntry),
+      structuredRecordCount(candidate.project_history, isValidProjectEntry),
+      structuredRecordCount(candidate.projectHistory, isValidProjectEntry),
     ) < projectAnchors
   )
     extracted.delete("projects");

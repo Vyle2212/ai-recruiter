@@ -91,6 +91,70 @@ const complete = evaluateCandidateProfileCompletion({
   ],
 });
 assert.equal(complete.searchable, true);
+for (const placeholder of [[], [""], [{}], "[]", "[{}]", "N/A"]) {
+  const incomplete = evaluateCandidateProfileCompletion(
+    {
+      ...{
+        name: "Jane Doe",
+        email: "jane@example.com",
+        location: "Malaysia",
+        current_title: "SAP MM Consultant",
+        current_company: "Acme",
+        projects: [
+          {
+            client: "Example Client",
+            role: "Consultant",
+            start_date: "2022-01",
+            end_date: "2023-12",
+          },
+        ],
+        experience: [
+          {
+            employer: "Acme",
+            title: "SAP MM Consultant",
+            start_date: "2022-01",
+            current: true,
+          },
+        ],
+        education: ["Bachelor of Computing"],
+        languages: ["English"],
+        primary_module: "MM",
+        is_sap_profile: true,
+      },
+      skills: placeholder,
+    },
+    { requireCandidateConfirmation: false },
+  );
+  assert.ok(incomplete.missingRequiredFields.includes("skills"));
+  assert.equal(incomplete.searchable, false);
+}
+assert.ok(
+  evaluateCandidateProfileCompletion(
+    {
+      ...{
+        name: "Jane Doe",
+        email: "jane@example.com",
+        location: "Malaysia",
+        current_title: "SAP Consultant",
+        current_company: "Acme",
+        skills: ["SAP MM"],
+        education: ["Bachelor of Computing"],
+        languages: ["English"],
+        primary_module: "MM",
+        is_sap_profile: true,
+      },
+      experience: [
+        {
+          employer: "N/A",
+          title: "SAP Consultant",
+          start_date: "2022-01",
+          current: true,
+        },
+      ],
+    },
+    { requireCandidateConfirmation: false },
+  ).missingRequiredFields.includes("employment_history"),
+);
 assert.equal(
   evaluateCandidateProfileCompletion({
     name: "Jane Doe",
@@ -249,6 +313,14 @@ const partialProjects = evaluateCandidateExtractionCoverage(
   multipleProjectSource,
   { ...multipleProjectCandidate, projects: [oneProject] },
 );
+const emptyStructuredEducation = evaluateCandidateExtractionCoverage(
+  multipleProjectSource,
+  { ...multipleProjectCandidate, education: [{ degree: "" }] },
+);
+assert.ok(
+  emptyStructuredEducation.missedObservedSections.includes("education"),
+);
+assert.ok(emptyStructuredEducation.missingRequiredFields.includes("education"));
 assert.equal(partialProjects.status, "incomplete_needs_review");
 assert.ok(partialProjects.missedObservedSections.includes("projects"));
 assert.ok(
@@ -272,6 +344,18 @@ assert.equal(
   }).status,
   "complete_for_validation",
 );
+for (const partial of [
+  [oneProject, {}],
+  [oneProject, { client: "Synthetic Client B", role: "SAP MM Consultant" }],
+  JSON.stringify([oneProject, { client: "Synthetic Client B" }]),
+]) {
+  const coverage = evaluateCandidateExtractionCoverage(multipleProjectSource, {
+    ...multipleProjectCandidate,
+    projects: partial,
+  });
+  assert.equal(coverage.status, "incomplete_needs_review");
+  assert.ok(coverage.missedObservedSections.includes("projects"));
+}
 
 const multipleEmploymentSource = `SYNTHETIC SAP CONSULTANT
 PROFESSIONAL EXPERIENCE
@@ -302,6 +386,22 @@ const currentEmployment = {
   start_date: "2023-01",
   current: true,
 };
+for (const partial of [
+  [firstEmployment, {}],
+  [firstEmployment, { employer: "Synthetic Consulting B" }],
+  JSON.stringify([firstEmployment, { title: "SAP Consultant" }]),
+]) {
+  const coverage = evaluateCandidateExtractionCoverage(
+    multipleEmploymentSource,
+    {
+      ...multipleProjectCandidate,
+      experience: partial,
+      projects: [oneProject],
+    },
+  );
+  assert.equal(coverage.status, "incomplete_needs_review");
+  assert.ok(coverage.missedObservedSections.includes("employment"));
+}
 const multipleEmploymentCandidate = {
   ...multipleProjectCandidate,
   experience: [firstEmployment],

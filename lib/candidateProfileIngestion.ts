@@ -138,11 +138,26 @@ const REQUIRED_CORE_FIELDS: Array<[string, string[]]> = [
 ];
 
 function present(candidate: Record<string, unknown>, aliases: string[]) {
-  return aliases.some((alias) =>
-    Array.isArray(candidate[alias])
-      ? candidate[alias].length > 0
-      : Boolean(clean(candidate[alias])),
-  );
+  return aliases.some((alias) => hasMeaningfulCandidateValue(candidate[alias]));
+}
+
+export function hasMeaningfulCandidateValue(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(hasMeaningfulCandidateValue);
+  if (value && typeof value === "object")
+    return Object.values(value).some(hasMeaningfulCandidateValue);
+  if (typeof value !== "string")
+    return value !== null && value !== undefined && value !== false;
+  const text = clean(value);
+  if (!text || /^(?:n\/?a|none|null|unknown|not available|-+)$/i.test(text))
+    return false;
+  if (/^[\[{]/.test(text)) {
+    try {
+      return hasMeaningfulCandidateValue(JSON.parse(text));
+    } catch {
+      return true;
+    }
+  }
+  return true;
 }
 
 function rowText(row: Record<string, unknown>, ...keys: string[]) {
@@ -150,46 +165,51 @@ function rowText(row: Record<string, unknown>, ...keys: string[]) {
     const value = row[key];
     if (value && typeof value === "object" && "value" in value) {
       const nested = clean((value as { value?: unknown }).value);
-      if (nested) return nested;
+      if (hasMeaningfulCandidateValue(nested)) return nested;
     }
     const direct = clean(value);
-    if (direct && direct !== "[object Object]") return direct;
+    if (direct !== "[object Object]" && hasMeaningfulCandidateValue(direct))
+      return direct;
   }
   return "";
 }
 
+export function isValidEmploymentEntry(item: unknown): boolean {
+  if (!item || typeof item !== "object") return false;
+  const row = item as Record<string, unknown>;
+  const employer = rowText(row, "employer", "company", "organization");
+  const title = rowText(row, "title", "role", "position");
+  const start = rowText(row, "start_date", "startDate", "from");
+  const end = rowText(row, "end_date", "endDate", "to");
+  return Boolean(
+    employer &&
+      title &&
+      start &&
+      (end || row.current === true || /^(?:current|present|now)$/i.test(end)),
+  );
+}
+
 function validEmployment(value: unknown) {
-  return list(value).some((item) => {
-    if (!item || typeof item !== "object") return false;
-    const row = item as Record<string, unknown>;
-    const employer = rowText(row, "employer", "company", "organization");
-    const title = rowText(row, "title", "role", "position");
-    const start = rowText(row, "start_date", "startDate", "from");
-    const end = rowText(row, "end_date", "endDate", "to");
-    return Boolean(
-      employer &&
-        title &&
-        start &&
-        (end || row.current === true || /^(?:current|present|now)$/i.test(end)),
-    );
-  });
+  return list(value).some(isValidEmploymentEntry);
+}
+
+export function isValidProjectEntry(item: unknown): boolean {
+  if (!item || typeof item !== "object") return false;
+  const row = item as Record<string, unknown>;
+  const identity = rowText(row, "project", "name", "client", "customer");
+  const role = rowText(row, "role", "title", "position");
+  const start = rowText(row, "start_date", "startDate", "from");
+  const end = rowText(row, "end_date", "endDate", "to");
+  return Boolean(
+    identity &&
+      role &&
+      start &&
+      (end || row.current === true || /^(?:current|present|now)$/i.test(end)),
+  );
 }
 
 function validProject(value: unknown) {
-  return list(value).some((item) => {
-    if (!item || typeof item !== "object") return false;
-    const row = item as Record<string, unknown>;
-    const identity = rowText(row, "project", "name", "client", "customer");
-    const role = rowText(row, "role", "title", "position");
-    const start = rowText(row, "start_date", "startDate", "from");
-    const end = rowText(row, "end_date", "endDate", "to");
-    return Boolean(
-      identity &&
-        role &&
-        start &&
-        (end || row.current === true || /^(?:current|present|now)$/i.test(end)),
-    );
-  });
+  return list(value).some(isValidProjectEntry);
 }
 
 export function evaluateCandidateProfileCompletion(
