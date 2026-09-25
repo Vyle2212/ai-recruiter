@@ -40,6 +40,20 @@ function mergeGroundedProjects(
       const sameRole = Boolean(
         key(existing.role) && key(existing.role) === key(row.role),
       );
+      const existingRole = clean(existing.role);
+      const explicitRole = clean(row.role);
+      const explicitRoleKey = key(explicitRole);
+      const existingRoleKey = key(existingRole);
+      const broadRoleTail = existingRole.slice(explicitRole.length);
+      const explicitRefinesBroadRole = Boolean(
+        explicitRoleKey &&
+          existingRoleKey.startsWith(`${explicitRoleKey} `) &&
+          existingRole.length > explicitRole.length &&
+          (/\b(?:19|20)\d{2}\b/.test(broadRoleTail) ||
+            /\b(?:responsibilit|deliver|implement|support|configur|test|cutover|migration|rollout|workshop|training|go[ -]?live)\w*\b/i.test(
+              broadRoleTail,
+            )),
+      );
       const existingClient = key(existing.client);
       const explicitClient = key(row.client);
       const existingName = key(existing.name);
@@ -54,11 +68,25 @@ function mergeGroundedProjects(
       const sameOwnership = Boolean(
         (existingClient && explicitClient) || (existingName && explicitName),
       );
-      return samePeriod && sameRole && sameOwnership;
+      return (
+        samePeriod && (sameRole || explicitRefinesBroadRole) && sameOwnership
+      );
     });
     if (matching) {
       if (!clean(matching.name)) matching.name = row.name;
       if (!clean(matching.client)) matching.client = row.client;
+      if (
+        key(matching.role) !== key(row.role) &&
+        key(matching.role).startsWith(`${key(row.role)} `)
+      )
+        matching.role = row.role;
+      if (!clean(matching.project_type))
+        matching.project_type = row.project_type;
+      if (
+        (!Array.isArray(matching.modules) || !matching.modules.length) &&
+        Array.isArray(row.modules)
+      )
+        matching.modules = row.modules;
     } else projects.push(row);
   }
   return projects;

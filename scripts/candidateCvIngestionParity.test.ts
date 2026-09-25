@@ -76,6 +76,15 @@ async function main() {
   );
   assert.deepEqual(admin.extractionCoverage, candidate.extractionCoverage);
   assert.deepEqual(admin.parserQuality, candidate.parserQuality);
+  assert.equal(
+    admin.candidatePayload.project_history.length,
+    1,
+    "the same project cannot be duplicated when one reader captures dates and duties in its role",
+  );
+  assert.equal(
+    admin.candidatePayload.project_history[0].role,
+    "SAP MM Consultant",
+  );
   assert.deepEqual(
     admin.candidatePayload.sourceExtraction,
     admin.sourceExtraction,
@@ -247,6 +256,26 @@ Jan 2023 - Dec 2024`;
       conflictingProjects,
     ).missedObservedSections.includes("projects"),
     "contradictory project clients must remain under review",
+  );
+  const distinctRole = enrichCandidateUpload(
+    {
+      name: "Jane Doe",
+      projects: [
+        {
+          name: "Synthetic Alpha",
+          client: "Synthetic Logistics",
+          role: "SAP MM Lead",
+          start_date: "Jan 2020",
+          end_date: "Dec 2021",
+        },
+      ],
+    },
+    conflictingSource,
+  );
+  assert.equal(
+    distinctRole.project_history.filter(isValidProjectEntry).length,
+    2,
+    "two genuinely different roles on the same client and period must remain separate assertions",
   );
   const reversed = enrichCandidateUpload(
     { name: "Jane Doe" },
