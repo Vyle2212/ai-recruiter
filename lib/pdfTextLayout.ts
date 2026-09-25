@@ -51,7 +51,11 @@ export function renderPdfTextItems(items: TextItem[]): string {
 }
 
 type PdfPage = {
-  getTextContent: (options: object) => Promise<{ items: TextItem[] }>;
+  getTextContent: (options: {
+    includeMarkedContent: false;
+    disableNormalization: false;
+  }) => Promise<{ items: Array<TextItem | { type: string }> }>;
+  cleanup?: () => void;
 };
 const compact = (items: TextItem[]) =>
   renderPdfTextItems(items).replace(/\s+/g, " ").trim();
@@ -105,10 +109,14 @@ function renderEmploymentColumns(items: TextItem[]): string | undefined {
 export function createCvPdfRenderer() {
   let scopeTable = false;
   return async (page: PdfPage) => {
-    const { items } = await page.getTextContent({
-      normalizeWhitespace: false,
-      disableCombineTextItems: true,
+    const content = await page.getTextContent({
+      includeMarkedContent: false,
+      disableNormalization: false,
     });
+    const items = content.items.filter(
+      (item): item is TextItem =>
+        "str" in item && "transform" in item && "width" in item,
+    );
     const plain = renderPdfTextItems(items);
     const columns = renderEmploymentColumns(items);
     if (columns) return columns;

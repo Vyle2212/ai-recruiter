@@ -29,31 +29,65 @@ export async function extractCvPdf(
   buffer: Buffer,
   options: PdfExtractionOptions = {},
 ): Promise<{ text: string; sourceExtraction: CvSourceExtraction }> {
-  const pdf = (await import("pdf-parse")).default;
-  const result = await pdf(buffer, { pagerender: createCvPdfRenderer() });
-  const native = result.text || "";
-  const reason = pdfOcrReason(native);
-  if (!reason)
+  const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  // PDF.js may transfer/detach the supplied typed array. Always give it an
+  // isolated copy so the original bytes remain available for OCR/archive.
+  const loadingTask = getDocument({ data: Uint8Array.from(buffer) });
+  try {
+    const document = await loadingTask.promise;
+    if (
+      !Number.isSafeInteger(document.numPages) ||
+      document.numPages < 1 ||
+      document.numPages > 50
+    )
+      throw new CvSourceError(
+        "OCR_PAGE_LIMIT",
+        "PDF processing supports 1–50 pages per CV. Split longer documents before uploading.",
+      );
+
+    const renderPage = createCvPdfRenderer();
+    const pages: string[] = [];
+    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber++) {
+      const page = await document.getPage(pageNumber);
+      pages.push(await renderPage(page));
+      page.cleanup();
+    }
+    const native = pages.join("\n\n");
+    const reason = pdfOcrReason(native);
+    if (!reason)
+      return {
+        text: native,
+        sourceExtraction: {
+          method: "native",
+          pageCount: document.numPages,
+          reason: "",
+        },
+      };
+    const text = await (options.ocr || googlePdfOcr)(buffer, document.numPages);
+    if (
+      pdfOcrReason(text) ||
+      (reason === "PDF_EMPLOYMENT_UNRESOLVED" &&
+        !extractCanonicalEmploymentFromResume(text).length)
+    )
+      throw new CvSourceError(
+        "OCR_REVIEW_REQUIRED",
+        "OCR could not recover a reliable CV with readable employment information. The original file needs review; no partial CV was saved.",
+      );
     return {
-      text: native,
+      text,
       sourceExtraction: {
-        method: "native",
-        pageCount: result.numpages,
-        reason: "",
+        method: "ocr",
+        pageCount: document.numPages,
+        reason,
       },
     };
-  const text = await (options.ocr || googlePdfOcr)(buffer, result.numpages);
-  if (
-    pdfOcrReason(text) ||
-    (reason === "PDF_EMPLOYMENT_UNRESOLVED" &&
-      !extractCanonicalEmploymentFromResume(text).length)
-  )
+  } catch (error) {
+    if (error instanceof CvSourceError) throw error;
     throw new CvSourceError(
-      "OCR_REVIEW_REQUIRED",
-      "OCR could not recover a reliable CV with readable employment information. The original file needs review; no partial CV was saved.",
+      "PDF_PARSE_FAILED",
+      "The PDF could not be read safely. The original file needs review; no partial CV was saved.",
     );
-  return {
-    text,
-    sourceExtraction: { method: "ocr", pageCount: result.numpages, reason },
-  };
+  } finally {
+    await loadingTask.destroy().catch(() => undefined);
+  }
 }
