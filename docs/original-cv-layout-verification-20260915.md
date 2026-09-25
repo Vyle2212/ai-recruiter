@@ -1,5 +1,11 @@
 # Original CV layout verification — 2026-09-15
 
+> Shared employment checkpoint: [v150 bounded employment field cards](precision-v150-bounded-employment-cards-20260925.md). A same-fingerprint, read-only comparison of 357 unique Word sources increases valid employment rows from 808 to 816 while projects remain 347 and employment-gap sources fall from 103 to 100. Only complete employer/role/ordered-date cards inside employment boundaries are retained; employer/client conflicts stay unchanged. Full PDF/OCR and 970+ same-population verification remain outstanding; production is NO_GO.
+
+> Shared project checkpoint: [v149 project assertion union](precision-v149-project-assertion-union-20260925.md). The same 905-original archive gains 19 valid project rows by retaining distinct complete assertions from both readers; contradictory clients remain review items. Source failures and complete-for-validation totals do not change.
+
+> RTF source checkpoint: [v148 shared RTF parser](precision-v148-rtf-shared-parser-20260925.md). The complete 905-file archive now has zero source extraction failures after RTF support, but 14 PDFs still require OCR, 61 PDFs need layout fallback and only 892 byte-unique originals are available. This remains code/private aggregate evidence, not production acceptance.
+
 > Legacy Word extraction checkpoint: [v147 system-wide DOC extraction](precision-v147-system-wide-legacy-doc-extraction-20260925.md). On the same 357-source Word fingerprint, 165 of 167 unique legacy DOC files now reach the shared parser instead of failing before extraction. Valid aggregate output rises from 484 to 798 employment rows and from 196 to 332 project rows. The two unreadable DOC sources and one RTF remain private review failures; PDF/OCR and the complete 970+ comparison remain outstanding, so production is NO_GO.
 
 > 2026-09-25 private archive inventory: [v146 Word-source inventory](precision-v146-private-word-source-inventory-20260925.md) measures 192 DOCX, 170 DOC and one RTF. The shared parser audit covered all 192 DOCX without a source-read failure and grouped 50 accepted no-employment outcomes by the existing six layout queues. DOC/RTF remain fail-closed, and the complete PDF/970+ comparison is still blocked.

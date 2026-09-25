@@ -2,7 +2,7 @@ import { careerMonthIndex } from "./candidateCareerExperience";
 import type { BoundedCareerTableRow } from "./boundedCareerTables";
 
 const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*";
-const date = `(?:${month}\\s+(?:19|20)\\d{2}|(?:19|20)\\d{2})`;
+const date = `(?:${month}\\s+(?:19|20)\\d{2}|(?:19|20)\\d{2}|(?:0?[1-9]|1[0-2])\\s*[/]\\s*(?:\\d{2}|(?:19|20)\\d{2}))`;
 const range = new RegExp(`\\b(${date})\\s*(?:[-–—]|to)\\s*(${date}|Present|Current|Now|Till\\s+(?:to\\s+)?Date)\\b`, "gi");
 const roleWord = /\b(?:consultant|engineer|analyst|architect|manager|lead|developer|specialist|programmer)\b/i;
 
@@ -79,4 +79,106 @@ export function companyDurationRoleCards(input: string): BoundedCareerTableRow[]
     if (item) candidates.push(item);
   });
   return candidates.filter(item => assertedSpans.get(`${careerMonthIndex(item.start)}:${careerMonthIndex(item.end)}`) === 1);
+}
+
+/** Read complete labelled cards only inside employment-owned boundaries. */
+export function labelledEmploymentFieldCards(input: string): BoundedCareerTableRow[] {
+  const text = input.normalize("NFKC").replace(/\s+/g, " ");
+  const employmentHeading = /\b(?:Professional\s+(?:Work\s+)?Experience|Employment\s+History|Career\s+History|Working\s+Experiences?|Work\s+Experience)\b\s*:?\s*/gi;
+  const headings = [...text.matchAll(employmentHeading)];
+  const stop = /\b(?:Project\s+(?:Experience|History|Details)|Projects?\s*:|Client\s+Experience|Education|Academic\s+Qualifications?|Certifications?|Technical\s+Skills?|Languages?|References?)\b\s*:?/i;
+  const sections = headings.map((heading, index) => {
+    const start = (heading.index || 0) + heading[0].length;
+    const raw = text.slice(start, headings[index + 1]?.index);
+    const boundary = raw.search(stop);
+    return { body: (boundary >= 0 ? raw.slice(0, boundary) : raw).slice(0, 24000), explicitlyOwned: true };
+  });
+  // Employer/Organization is ownership evidence without a heading. Plain
+  // standalone Company cards remain unresolved because they may name a client.
+  if (!sections.length && /\b(?:Employer|Organi[sz]ation)\s*:/i.test(text)) {
+    const boundary = text.search(stop);
+    sections.push({ body: (boundary >= 0 ? text.slice(0, boundary) : text).slice(0, 24000), explicitlyOwned: false });
+  }
+
+  const field = /\b(Employer|Company(?:\s+Name)?|Organi[sz]ation)\s*:\s*/gi;
+  const nextLabel = /\b(?:Employer|Company(?:\s+Name)?|Organi[sz]ation|Role|Position(?:\s+Title)?|Designation|Duration|Period|From\s*\/\s*To|Date\s+Joined|Date\s+Left|Client|Customer|Project)\s*:/i;
+  const valueAfter = (card: string, label: RegExp) => {
+    const match = label.exec(card);
+    if (!match) return "";
+    const tail = card.slice((match.index || 0) + match[0].length);
+    const boundary = tail.search(nextLabel);
+    return (boundary >= 0 ? tail.slice(0, boundary) : tail).replace(/^[\s:–—-]+|[\s;|]+$/g, "").trim();
+  };
+  const rangeIn = (card: string) => {
+    range.lastIndex = 0;
+    const match = range.exec(card);
+    range.lastIndex = 0;
+    return match;
+  };
+  const results: BoundedCareerTableRow[] = [];
+  for (const section of sections) {
+    const markers = [...section.body.matchAll(field)];
+    markers.forEach((marker, cardIndex) => {
+      if (!section.explicitlyOwned && !/^(?:Employer|Organi[sz]ation)$/i.test(marker[1])) return;
+      const card = section.body.slice(marker.index || 0, markers[cardIndex + 1]?.index ?? section.body.length).slice(0, 1200);
+      const company = valueAfter(card, /^(?:\s*)(?:Employer|Company(?:\s+Name)?|Organi[sz]ation)\s*:\s*/i);
+      const title = valueAfter(card, /\b(?:Role|Position(?:\s+Title)?|Designation)\s*:\s*/i);
+      const periodLabel = /\b(?:Duration|Period|From\s*\/\s*To)\s*:\s*/i.exec(card);
+      const joined = valueAfter(card, /\bDate\s+Joined\s*:\s*/i);
+      const left = valueAfter(card, /\bDate\s+Left\s*:\s*/i);
+      const period = periodLabel ? rangeIn(card.slice((periodLabel.index || 0) + periodLabel[0].length)) : null;
+      const start = period?.[1] || joined.match(new RegExp(`^(${date})$`, "i"))?.[1] || "";
+      const end = period?.[2] || left.match(new RegExp(`^(${date}|Present|Current|Now|Till\\s+(?:to\\s+)?Date)$`, "i"))?.[1] || "";
+      const current = /^(?:present|current|now|till\s+(?:to\s+)?date)$/i.test(end);
+      const first = careerMonthIndex(start), last = careerMonthIndex(end, current);
+      if (!company || !title || title.length > 120 || title.split(/\s+/).length > 16 ||
+        /^(?:project|role|position|designation|n\/?a)$/i.test(title) || !start || !end ||
+        first === null || last === null || first > last ||
+        /\b(?:client|customer|project)\b/i.test(company) ||
+        /\b(?:client|customer|project\s+description)\b/i.test(title)) return;
+      results.push({ company: company.replace(/[.;,\s]+$/g, "").trim(), title: title.replace(/[.;,\s]+$/g, "").trim(), start, end, excerpt: card.slice(0, 300) });
+    });
+  }
+  return results.filter((item, index) => results.findIndex(other =>
+    [other.company, other.title, other.start, other.end].join("|").toLowerCase() ===
+    [item.company, item.title, item.start, item.end].join("|").toLowerCase()) === index);
+}
+
+/** Read three-line employer / role / date cards bounded by employment headings. */
+export function multilineEmploymentTriples(input: string): BoundedCareerTableRow[] {
+  const lines = input.normalize("NFKC").split(/\r?\n/).map(line => line.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const employment = /^(?:Professional\s+(?:Work\s+)?Experience|Employment\s+History|Career\s+History|Working\s+Experiences?|Work\s+Experience)\s*:?$/i;
+  const boundary = /^(?:Projects?|Project\s+(?:Experience|History|Details)|Client\s+Experience|Education|Academic\s+Qualifications?|Certifications?|Technical\s+Skills?|Languages?|References?)\s*:?$/i;
+  const legalEmployer = /^(?!.*\b(?:client|customer|project)\b)(?:(?:Employer|Company(?:\s+Name)?|Organi[sz]ation)\s*:\s*)?([A-Z][A-Za-z0-9&.,'() /-]{1,110}?\b(?:Sdn\.?\s*Bhd\.?|Pte\.?\s*Ltd\.?|Pvt\.?\s*Ltd\.?|Ltd\.?|Limited|Inc\.?|Corporation|Corp\.?|GmbH|LLC|Consulting|Technologies|Solutions|Systems|Bank|Berhad))(?:,\s*(?:Malaysia|India|Singapore))?$/i;
+  const roleLine = /\b(?:consultant|engineer|analyst|architect|manager|lead|developer|specialist|programmer|administrator|executive)\b/i;
+  const dateOnly = new RegExp(`^(${date})\\s*(?:[-–—]|to)\\s*(${date}|Present|Current|Now|Till\\s+(?:to\\s+)?Date)$`, "i");
+  const results: BoundedCareerTableRow[] = [];
+  let inEmployment = false;
+  lines.forEach((line, index) => {
+    if (employment.test(line)) { inEmployment = true; return; }
+    if (boundary.test(line)) { inEmployment = false; return; }
+    if (!inEmployment) return;
+    const period = dateOnly.exec(line);
+    if (!period) return;
+    const parsePair = (pair: string[]) => {
+      if (pair.length !== 2 || pair.some(value => /\b(?:client|customer|project)\b/i.test(value))) return null;
+      const companies = pair.flatMap(value => {
+        const match = legalEmployer.exec(value);
+        return match ? [match[1].replace(/[.;,\s]+$/g, "").trim()] : [];
+      });
+      const roles = pair.filter(value => roleLine.test(value) && !legalEmployer.test(value) && value.length <= 120);
+      return companies.length === 1 && roles.length === 1 ? { company: companies[0], title: roles[0] } : null;
+    };
+    const before = parsePair(lines.slice(Math.max(0, index - 2), index));
+    const after = parsePair(lines.slice(index + 1, index + 3));
+    const owned = before || after;
+    if (!owned) return;
+    const current = /^(?:present|current|now|till\s+(?:to\s+)?date)$/i.test(period[2]);
+    const first = careerMonthIndex(period[1]), last = careerMonthIndex(period[2], current);
+    if (first === null || last === null || first > last) return;
+    results.push({ company: owned.company, title: owned.title, start: period[1], end: period[2], excerpt: [...(before ? lines.slice(index - 2, index) : []), line, ...(before ? [] : lines.slice(index + 1, index + 3))].join(" ").slice(0, 300) });
+  });
+  return results.filter((item, index) => results.findIndex(other =>
+    [other.company, other.title, other.start, other.end].join("|").toLowerCase() ===
+    [item.company, item.title, item.start, item.end].join("|").toLowerCase()) === index);
 }

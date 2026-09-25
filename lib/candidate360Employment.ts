@@ -12,7 +12,7 @@ import { labelledCompanySpells } from "./labelledCompanySpells";
 import { boundedCareerSummary } from "./boundedCareerSummary";
 import { boundedEmployerRoleCards } from "./boundedEmployerRoleCards";
 import { boundedCareerTables } from "./boundedCareerTables";
-import { companyDurationRoleCards, datedRoleCompanyCards } from "./boundedEmploymentFieldCards";
+import { companyDurationRoleCards, datedRoleCompanyCards, labelledEmploymentFieldCards, multilineEmploymentTriples } from "./boundedEmploymentFieldCards";
 import type {
   EnterpriseEmployment,
   EnterpriseProject,
@@ -2133,6 +2133,21 @@ function resumeEmployment(resumeText: string) {
     for (const [index, row] of companyDurationRoleCards(resumeText).entries()) {
       const parsed = entry({ ...row, sourceRef: `resume.companyDurationRoleCard.${index + 1}`,
         sourceType: "parsed_resume", confidence: 93 });
+      if (parsed) output.push(parsed);
+    }
+  }
+  const hasCompleteEmployment = output.some(item =>
+    item.company && item.title && item.start && item.end &&
+    supportedRange(item.start, item.end, item.current));
+  if (!hasCompleteEmployment) {
+    for (const [index, row] of labelledEmploymentFieldCards(resumeText).entries()) {
+      const parsed = entry({ ...row, sourceRef: `resume.labelledEmploymentFieldCard.${index + 1}`,
+        sourceType: "parsed_resume", confidence: 95 });
+      if (parsed) output.push(parsed);
+    }
+    for (const [index, row] of multilineEmploymentTriples(resumeText).entries()) {
+      const parsed = entry({ ...row, sourceRef: `resume.multilineEmploymentTriple.${index + 1}`,
+        sourceType: "parsed_resume", confidence: 95 });
       if (parsed) output.push(parsed);
     }
   }

@@ -1,5 +1,11 @@
 # Production Trust release promotion
 
+> Latest code-only data checkpoint: [v150 bounded employment field cards](precision-v150-bounded-employment-cards-20260925.md). Shared admin/candidate employment rules were compared read-only on the same 357 unique Word sources at the v149 project baseline: valid employment rows increase 808 to 816, projects remain 347 and unresolved employment sources fall 103 to 100, with no increase in exact employer/client conflicts. This subset result does not satisfy the complete 970+ audit, live OCR, restore, private Storage/RLS/Auth cutover/readback, authenticated acceptance or reviewed backfill. Release remains NO_GO.
+
+> Project-parser checkpoint: [v149 project assertion union](precision-v149-project-assertion-union-20260925.md). Valid project rows rise 492 to 511 on the same 905 originals while contradictory client evidence remains blocked for review. This code/private aggregate result does not lower any release gate.
+
+> Latest source-readability checkpoint: [v148 shared RTF parser](precision-v148-rtf-shared-parser-20260925.md). Source failures fall from three to zero across the same 905 originals, but only 892 are byte-unique and PDF OCR/layout work remains. This does not lower any release gate; production remains NO_GO.
+
 > Legacy Word extraction checkpoint: [v147 system-wide DOC extraction](precision-v147-system-wide-legacy-doc-extraction-20260925.md). The shared admin/candidate source layer now validates and reads OLE Word `.doc` files, and a same-fingerprint private comparison opened 165 previously blocked sources without serializing candidate data. Two DOC and one RTF source remain fail-closed. This is code and private aggregate evidence only; it does not satisfy the complete 970+ audit, live OCR, fresh restore, production RLS/Storage cutover/readback, backfill or runtime acceptance gates. Production remains NO_GO.
 
 > Latest parser-data evidence: [v146 private Word-source inventory](precision-v146-private-word-source-inventory-20260925.md). It is aggregate-only and contains no candidate data. The measured subset is not the complete 970+ collection; 171 legacy DOC/RTF files remain unsupported and the PDF archive transfer did not complete. This evidence cannot satisfy the full-collection, OCR, restore, RLS/Storage or runtime gates, so production remains NO_GO.
