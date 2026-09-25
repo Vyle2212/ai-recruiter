@@ -24,6 +24,7 @@ export async function ocrPdfPages(
   pageCount: number,
   client: PdfOcrClient,
   timeoutMs = 45000,
+  pagesRequiringOcrText: readonly number[] = [],
 ): Promise<string> {
   if (!Number.isSafeInteger(pageCount) || pageCount < 1 || pageCount > 50)
     throw new CvSourceError(
@@ -112,7 +113,18 @@ export async function ocrPdfPages(
       seen.add(number);
       batch.set(number, page.fullTextAnnotation?.text || "");
     }
-    for (const page of pages) texts.push(batch.get(page)!);
+    for (const page of pages) {
+      const text = batch.get(page)!;
+      if (
+        pagesRequiringOcrText.includes(page) &&
+        text.replace(/\s/g, "").length < 20
+      )
+        throw new CvSourceError(
+          "OCR_REVIEW_REQUIRED",
+          "OCR could not recover reliable text from a PDF page. The original file needs review; no partial CV was saved.",
+        );
+      texts.push(text);
+    }
   }
   return texts.join("\n\n");
 }
@@ -120,6 +132,7 @@ export async function ocrPdfPages(
 export async function googlePdfOcr(
   buffer: Buffer,
   pageCount: number,
+  pagesRequiringOcrText: number[] = [],
 ): Promise<string> {
   const raw = process.env.GOOGLE_CREDENTIALS;
   if (!raw)
@@ -144,7 +157,13 @@ export async function googlePdfOcr(
   const { ImageAnnotatorClient } = await import("@google-cloud/vision");
   const client = new ImageAnnotatorClient({ credentials });
   try {
-    return await ocrPdfPages(buffer, pageCount, client);
+    return await ocrPdfPages(
+      buffer,
+      pageCount,
+      client,
+      45000,
+      pagesRequiringOcrText,
+    );
   } catch (error) {
     if (error instanceof CvSourceError) throw error;
     throw new CvSourceError(

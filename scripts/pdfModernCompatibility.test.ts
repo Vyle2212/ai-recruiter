@@ -9,8 +9,8 @@ function pdfText(value: string) {
     .replace(/\)/g, "\\)");
 }
 
-function syntheticPdf(lines: string[]) {
-  const content = [
+function pageContent(lines: string[]) {
+  return [
     "BT",
     "/F1 10 Tf",
     "50 790 Td",
@@ -21,14 +21,25 @@ function syntheticPdf(lines: string[]) {
     ),
     "ET",
   ].join("\n");
+}
+
+function syntheticPdf(lines: string[], secondPageLines?: string[]) {
+  const content = pageContent(lines);
+  const secondContent =
+    secondPageLines === undefined ? null : pageContent(secondPageLines);
   const objects = [
     "",
     "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    `<< /Type /Pages /Kids [3 0 R${secondContent === null ? "" : " 6 0 R"}] /Count ${secondContent === null ? 1 : 2} >>`,
     "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
     `<< /Length ${Buffer.byteLength(content, "latin1")} >>\nstream\n${content}\nendstream`,
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
   ];
+  if (secondContent !== null)
+    objects.push(
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 7 0 R >>",
+      `<< /Length ${Buffer.byteLength(secondContent, "latin1")} >>\nstream\n${secondContent}\nendstream`,
+    );
   let pdf = "%PDF-1.4\n";
   const offsets = [0];
   for (let index = 1; index < objects.length; index++) {
@@ -89,6 +100,36 @@ async function main() {
     "PDF_TEXT_EMPTY_OR_TOO_SHORT",
   );
   assert.match(recovered.text, /Synthetic Services Ltd/);
+
+  const mixed = await extractCvPdf(
+    syntheticPdf(
+      [
+        "SYNTHETIC SAP CONSULTANT",
+        "Professional Experience",
+        "Synthetic Consulting Ltd January 2020 - June 2025",
+        "SAP FICO Consultant",
+        "Implemented SAP S/4HANA finance configuration testing and go-live.",
+      ],
+      [],
+    ),
+    {
+      ocr: async (_buffer, pages, pagesRequiringOcrText) => {
+        assert.equal(pages, 2);
+        assert.deepEqual(pagesRequiringOcrText, [1, 2]);
+        return [
+          "SYNTHETIC SAP CONSULTANT",
+          "Employment History",
+          "Synthetic Consulting Ltd January 2020 - June 2025",
+          "SAP FICO Consultant",
+          "Second page SAP project details recovered by OCR.",
+        ].join("\n");
+      },
+    },
+  );
+  assert.equal(mixed.sourceExtraction.method, "ocr");
+  assert.equal(mixed.sourceExtraction.pageCount, 2);
+  assert.equal(mixed.sourceExtraction.reason, "PDF_PAGE_TEXT_INCOMPLETE");
+  assert.match(mixed.text, /Second page SAP project details/);
 
   await assert.rejects(
     extractCvPdf(Buffer.from("not-a-pdf"), { ocr: async () => "" }),

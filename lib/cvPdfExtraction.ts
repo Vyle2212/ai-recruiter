@@ -3,7 +3,11 @@ import { CvSourceError, googlePdfOcr } from "./cvPdfOcr";
 import { createCvPdfRenderer } from "./pdfTextLayout";
 
 export type PdfExtractionOptions = {
-  ocr?: (buffer: Buffer, pages: number) => Promise<string>;
+  ocr?: (
+    buffer: Buffer,
+    pages: number,
+    pagesRequiringOcrText?: number[],
+  ) => Promise<string>;
 };
 export type CvSourceExtraction = {
   method: "native" | "ocr";
@@ -53,7 +57,14 @@ export async function extractCvPdf(
       page.cleanup();
     }
     const native = pages.join("\n\n");
-    const reason = pdfOcrReason(native);
+    const pagesNeedingText = pages.flatMap((text, index) =>
+      text.replace(/\s/g, "").length < 50 ? [index + 1] : [],
+    );
+    // A readable first page must not hide a scanned or otherwise unreadable
+    // later page. OCR the full document and require those pages to recover.
+    const reason =
+      pdfOcrReason(native) ||
+      (pagesNeedingText.length ? "PDF_PAGE_TEXT_INCOMPLETE" : "");
     if (!reason)
       return {
         text: native,
@@ -63,7 +74,17 @@ export async function extractCvPdf(
           reason: "",
         },
       };
-    const text = await (options.ocr || googlePdfOcr)(buffer, document.numPages);
+    // OCR replaces the native text for the whole PDF, so every page must be
+    // recovered, including pages that were readable before the fallback.
+    const pagesRequiringOcrText = Array.from(
+      { length: document.numPages },
+      (_, index) => index + 1,
+    );
+    const text = await (options.ocr || googlePdfOcr)(
+      buffer,
+      document.numPages,
+      pagesRequiringOcrText,
+    );
     if (
       pdfOcrReason(text) ||
       (reason === "PDF_EMPLOYMENT_UNRESOLVED" &&

@@ -25,14 +25,12 @@ async function main() {
           responses: [
             {
               totalPages: 7,
-              responses: [...pages]
-                .reverse()
-                .map((pageNumber) => ({
-                  context: { pageNumber },
-                  fullTextAnnotation: {
-                    text: pageNumber === 3 ? "" : `Page ${pageNumber}`,
-                  },
-                })),
+              responses: [...pages].reverse().map((pageNumber) => ({
+                context: { pageNumber },
+                fullTextAnnotation: {
+                  text: pageNumber === 3 ? "" : `Page ${pageNumber}`,
+                },
+              })),
             },
           ],
         },
@@ -47,6 +45,80 @@ async function main() {
     [1, 2, 3, 4, 5],
     [6, 7],
   ]);
+  await assert.rejects(
+    ocrPdfPages(Buffer.from("%PDF"), 7, client, 45000, [3]),
+    (error) =>
+      error instanceof CvSourceError && error.code === "OCR_REVIEW_REQUIRED",
+  );
+  await assert.rejects(
+    ocrPdfPages(
+      Buffer.from("%PDF"),
+      2,
+      {
+        async batchAnnotateFiles() {
+          return [
+            {
+              responses: [
+                {
+                  totalPages: 2,
+                  responses: [
+                    {
+                      context: { pageNumber: 1 },
+                      fullTextAnnotation: { text: "First page has full text" },
+                    },
+                    {
+                      context: { pageNumber: 2 },
+                      fullTextAnnotation: { text: "Page 2" },
+                    },
+                  ],
+                },
+              ],
+            },
+          ];
+        },
+      },
+      45000,
+      [2],
+    ),
+    (error) =>
+      error instanceof CvSourceError && error.code === "OCR_REVIEW_REQUIRED",
+  );
+  assert.equal(
+    await ocrPdfPages(
+      Buffer.from("%PDF"),
+      2,
+      {
+        async batchAnnotateFiles() {
+          return [
+            {
+              responses: [
+                {
+                  totalPages: 2,
+                  responses: [
+                    {
+                      context: { pageNumber: 1 },
+                      fullTextAnnotation: {
+                        text: "SAP consultant employment and project experience",
+                      },
+                    },
+                    {
+                      context: { pageNumber: 2 },
+                      fullTextAnnotation: {
+                        text: "SAP implementation and migration project details",
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          ];
+        },
+      },
+      45000,
+      [1, 2],
+    ),
+    "SAP consultant employment and project experience\n\nSAP implementation and migration project details",
+  );
   const fails = async (responses: any) =>
     assert.rejects(
       ocrPdfPages(Buffer.from("%PDF"), 2, {
