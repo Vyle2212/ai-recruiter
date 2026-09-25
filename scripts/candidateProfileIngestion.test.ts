@@ -266,6 +266,78 @@ assert.equal(
   "complete_for_validation",
 );
 
+const multipleEmploymentSource = `SYNTHETIC SAP CONSULTANT
+PROFESSIONAL EXPERIENCE
+Employer: Synthetic Consulting A
+Role: SAP MM Consultant
+Duration: Jan 2020 - Dec 2022
+Company Name: Synthetic Consulting B
+Job Title: Senior SAP MM Consultant
+Duration: Jan 2023 - Present
+PROJECT EXPERIENCE
+Client: Synthetic Client
+Project: Procurement rollout
+EDUCATION
+Bachelor of Computing
+SKILLS
+SAP MM, Procurement
+LANGUAGES
+English`;
+const firstEmployment = {
+  employer: "Synthetic Consulting A",
+  title: "SAP MM Consultant",
+  start_date: "2020-01",
+  end_date: "2022-12",
+};
+const currentEmployment = {
+  employer: "Synthetic Consulting B",
+  title: "Senior SAP MM Consultant",
+  start_date: "2023-01",
+  current: true,
+};
+const multipleEmploymentCandidate = {
+  ...multipleProjectCandidate,
+  experience: [firstEmployment],
+  projects: [oneProject],
+};
+const partialEmployment = evaluateCandidateExtractionCoverage(
+  multipleEmploymentSource,
+  multipleEmploymentCandidate,
+);
+assert.equal(partialEmployment.status, "incomplete_needs_review");
+assert.ok(partialEmployment.missedObservedSections.includes("employment"));
+assert.equal(
+  evaluateCandidateExtractionCoverage(multipleEmploymentSource, {
+    ...multipleEmploymentCandidate,
+    experience: [firstEmployment, currentEmployment],
+  }).missedObservedSections.includes("employment"),
+  false,
+);
+
+const projectsWithCompanyLabels = multipleEmploymentSource
+  .replace(
+    /PROFESSIONAL EXPERIENCE[\s\S]*?PROJECT EXPERIENCE/,
+    `PROFESSIONAL EXPERIENCE
+Employer: Synthetic Consulting A
+Role: SAP MM Consultant
+Duration: Jan 2020 - Present
+PROJECT EXPERIENCE`,
+  )
+  .replace(
+    "Client: Synthetic Client",
+    `Company: Project Customer One
+Company: Project Customer Two
+Client: Synthetic Client`,
+  );
+assert.equal(
+  evaluateCandidateExtractionCoverage(projectsWithCompanyLabels, {
+    ...multipleEmploymentCandidate,
+    experience: [firstEmployment],
+  }).missedObservedSections.includes("employment"),
+  false,
+  "company labels in a later project section must not inflate employment count",
+);
+
 const missedEducation = evaluateCandidateExtractionCoverage(
   "Jane Doe\nWORK EXPERIENCE\nSAP Consultant 2022 - Present\nEDUCATION\nBachelor of Computing",
   {

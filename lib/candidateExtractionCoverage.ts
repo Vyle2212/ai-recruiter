@@ -44,8 +44,10 @@ function present(candidate: Record<string, unknown>, aliases: string[]) {
   return aliases.some((alias) => values(candidate[alias]).some(Boolean));
 }
 
-function projectRecordCount(value: unknown): number {
+function structuredRecordCount(value: unknown): number {
   if (Array.isArray(value)) return value.filter(Boolean).length;
+  if (value && typeof value === "object")
+    return Object.values(value).filter(Boolean).length;
   if (typeof value !== "string") return 0;
   try {
     const parsed: unknown = JSON.parse(value);
@@ -53,6 +55,36 @@ function projectRecordCount(value: unknown): number {
   } catch {
     return 0;
   }
+}
+
+function employmentSection(rawText: string): string {
+  const lines = rawText.split(/\r?\n/);
+  const start = lines.findIndex((line) =>
+    /^\s*(?:work(?:ing)?|professional|career|employment)\s+(?:experience|history)\s*:?\s*$/i.test(
+      line,
+    ),
+  );
+  if (start < 0) return "";
+  const endOffset = lines
+    .slice(start + 1)
+    .findIndex((line) =>
+      /^\s*(?:projects?(?:\s+(?:experience|history|details|portfolio))?|education|academic\s+(?:background|qualifications?)|certifications?|licenses?|skills?|technical\s+skills?|languages?|references?)\s*:?\s*$/i.test(
+        line,
+      ),
+    );
+  const end = endOffset < 0 ? lines.length : start + 1 + endOffset;
+  return lines.slice(start + 1, end).join("\n");
+}
+
+/** Count explicitly labelled employers only inside the bounded employment section. */
+function explicitEmploymentCount(rawText: string): number {
+  const section = employmentSection(rawText);
+  if (!section) return 0;
+  return (
+    section.match(
+      /^[ \t]*(?:employer|company|organisation|organization)(?:[ \t]+name)?[ \t]*:[ \t]*\S/gim,
+    ) || []
+  ).length;
 }
 
 /** Count repeated project-entry labels without double-counting Client + Project in one entry. */
@@ -125,7 +157,9 @@ export function evaluateCandidateExtractionCoverage(
     "sap_modules",
   ]);
   const projectAnchors = explicitProjectCount(rawText);
+  const employmentAnchors = explicitEmploymentCount(rawText);
   if (projectAnchors) observed.add("projects");
+  if (employmentAnchors) observed.add("employment");
   for (const [section, pattern] of Object.entries(OBSERVED_PATTERNS)) {
     if (pattern.test(rawText))
       observed.add(section as CandidateExtractionSection);
@@ -137,14 +171,25 @@ export function evaluateCandidateExtractionCoverage(
       extracted.add(section as CandidateExtractionSection);
   }
 
+  if (
+    employmentAnchors > 1 &&
+    Math.max(
+      structuredRecordCount(candidate.experience),
+      structuredRecordCount(candidate.employment),
+      structuredRecordCount(candidate.employment_history),
+      structuredRecordCount(candidate.employmentHistory),
+    ) < employmentAnchors
+  )
+    extracted.delete("employment");
+
   // Section presence is not enough when the source explicitly enumerates
   // multiple projects. One extracted record must not hide omitted projects.
   if (
     projectAnchors > 1 &&
     Math.max(
-      projectRecordCount(candidate.projects),
-      projectRecordCount(candidate.project_history),
-      projectRecordCount(candidate.projectHistory),
+      structuredRecordCount(candidate.projects),
+      structuredRecordCount(candidate.project_history),
+      structuredRecordCount(candidate.projectHistory),
     ) < projectAnchors
   )
     extracted.delete("projects");
