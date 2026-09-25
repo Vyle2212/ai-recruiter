@@ -1358,8 +1358,16 @@ function stableAssignmentHash(value: string) {
 
 function cleanFlattenedProjectField(value: string) {
   return clean(value)
-    .replace(/^(?:[|;]\s*)+/, "")
-    .replace(/(?:\s*[|;])+$/, "")
+    .replace(/^(?:[|;•·]\s*)+/, "")
+    .replace(
+      /\s*[|;•·]\s*(?=(?:(?:End\s+)?(?:Client|Customer)(?:\s+Name)?|Project(?:\s+(?:Name|Title))?|Role|Position|Designation|Project\s+Duration|Duration|Period|From\s*\/\s*To|Roles?\s*(?:&|and)\s*Responsibilities|Responsibilities|Scope|Activities|Environment|System|Platform)\s*:)[\s\S]*$/i,
+      "",
+    )
+    .replace(
+      /\s*[|;•·]\s*(?:(?:End\s+)?(?:Client|Customer)(?:\s+Name)?|Project(?:\s+(?:Name|Title))?|Role|Position|Designation|Project\s+Duration|Duration|Period|From\s*\/\s*To|Roles?\s*(?:&|and)\s*Responsibilities|Responsibilities|Scope|Activities|Environment|System|Platform|End)$/i,
+      "",
+    )
+    .replace(/(?:\s*[|;•·])+$/, "")
     .trim();
 }
 

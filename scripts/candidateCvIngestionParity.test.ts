@@ -266,7 +266,7 @@ End Date: Dec 2023`,
     );
   }
   for (const sourceType of ["admin_upload", "candidate_upload"] as const) {
-    for (const delimiter of [" | ", "; "]) {
+    for (const delimiter of [" | ", "; ", "|", ";", "•"]) {
       const flattenedProject = await prepareCandidateCv({
         buffer: Buffer.from(
           source.replace(

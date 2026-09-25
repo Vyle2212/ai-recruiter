@@ -1,6 +1,20 @@
 import { careerMonthIndex } from "./candidateCareerExperience";
 
 const PROJECT_CLIENT_LABEL = "(?:End\\s+)?(?:Client|Customer)(?:\\s+Name)?";
+const PROJECT_FIELD_LABELS = `Project(?:\\s+(?:Name|Title))?|${PROJECT_CLIENT_LABEL}|Role|Position|Designation|Project\\s+Duration|Duration|Period|From\\s*\\/\\s*To|Roles?\\s*(?:&|and)\\s*Responsibilities|Responsibilities|Scope|Activities|Environment|System|Platform`;
+const PROJECT_INLINE_SEPARATOR = "[|;•·]";
+
+function cleanProjectCardValue(value: string) {
+  return value
+    .split(
+      new RegExp(
+        `${PROJECT_INLINE_SEPARATOR}\\s*(?=(?:${PROJECT_FIELD_LABELS})\\s*:)`,
+        "i",
+      ),
+    )[0]
+    .replace(new RegExp(`(?:\\s*${PROJECT_INLINE_SEPARATOR})+$`), "")
+    .trim();
+}
 
 // Only explicit adjacent PDF labels form a card. A nearby employment date or
 // an unrelated client line must not complete a partial assignment.
@@ -84,8 +98,8 @@ export function nativeProjectCards(source: string) {
             ),
           ),
         ];
-    const value = (block: string, label: string) =>
-      block
+    const value = (block: string, label: string) => {
+      const matched = block
         .match(
           new RegExp(
             `^\\s*(?:${label})\\s*:\\s*(?:([^\\n]+)|\\n\\s*([^\\n]+))`,
@@ -94,7 +108,9 @@ export function nativeProjectCards(source: string) {
         )
         ?.slice(1)
         .find((item) => item?.trim())
-        ?.trim() || "";
+        ?.trim();
+      return matched ? cleanProjectCardValue(matched) : "";
+    };
     const range = (block: string) => {
       const labelled = value(
         block,
@@ -160,18 +176,15 @@ export function nativeProjectCards(source: string) {
             new RegExp(`\\b(?:${PROJECT_CLIENT_LABEL})\\s*:`, "gi"),
           ),
         ];
-    const inlineLabels = `Project(?:\\s+(?:Name|Title))?|${PROJECT_CLIENT_LABEL}|Role|Position|Designation|Project\\s+Duration|Duration|Period|From\\s*\\/\\s*To|Roles?\\s*(?:&|and)\\s*Responsibilities|Responsibilities|Scope|Activities|Environment|System|Platform`;
     const inlineValue = (block: string, label: string) =>
       block
         .match(
           new RegExp(
-            `\\b(?:${label})\\s*:\\s*([\\s\\S]{1,300}?)(?=\\s+\\b(?:${inlineLabels})\\s*:|$)`,
+            `\\b(?:${label})\\s*:\\s*([\\s\\S]{1,300}?)(?=(?:\\s+|${PROJECT_INLINE_SEPARATOR}\\s*)\\b(?:${PROJECT_FIELD_LABELS})\\s*:|$)`,
             "i",
           ),
         )?.[1]
-        ?.trim()
-        .replace(/[|;]+\s*$/, "")
-        .trim() || "";
+        ?.trim() || "";
     inlineAnchors.forEach((anchor, index) => {
       const block = inlineSection.slice(
         anchor.index || 0,

@@ -95,7 +95,7 @@ assert.equal(
   nativeProjectCards(flattenedUnderHeading)[0].client,
   "Example Bank",
 );
-for (const delimiter of [" | ", "; "]) {
+for (const delimiter of [" | ", "; ", "|", ";", "•"]) {
   const inline = [
     "Project: Finance Transformation",
     "End Client: Example Bank",
@@ -109,4 +109,19 @@ for (const delimiter of [" | ", "; "]) {
   assert.equal(cards[0].client, "Example Bank");
   assert.equal(cards[0].role, "SAP FICO Consultant");
 }
+const canonicalPolluted = normalizeActualCandidateSchema({
+  projects: [
+    {
+      project_name: "Finance Transformation•End",
+      client:
+        "Example Bank|Role: SAP FICO Consultant|Duration: Jan 2020 to Dec 2021",
+      role: "SAP FICO Consultant|Duration: Jan 2020 to Dec 2021",
+      start_date: "Jan 2020",
+      end_date: "Dec 2021",
+    },
+  ],
+}).enterpriseProfile.projects[0];
+assert.equal(canonicalPolluted.name, "Finance Transformation");
+assert.equal(canonicalPolluted.client, "Example Bank");
+assert.equal(canonicalPolluted.role, "SAP FICO Consultant");
 console.log("Native project card ownership and section boundaries: PASS");
