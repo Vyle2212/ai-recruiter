@@ -47,4 +47,3 @@ live OCR and 61 PDFs need layout fallback. Current restore evidence,
 production RLS/Auth/private Storage cutover and readback, authenticated
 synthetic upload/OCR, reviewed backfill and the complete 970+ audit remain
 required. `readyForBulkUpload` remains `false`; production remains **NO_GO**.
-
