@@ -7,6 +7,7 @@ import {
 } from "../lib/candidateCvIngestion";
 import { enrichCandidateUpload } from "../lib/candidateUploadEnrichment";
 import { isValidProjectEntry } from "../lib/candidateProfileIngestion";
+import { evaluateCandidateExtractionCoverage } from "../lib/candidateExtractionCoverage";
 
 const source = `
 Jane Doe
@@ -104,6 +105,80 @@ Jan 2023 - Dec 2024`;
     moreExplicitProjects.project_history.length,
     2,
     "one canonical project must not hide a second explicitly labelled project",
+  );
+  const disjointProject = enrichCandidateUpload(
+    {
+      name: "Jane Doe",
+      projects: [
+        {
+          name: "Synthetic Alpha",
+          client: "Synthetic Manufacturing",
+          role: "SAP MM Consultant",
+          start_date: "Jan 2020",
+          end_date: "Dec 2021",
+        },
+        {
+          name: "Synthetic Gamma",
+          client: "Synthetic Retail",
+          role: "SAP MM Architect",
+          start_date: "Jan 2022",
+          end_date: "Dec 2022",
+        },
+      ],
+    },
+    `SAP MM Consultant\nPROJECT EXPERIENCE\nProject Title: Synthetic Beta\nClient: Synthetic Logistics\nRole: SAP MM Lead\nDuration: Jan 2023 - Dec 2024`,
+  );
+  assert.deepEqual(
+    new Set(disjointProject.project_history.map((row: Record<string, unknown>) => String(row.name))),
+    new Set(["Synthetic Alpha", "Synthetic Beta", "Synthetic Gamma"]),
+    "a distinct explicitly dated project must survive even when the canonical reader has more rows",
+  );
+  const mixedProjectCards = enrichCandidateUpload(
+    { name: "Jane Doe" },
+    `SAP MM Consultant\nPROJECT EXPERIENCE\nProject Title: Synthetic Alpha\nClient: Synthetic Manufacturing\nRole: SAP MM Consultant\nDuration: Jan 2020 - Dec 2021\nClient: Synthetic Logistics\nRole: SAP MM Lead\nDuration: Jan 2022 - Dec 2022\nProject Title: Synthetic Gamma\nClient: Synthetic Retail\nRole: SAP MM Architect\nDuration: Jan 2023 - Dec 2024\nEDUCATION\nBachelor of Computing\nClient: Synthetic School\nRole: SAP MM Consultant\nDuration: Jan 2015 - Dec 2016`,
+  );
+  assert.equal(
+    mixedProjectCards.project_history.filter(isValidProjectEntry).length,
+    3,
+    "a labelled client-only card between named projects is retained once; later education cannot create a project",
+  );
+  const incompleteClientCard = enrichCandidateUpload(
+    { name: "Jane Doe" },
+    `SAP MM Consultant\nPROJECT EXPERIENCE\nProject Title: Synthetic Alpha\nClient: Synthetic Manufacturing\nRole: SAP MM Consultant\nDuration: Jan 2020 - Dec 2021\nClient: Synthetic Logistics\nRole: SAP MM Lead\nProject Title: Synthetic Gamma\nClient: Synthetic Retail\nRole: SAP MM Architect\nDuration: Jan 2023 - Dec 2024`,
+  );
+  assert.equal(
+    incompleteClientCard.project_history.filter(isValidProjectEntry).length,
+    2,
+    "a Client-only card cannot borrow a later project's dates",
+  );
+  const unfinishedNamedCard = enrichCandidateUpload(
+    { name: "Jane Doe" },
+    `SAP MM Consultant\nPROJECT EXPERIENCE\nProject Title: Synthetic Alpha\nClient: Synthetic Manufacturing\nRole: SAP MM Consultant\nClient: Synthetic Logistics\nRole: SAP MM Lead\nDuration: Jan 2022 - Dec 2022\nProject Title: Synthetic Gamma\nClient: Synthetic Retail\nRole: SAP MM Architect\nDuration: Jan 2023 - Dec 2024`,
+  );
+  assert.equal(
+    unfinishedNamedCard.project_history.filter(isValidProjectEntry).length,
+    2,
+    "an incomplete named card cannot borrow the next Client-only card's duration",
+  );
+  const conflictingSource = `SAP MM Consultant\nPROJECT EXPERIENCE\nProject Title: Synthetic Alpha\nClient: Synthetic Logistics\nRole: SAP MM Consultant\nDuration: Jan 2020 - Dec 2021`;
+  const conflictingProjects = enrichCandidateUpload(
+    {
+      name: "Jane Doe",
+      projects: [{
+        name: "Synthetic Alpha",
+        client: "Synthetic Manufacturing",
+        role: "SAP MM Consultant",
+        start_date: "Jan 2020",
+        end_date: "Dec 2021",
+      }],
+    },
+    conflictingSource,
+  );
+  assert.equal(conflictingProjects.project_history.filter(isValidProjectEntry).length, 2);
+  assert.ok(
+    evaluateCandidateExtractionCoverage(conflictingSource, conflictingProjects)
+      .missedObservedSections.includes("projects"),
+    "contradictory project clients must remain under review",
   );
   const reversed = enrichCandidateUpload(
     { name: "Jane Doe" },

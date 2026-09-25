@@ -4,6 +4,7 @@ import {
   isValidEmploymentEntry,
   isValidProjectEntry,
 } from "./candidateProfileIngestion";
+import { careerMonthIndex } from "./candidateCareerExperience";
 
 export type CandidateExtractionSection =
   | "identity"
@@ -44,6 +45,30 @@ function structuredRecordCount(
   } catch {
     return 0;
   }
+}
+
+function conflictingProjectClients(value: unknown): boolean {
+  if (!Array.isArray(value)) return false;
+  const rows = value.filter(isValidProjectEntry) as Array<Record<string, unknown>>;
+  const key = (text: unknown) =>
+    typeof text === "string"
+      ? text.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()
+      : "";
+  for (let i = 0; i < rows.length; i++) {
+    for (const later of rows.slice(i + 1)) {
+      const first = rows[i];
+      if (!key(first.name) || key(first.name) !== key(later.name) ||
+        !key(first.role) || key(first.role) !== key(later.role) ||
+        !key(first.client) || !key(later.client) ||
+        key(first.client) === key(later.client)) continue;
+      const from = careerMonthIndex(first.start_date);
+      const to = careerMonthIndex(first.end_date, first.current === true);
+      if (from !== null && to !== null &&
+        from === careerMonthIndex(later.start_date) &&
+        to === careerMonthIndex(later.end_date, later.current === true)) return true;
+    }
+  }
+  return false;
 }
 
 function employmentSection(rawText: string): string {
@@ -195,6 +220,11 @@ export function evaluateCandidateExtractionCoverage(
       structuredRecordCount(candidate.projectHistory, isValidProjectEntry),
     ) < projectAnchors
   )
+    extracted.delete("projects");
+
+  // Two equally dated assignments with the same named project and role but
+  // different clients cannot both be silently treated as a complete parse.
+  if (conflictingProjectClients(candidate.projects || candidate.project_history))
     extracted.delete("projects");
 
   const observedSections = Array.from(observed);

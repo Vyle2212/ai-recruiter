@@ -1,6 +1,7 @@
 import { extractFullCandidateProfile } from "./fullCandidateExtractionEngine";
 import { normalizeActualCandidateSchema } from "./candidate360SchemaNormalize";
 import { isValidProjectEntry } from "./candidateProfileIngestion";
+import { careerMonthIndex } from "./candidateCareerExperience";
 
 const clean = (value: unknown) =>
   String(value ?? "")
@@ -9,6 +10,44 @@ const clean = (value: unknown) =>
 
 const unique = (values: unknown[]) =>
   Array.from(new Set(values.map(clean).filter(Boolean)));
+
+function mergeGroundedProjects(
+  canonical: Array<Record<string, unknown>>,
+  explicit: Array<Record<string, unknown>>,
+) {
+  const validCanonical = canonical.filter(isValidProjectEntry);
+  if (!validCanonical.length) return explicit;
+  const projects = [...canonical];
+  const key = (value: unknown) =>
+    clean(value).normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  for (const row of explicit.filter(isValidProjectEntry)) {
+    const matching = projects.find((existing) => {
+      if (!isValidProjectEntry(existing)) return false;
+      const start = careerMonthIndex(existing.start_date);
+      const end = careerMonthIndex(existing.end_date, existing.current === true);
+      const samePeriod =
+        start !== null && end !== null &&
+        start === careerMonthIndex(row.start_date) &&
+        end === careerMonthIndex(row.end_date, row.current === true);
+      const sameRole = Boolean(key(existing.role) && key(existing.role) === key(row.role));
+      const existingClient = key(existing.client);
+      const explicitClient = key(row.client);
+      const existingName = key(existing.name);
+      const explicitName = key(row.name);
+      if ((existingClient && explicitClient && existingClient !== explicitClient) ||
+        (existingName && explicitName && existingName !== explicitName)) return false;
+      const sameOwnership = Boolean(
+        (existingClient && explicitClient) || (existingName && explicitName),
+      );
+      return samePeriod && sameRole && sameOwnership;
+    });
+    if (matching) {
+      if (!clean(matching.name)) matching.name = row.name;
+      if (!clean(matching.client)) matching.client = row.client;
+    } else projects.push(row);
+  }
+  return projects;
+}
 
 const SECTION_HEADINGS =
   /^(?:work|professional|career|employment)\s+(?:experience|history)|projects?|client experience|education|academic background|academic qualifications?|qualifications?|certifications?|credentials?|skills?|technical skills?|core competencies|languages?|language proficiency|personal details|summary|profile|references?\s*:?[\s]*$/i;
@@ -89,8 +128,14 @@ function explicitProjectRecords(rawText: string) {
   const records: Array<Record<string, unknown>> = [];
   for (const [index, marker] of markers.entries()) {
     const start = marker.index || 0;
-    const end =
+    const nextProject =
       markers[index + 1]?.index ?? Math.min(normalized.length, start + 2400);
+    // The first Client label can belong to this named project. A second one
+    // starts a separate card and must not lend its role or dates backward.
+    const clientsWithinCard = clientMarkers
+      .map((clientMarker) => clientMarker.index || 0)
+      .filter((clientIndex) => clientIndex > start && clientIndex < nextProject);
+    const end = clientsWithinCard[1] ?? nextProject;
     const block = normalized.slice(start, end);
     const name = clean(
       block.match(
@@ -142,6 +187,58 @@ function explicitProjectRecords(rawText: string) {
       modules: unique(moduleLine.split(/[,;|/]+/)),
       project_type: projectType,
     });
+  }
+  // A document can mix named Project cards with Client-only cards. The
+  // primary pass above uses Project markers, so a Client-only assignment
+  // between them would otherwise disappear. Read a Client card only within
+  // the same nearby project section; its own Role and Duration labels must
+  // occur before the next Project or Client marker.
+  if (projectMarkers.length) {
+    const boundaries = [...projectMarkers, ...clientMarkers]
+      .map((marker) => marker.index || 0)
+      .sort((left, right) => left - right);
+    for (const clientMarker of clientMarkers) {
+      const start = clientMarker.index || 0;
+      const priorProject = projectMarkers
+        .map((marker) => marker.index || 0)
+        .filter((index) => index < start)
+        .at(-1);
+      if (priorProject === undefined || start - priorProject > 2400) continue;
+      if (/\n\s*(?:(?:work(?:ing)?|professional|employment)\s+(?:experience|history)|education|academic\s+(?:background|qualifications?)|skills?|languages?|references?)\s*:?\s*(?:\n|$)/i.test(normalized.slice(priorProject, start)))
+        continue;
+      const end = boundaries.find((index) => index > start) ??
+        Math.min(normalized.length, start + 1200);
+      const block = normalized.slice(start, end);
+      const client = clean(
+        block.match(/(?:^|\n)[ \t]*(?:client|customer)[ \t]*:[ \t]*([^\n]{2,160})/im)?.[1] ||
+          nextLabelLine(block, "client|customer"),
+      );
+      const role = clean(
+        block.match(/(?:^|\n)[ \t]*(?:project[ \t]+role|role|position|designation)[ \t]*:[ \t]*([^\n]{2,160})/im)?.[1] ||
+          nextLabelLine(block, "project[ \\t]+role|role|position|designation"),
+      );
+      const dated = block.match(
+        /(?:^|\n)[ \t]*(?:duration|period|project[ \t]+dates?)[ \t]*:[ \t]*([^\n]{3,120})/im,
+      )?.[1] || nextLabelLine(block, "duration|period|project[ \\t]+dates?");
+      const range = dated?.match(rangePattern);
+      if (!client || !role || !range || /^(?:role|duration|project|client|customer|education)\s*:/i.test(client) ||
+        /^(?:role|duration|project|client|customer|education)\s*:/i.test(role)) continue;
+      const row = {
+        name: "",
+        client,
+        role,
+        start_date: dateValue(range[1]),
+        end_date: dateValue(range[2]),
+        modules: [],
+        project_type: "",
+      };
+      if (isValidProjectEntry(row) && !records.some((known) =>
+        clean(known.client).toLowerCase() === client.toLowerCase() &&
+        clean(known.role).toLowerCase() === role.toLowerCase() &&
+        careerMonthIndex(known.start_date) === careerMonthIndex(row.start_date) &&
+        careerMonthIndex(known.end_date) === careerMonthIndex(row.end_date)
+      )) records.push(row);
+    }
   }
   // Some DOCX layouts put the label and its value on separate lines. Keep
   // each Client/Project/Role group bounded by the next Client so dates and
@@ -265,17 +362,10 @@ export function enrichCandidateUpload(
     }),
   );
   const explicitProjects = explicitProjectRecords(rawText);
-  // The canonical projection can recover one project while missing other
-  // explicitly labelled assignments. Keep the better complete set; never
-  // silently discard more source-backed rows merely because one row parsed.
-  const canonicalCompleteProjects =
-    canonicalProjects.filter(isValidProjectEntry).length;
-  const projects =
-    !canonicalCompleteProjects ||
-    explicitProjects.filter(isValidProjectEntry).length >
-      canonicalCompleteProjects
-      ? explicitProjects
-      : canonicalProjects;
+  // The two source-backed readers may recover different assignments. Count
+  // alone must not discard a distinct explicit project or a canonical one.
+  // Match the same role, period and named project/client before deduplicating.
+  const projects = mergeGroundedProjects(canonicalProjects, explicitProjects);
   const education = explicitEducation.length
     ? explicitEducation
     : canonical.education || [];
