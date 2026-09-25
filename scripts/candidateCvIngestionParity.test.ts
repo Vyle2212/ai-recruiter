@@ -129,7 +129,11 @@ Jan 2023 - Dec 2024`;
     `SAP MM Consultant\nPROJECT EXPERIENCE\nProject Title: Synthetic Beta\nClient: Synthetic Logistics\nRole: SAP MM Lead\nDuration: Jan 2023 - Dec 2024`,
   );
   assert.deepEqual(
-    new Set(disjointProject.project_history.map((row: Record<string, unknown>) => String(row.name))),
+    new Set(
+      disjointProject.project_history.map((row: Record<string, unknown>) =>
+        String(row.name),
+      ),
+    ),
     new Set(["Synthetic Alpha", "Synthetic Beta", "Synthetic Gamma"]),
     "a distinct explicitly dated project must survive even when the canonical reader has more rows",
   );
@@ -164,20 +168,27 @@ Jan 2023 - Dec 2024`;
   const conflictingProjects = enrichCandidateUpload(
     {
       name: "Jane Doe",
-      projects: [{
-        name: "Synthetic Alpha",
-        client: "Synthetic Manufacturing",
-        role: "SAP MM Consultant",
-        start_date: "Jan 2020",
-        end_date: "Dec 2021",
-      }],
+      projects: [
+        {
+          name: "Synthetic Alpha",
+          client: "Synthetic Manufacturing",
+          role: "SAP MM Consultant",
+          start_date: "Jan 2020",
+          end_date: "Dec 2021",
+        },
+      ],
     },
     conflictingSource,
   );
-  assert.equal(conflictingProjects.project_history.filter(isValidProjectEntry).length, 2);
+  assert.equal(
+    conflictingProjects.project_history.filter(isValidProjectEntry).length,
+    2,
+  );
   assert.ok(
-    evaluateCandidateExtractionCoverage(conflictingSource, conflictingProjects)
-      .missedObservedSections.includes("projects"),
+    evaluateCandidateExtractionCoverage(
+      conflictingSource,
+      conflictingProjects,
+    ).missedObservedSections.includes("projects"),
     "contradictory project clients must remain under review",
   );
   const reversed = enrichCandidateUpload(

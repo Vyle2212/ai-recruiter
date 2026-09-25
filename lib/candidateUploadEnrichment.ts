@@ -19,23 +19,38 @@ function mergeGroundedProjects(
   if (!validCanonical.length) return explicit;
   const projects = [...canonical];
   const key = (value: unknown) =>
-    clean(value).normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    clean(value)
+      .normalize("NFKC")
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim();
   for (const row of explicit.filter(isValidProjectEntry)) {
     const matching = projects.find((existing) => {
       if (!isValidProjectEntry(existing)) return false;
       const start = careerMonthIndex(existing.start_date);
-      const end = careerMonthIndex(existing.end_date, existing.current === true);
+      const end = careerMonthIndex(
+        existing.end_date,
+        existing.current === true,
+      );
       const samePeriod =
-        start !== null && end !== null &&
+        start !== null &&
+        end !== null &&
         start === careerMonthIndex(row.start_date) &&
         end === careerMonthIndex(row.end_date, row.current === true);
-      const sameRole = Boolean(key(existing.role) && key(existing.role) === key(row.role));
+      const sameRole = Boolean(
+        key(existing.role) && key(existing.role) === key(row.role),
+      );
       const existingClient = key(existing.client);
       const explicitClient = key(row.client);
       const existingName = key(existing.name);
       const explicitName = key(row.name);
-      if ((existingClient && explicitClient && existingClient !== explicitClient) ||
-        (existingName && explicitName && existingName !== explicitName)) return false;
+      if (
+        (existingClient &&
+          explicitClient &&
+          existingClient !== explicitClient) ||
+        (existingName && explicitName && existingName !== explicitName)
+      )
+        return false;
       const sameOwnership = Boolean(
         (existingClient && explicitClient) || (existingName && explicitName),
       );
@@ -134,7 +149,9 @@ function explicitProjectRecords(rawText: string) {
     // starts a separate card and must not lend its role or dates backward.
     const clientsWithinCard = clientMarkers
       .map((clientMarker) => clientMarker.index || 0)
-      .filter((clientIndex) => clientIndex > start && clientIndex < nextProject);
+      .filter(
+        (clientIndex) => clientIndex > start && clientIndex < nextProject,
+      );
     const end = clientsWithinCard[1] ?? nextProject;
     const block = normalized.slice(start, end);
     const name = clean(
@@ -204,25 +221,42 @@ function explicitProjectRecords(rawText: string) {
         .filter((index) => index < start)
         .at(-1);
       if (priorProject === undefined || start - priorProject > 2400) continue;
-      if (/\n\s*(?:(?:work(?:ing)?|professional|employment)\s+(?:experience|history)|education|academic\s+(?:background|qualifications?)|skills?|languages?|references?)\s*:?\s*(?:\n|$)/i.test(normalized.slice(priorProject, start)))
+      if (
+        /\n\s*(?:(?:work(?:ing)?|professional|employment)\s+(?:experience|history)|education|academic\s+(?:background|qualifications?)|skills?|languages?|references?)\s*:?\s*(?:\n|$)/i.test(
+          normalized.slice(priorProject, start),
+        )
+      )
         continue;
-      const end = boundaries.find((index) => index > start) ??
+      const end =
+        boundaries.find((index) => index > start) ??
         Math.min(normalized.length, start + 1200);
       const block = normalized.slice(start, end);
       const client = clean(
-        block.match(/(?:^|\n)[ \t]*(?:client|customer)[ \t]*:[ \t]*([^\n]{2,160})/im)?.[1] ||
-          nextLabelLine(block, "client|customer"),
+        block.match(
+          /(?:^|\n)[ \t]*(?:client|customer)[ \t]*:[ \t]*([^\n]{2,160})/im,
+        )?.[1] || nextLabelLine(block, "client|customer"),
       );
       const role = clean(
-        block.match(/(?:^|\n)[ \t]*(?:project[ \t]+role|role|position|designation)[ \t]*:[ \t]*([^\n]{2,160})/im)?.[1] ||
+        block.match(
+          /(?:^|\n)[ \t]*(?:project[ \t]+role|role|position|designation)[ \t]*:[ \t]*([^\n]{2,160})/im,
+        )?.[1] ||
           nextLabelLine(block, "project[ \\t]+role|role|position|designation"),
       );
-      const dated = block.match(
-        /(?:^|\n)[ \t]*(?:duration|period|project[ \t]+dates?)[ \t]*:[ \t]*([^\n]{3,120})/im,
-      )?.[1] || nextLabelLine(block, "duration|period|project[ \\t]+dates?");
+      const dated =
+        block.match(
+          /(?:^|\n)[ \t]*(?:duration|period|project[ \t]+dates?)[ \t]*:[ \t]*([^\n]{3,120})/im,
+        )?.[1] || nextLabelLine(block, "duration|period|project[ \\t]+dates?");
       const range = dated?.match(rangePattern);
-      if (!client || !role || !range || /^(?:role|duration|project|client|customer|education)\s*:/i.test(client) ||
-        /^(?:role|duration|project|client|customer|education)\s*:/i.test(role)) continue;
+      if (
+        !client ||
+        !role ||
+        !range ||
+        /^(?:role|duration|project|client|customer|education)\s*:/i.test(
+          client,
+        ) ||
+        /^(?:role|duration|project|client|customer|education)\s*:/i.test(role)
+      )
+        continue;
       const row = {
         name: "",
         client,
@@ -232,12 +266,18 @@ function explicitProjectRecords(rawText: string) {
         modules: [],
         project_type: "",
       };
-      if (isValidProjectEntry(row) && !records.some((known) =>
-        clean(known.client).toLowerCase() === client.toLowerCase() &&
-        clean(known.role).toLowerCase() === role.toLowerCase() &&
-        careerMonthIndex(known.start_date) === careerMonthIndex(row.start_date) &&
-        careerMonthIndex(known.end_date) === careerMonthIndex(row.end_date)
-      )) records.push(row);
+      if (
+        isValidProjectEntry(row) &&
+        !records.some(
+          (known) =>
+            clean(known.client).toLowerCase() === client.toLowerCase() &&
+            clean(known.role).toLowerCase() === role.toLowerCase() &&
+            careerMonthIndex(known.start_date) ===
+              careerMonthIndex(row.start_date) &&
+            careerMonthIndex(known.end_date) === careerMonthIndex(row.end_date),
+        )
+      )
+        records.push(row);
     }
   }
   // Some DOCX layouts put the label and its value on separate lines. Keep
