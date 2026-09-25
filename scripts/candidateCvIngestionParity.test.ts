@@ -154,6 +154,117 @@ async function main() {
       "a stale upstream current_company cannot override closed employment evidence",
     );
   }
+  const splitProjectDateFamilies = [
+    "Start Date: Jan 2022\nEnd Date: Dec 2023",
+    "From: Jan 2022\nTo: Dec 2023",
+    "Date From\nJan 2022\nDate To\nDec 2023",
+  ];
+  for (const sourceType of ["admin_upload", "candidate_upload"] as const) {
+    for (const splitDates of splitProjectDateFamilies) {
+      const prepared = await prepareCandidateCv({
+        buffer: Buffer.from(source.replace("Jan 2022 - Dec 2023", splitDates)),
+        fileName: "synthetic-split-project-dates.txt",
+        source: sourceType,
+      });
+      assert.equal(prepared.accepted, true);
+      if (!prepared.accepted) throw new Error("split project fixture rejected");
+      assert.equal(
+        prepared.candidatePayload.project_history.length,
+        1,
+        "each supported split-date family must recover exactly one project",
+      );
+      assert.deepEqual(
+        {
+          client: prepared.candidatePayload.project_history[0].client,
+          role: prepared.candidatePayload.project_history[0].role,
+          start_date: prepared.candidatePayload.project_history[0].start_date,
+          end_date: prepared.candidatePayload.project_history[0].end_date,
+        },
+        {
+          client: "Example Manufacturing",
+          role: "SAP MM Consultant",
+          start_date: "Jan 2022",
+          end_date: "Dec 2023",
+        },
+      );
+      assert.ok(
+        !prepared.extractionCoverage.missedObservedSections.includes(
+          "projects",
+        ),
+      );
+    }
+    const adjacentIncomplete = await prepareCandidateCv({
+      buffer: Buffer.from(
+        source.replace(
+          `Client: Example Manufacturing
+Role: SAP MM Consultant
+Jan 2022 - Dec 2023
+Led workshops, configuration, testing, migration, training and go-live support.`,
+          `Project Title: Synthetic Alpha
+Client: Synthetic Manufacturing
+Role: SAP MM Consultant
+Start Date: Jan 2022
+Project Title: Synthetic Beta
+Client: Synthetic Logistics
+Role: SAP MM Lead
+End Date: Dec 2023`,
+        ),
+      ),
+      fileName: "synthetic-incomplete-project-dates.txt",
+      source: sourceType,
+    });
+    assert.equal(adjacentIncomplete.accepted, true);
+    if (!adjacentIncomplete.accepted)
+      throw new Error("incomplete project fixture rejected");
+    assert.equal(
+      adjacentIncomplete.candidatePayload.project_history.length,
+      0,
+      "adjacent partial project cards must not lend split dates to each other",
+    );
+    assert.ok(
+      adjacentIncomplete.extractionCoverage.missedObservedSections.includes(
+        "projects",
+      ),
+    );
+    const laterSectionDate = await prepareCandidateCv({
+      buffer: Buffer.from(
+        source
+          .replace("Jan 2022 - Dec 2023", "Start Date: Jan 2022")
+          .replace(
+            "EDUCATION\nBachelor of Computing",
+            "EDUCATION\nEnd Date: Dec 2023\nBachelor of Computing",
+          ),
+      ),
+      fileName: "synthetic-cross-section-project-date.txt",
+      source: sourceType,
+    });
+    assert.equal(laterSectionDate.accepted, true);
+    if (!laterSectionDate.accepted)
+      throw new Error("cross-section project fixture rejected");
+    assert.equal(
+      laterSectionDate.candidatePayload.project_history.length,
+      0,
+      "a project cannot borrow a split end date from a later section",
+    );
+    const reversedSplitDates = await prepareCandidateCv({
+      buffer: Buffer.from(
+        source.replace(
+          "Jan 2022 - Dec 2023",
+          "Start Date: Dec 2023\nEnd Date: Jan 2022",
+        ),
+      ),
+      fileName: "synthetic-reversed-split-project-dates.txt",
+      source: sourceType,
+    });
+    assert.equal(reversedSplitDates.accepted, true);
+    if (!reversedSplitDates.accepted)
+      throw new Error("reversed split project fixture rejected");
+    assert.equal(
+      reversedSplitDates.candidatePayload.project_history.length,
+      0,
+      "reversed split project dates must remain unstructured for review",
+    );
+  }
   const projectSource = `SAP MM Consultant
 PROJECT EXPERIENCE
 Project Title: Synthetic Alpha

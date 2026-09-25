@@ -94,6 +94,8 @@ function mergeGroundedProjects(
 
 const SECTION_HEADINGS =
   /^(?:work|professional|career|employment)\s+(?:experience|history)|projects?|client experience|education|academic background|academic qualifications?|qualifications?|certifications?|credentials?|skills?|technical skills?|core competencies|languages?|language proficiency|personal details|summary|profile|references?\s*:?[\s]*$/i;
+const PROJECT_SECTION_END_HEADINGS =
+  /^(?:(?:work(?:ing)?|professional|career|employment)\s+(?:experience|history)|education|academic\s+(?:background|qualifications?)|qualifications?|certifications?|credentials?|skills?|technical\s+skills?|core\s+competencies|languages?|language\s+proficiency|personal\s+details|summary|profile|references?)\s*:?\s*$/i;
 
 function explicitSectionLines(rawText: string, heading: RegExp) {
   const lines = rawText.split(/\r?\n/).map((line) => line.trim());
@@ -168,6 +170,43 @@ function explicitProjectRecords(rawText: string) {
         ),
       )?.[1],
     );
+  const labelledLineValue = (block: string, labels: string) =>
+    clean(
+      block.match(
+        new RegExp(
+          `(?:^|\\n)[ \\t]*(?:${labels})[ \\t]*:[ \\t]*([^\\n]{2,120})`,
+          "im",
+        ),
+      )?.[1] || nextLabelLine(block, labels),
+    );
+  const splitDateRange = (block: string) => {
+    const start = dateValue(
+      labelledLineValue(
+        block,
+        "(?:project[ \\t]+)?start(?:ing)?[ \\t]+date|date[ \\t]+from|from",
+      ),
+    );
+    const end = dateValue(
+      labelledLineValue(
+        block,
+        "(?:project[ \\t]+)?end(?:ing)?[ \\t]+date|date[ \\t]+to|to",
+      ),
+    );
+    const startIsDate = new RegExp(`^(?:${dateToken})$`, "i").test(start);
+    const endIsDate = new RegExp(
+      `^(?:${dateToken}|Present|Current|Till Date|To Date)$`,
+      "i",
+    ).test(end);
+    return startIsDate && endIsDate ? ([start, end] as const) : null;
+  };
+  const boundedProjectBlock = (block: string) => {
+    const boundary = block.match(
+      /\n\s*(?:(?:work(?:ing)?|professional|career|employment)\s+(?:experience|history)|education|academic\s+(?:background|qualifications?)|qualifications?|certifications?|credentials?|skills?|technical\s+skills?|core\s+competencies|languages?|language\s+proficiency|personal\s+details|summary|profile|references?)\s*:?\s*(?:\n|$)/i,
+    );
+    return boundary?.index === undefined
+      ? block
+      : block.slice(0, boundary.index);
+  };
   const records: Array<Record<string, unknown>> = [];
   for (const [index, marker] of markers.entries()) {
     const start = marker.index || 0;
@@ -181,7 +220,7 @@ function explicitProjectRecords(rawText: string) {
         (clientIndex) => clientIndex > start && clientIndex < nextProject,
       );
     const end = clientsWithinCard[1] ?? nextProject;
-    const block = normalized.slice(start, end);
+    const block = boundedProjectBlock(normalized.slice(start, end));
     const name = clean(
       block.match(
         /(?:^|\n)\s*(?:project\s+(?:name|title)|project)\s*:\s*([^\n]{2,160})/im,
@@ -209,7 +248,10 @@ function explicitProjectRecords(rawText: string) {
     const range =
       duration.match(rangePattern) ||
       (colonRole ? block.match(rangePattern) : null);
-    if (!(name || client) || !role || !range) continue;
+    const splitRange = splitDateRange(block);
+    const startDate = range?.[1] || splitRange?.[0] || "";
+    const endDate = range?.[2] || splitRange?.[1] || "";
+    if (!(name || client) || !role || !startDate || !endDate) continue;
     const moduleLine = clean(
       block.match(
         /(?:^|\n)\s*(?:sap\s+modules?|modules?)\s*:\s*([^\n]{1,160})/im,
@@ -227,8 +269,8 @@ function explicitProjectRecords(rawText: string) {
       name,
       client,
       role,
-      start_date: dateValue(range[1]),
-      end_date: dateValue(range[2]),
+      start_date: dateValue(startDate),
+      end_date: dateValue(endDate),
       modules: unique(moduleLine.split(/[,;|/]+/)),
       project_type: projectType,
     });
@@ -258,7 +300,7 @@ function explicitProjectRecords(rawText: string) {
       const end =
         boundaries.find((index) => index > start) ??
         Math.min(normalized.length, start + 1200);
-      const block = normalized.slice(start, end);
+      const block = boundedProjectBlock(normalized.slice(start, end));
       const client = clean(
         block.match(
           /(?:^|\n)[ \t]*(?:client|customer)[ \t]*:[ \t]*([^\n]{2,160})/im,
@@ -275,10 +317,14 @@ function explicitProjectRecords(rawText: string) {
           /(?:^|\n)[ \t]*(?:duration|period|project[ \t]+dates?)[ \t]*:[ \t]*([^\n]{3,120})/im,
         )?.[1] || nextLabelLine(block, "duration|period|project[ \\t]+dates?");
       const range = dated?.match(rangePattern);
+      const splitRange = splitDateRange(block);
+      const startDate = range?.[1] || splitRange?.[0] || "";
+      const endDate = range?.[2] || splitRange?.[1] || "";
       if (
         !client ||
         !role ||
-        !range ||
+        !startDate ||
+        !endDate ||
         /^(?:role|duration|project|client|customer|education)\s*:/i.test(
           client,
         ) ||
@@ -289,8 +335,8 @@ function explicitProjectRecords(rawText: string) {
         name: "",
         client,
         role,
-        start_date: dateValue(range[1]),
-        end_date: dateValue(range[2]),
+        start_date: dateValue(startDate),
+        end_date: dateValue(endDate),
         modules: [],
         project_type: "",
       };
@@ -329,7 +375,14 @@ function explicitProjectRecords(rawText: string) {
   };
   for (const [index, start] of clientHeadings.entries()) {
     const end = clientHeadings[index + 1] ?? lines.length;
-    const block = lines.slice(start, end);
+    const unboundedBlock = lines.slice(start, end);
+    const sectionBoundary = unboundedBlock.findIndex(
+      (line, offset) => offset > 0 && PROJECT_SECTION_END_HEADINGS.test(line),
+    );
+    const block =
+      sectionBoundary < 0
+        ? unboundedBlock
+        : unboundedBlock.slice(0, sectionBoundary);
     const clientLine = labelValue(block, /^(?:client|customer)$/i);
     const name = labelValue(block, /^project$/i);
     const role = labelValue(block, /^(?:role|position|designation)$/i);
@@ -342,18 +395,21 @@ function explicitProjectRecords(rawText: string) {
         ? precedingRange
         : null;
     const range = (block[1] || "").match(rangePattern) || dateOnlyBeforeClient;
+    const splitRange = splitDateRange(block.join("\n"));
+    const startDate = range?.[1] || splitRange?.[0] || "";
+    const endDate = range?.[2] || splitRange?.[1] || "";
     const client = clean(
       clientLine
         .replace((block[1] || "").match(rangePattern)?.[0] || /$^/, "")
         .replace(/[\s,;|–—-]+$/, ""),
     );
-    if (!client || !name || !role || !range) continue;
+    if (!client || !name || !role || !startDate || !endDate) continue;
     records.push({
       name,
       client,
       role,
-      start_date: dateValue(range[1]),
-      end_date: dateValue(range[2]),
+      start_date: dateValue(startDate),
+      end_date: dateValue(endDate),
       modules: [],
       project_type: "",
     });
