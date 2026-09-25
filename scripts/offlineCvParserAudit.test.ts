@@ -92,6 +92,14 @@ async function main() {
   });
   assert.equal(r.ocrRequired, 1);
   assert.equal(r.employmentLayoutUnresolved, 0);
+  assert.deepEqual(r.sourceExtraction, { native: 4, ocr: 0 });
+  assert.deepEqual(r.ocrOutcomes, {
+    accepted: 0,
+    completeForValidation: 0,
+    needsReview: 0,
+    classificationReview: 0,
+    qualityRejected: 0,
+  });
   assert.equal(r.classificationReview, 2);
   assert.equal(r.classificationByType.UNKNOWN, 2);
   assert.equal(r.completeForValidation + r.needsReview, 2);
@@ -110,6 +118,27 @@ async function main() {
     JSON.stringify(r),
     /Jane|private-name|example\.invalid|Example Manufacturing/i,
   );
+
+  const ocrAudit = createOfflineCvAudit();
+  await ocrAudit.process(
+    scannedSyntheticPdf(),
+    "private-ocr-name.pdf",
+    async () => complete.toString(),
+  );
+  assert.deepEqual(ocrAudit.report.sourceExtraction, { native: 0, ocr: 1 });
+  assert.deepEqual(ocrAudit.report.ocrOutcomes, {
+    accepted: 1,
+    completeForValidation: ocrAudit.report.completeForValidation,
+    needsReview: ocrAudit.report.needsReview,
+    classificationReview: 0,
+    qualityRejected: 0,
+  });
+  assert.equal(
+    ocrAudit.report.ocrOutcomes.completeForValidation +
+      ocrAudit.report.ocrOutcomes.needsReview,
+    1,
+  );
+  assert.doesNotMatch(JSON.stringify(ocrAudit.report), /private-ocr-name/i);
 
   const outsideRepo = fs.mkdtempSync(
     path.join(os.tmpdir(), "private-parser-audit-"),

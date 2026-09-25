@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { prepareCandidateCv } from "./candidateCvIngestion";
 import { CvSourceError } from "./cvPdfOcr";
+import type { PdfExtractionOptions } from "./cvPdfExtraction";
 import type { CandidateExtractionSection } from "./candidateExtractionCoverage";
 import {
   isValidEmploymentEntry,
@@ -56,6 +57,14 @@ export type OfflineCvAudit = {
   classificationReview: number;
   classificationByType: { NON_SAP_CV: number; JD: number; UNKNOWN: number };
   qualityRejected: number;
+  sourceExtraction: { native: number; ocr: number };
+  ocrOutcomes: {
+    accepted: number;
+    completeForValidation: number;
+    needsReview: number;
+    classificationReview: number;
+    qualityRejected: number;
+  };
   ocrRequired: number;
   employmentLayoutUnresolved: number;
   sourceFailures: number;
@@ -149,6 +158,14 @@ export function createOfflineCvAudit(
     classificationReview: 0,
     classificationByType: { NON_SAP_CV: 0, JD: 0, UNKNOWN: 0 },
     qualityRejected: 0,
+    sourceExtraction: { native: 0, ocr: 0 },
+    ocrOutcomes: {
+      accepted: 0,
+      completeForValidation: 0,
+      needsReview: 0,
+      classificationReview: 0,
+      qualityRejected: 0,
+    },
     ocrRequired: 0,
     employmentLayoutUnresolved: 0,
     sourceFailures: 0,
@@ -172,7 +189,11 @@ export function createOfflineCvAudit(
   };
   return {
     report,
-    async process(buffer: Buffer, fileName: string, allowOcr = false) {
+    async process(
+      buffer: Buffer,
+      fileName: string,
+      allowOcr: boolean | PdfExtractionOptions["ocr"] = false,
+    ) {
       report.files++;
       const hash = createHash("sha256").update(buffer).digest("hex");
       if (hashes.has(hash)) {
@@ -193,22 +214,29 @@ export function createOfflineCvAudit(
           source: "admin_upload",
           // Offline inspection must never send a private PDF to Vision by
           // accident. An explicit operator choice enables the real OCR path.
-          pdfOcr: allowOcr
-            ? undefined
-            : async (_buffer, _pages, _requiredPages, reason) => {
-                throw new CvSourceError(
-                  reason === "PDF_EMPLOYMENT_UNRESOLVED"
-                    ? "OFFLINE_EMPLOYMENT_UNRESOLVED"
-                    : "OFFLINE_OCR_REQUIRED",
-                  "PDF requires supervised fallback for offline audit",
-                );
-              },
+          pdfOcr:
+            typeof allowOcr === "function"
+              ? allowOcr
+              : allowOcr
+                ? undefined
+                : async (_buffer, _pages, _requiredPages, reason) => {
+                    throw new CvSourceError(
+                      reason === "PDF_EMPLOYMENT_UNRESOLVED"
+                        ? "OFFLINE_EMPLOYMENT_UNRESOLVED"
+                        : "OFFLINE_OCR_REQUIRED",
+                      "PDF requires supervised fallback for offline audit",
+                    );
+                  },
         });
+        report.sourceExtraction[prepared.sourceExtraction.method]++;
+        const usedOcr = prepared.sourceExtraction.method === "ocr";
         if (!prepared.accepted) {
-          if (prepared.rejectionType === "resume_quality")
+          if (prepared.rejectionType === "resume_quality") {
             report.qualityRejected++;
-          else {
+            if (usedOcr) report.ocrOutcomes.qualityRejected++;
+          } else {
             report.classificationReview++;
+            if (usedOcr) report.ocrOutcomes.classificationReview++;
             if (prepared.recordType in report.classificationByType)
               report.classificationByType[
                 prepared.recordType as keyof typeof report.classificationByType
@@ -219,8 +247,16 @@ export function createOfflineCvAudit(
           !prepared.parserQuality.needsManualReview
         ) {
           report.completeForValidation++;
+          if (usedOcr) {
+            report.ocrOutcomes.accepted++;
+            report.ocrOutcomes.completeForValidation++;
+          }
         } else {
           report.needsReview++;
+          if (usedOcr) {
+            report.ocrOutcomes.accepted++;
+            report.ocrOutcomes.needsReview++;
+          }
         }
         if (prepared.accepted) {
           const candidate = prepared.candidatePayload as Record<
