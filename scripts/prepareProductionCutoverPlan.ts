@@ -8,6 +8,10 @@ import {
   PRODUCTION_CUTOVER_SQL_SEQUENCE,
   type ProductionRecoveryEvidence,
 } from "../lib/productionCutoverPlan";
+import {
+  originalCvCollectionMatches,
+  verifyOriginalCvCollection,
+} from "../lib/originalCvCollectionManifest";
 
 function argument(name: string) {
   const prefix = `--${name}=`;
@@ -69,9 +73,31 @@ function main() {
     required(argument("output"), "production_cutover_output_missing"),
     repositoryRoot,
   );
-  const evidence = JSON.parse(
-    fs.readFileSync(evidencePath, "utf8"),
-  ) as ProductionRecoveryEvidence;
+  const evidence = JSON.parse(fs.readFileSync(evidencePath, "utf8")) as Omit<
+    ProductionRecoveryEvidence,
+    "originalCvCollection"
+  > & {
+    originalCvCollection?: ProductionRecoveryEvidence["originalCvCollection"];
+  };
+  const measuredOriginals = verifyOriginalCvCollection({
+    sourceDirectory: required(
+      argument("source-cv-directory"),
+      "production_cutover_source_cv_directory_missing",
+    ),
+    verifiedDirectory: required(
+      argument("verified-cv-directory"),
+      "production_cutover_verified_cv_directory_missing",
+    ),
+    repositoryRoot,
+  });
+  if (
+    evidence.originalCvCollection !== undefined &&
+    !originalCvCollectionMatches(
+      evidence.originalCvCollection,
+      measuredOriginals,
+    )
+  )
+    throw new Error("production_cutover_cv_manifest_readback_mismatch");
   const artifacts = PRODUCTION_CUTOVER_SQL_SEQUENCE.map((artifactPath) => {
     const contents = fs.readFileSync(
       path.join(repositoryRoot, artifactPath),
@@ -91,7 +117,7 @@ function main() {
     return { path: artifactPath, sha256: sha256(contents) };
   });
   const plan = buildProductionCutoverPlan({
-    evidence,
+    evidence: { ...evidence, originalCvCollection: measuredOriginals },
     artifacts,
     currentCommitSha,
   });
@@ -112,6 +138,8 @@ function main() {
       recoveryVerified: plan.recoveryVerified,
       databaseRestoreVerified: plan.databaseRestoreVerified,
       originalCvCollectionVerified: plan.originalCvCollectionVerified,
+      originalCvFileCount: measuredOriginals.sourceFileCount,
+      originalCvUniqueFileCount: measuredOriginals.sourceUniqueFileCount,
       readyForSupervisedCutover: plan.readyForSupervisedCutover,
       readyForBulkUpload: plan.readyForBulkUpload,
       privacy: plan.privacy,
@@ -123,8 +151,13 @@ function main() {
 try {
   main();
 } catch (error) {
+  // JSON and filesystem exceptions may embed private CV paths or input text.
+  // Only our fixed, non-sensitive operational codes may reach stdout/stderr.
+  const code = error instanceof Error ? error.message : "";
   console.error(
-    error instanceof Error ? error.message : "production_cutover_plan_failed",
+    /^(?:production_|original_cv_collection_)[a-z0-9_]+$/.test(code)
+      ? code
+      : "production_cutover_plan_failed",
   );
   process.exitCode = 1;
 }

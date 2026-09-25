@@ -154,5 +154,9 @@ assert.match(
   /\["show", `\$\{currentCommitSha\}:\$\{artifactPath\}`\]/,
 );
 assert.match(planScript, /production_cutover_sql_not_committed/);
+assert.match(planScript, /verifyOriginalCvCollection\(/);
+assert.match(planScript, /production_cutover_cv_manifest_readback_mismatch/);
+assert.match(planScript, /production_cutover_plan_failed/);
+assert.doesNotMatch(planScript, /console\.error\(error\.message\)/);
 
 console.log("productionCutoverPlan.test.ts passed");
