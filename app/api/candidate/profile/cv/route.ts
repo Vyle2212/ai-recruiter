@@ -83,8 +83,19 @@ export async function POST(request: NextRequest) {
     return responseError("Original CV was not found in private storage.", 404);
 
   const buffer = Buffer.from(await downloaded.data.arrayBuffer());
-  if (buffer.length !== input.size || buffer.length > MAX_ORIGINAL_BYTES)
-    return responseError("Uploaded CV size does not match the request.", 400);
+  if (buffer.length !== input.size || buffer.length > MAX_ORIGINAL_BYTES) {
+    try {
+      await recordCandidateUploadReview({
+        objectKey,
+        fileName,
+        actorUserId: authorization.scope.authUserId,
+        reasonCodes: ["content_size_mismatch"],
+      });
+    } catch {
+      return responseError("candidate_cv_review_queue_unavailable", 503);
+    }
+    return responseError("candidate_cv_content_size_mismatch", 409);
+  }
 
   if (!cvContentDigestMatches(buffer, contentDigest)) {
     try {

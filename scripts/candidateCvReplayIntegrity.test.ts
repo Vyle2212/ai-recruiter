@@ -12,6 +12,7 @@ const objectKey = `${owner}/00000000-0000-4000-8000-000000000002.pdf`;
 const sourceReference = `candidate-original-cvs/${objectKey}`;
 let stored: Buffer | null = null;
 let reviewCalls = 0;
+const reviewReasons: string[][] = [];
 let saveCalls = 0;
 let linkedSource: string | null = sourceReference;
 let classificationRejected = false;
@@ -57,8 +58,9 @@ const stubs: Record<string, unknown> = {
   },
   "@/lib/candidateProfileIngestion": {},
   "@/lib/candidateUploadReviewQueue": {
-    recordCandidateUploadReview: async () => {
+    recordCandidateUploadReview: async (input: { reasonCodes: string[] }) => {
       reviewCalls++;
+      reviewReasons.push(input.reasonCodes);
     },
   },
   "@/lib/cvPdfOcr": { CvSourceError: class extends Error {} },
@@ -114,12 +116,12 @@ vm.runInNewContext(source, {
   Buffer,
 });
 
-async function request(claimedDigest = digest) {
+async function request(claimedDigest = digest, claimedSize = bytes.length) {
   return exports.POST({
     json: async () => ({
       fileName: "synthetic.pdf",
       objectKey,
-      size: bytes.length,
+      size: claimedSize,
       contentDigest: claimedDigest,
     }),
   });
@@ -131,11 +133,23 @@ async function main() {
   assert.notEqual(missing.body.alreadyProcessed, true);
 
   stored = Buffer.from(bytes);
+  const wrongSize = await request(digest, bytes.length - 1);
+  assert.equal(wrongSize.status, 409);
+  assert.notEqual(wrongSize.body.alreadyProcessed, true);
+  assert.equal(
+    reviewCalls,
+    1,
+    "a present file with a wrong size must enter review",
+  );
+  assert.equal(reviewReasons.at(-1)?.join(","), "content_size_mismatch");
+  assert.equal(saveCalls, 0);
+
+  stored = Buffer.from(bytes);
   stored[0] ^= 1;
   const changed = await request();
   assert.equal(changed.status, 409);
   assert.notEqual(changed.body.alreadyProcessed, true);
-  assert.equal(reviewCalls, 1, "changed originals must enter private review");
+  assert.equal(reviewCalls, 2, "changed originals must enter private review");
 
   stored = bytes;
   const intact = await request();
@@ -149,7 +163,7 @@ async function main() {
   assert.equal(uncertain.body.recordType, "UNKNOWN");
   assert.equal(uncertain.body.originalPreserved, true);
   assert.equal(uncertain.body.reviewRequired, true);
-  assert.equal(reviewCalls, 2);
+  assert.equal(reviewCalls, 3);
   assert.equal(saveCalls, 0, "uncertain CVs cannot update candidate profiles");
   console.log("Candidate CV replay byte-integrity regression passed");
 }

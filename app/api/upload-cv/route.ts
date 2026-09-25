@@ -114,10 +114,27 @@ export async function POST(req: NextRequest) {
       }
       const buffer = Buffer.from(await data.arrayBuffer());
       if (buffer.length !== input.size || buffer.length > MAX_ORIGINAL_BYTES) {
+        try {
+          await recordCandidateUploadReview({
+            objectKey,
+            fileName,
+            actorUserId: authorization.scope.subjectId,
+            reasonCodes: ["content_size_mismatch"],
+          });
+        } catch {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "CV integrity review queue is unavailable.",
+            },
+            { status: 503 },
+          );
+        }
         return NextResponse.json(
           {
             success: false,
-            error: "Uploaded CV size does not match the request.",
+            error:
+              "Uploaded CV size does not match the request and was preserved for review.",
           },
           { status: 400 },
         );

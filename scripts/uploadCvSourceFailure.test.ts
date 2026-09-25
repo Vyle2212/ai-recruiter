@@ -11,6 +11,7 @@ async function main() {
   const saved: string[] = [];
   const archived: string[] = [];
   const queued: string[] = [];
+  const queuedReasons: string[][] = [];
   const discarded: string[] = [];
   let processed = false;
   let downloads = 0;
@@ -127,8 +128,12 @@ async function main() {
         createHash("sha256").update(bytes).digest("hex") === claimed,
     },
     "@/lib/candidateUploadReviewQueue": {
-      recordCandidateUploadReview: async (input: { fileName: string }) => {
+      recordCandidateUploadReview: async (input: {
+        fileName: string;
+        reasonCodes: string[];
+      }) => {
         queued.push(input.fileName);
+        queuedReasons.push(input.reasonCodes);
       },
     },
     "@/lib/recruiterApiAuthorization": {
@@ -263,11 +268,15 @@ async function main() {
   );
 
   processed = false;
-  const signedRequest = (objectKey: string, contentDigest = validDigest) => ({
+  const signedRequest = (
+    objectKey: string,
+    contentDigest = validDigest,
+    claimedSize = 5,
+  ) => ({
     headers: new Headers({ "content-type": "application/json" }),
     json: async () => ({
       fileName: "valid.pdf",
-      size: 5,
+      size: claimedSize,
       objectKey,
       contentDigest,
     }),
@@ -279,6 +288,21 @@ async function main() {
   );
   assert.equal(invalid.success, false);
   assert.equal(downloads, 0, "Another admin's object cannot be downloaded");
+  const wrongSize = await exports.POST(
+    signedRequest(signedObjectKey, validDigest, 4),
+  );
+  assert.equal(wrongSize.success, false);
+  assert.deepEqual(
+    queued,
+    ["failed.pdf", "error.pdf", "valid.pdf"],
+    "A present original with an unexpected size must enter private review",
+  );
+  assert.equal(queuedReasons.at(-1)?.join(","), "content_size_mismatch");
+  assert.equal(
+    saved.filter((name) => name === "valid.pdf").length,
+    1,
+    "Size mismatch must fail before parsing or saving",
+  );
   const mismatched = await exports.POST(
     signedRequest(signedObjectKey, "0".repeat(64)),
   );
@@ -290,7 +314,7 @@ async function main() {
   );
   assert.deepEqual(
     queued,
-    ["failed.pdf", "error.pdf", "valid.pdf"],
+    ["failed.pdf", "error.pdf", "valid.pdf", "valid.pdf"],
     "Digest mismatch must preserve the private object for review",
   );
   const signed = await exports.POST(signedRequest(signedObjectKey));
@@ -323,7 +347,7 @@ async function main() {
   assert.equal(held.results[0].ok, false);
   assert.deepEqual(
     queued,
-    ["failed.pdf", "error.pdf", "valid.pdf", "held.pdf"],
+    ["failed.pdf", "error.pdf", "valid.pdf", "valid.pdf", "held.pdf"],
     "Held original must enter a durable review queue",
   );
   const uncertainForm = new FormData();
