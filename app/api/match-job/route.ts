@@ -1,3 +1,5 @@
+import { loadCandidateSearchMutationEligibility } from "@/lib/candidateSearchMutationGate";
+import { recruiterSearchAuthorizationDenied, recruiterSearchPrivateNoStoreHeaders, requireRecruiterSearchAuthorization } from "@/lib/recruiterSearchAuthorization";
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { createLazyOpenAiClient } from "@/lib/runtimeClients";
@@ -5,6 +7,12 @@ import { createLazyOpenAiClient } from "@/lib/runtimeClients";
 const openai = createLazyOpenAiClient();
 
 export async function POST(req: Request) {
+  const authorization = await requireRecruiterSearchAuthorization({
+    permission: "search:read",
+    route: "/api/match-job",
+  });
+  if (!authorization.allowed)
+    return recruiterSearchAuthorizationDenied(authorization);
   try {
     const body = await req.json();
 
@@ -55,18 +63,29 @@ export async function POST(req: Request) {
       );
     }
 
-    // ADD SCORE %
+    const lifecycle = await loadCandidateSearchMutationEligibility(
+      supabase,
+      (data || []).map((candidate: any) => candidate.candidate_id || candidate.id),
+    );
+
+    // An RPC result is only a ranking hint. Current candidate lifecycle state
+    // remains authoritative before any candidate is returned.
     const formatted =
-      data?.map((candidate: any) => ({
-        ...candidate,
-        score:
-          candidate.similarity || 0,
-      })) || [];
+      data
+        ?.filter((candidate: any) =>
+          lifecycle.eligibleIds.has(
+            String(candidate.candidate_id || candidate.id || "").trim(),
+          ),
+        )
+        .map((candidate: any) => ({
+          ...candidate,
+          score: candidate.similarity || 0,
+        })) || [];
 
     return NextResponse.json({
       success: true,
       matches: formatted,
-    });
+    }, { headers: recruiterSearchPrivateNoStoreHeaders });
   } catch (error: any) {
     console.log(error);
 

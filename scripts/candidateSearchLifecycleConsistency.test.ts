@@ -8,6 +8,7 @@ import {
   candidateSearchLifecycleDecision,
 } from "../lib/candidateSearchLifecycle";
 import { buildSearchIndexAudit } from "../lib/searchIndexAudit";
+import { candidateSearchMutationEligibility } from "../lib/candidateSearchMutationGate";
 
 const blocked = [
   "deleted",
@@ -76,6 +77,26 @@ assert.equal(
   }).visible,
   true,
 );
+
+const mutationEligibility = candidateSearchMutationEligibility(
+  [
+    {
+      id: "eligible",
+      status: "active",
+      extraction_coverage_status: "complete_for_validation",
+      profile_confirmation_status: "candidate_confirmed",
+    },
+    { id: "ocr-review", status: "needs_review" },
+  ],
+  ["eligible", "ocr-review", "missing"],
+);
+assert.deepEqual(mutationEligibility.requestedIds, [
+  "eligible",
+  "ocr-review",
+  "missing",
+]);
+assert.deepEqual([...mutationEligibility.eligibleIds], ["eligible"]);
+assert.equal(mutationEligibility.allEligible, false);
 
 const reconciliation = buildSearchIndexAudit({
   candidates: [
@@ -156,6 +177,9 @@ const legacyCandidateList = read("../app/api/get-candidates/route.ts");
 const persistedMatches = read("../app/api/get-matches/route.ts");
 const directMatchWrite = read("../app/api/ai-match/route.ts");
 const shortlistWrite = read("../app/api/shortlisted/route.ts");
+const shortlistCandidateWrite = read("../app/api/shortlist-candidates/route.ts");
+const shortlistCollection = read("../app/api/shortlists/route.ts");
+const legacyMatchJob = read("../app/api/match-job/route.ts");
 const ownedUpdate = read(
   "../supabase/manual/202609240014_candidate_owned_cv_update.sql",
 );
@@ -197,6 +221,9 @@ for (const [surface, source] of [
   ["persisted match list", persistedMatches],
   ["direct match write", directMatchWrite],
   ["shortlist write", shortlistWrite],
+  ["shortlist candidate write", shortlistCandidateWrite],
+  ["shortlist collection", shortlistCollection],
+  ["legacy match RPC", legacyMatchJob],
 ] as const) {
   assert.match(
     source,
@@ -209,6 +236,28 @@ assert.match(directMatchWrite, /extraction_coverage_status/);
 assert.match(directMatchWrite, /profile_confirmation_status/);
 assert.match(shortlistWrite, /extraction_coverage_status/);
 assert.match(shortlistWrite, /profile_confirmation_status/);
+for (const source of [
+  shortlistCandidateWrite,
+  shortlistCollection,
+  legacyMatchJob,
+]) {
+  assert.match(source, /loadCandidateSearchMutationEligibility/);
+  assert.match(source, /allEligible|eligibleIds/);
+}
+for (const source of [
+  legacyMatchCandidates,
+  generateMatches,
+  matches,
+  jobMatches,
+  vectorSearch,
+  directMatchWrite,
+  shortlistCandidateWrite,
+  shortlistCollection,
+  legacyMatchJob,
+]) {
+  assert.match(source, /requireRecruiterSearchAuthorization/);
+  assert.match(source, /recruiterSearchAuthorizationDenied/);
+}
 assert.match(
   ownedUpdate,
   /delete from public\.candidate_search_index where candidate_id = p_candidate_id/,

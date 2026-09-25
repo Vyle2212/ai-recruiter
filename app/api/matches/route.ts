@@ -1,3 +1,4 @@
+import { recruiterSearchAuthorizationDenied, requireRecruiterSearchAuthorization } from "@/lib/recruiterSearchAuthorization";
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { calculateRecruiterMatch } from "@/lib/recruiterMatchEngine";
@@ -557,6 +558,12 @@ function enforceBtpRouteCap(job: any, candidate: any, result: any, details: any)
 }
 
 export async function POST(req: NextRequest) {
+  const authorization = await requireRecruiterSearchAuthorization({
+    permission: "search:read",
+    route: "/api/matches",
+  });
+  if (!authorization.allowed)
+    return recruiterSearchAuthorizationDenied(authorization);
   try {
     const body = await req.json();
     const jobId = body.jobId || body.job_id;

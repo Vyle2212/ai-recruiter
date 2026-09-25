@@ -1,3 +1,5 @@
+import { loadCandidateSearchMutationEligibility } from "@/lib/candidateSearchMutationGate";
+import { recruiterSearchAuthorizationDenied, recruiterSearchPrivateNoStoreHeaders, requireRecruiterSearchAuthorization } from "@/lib/recruiterSearchAuthorization";
 import { NextRequest, NextResponse } from "next/server";
 import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
 
@@ -13,6 +15,12 @@ function asArray(value: any): string[] {
 }
 
 export async function POST(req: NextRequest) {
+  const authorization = await requireRecruiterSearchAuthorization({
+    permission: "candidate-detail:read",
+    route: "/api/shortlist-candidates",
+  });
+  if (!authorization.allowed)
+    return recruiterSearchAuthorizationDenied(authorization);
   try {
     const body = await req.json().catch(() => ({}));
     const shortlistId = body.shortlistId || body.shortlist_id;
@@ -20,6 +28,13 @@ export async function POST(req: NextRequest) {
 
     if (!shortlistId) return NextResponse.json({ success: false, error: "Missing shortlistId" }, { status: 400 });
     if (!candidateIds.length) return NextResponse.json({ success: false, error: "Missing candidateIds" }, { status: 400 });
+
+    const eligibility = await loadCandidateSearchMutationEligibility(supabase, candidateIds);
+    if (!eligibility.allEligible)
+      return NextResponse.json(
+        { success: false, error: "Every candidate must be eligible for shortlisting." },
+        { status: 409, headers: recruiterSearchPrivateNoStoreHeaders },
+      );
 
     const rows = candidateIds.map((candidateId, index) => ({
       shortlist_id: shortlistId,
@@ -46,6 +61,12 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const authorization = await requireRecruiterSearchAuthorization({
+    permission: "candidate-detail:read",
+    route: "/api/shortlist-candidates",
+  });
+  if (!authorization.allowed)
+    return recruiterSearchAuthorizationDenied(authorization);
   try {
     const body = await req.json().catch(() => ({}));
     const shortlistId = body.shortlistId || body.shortlist_id;
@@ -54,6 +75,13 @@ export async function PATCH(req: NextRequest) {
     if (!shortlistId || !candidateId) {
       return NextResponse.json({ success: false, error: "Missing shortlistId or candidateId" }, { status: 400 });
     }
+
+    const eligibility = await loadCandidateSearchMutationEligibility(supabase, [candidateId]);
+    if (!eligibility.allEligible)
+      return NextResponse.json(
+        { success: false, error: "Candidate is not eligible for shortlist updates." },
+        { status: 409, headers: recruiterSearchPrivateNoStoreHeaders },
+      );
 
     const updatePayload: Record<string, any> = {};
     if (body.stage) updatePayload.stage = body.stage;
@@ -82,6 +110,12 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const authorization = await requireRecruiterSearchAuthorization({
+    permission: "candidate-detail:read",
+    route: "/api/shortlist-candidates",
+  });
+  if (!authorization.allowed)
+    return recruiterSearchAuthorizationDenied(authorization);
   try {
     const body = await req.json().catch(() => ({}));
     const shortlistId = body.shortlistId || body.shortlist_id;

@@ -1,3 +1,4 @@
+import { recruiterSearchAuthorizationDenied, requireRecruiterSearchAuthorization } from "@/lib/recruiterSearchAuthorization";
 import { NextRequest, NextResponse } from "next/server";
 import { createLazyOpenAiClient, createLazySupabaseServiceClient } from "@/lib/runtimeClients";
 import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
@@ -6,6 +7,12 @@ const openai = createLazyOpenAiClient();
 const supabase = createLazySupabaseServiceClient();
 
 export async function POST(req: NextRequest) {
+  const authorization = await requireRecruiterSearchAuthorization({
+    permission: "search:read",
+    route: "/api/match-candidates",
+  });
+  if (!authorization.allowed)
+    return recruiterSearchAuthorizationDenied(authorization);
   try {
     const body = await req.json();
 

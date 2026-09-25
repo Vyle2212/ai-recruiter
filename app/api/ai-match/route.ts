@@ -1,8 +1,15 @@
+import { recruiterSearchAuthorizationDenied, requireRecruiterSearchAuthorization } from "@/lib/recruiterSearchAuthorization";
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
 
 export async function POST(req: Request) {
+  const authorization = await requireRecruiterSearchAuthorization({
+    permission: "candidate-detail:read",
+    route: "/api/ai-match",
+  });
+  if (!authorization.allowed)
+    return recruiterSearchAuthorizationDenied(authorization);
   try {
     const body = await req.json();
 
