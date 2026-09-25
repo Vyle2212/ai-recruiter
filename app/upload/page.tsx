@@ -6,6 +6,7 @@ import {
   buildAdminCvUploadPlan,
   classifyAdminCvUploadResult,
   parseAdminCvCheckpoint,
+  readyAdminCvUploadItems,
   selectionFingerprintMaterial,
   summarizeAdminCvPlan,
   updateAdminCvCheckpoint,
@@ -223,8 +224,8 @@ export default function UploadPage() {
     const storage = createClient(url, key).storage;
     let nextCheckpoint = checkpoint;
 
-    for (const item of items) {
-      if (pauseRef.current || item.disposition !== "ready") break;
+    for (const item of readyAdminCvUploadItems(items)) {
+      if (pauseRef.current) break;
       setActiveName(item.name);
       let outcome: AdminCvUploadOutcome = "failed";
       let message = "";
@@ -261,6 +262,13 @@ export default function UploadPage() {
       );
       if (message && FATAL_UPLOAD_ERROR.test(message)) {
         setError(`${message} Upload stopped safely.`);
+        break;
+      }
+      if (outcome === "failed") {
+        // Later versions must not be committed before a failed older CV.
+        setError(
+          "This CV needs a retry. Upload stopped to preserve file order.",
+        );
         break;
       }
     }

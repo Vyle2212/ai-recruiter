@@ -242,3 +242,11 @@ export function summarizeAdminCvPlan(plan: AdminCvPlanItem[]) {
   }
   return counts;
 }
+
+/** Only actionable files are processed; invalid, duplicate and resumed rows
+ * must never act as an end-of-batch sentinel. Preserve the plan's age order. */
+export function readyAdminCvUploadItems<T extends AdminCvPlanItem>(
+  plan: T[],
+): T[] {
+  return plan.filter((item) => item.disposition === "ready");
+}

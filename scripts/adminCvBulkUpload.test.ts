@@ -4,6 +4,7 @@ import {
   buildAdminCvUploadPlan,
   classifyAdminCvUploadResult,
   parseAdminCvCheckpoint,
+  readyAdminCvUploadItems,
   selectionFingerprintMaterial,
   summarizeAdminCvPlan,
   updateAdminCvCheckpoint,
@@ -85,6 +86,32 @@ assert.deepEqual(summarizeAdminCvPlan(plan), {
   exactDuplicates: 1,
   invalid: 1,
 });
+assert.deepEqual(
+  readyAdminCvUploadItems(plan).map((item) => item.name),
+  ["same-bytes-copy.pdf"],
+  "an invalid row, exact duplicate and restored row cannot halt the batch",
+);
+const interleaved = buildAdminCvUploadPlan(
+  [
+    files[3],
+    files[0],
+    files[2],
+    files[1],
+    {
+      digest: digest("e"),
+      name: "later.pdf",
+      size: 400,
+      lastModified: 400,
+      selectionIndex: 4,
+    },
+  ],
+  checkpoint,
+);
+assert.deepEqual(
+  readyAdminCvUploadItems(interleaved).map((item) => item.name),
+  ["same-bytes-copy.pdf", "later.pdf"],
+  "ready CVs remain oldest-first even when skipped rows are interleaved",
+);
 
 assert.equal(
   classifyAdminCvUploadResult({
@@ -134,6 +161,8 @@ assert.match(page, /contentDigest/);
 assert.match(page, /buildAdminCvUploadPlan/);
 assert.match(page, /lastModified/);
 assert.match(page, /Pause after current CV/);
+assert.match(page, /for \(const item of readyAdminCvUploadItems\(items\)\)/);
+assert.match(page, /if \(outcome === "failed"\)/);
 assert.doesNotMatch(
   page,
   /localStorage/,
