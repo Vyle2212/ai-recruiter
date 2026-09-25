@@ -1,26 +1,9 @@
 import { careerMonthIndex } from "./candidateCareerExperience";
+import { projectDateIsCurrent, projectDateRange } from "./projectDateEvidence";
 
 const PROJECT_CLIENT_LABEL = "(?:End\\s+)?(?:Client|Customer)(?:\\s+Name)?";
 const PROJECT_FIELD_LABELS = `Project(?:\\s+(?:Name|Title))?|${PROJECT_CLIENT_LABEL}|Role|Position|Designation|Project\\s+Duration|Duration|Period|From\\s*\\/\\s*To|Roles?\\s*(?:&|and)\\s*Responsibilities|Responsibilities|Scope|Activities|Environment|System|Platform`;
 const PROJECT_INLINE_SEPARATOR = "[|;•·]";
-const PROJECT_MONTH_NAME =
-  "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
-const PROJECT_DATE_TOKEN = `(?:${PROJECT_MONTH_NAME}[\\s’'/-]+(?:\\d{2}|(?:19|20)\\d{2})|(?:0?[1-9]|1[0-2])\\s*\\/\\s*(?:\\d{2}|(?:19|20)\\d{2})|(?:19|20)\\d{2}(?:[-/](?:0?[1-9]|1[0-2]))?)`;
-const PROJECT_CURRENT_TOKEN = "(?:Present|Current|Now|Till\\s+date|To\\s+date)";
-
-function projectDateRange(value: string) {
-  return value.match(
-    new RegExp(
-      `\\b(${PROJECT_DATE_TOKEN})\\s*(?:-|–|—|to|~)\\s*(${PROJECT_DATE_TOKEN}|${PROJECT_CURRENT_TOKEN})\\b`,
-      "i",
-    ),
-  );
-}
-
-function projectDateIsCurrent(value: string) {
-  return new RegExp(`^${PROJECT_CURRENT_TOKEN}$`, "i").test(value.trim());
-}
-
 function cleanProjectCardValue(value: string) {
   return value
     .split(

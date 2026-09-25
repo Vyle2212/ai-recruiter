@@ -353,6 +353,53 @@ Scope: SAP implementation, migration and cutover`,
         "admin and candidate uploads must retain the same complete project across supported date formats",
       );
     }
+    for (const [range, start, end] of [
+      ["Jan'22 - Dec'23", "Jan 22", "Dec 23"],
+      ["2022-01 - 2023-12", "2022-01", "2023-12"],
+      ["Jan 2022 - Now", "Jan 2022", "Now"],
+    ] as const) {
+      const sparseLabelProject = await prepareCandidateCv({
+        buffer: Buffer.from(
+          source.replace(
+            `Client: Example Manufacturing
+Role: SAP MM Consultant
+Jan 2022 - Dec 2023
+Led workshops, configuration, testing, migration, training and go-live support.`,
+            `Project: Procurement Transformation
+Client: Example Manufacturing
+Role: SAP MM Consultant
+Duration: ${range}`,
+          ),
+        ),
+        fileName: "synthetic-sparse-project-date-formats.txt",
+        source: sourceType,
+      });
+      assert.equal(sparseLabelProject.accepted, true);
+      if (!sparseLabelProject.accepted)
+        throw new Error("sparse project date-format fixture rejected");
+      assert.equal(
+        sparseLabelProject.candidatePayload.project_history.length,
+        1,
+      );
+      assert.deepEqual(
+        {
+          name: sparseLabelProject.candidatePayload.project_history[0].name,
+          client: sparseLabelProject.candidatePayload.project_history[0].client,
+          role: sparseLabelProject.candidatePayload.project_history[0].role,
+          start:
+            sparseLabelProject.candidatePayload.project_history[0].start_date,
+          end: sparseLabelProject.candidatePayload.project_history[0].end_date,
+        },
+        {
+          name: "Procurement Transformation",
+          client: "Example Manufacturing",
+          role: "SAP MM Consultant",
+          start,
+          end,
+        },
+        "sparse labelled projects must use the same grounded date grammar in both upload sources",
+      );
+    }
   }
   const projectSource = `SAP MM Consultant
 PROJECT EXPERIENCE

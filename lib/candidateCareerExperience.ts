@@ -7,7 +7,7 @@ const clean = (value: unknown) => typeof value === "string" ? value.normalize("N
 export function careerMonthIndex(value: unknown, current = false, now = new Date()): number | null {
   const currentMonth = now.getUTCFullYear() * 12 + now.getUTCMonth();
   const source = clean(value);
-  if (current || /^(present|current|now)$/i.test(source)) return currentMonth;
+  if (current || /^(?:present|current|now|(?:till|to)(?:\s+to)?\s+date)$/i.test(source)) return currentMonth;
   const names = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
   let year: number, month: number;
   const iso = source.match(/^(19\d{2}|20\d{2})(?:[-/](0?[1-9]|1[0-2]))?$/);

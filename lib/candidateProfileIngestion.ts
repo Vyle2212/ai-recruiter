@@ -200,9 +200,7 @@ function validEmployment(value: unknown) {
 function validDatedRange(start: string, end: string, current: boolean) {
   const from = careerMonthIndex(start);
   const to = end
-    ? /^(?:till date|to date)$/i.test(end)
-      ? careerMonthIndex("", true)
-      : careerMonthIndex(end)
+    ? careerMonthIndex(end, current)
     : current
       ? careerMonthIndex("", true)
       : null;

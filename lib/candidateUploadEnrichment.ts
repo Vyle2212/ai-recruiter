@@ -2,6 +2,11 @@ import { extractFullCandidateProfile } from "./fullCandidateExtractionEngine";
 import { normalizeActualCandidateSchema } from "./candidate360SchemaNormalize";
 import { isValidProjectEntry } from "./candidateProfileIngestion";
 import { careerMonthIndex } from "./candidateCareerExperience";
+import {
+  PROJECT_CURRENT_TOKEN_PATTERN,
+  PROJECT_DATE_TOKEN_PATTERN,
+  projectDateIsCurrent,
+} from "./projectDateEvidence";
 
 const clean = (value: unknown) =>
   String(value ?? "")
@@ -25,10 +30,7 @@ function mergeGroundedProjects(
       .replace(/[^\p{L}\p{N}]+/gu, " ")
       .trim();
   const projectEndIsCurrent = (value: Record<string, unknown>) =>
-    value.current === true ||
-    /^(?:present|current|now|till\s+date|to\s+date)$/i.test(
-      clean(value.end_date),
-    );
+    value.current === true || projectDateIsCurrent(value.end_date);
   for (const row of explicit.filter(isValidProjectEntry)) {
     const matching = projects.find((existing) => {
       if (!isValidProjectEntry(existing)) return false;
@@ -159,10 +161,8 @@ function explicitProjectRecords(rawText: string) {
     ...normalized.matchAll(/(?:^|\n)\s*(?:client|customer)\s*:/gim),
   ];
   const markers = projectMarkers.length ? projectMarkers : clientMarkers;
-  const dateToken =
-    "(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[’']?\\s*)?(?:19|20)\\d{2}|(?:0?[1-9]|1[0-2])[/-](?:19|20)?\\d{2}";
   const rangePattern = new RegExp(
-    `(${dateToken})\\s*(?:-|–|—|to)\\s*(${dateToken}|Present|Current|Till Date|To Date)`,
+    `\\b(${PROJECT_DATE_TOKEN_PATTERN})\\s*(?:-|–|—|to|~)\\s*(${PROJECT_DATE_TOKEN_PATTERN}|${PROJECT_CURRENT_TOKEN_PATTERN})\\b`,
     "i",
   );
   const dateValue = (value: string) => clean(value.replace(/[’']/g, " "));
@@ -197,9 +197,12 @@ function explicitProjectRecords(rawText: string) {
         "(?:project[ \\t]+)?end(?:ing)?[ \\t]+date|date[ \\t]+to|to",
       ),
     );
-    const startIsDate = new RegExp(`^(?:${dateToken})$`, "i").test(start);
+    const startIsDate = new RegExp(
+      `^(?:${PROJECT_DATE_TOKEN_PATTERN})$`,
+      "i",
+    ).test(start);
     const endIsDate = new RegExp(
-      `^(?:${dateToken}|Present|Current|Till Date|To Date)$`,
+      `^(?:${PROJECT_DATE_TOKEN_PATTERN}|${PROJECT_CURRENT_TOKEN_PATTERN})$`,
       "i",
     ).test(end);
     return startIsDate && endIsDate ? ([start, end] as const) : null;

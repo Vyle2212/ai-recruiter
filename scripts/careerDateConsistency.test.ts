@@ -25,6 +25,9 @@ assert.equal(normalizeActualCandidateSchema({raw_text:yearOnlySource.replace('20
 for (const date of ['2021-09', '09/2021', '09/21', 'September 2021', 'Sept 2021', '14th September 2021', '2021-09-14']) {
   assert.equal(careerMonthIndex(date, false, now), 2021 * 12 + 8, date);
 }
+for (const current of ['Present', 'Current', 'Now', 'Till date', 'Till to date', 'To date']) {
+  assert.equal(careerMonthIndex(current, false, now), 2026 * 12 + 8, current);
+}
 for (const date of ['2099-01', 'Jan 2099', '2021-02-30', '13/2021', 'ambiguous date']) assert.equal(careerMonthIndex(date, false, now), null, date);
 assert.equal(calculateTotalCareerYears([{start:'01/2020',end:'01/2022'},{start:'Jan 2021',end:'Jan 2023'}], now), 3);
 assert.equal(calculateTotalCareerYears([{start:'2023',end:'2020'},{start:'2099-01',end:'2099-12'}], now), null);
