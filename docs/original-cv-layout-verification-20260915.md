@@ -1,5 +1,9 @@
 # Original CV layout verification — 2026-09-15
 
+> Latest employment-card checkpoint: [v153 reordered employment field cards](precision-v153-reordered-employment-field-cards-20260925.md). The shared admin/candidate parser now accepts only complete reordered or split-date employment cards inside employment-owned boundaries. On the same 357 unique private Word sources, valid employment rows move 815 → 819 and missing-employment sources 103 → 101; project rows stay 355. Five new rows are source-owned and one cross-boundary row is removed. The remaining layouts stay in review and production remains NO_GO.
+
+> Latest full-archive parser checkpoint: [v152 labelled project cards](precision-v152-labelled-project-cards-20260925.md). The read-only 905-original / 892-unique audit recovers 17 valid project rows and makes one more profile structurally complete, while reporting invalid placeholder rows as extraction gaps. Fourteen PDFs still need OCR and 60 have unresolved employment layout. Production remains NO_GO.
+
 > Shared employment checkpoint: [v150 bounded employment field cards](precision-v150-bounded-employment-cards-20260925.md). A same-fingerprint, read-only comparison of 357 unique Word sources increases valid employment rows from 808 to 816 while projects remain 347 and employment-gap sources fall from 103 to 100. Only complete employer/role/ordered-date cards inside employment boundaries are retained; employer/client conflicts stay unchanged. Full PDF/OCR and 970+ same-population verification remain outstanding; production is NO_GO.
 
 > Shared project checkpoint: [v149 project assertion union](precision-v149-project-assertion-union-20260925.md). The same 905-original archive gains 19 valid project rows by retaining distinct complete assertions from both readers; contradictory clients remain review items. Source failures and complete-for-validation totals do not change.

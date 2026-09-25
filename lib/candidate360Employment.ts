@@ -13,6 +13,7 @@ import { boundedCareerSummary } from "./boundedCareerSummary";
 import { boundedEmployerRoleCards } from "./boundedEmployerRoleCards";
 import { boundedCareerTables } from "./boundedCareerTables";
 import { companyDurationRoleCards, datedRoleCompanyCards, labelledEmploymentFieldCards, multilineEmploymentTriples } from "./boundedEmploymentFieldCards";
+import { reorderedEmploymentFieldCards } from "./reorderedEmploymentFieldCards";
 import type {
   EnterpriseEmployment,
   EnterpriseProject,
@@ -2161,6 +2162,11 @@ function resumeEmployment(resumeText: string) {
     };
     for (const [index, row] of labelledEmploymentFieldCards(resumeText).entries()) {
       const parsed = entry({ ...row, sourceRef: `resume.labelledEmploymentFieldCard.${index + 1}`,
+        sourceType: "parsed_resume", confidence: 95 });
+      if (parsed && !broadensKnownEmployer(row)) output.push(parsed);
+    }
+    for (const [index, row] of reorderedEmploymentFieldCards(resumeText).entries()) {
+      const parsed = entry({ ...row, sourceRef: `resume.reorderedEmploymentFieldCard.${index + 1}`,
         sourceType: "parsed_resume", confidence: 95 });
       if (parsed && !broadensKnownEmployer(row)) output.push(parsed);
     }

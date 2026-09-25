@@ -1,5 +1,11 @@
 # CV upload OCR integration
 
+> Latest employment-card checkpoint: [v153 reordered employment field cards](precision-v153-reordered-employment-field-cards-20260925.md). On the same 357 unique private Word sources, five source-owned employment rows are recovered and one row that borrowed role/date evidence across a client-project boundary is removed: valid employment rows change from 815 to 819 and sources without valid employment fall from 103 to 101. Projects remain 355. This is a private read-only subset audit, not 970-source or live OCR acceptance; production remains NO_GO.
+
+> Latest full-archive parser checkpoint: [v152 labelled project cards](precision-v152-labelled-project-cards-20260925.md). The same 905 originals / 892 unique contents recover 17 project rows and one additional complete-for-validation profile while invalid placeholder rows are exposed as gaps. Fourteen PDFs require OCR and 60 retain unresolved employment layout. Production remains NO_GO.
+
+> Current-field evidence checkpoint: [v151 current employment evidence](precision-v151-current-employment-evidence-20260925.md). Current employer and role require a complete source-owned row rather than a nonempty placeholder. Production remains NO_GO.
+
 > Shared employment checkpoint: [v150 bounded employment field cards](precision-v150-bounded-employment-cards-20260925.md). On the same 357 unique private Word sources at the v149 project baseline, complete labelled/adjacent employment cards raise valid employment rows from 808 to 816 and reduce sources without valid employment from 103 to 100. Projects stay at 347 and exact employer/client conflicts remain unchanged. The complete 970+ audit, live OCR, restore and production RLS/Auth/Storage/runtime acceptance remain missing, so production is NO_GO.
 
 > Shared project checkpoint: [v149 project assertion union](precision-v149-project-assertion-union-20260925.md). Across the same 905 originals, retaining distinct complete projects from both readers raises valid project rows from 492 to 511 while contradictory client assertions remain in review. Source failures stay zero and complete-for-validation stays two. Production remains NO_GO.

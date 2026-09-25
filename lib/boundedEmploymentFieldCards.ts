@@ -121,6 +121,11 @@ export function labelledEmploymentFieldCards(input: string): BoundedCareerTableR
     markers.forEach((marker, cardIndex) => {
       if (!section.explicitlyOwned && !/^(?:Employer|Organi[sz]ation)$/i.test(marker[1])) return;
       const card = section.body.slice(marker.index || 0, markers[cardIndex + 1]?.index ?? section.body.length).slice(0, 1200);
+      const ownershipBoundary = card.search(/\b(?:Client|Customer|Project)\s*:/i);
+      const roleMarker = /\b(?:Role|Position(?:\s+Title)?|Designation)\s*:/i.exec(card);
+      const dateMarker = /\b(?:Duration|Period|From\s*\/\s*To|Date\s+(?:Joined|Left))\s*:/i.exec(card);
+      if (ownershipBoundary >= 0 && (!roleMarker || !dateMarker ||
+        (roleMarker.index || 0) > ownershipBoundary || (dateMarker.index || 0) > ownershipBoundary)) return;
       const company = valueAfter(card, /^(?:\s*)(?:Employer|Company(?:\s+Name)?|Organi[sz]ation)\s*:\s*/i);
       const title = valueAfter(card, /\b(?:Role|Position(?:\s+Title)?|Designation)\s*:\s*/i);
       const periodLabel = /\b(?:Duration|Period|From\s*\/\s*To)\s*:\s*/i.exec(card);

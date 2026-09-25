@@ -1,5 +1,9 @@
 # Production Trust release promotion
 
+> Latest parser checkpoint: [v153 reordered employment field cards](precision-v153-reordered-employment-field-cards-20260925.md). A private read-only comparison on 357 unique Word sources recovers five complete employment rows, removes one row that crossed a client-project boundary, and reduces missing-employment sources from 103 to 101 without changing 355 project rows. It does not satisfy full-archive, live OCR, restore, RLS/Auth/Storage or authenticated runtime acceptance. Production remains NO_GO.
+
+> Latest full-archive parser checkpoint: [v152 labelled project cards](precision-v152-labelled-project-cards-20260925.md). The 905-original / 892-unique read-only audit improves bounded project extraction but still leaves 14 PDFs requiring OCR, 60 employment-layout cases unresolved, and at least 78 unique originals missing from the 970 target. Production remains NO_GO.
+
 > Latest code-only data checkpoint: [v150 bounded employment field cards](precision-v150-bounded-employment-cards-20260925.md). Shared admin/candidate employment rules were compared read-only on the same 357 unique Word sources at the v149 project baseline: valid employment rows increase 808 to 816, projects remain 347 and unresolved employment sources fall 103 to 100, with no increase in exact employer/client conflicts. This subset result does not satisfy the complete 970+ audit, live OCR, restore, private Storage/RLS/Auth cutover/readback, authenticated acceptance or reviewed backfill. Release remains NO_GO.
 
 > Project-parser checkpoint: [v149 project assertion union](precision-v149-project-assertion-union-20260925.md). Valid project rows rise 492 to 511 on the same 905 originals while contradictory client evidence remains blocked for review. This code/private aggregate result does not lower any release gate.

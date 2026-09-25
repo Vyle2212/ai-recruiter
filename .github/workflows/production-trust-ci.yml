@@ -178,6 +178,7 @@ jobs:
           node --import tsx scripts/boundedCareerSummary.test.ts
           node --import tsx scripts/boundedEmployerRoleCards.test.ts
           node --import tsx scripts/boundedEmploymentFieldCards.test.ts
+          node --import tsx scripts/reorderedEmploymentFieldCards.test.ts
           node --import tsx scripts/employmentEvidenceDeduplication.test.ts
           node --import tsx scripts/profileSourceAuditEvidence.test.ts
           node --import tsx scripts/flattenedEmployment.test.ts
@@ -243,6 +244,7 @@ jobs:
         run: |
           npm run check:production-trust:format
           npx prettier --check lib/candidateExtractionCoverage.ts scripts/candidateProfileIngestion.test.ts
+          npx prettier --check lib/reorderedEmploymentFieldCards.ts scripts/reorderedEmploymentFieldCards.test.ts docs/precision-v153-reordered-employment-field-cards-20260925.md
           npx prettier --check lib/candidateCvIngestion.ts lib/offlineCvParserAudit.ts scripts/auditOfflineCvParser.ts scripts/offlineCvParserAudit.test.ts
           npx prettier --check lib/cvPdfOcr.ts scripts/cvPdfOcr.test.ts
           npx prettier --check lib/originalCvArchive.ts lib/originalCvArchiveCommit.ts scripts/originalCvArchiveContract.test.ts
