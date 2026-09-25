@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   evaluateCandidateProfileCompletion,
+  hasMeaningfulCandidateValue,
   isValidEmploymentEntry,
   isValidProjectEntry,
   mergeCandidateProfileVersion,
@@ -12,6 +13,8 @@ import { enrichCandidateUpload } from "../lib/candidateUploadEnrichment";
 
 const fullText =
   "Jane Doe SAP MM consultant procurement implementation rollout migration workshops integration testing support reporting governance master data inventory purchasing configuration blueprint hypercare stakeholder regional architecture cutover deployment documentation training";
+assert.equal(hasMeaningfulCandidateValue("Not disclosed"), false);
+assert.equal(hasMeaningfulCandidateValue("Real Consulting"), true);
 const existing = [
   {
     id: "candidate-a",

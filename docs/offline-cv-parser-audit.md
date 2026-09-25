@@ -1,11 +1,11 @@
 # Full-collection CV parser audit
 
 Both admin and candidate CV uploads call `prepareCandidateCv`. The offline audit
-calls the same parser on every PDF, DOCX, DOC and TXT in a directory **outside
+calls the same parser on every PDF, DOCX, DOC, RTF and TXT in a directory **outside
 this repository**, including nested folders. Legacy binary DOC files require a
 valid OLE signature and use the same extraction path as both upload flows. RTF
-files are inventoried in the same pass but fail closed as unsupported rather
-than being decoded as plain text. Run from the repository root:
+files (including RTF content inside a `.doc` file) are decoded by the same
+shared parser; embedded image data is excluded from the text. Run from the repository root:
 
 ```sh
 node --import tsx scripts/auditOfflineCvParser.ts --directory /private/path/to/original-cvs --minimum-unique 970
@@ -35,7 +35,7 @@ unique file has exactly one outcome: `completeForValidation`, `needsReview`,
 `classificationByType` distinguishes uncertain SAP evidence from confidently
 non-SAP documents and job descriptions; no file is deleted by this audit.
 `sourceFormats` records only fixed aggregate format counts, while
-`unsupportedLegacyFiles` separates RTF from corrupt supported files. Unreadable
+`unsupportedLegacyFiles` is kept for report compatibility. Unreadable
 DOC files count as source failures and retain their originals for private
 review; the audit never claims that failed contents were parsed.
 Missing required fields and source sections are aggregated across files.

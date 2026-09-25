@@ -149,7 +149,10 @@ export function hasMeaningfulCandidateValue(value: unknown): boolean {
   if (typeof value !== "string")
     return value !== null && value !== undefined && value !== false;
   const text = clean(value);
-  if (!text || /^(?:n\/?a|none|null|unknown|not available|-+)$/i.test(text))
+  if (
+    !text ||
+    /^(?:n\/?a|none|null|unknown|not available|not disclosed|-+)$/i.test(text)
+  )
     return false;
   if (/^[\[{]/.test(text)) {
     try {

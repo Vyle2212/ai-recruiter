@@ -2119,13 +2119,11 @@ export function resolveCurrentEmployer(
     ) || explicitCurrentRoleContext(sourceScopes).company;
   if (explicitCurrentField) return explicitCurrentField;
   const openEndedRecord = timeline.find(
-    (item) => item.company && /present|current|now/i.test(item.end),
+    (item) => item.company && /^(?:present|current|now|till date|to date)$/i.test(item.end.trim()),
   );
   if (openEndedRecord) return openEndedRecord.company;
-  // Undated employment cannot be chronologically placed behind a completed
-  // role. Do not present that older role as the current employer.
-  if (timeline.some((item) => item.company && !item.start && !item.end)) return "";
-  return timeline.find((item) => item.company)?.company || "";
+  // A latest historical employer is still not evidence of current employment.
+  return "";
 }
 
 function plausiblePersonName(value: string) {
@@ -4264,7 +4262,6 @@ function normalizeActualCandidateSchemaFresh(
     currentEmployment?.title ||
     currentRoleContext.title ||
     profileTitle ||
-    employmentTimeline[0]?.title ||
     "";
   const currentCompany = resolveCurrentEmployer(
     sourceScopes,

@@ -10,10 +10,14 @@ import { productionEmploymentGapQueue } from "./productionEmploymentProjectionAu
 
 const REQUIRED_FIELDS = new Set([
   "display_name",
+  "contact",
   "email",
   "phone",
   "location",
+  "current_title",
+  "current_employer",
   "current_role",
+  "skills",
   "employment_history",
   "project_history",
   "education",
