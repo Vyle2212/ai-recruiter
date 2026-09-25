@@ -1,5 +1,6 @@
-import { parseCv } from "./cv-parser";
+import { parseCv, parseCvFromText } from "./cv-parser";
 import type { CvSourceExtraction } from "./cvPdfExtraction";
+import { extractCvTextDocument } from "./cvTextDocumentExtraction";
 import {
   classifyCandidateText,
   normalizeCandidatePayloadForSapUpload,
@@ -78,7 +79,18 @@ export async function prepareCandidateCv(input: {
   fileName: string;
   source: CandidateCvIngestionSource;
 }): Promise<PreparedCandidateCv | RejectedCandidateCv> {
-  const parsed = await parseCv(input.buffer, input.fileName);
+  const parsed = input.fileName.toLowerCase().endsWith(".pdf")
+    ? await parseCv(input.buffer, input.fileName)
+    : await (async () => {
+        const { text, sourceExtraction } = await extractCvTextDocument(
+          input.buffer,
+          input.fileName,
+        );
+        return {
+          ...parseCvFromText(text, input.fileName),
+          sourceExtraction,
+        };
+      })();
   const rawText = typeof parsed.rawText === "string" ? parsed.rawText : "";
   const classification = classifyCandidateText(rawText, input.fileName);
 
