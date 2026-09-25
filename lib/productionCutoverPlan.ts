@@ -57,6 +57,8 @@ export type ProductionRecoveryEvidence = {
     verifiedManifestFingerprint: string;
     sourceFileCount: number;
     verifiedFileCount: number;
+    sourceUniqueFileCount: number;
+    verifiedUniqueFileCount: number;
   };
 };
 
@@ -215,8 +217,14 @@ function verifyRecoveryEvidence(input: {
     originals.retainedOutsideSupabase !== true ||
     originals.manifestFingerprint !== originals.verifiedManifestFingerprint ||
     !Number.isSafeInteger(originals.sourceFileCount) ||
-    originals.sourceFileCount < database.sourceCandidateCount ||
-    originals.sourceFileCount !== originals.verifiedFileCount
+    !Number.isSafeInteger(originals.verifiedFileCount) ||
+    !Number.isSafeInteger(originals.sourceUniqueFileCount) ||
+    !Number.isSafeInteger(originals.verifiedUniqueFileCount) ||
+    originals.sourceUniqueFileCount < database.sourceCandidateCount ||
+    originals.sourceUniqueFileCount > originals.sourceFileCount ||
+    originals.verifiedUniqueFileCount > originals.verifiedFileCount ||
+    originals.sourceFileCount !== originals.verifiedFileCount ||
+    originals.sourceUniqueFileCount !== originals.verifiedUniqueFileCount
   )
     throw new Error("production_recovery_cv_collection_incomplete");
 }

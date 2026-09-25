@@ -39,6 +39,8 @@ const evidence: ProductionRecoveryEvidence = {
     verifiedManifestFingerprint: fp("originals"),
     sourceFileCount: 972,
     verifiedFileCount: 972,
+    sourceUniqueFileCount: 970,
+    verifiedUniqueFileCount: 970,
   },
 };
 const now = new Date("2026-09-25T01:00:00.000Z");
@@ -89,6 +91,19 @@ refuses((copy) => {
 }, /restore_not_isolated/);
 refuses((copy) => {
   copy.originalCvCollection.verifiedFileCount--;
+}, /cv_collection_incomplete/);
+refuses((copy) => {
+  copy.originalCvCollection.sourceUniqueFileCount = 1;
+  copy.originalCvCollection.verifiedUniqueFileCount = 1;
+}, /cv_collection_incomplete/);
+refuses((copy) => {
+  copy.originalCvCollection.verifiedUniqueFileCount--;
+}, /cv_collection_incomplete/);
+refuses((copy) => {
+  copy.originalCvCollection.sourceUniqueFileCount =
+    copy.originalCvCollection.sourceFileCount + 1;
+  copy.originalCvCollection.verifiedUniqueFileCount =
+    copy.originalCvCollection.verifiedFileCount + 1;
 }, /cv_collection_incomplete/);
 refuses((copy) => {
   copy.verifiedAt = "2026-09-23T00:00:00.000Z";
