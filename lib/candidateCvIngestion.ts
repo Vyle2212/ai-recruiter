@@ -1,5 +1,6 @@
 import { parseCv, parseCvFromText } from "./cv-parser";
 import type { CvSourceExtraction } from "./cvPdfExtraction";
+import type { PdfExtractionOptions } from "./cvPdfExtraction";
 import { extractCvTextDocument } from "./cvTextDocumentExtraction";
 import {
   classifyCandidateText,
@@ -77,9 +78,14 @@ export async function prepareCandidateCv(input: {
   buffer: Buffer;
   fileName: string;
   source: CandidateCvIngestionSource;
+  pdfOcr?: PdfExtractionOptions["ocr"];
 }): Promise<PreparedCandidateCv | RejectedCandidateCv> {
   const parsed = input.fileName.toLowerCase().endsWith(".pdf")
-    ? await parseCv(input.buffer, input.fileName)
+    ? await parseCv(
+        input.buffer,
+        input.fileName,
+        input.pdfOcr ? { ocr: input.pdfOcr } : {},
+      )
     : await (async () => {
         const { text, sourceExtraction } = await extractCvTextDocument(
           input.buffer,

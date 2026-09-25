@@ -201,6 +201,7 @@ jobs:
           node --import tsx scripts/productionAuthFoundation.test.ts
           node --import tsx scripts/candidateProfileLifecycleBatch.test.ts
           node --import tsx scripts/candidateCvIngestionParity.test.ts
+          node --import tsx scripts/offlineCvParserAudit.test.ts
           node --import tsx scripts/legacyCvUploadBoundary.test.ts
           node --import tsx scripts/candidateOwnedCvUpdate.test.ts
           node --import tsx scripts/candidateCvReplayIntegrity.test.ts
@@ -240,6 +241,7 @@ jobs:
         run: |
           npm run check:production-trust:format
           npx prettier --check lib/candidateExtractionCoverage.ts scripts/candidateProfileIngestion.test.ts
+          npx prettier --check lib/candidateCvIngestion.ts lib/offlineCvParserAudit.ts scripts/auditOfflineCvParser.ts scripts/offlineCvParserAudit.test.ts
           npx prettier --check lib/cvPdfOcr.ts scripts/cvPdfOcr.test.ts
           npx prettier --check lib/originalCvArchive.ts lib/originalCvArchiveCommit.ts scripts/originalCvArchiveContract.test.ts
           npx prettier --check scripts/candidateCvReplayIntegrity.test.ts

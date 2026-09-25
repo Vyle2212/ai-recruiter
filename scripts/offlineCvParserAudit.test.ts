@@ -1,0 +1,120 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { createOfflineCvAudit } from "../lib/offlineCvParserAudit";
+
+const complete = Buffer.from(`
+Jane Doe
+Email: jane.doe@example.invalid
+Phone: +65 9123 4567
+Location: Singapore
+SAP MM consultant delivering procurement and SAP S/4HANA implementation.
+WORK EXPERIENCE
+SAP MM Consultant | Example Consulting | Jan 2020 - Present
+PROJECT EXPERIENCE
+Client: Example Manufacturing
+Role: SAP MM Consultant
+Jan 2021 - Dec 2023
+EDUCATION
+Bachelor of Computing
+SKILLS
+SAP MM, Procurement
+LANGUAGES
+English
+`);
+const partial = Buffer.from(
+  complete
+    .toString()
+    .replace(
+      "Client: Example Manufacturing",
+      "Client: Example Manufacturing\nClient: Synthetic Logistics",
+    ),
+);
+
+function scannedSyntheticPdf() {
+  const objects = [
+    "",
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] >>",
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  for (let i = 1; i < objects.length; i++) {
+    offsets[i] = Buffer.byteLength(pdf, "latin1");
+    pdf += `${i} 0 obj\n${objects[i]}\nendobj\n`;
+  }
+  const xref = Buffer.byteLength(pdf, "latin1");
+  pdf += `xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+  for (let i = 1; i < objects.length; i++)
+    pdf += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(pdf, "latin1");
+}
+
+async function main() {
+  const audit = createOfflineCvAudit();
+  await audit.process(complete, "private-name-1.txt");
+  await audit.process(complete, "same-bytes-another-name.txt");
+  await audit.process(partial, "private-name-2.txt");
+  await audit.process(
+    Buffer.from("A plain cover letter about travel and food."),
+    "private-name-3.txt",
+  );
+  await audit.process(Buffer.from("not a valid docx"), "private-name-4.docx");
+  await audit.process(scannedSyntheticPdf(), "private-name-5.pdf");
+  const r = audit.report;
+  assert.equal(r.files, 6);
+  assert.equal(r.uniqueFiles, 5);
+  assert.equal(r.duplicateFiles, 1);
+  assert.equal(r.sourceFailures, 1);
+  assert.equal(r.ocrRequired, 1);
+  assert.equal(r.classificationReview, 1);
+  assert.equal(r.completeForValidation + r.needsReview, 2);
+  assert.equal(r.readyForBulkUpload, false);
+  assert.doesNotMatch(
+    JSON.stringify(r),
+    /Jane|private-name|example\.invalid|Example Manufacturing/i,
+  );
+
+  const outsideRepo = fs.mkdtempSync(
+    path.join(os.tmpdir(), "private-parser-audit-"),
+  );
+  try {
+    fs.writeFileSync(path.join(outsideRepo, "synthetic.txt"), complete);
+    const run = spawnSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "scripts/auditOfflineCvParser.ts",
+        "--directory",
+        outsideRepo,
+      ],
+      { cwd: process.cwd(), encoding: "utf8" },
+    );
+    assert.equal(
+      run.status,
+      0,
+      "aggregate audit should accept an external folder",
+    );
+    const cli = JSON.parse(run.stdout);
+    assert.equal(cli.files, 1);
+    assert.equal(cli.readyForBulkUpload, false);
+    assert.doesNotMatch(
+      run.stdout + run.stderr,
+      /synthetic\.txt|Jane Doe|example\.invalid/,
+    );
+  } finally {
+    fs.unlinkSync(path.join(outsideRepo, "synthetic.txt"));
+    fs.rmdirSync(outsideRepo);
+  }
+  console.log("offlineCvParserAudit.test.ts passed");
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
