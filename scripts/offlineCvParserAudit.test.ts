@@ -82,7 +82,7 @@ async function main() {
   assert.equal(r.uniqueFiles, 7);
   assert.equal(r.duplicateFiles, 1);
   assert.equal(r.sourceFailures, 3);
-  assert.equal(r.unsupportedLegacyFiles, 2);
+  assert.equal(r.unsupportedLegacyFiles, 1);
   assert.deepEqual(r.sourceFormats, {
     pdf: 1,
     docx: 1,
@@ -141,7 +141,7 @@ async function main() {
     assert.equal(cli.sourceFormats.txt, 1);
     assert.equal(cli.sourceFormats.doc, 1);
     assert.equal(cli.sourceFormats.rtf, 1);
-    assert.equal(cli.unsupportedLegacyFiles, 2);
+    assert.equal(cli.unsupportedLegacyFiles, 1);
     assert.equal(cli.sourceFailures, 2);
     assert.match(cli.targetCommitSha, /^[a-f0-9]{40}$/);
     assert.equal(cli.readyForBulkUpload, false);

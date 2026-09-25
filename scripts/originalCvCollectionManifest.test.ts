@@ -115,7 +115,17 @@ try {
     path.join(verified, "private-a-copy.txt"),
   );
 
-  fs.writeFileSync(path.join(source, "secret-candidate.doc"), cvA);
+  fs.writeFileSync(path.join(source, "legacy-candidate.doc"), cvA);
+  fs.writeFileSync(path.join(verified, "legacy-candidate.doc"), cvA);
+  assert.equal(
+    measure().sourceFileCount,
+    4,
+    "legacy DOC is part of the original-CV manifest",
+  );
+  fs.unlinkSync(path.join(source, "legacy-candidate.doc"));
+  fs.unlinkSync(path.join(verified, "legacy-candidate.doc"));
+
+  fs.writeFileSync(path.join(source, "secret-candidate.rtf"), cvA);
   assert.throws(
     measure,
     (error: unknown) =>
@@ -123,7 +133,7 @@ try {
       error.message === "original_cv_collection_unsupported_entry",
     "errors must not reveal a CV filename",
   );
-  fs.unlinkSync(path.join(source, "secret-candidate.doc"));
+  fs.unlinkSync(path.join(source, "secret-candidate.rtf"));
   assert.equal(measure().sourceUniqueFileCount, 2);
 } finally {
   fs.rmSync(parent, { recursive: true, force: true });

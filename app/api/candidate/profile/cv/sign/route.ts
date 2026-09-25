@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     object = originalCvObjectKey(fileName, Buffer.alloc(1));
   } catch {
     return NextResponse.json(
-      { error: "Only PDF, DOCX, and TXT CVs are supported." },
+      { error: "Only PDF, DOCX, DOC, and TXT CVs are supported." },
       { status: 400, headers: privateHeaders },
     );
   }

@@ -327,7 +327,7 @@ export default function UploadPage() {
           id="cv-collection"
           type="file"
           multiple
-          accept=".pdf,.docx,.txt"
+          accept=".pdf,.docx,.doc,.txt"
           onChange={onPickFiles}
           disabled={preparing || uploading}
           style={{ display: "block", width: "100%", marginTop: 12 }}

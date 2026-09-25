@@ -49,6 +49,23 @@ assert.equal(
   "selection identity must not depend on browser ordering",
 );
 
+assert.equal(
+  buildAdminCvUploadPlan(
+    [
+      {
+        digest: digest("d"),
+        name: "legacy.doc",
+        size: 256,
+        lastModified: 1,
+        selectionIndex: 0,
+      },
+    ],
+    null,
+  )[0]?.disposition,
+  "ready",
+  "the shared bulk uploader accepts legacy Word CVs for server-side validation",
+);
+
 let checkpoint = updateAdminCvCheckpoint({
   checkpoint: null,
   selectionFingerprint: digest("f"),

@@ -34,6 +34,11 @@ function utf16Be(value: string, bom = true) {
   return bom ? Buffer.concat([Buffer.from([0xfe, 0xff]), bytes]) : bytes;
 }
 
+const syntheticOleDoc = Buffer.concat([
+  Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+  Buffer.alloc(512),
+]);
+
 async function main() {
   const utf8 = decodeCvTxt(Buffer.from(`\uFEFF${syntheticCv}`, "utf8"));
   assert.equal(utf8.encoding, "utf8");
@@ -55,6 +60,14 @@ async function main() {
   const utf16BeDecoded = decodeCvTxt(utf16Be(syntheticCv));
   assert.equal(utf16BeDecoded.encoding, "utf16be");
   assert.equal(utf16BeDecoded.text, syntheticCv);
+
+  const legacyDoc = await extractCvTextDocument(
+    syntheticOleDoc,
+    "synthetic.doc",
+    { extractDoc: async () => syntheticCv },
+  );
+  assert.equal(legacyDoc.text, syntheticCv);
+  assert.equal(legacyDoc.sourceExtraction.reason, "LEGACY_DOC_NATIVE");
 
   const prepared = await prepareCandidateCv({
     buffer: Buffer.concat([
@@ -81,6 +94,22 @@ async function main() {
       (error as { code?: string }).code === "CV_SOURCE_DOCX_INVALID",
   );
   await assert.rejects(
+    extractCvTextDocument(Buffer.from("not-an-ole-doc"), "broken.doc", {
+      extractDoc: async () => syntheticCv,
+    }),
+    (error: unknown) =>
+      error instanceof Error &&
+      (error as { code?: string }).code === "CV_SOURCE_DOC_INVALID",
+  );
+  await assert.rejects(
+    extractCvTextDocument(syntheticOleDoc, "empty.doc", {
+      extractDoc: async () => "",
+    }),
+    (error: unknown) =>
+      error instanceof Error &&
+      (error as { code?: string }).code === "CV_SOURCE_DOC_TEXT_INVALID",
+  );
+  await assert.rejects(
     extractCvTextDocument(Buffer.from(syntheticCv), "synthetic.rtf"),
     (error: unknown) =>
       error instanceof Error &&
@@ -88,7 +117,7 @@ async function main() {
   );
 
   console.log(
-    "Shared TXT/DOCX encoding and corrupt-source compatibility regression passed.",
+    "Shared TXT/DOCX/DOC encoding and corrupt-source compatibility regression passed.",
   );
 }
 
