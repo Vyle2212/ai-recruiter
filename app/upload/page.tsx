@@ -16,6 +16,7 @@ import {
   type AdminCvUploadOutcome,
   type AdminCvUploadResultLike,
 } from "@/lib/adminCvBulkUpload";
+import { finalizePossiblyCompletedSignedCvUpload } from "@/lib/signedCvUploadFinalization";
 
 type PreparedItem = AdminCvPlanItem & {
   file: File;
@@ -188,20 +189,22 @@ export default function UploadPage() {
         contentType: signed.contentType,
       },
     );
-    if (uploadError)
-      throw new Error("Private CV transfer failed; retry this file.");
-    const response = await readJson(
-      await fetch("/api/upload-cv", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileName: file.name,
-          size: file.size,
-          objectKey: signed.objectKey,
-          contentDigest,
+    const response = await finalizePossiblyCompletedSignedCvUpload({
+      uploadError,
+      requestProcessing: () =>
+        fetch("/api/upload-cv", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: file.name,
+            size: file.size,
+            objectKey: signed.objectKey,
+            contentDigest,
+          }),
         }),
-      }),
-    );
+      parseResponse: readJson,
+      transferFailureMessage: "Private CV transfer failed; retry this file.",
+    });
     const result = response?.results?.[0];
     if (!result || response.total !== 1)
       throw new Error("CV upload returned an invalid result.");

@@ -55,6 +55,11 @@ assert.match(
   /storage\.uploadToSignedUrl\(/,
   "CV bytes must bypass the Vercel function request-size limit",
 );
+assert.match(
+  uploadPage,
+  /finalizePossiblyCompletedSignedCvUpload\(\{[\s\S]*uploadError/,
+  "admin upload must ask the server to resolve an ambiguous Storage response",
+);
 assert.match(uploadPage, /MAX_CV_BYTES = 10 \* 1024 \* 1024/);
 assert.match(
   uploadPage,

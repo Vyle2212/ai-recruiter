@@ -2,6 +2,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { useCallback, useEffect, useState } from "react";
+import { finalizePossiblyCompletedSignedCvUpload } from "@/lib/signedCvUploadFinalization";
 
 type PortalResponse = {
   profile: any;
@@ -340,19 +341,22 @@ export default function CandidatePortalClient() {
         file,
         { contentType: signed.contentType },
       );
-      if (uploaded.error) throw new Error("Private CV transfer failed.");
-      const result = await json(
-        await fetch("/api/candidate/profile/cv", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            fileName: file.name,
-            size: file.size,
-            objectKey: signed.objectKey,
-            contentDigest,
+      const result = await finalizePossiblyCompletedSignedCvUpload({
+        uploadError: uploaded.error,
+        requestProcessing: () =>
+          fetch("/api/candidate/profile/cv", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              fileName: file.name,
+              size: file.size,
+              objectKey: signed.objectKey,
+              contentDigest,
+            }),
           }),
-        }),
-      );
+        parseResponse: json,
+        transferFailureMessage: "Private CV transfer failed.",
+      });
       setMessage(
         result.accepted
           ? "CV processed. Review every extracted section before confirming."

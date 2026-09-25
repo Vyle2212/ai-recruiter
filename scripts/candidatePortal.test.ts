@@ -34,6 +34,11 @@ async function main() {
   assert.match(source, /setStructured\("projectExperience"/);
   assert.match(source, /setStructured\("education"/);
   assert.match(source, /setStructured\("languages"/);
+  assert.match(
+    source,
+    /finalizePossiblyCompletedSignedCvUpload\(\{[\s\S]*uploadError: uploaded\.error/,
+    "candidate upload must ask the server to resolve an ambiguous Storage response",
+  );
   assert.doesNotMatch(
     source,
     /new OpenAI|responses\.create|sendMail|sendEmail/i,
