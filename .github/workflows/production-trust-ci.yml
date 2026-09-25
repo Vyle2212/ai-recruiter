@@ -244,6 +244,7 @@ jobs:
         run: |
           npm run check:production-trust:format
           npx prettier --check lib/candidateExtractionCoverage.ts scripts/candidateProfileIngestion.test.ts
+          npx prettier --check lib/boundedEmploymentFieldCards.ts lib/candidateUploadEnrichment.ts scripts/boundedEmploymentFieldCards.test.ts scripts/candidateCvIngestionParity.test.ts docs/precision-v156-split-employment-date-cards-20260925.md
           npx prettier --check lib/reorderedEmploymentFieldCards.ts scripts/reorderedEmploymentFieldCards.test.ts docs/precision-v153-reordered-employment-field-cards-20260925.md
           npx prettier --check lib/candidateSearchMutationGate.ts
           npx prettier --check lib/candidateCvIngestion.ts lib/offlineCvParserAudit.ts scripts/auditOfflineCvParser.ts scripts/offlineCvParserAudit.test.ts

@@ -388,6 +388,9 @@ export function enrichCandidateUpload(
           current: item.isCurrent === true,
           evidence_confidence: Number(item.confidence || 0),
         }));
+  const currentExperience = experience.find(
+    (item: any) => item.current === true && clean(item.employer),
+  );
   const canonicalProjects = (canonical.projectExperience || []).map(
     (item: any) => ({
       name: clean(item.name),
@@ -450,7 +453,9 @@ export function enrichCandidateUpload(
       full.extractedCurrentCompany !== "Not disclosed" &&
       !full.isCompanySuspicious
         ? full.extractedCurrentCompany
-        : candidate.current_company || candidate.currentCompany,
+        : clean(currentExperience?.employer) ||
+          candidate.current_company ||
+          candidate.currentCompany,
     primary_module:
       full.primarySapModule && full.primarySapModule !== "UNKNOWN"
         ? full.primarySapModule

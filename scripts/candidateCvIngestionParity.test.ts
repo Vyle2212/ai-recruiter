@@ -86,6 +86,53 @@ async function main() {
     candidate.sourceExtraction,
     "candidate uploads must use the same source provenance contract",
   );
+  const splitDateEmployment = source.replace(
+    "SAP MM Consultant | Example Consulting | Jan 2020 - Present",
+    "Employer: Example Consulting\nJob Title: SAP MM Consultant\nStart Date: Jan 2020\nEnd Date: Present",
+  );
+  for (const sourceType of ["admin_upload", "candidate_upload"] as const) {
+    const prepared = await prepareCandidateCv({
+      buffer: Buffer.from(splitDateEmployment),
+      fileName: "synthetic-split-employment-dates.txt",
+      source: sourceType,
+    });
+    assert.equal(prepared.accepted, true);
+    if (!prepared.accepted) throw new Error("split-date fixture rejected");
+    assert.equal(prepared.candidatePayload.employment_history.length, 1);
+    assert.deepEqual(prepared.candidatePayload.employment_history[0], {
+      employer: "Example Consulting",
+      company: "Example Consulting",
+      title: "SAP MM Consultant",
+      start_date: "Jan 2020",
+      end_date: "Present",
+      current: true,
+    });
+    assert.equal(
+      prepared.candidatePayload.current_company,
+      "Example Consulting",
+      "an explicitly open-ended employment card supplies the current employer",
+    );
+    assert.ok(
+      !prepared.extractionCoverage.missingRequiredFields.includes(
+        "current_employer",
+      ),
+    );
+    const historical = await prepareCandidateCv({
+      buffer: Buffer.from(
+        splitDateEmployment.replace("End Date: Present", "End Date: Dec 2022"),
+      ),
+      fileName: "synthetic-closed-split-employment-dates.txt",
+      source: sourceType,
+    });
+    assert.equal(historical.accepted, true);
+    if (!historical.accepted) throw new Error("historical fixture rejected");
+    assert.equal(historical.candidatePayload.employment_history.length, 1);
+    assert.equal(
+      historical.candidatePayload.current_company,
+      null,
+      "a completed employment card must not be promoted to current employer",
+    );
+  }
   const projectSource = `SAP MM Consultant
 PROJECT EXPERIENCE
 Project Title: Synthetic Alpha
