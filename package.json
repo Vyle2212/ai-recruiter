@@ -108,6 +108,7 @@
         "export:raw-identity": "tsx scripts/exportRawIdentityEvidence.ts",
         "export:selective-ai-extraction": "tsx scripts/exportSelectiveAiExtractionQueue.ts",
         "audit:batch-upload-extraction": "tsx scripts/auditBatchUploadExtraction.ts",
+        "audit:offline-cv-parser": "node --import tsx scripts/auditOfflineCvParser.ts",
         "export:batch-upload-extraction": "tsx scripts/exportBatchUploadExtraction.ts",
         "audit:field-qa": "tsx scripts/auditFieldLevelExtractionQa.ts",
         "export:field-qa": "tsx scripts/exportFieldLevelExtractionQa.ts",

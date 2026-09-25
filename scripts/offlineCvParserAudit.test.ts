@@ -3,7 +3,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { createOfflineCvAudit } from "../lib/offlineCvParserAudit";
+import {
+  compareOfflineCvAudits,
+  createOfflineCvAudit,
+} from "../lib/offlineCvParserAudit";
+import { productionEmploymentGapQueue } from "../lib/productionEmploymentProjectionAudit";
 
 const complete = Buffer.from(`
 Jane Doe
@@ -73,7 +77,17 @@ async function main() {
   assert.equal(r.ocrRequired, 1);
   assert.equal(r.classificationReview, 1);
   assert.equal(r.completeForValidation + r.needsReview, 2);
+  assert.equal(r.artifact, "offline_cv_parser_audit_v2");
+  assert.match(r.collectionFingerprint, /^[a-f0-9]{64}$/);
+  assert.equal(r.databaseWrites, 0);
   assert.equal(r.readyForBulkUpload, false);
+  assert.deepEqual(r.privacy, {
+    filenamesSerialized: 0,
+    candidateIdentifiersSerialized: 0,
+    sourceExcerptsSerialized: 0,
+    contactFieldsSerialized: 0,
+    fileDigestsSerialized: 0,
+  });
   assert.doesNotMatch(
     JSON.stringify(r),
     /Jane|private-name|example\.invalid|Example Manufacturing/i,
@@ -92,6 +106,8 @@ async function main() {
         "scripts/auditOfflineCvParser.ts",
         "--directory",
         outsideRepo,
+        "--minimum-unique",
+        "1",
       ],
       { cwd: process.cwd(), encoding: "utf8" },
     );
@@ -102,15 +118,111 @@ async function main() {
     );
     const cli = JSON.parse(run.stdout);
     assert.equal(cli.files, 1);
+    assert.match(cli.targetCommitSha, /^[a-f0-9]{40}$/);
     assert.equal(cli.readyForBulkUpload, false);
     assert.doesNotMatch(
       run.stdout + run.stderr,
       /synthetic\.txt|Jane Doe|example\.invalid/,
     );
+
+    const undersized = spawnSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "scripts/auditOfflineCvParser.ts",
+        "--directory",
+        outsideRepo,
+      ],
+      { cwd: process.cwd(), encoding: "utf8" },
+    );
+    assert.equal(undersized.status, 1);
+    assert.equal(undersized.stdout, "");
+    assert.equal(undersized.stderr, "offline_cv_audit_directory_invalid\n");
+
+    const baselineDirectory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "private-parser-baseline-"),
+    );
+    const baselinePath = path.join(baselineDirectory, "baseline.json");
+    fs.writeFileSync(baselinePath, JSON.stringify(cli), { mode: 0o600 });
+    const compared = spawnSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "scripts/auditOfflineCvParser.ts",
+        "--directory",
+        outsideRepo,
+        "--minimum-unique",
+        "1",
+        "--baseline",
+        baselinePath,
+      ],
+      { cwd: process.cwd(), encoding: "utf8" },
+    );
+    assert.equal(compared.status, 0);
+    const comparison = JSON.parse(compared.stdout).comparison;
+    assert.equal(comparison.samePopulation, true);
+    assert.equal(comparison.delta.employmentGapSources, 0);
+    assert.equal(comparison.readyForBulkUpload, false);
+    fs.unlinkSync(baselinePath);
+    fs.rmdirSync(baselineDirectory);
   } finally {
     fs.unlinkSync(path.join(outsideRepo, "synthetic.txt"));
     fs.rmdirSync(outsideRepo);
   }
+
+  const padding = " SAP delivery evidence".repeat(20);
+  const queueFixtures = [
+    ["Short SAP project", "short-or-missing-source"],
+    [
+      `Date Company Name Role 2020 Example Consulting SAP Consultant${padding}`,
+      "headed-table-needs-layout-review",
+    ],
+    [
+      `Employer: Example Consulting Role: SAP Consultant${padding}`,
+      "explicit-employer-label-needs-field-review",
+    ],
+    [
+      `Professional Experience 2020 to 2021 SAP Consultant${padding}`,
+      "near-heading-date-needs-boundary-review",
+    ],
+    [
+      `Project Experience Client: Example Buyer Project: Rollout${padding}`,
+      "project-or-client-heavy-needs-employment-evidence",
+    ],
+    [
+      `SAP transformation delivery narrative without owned career fields${padding}`,
+      "other-narrative-or-layout-review",
+    ],
+  ] as const;
+  for (const [source, expected] of queueFixtures)
+    assert.equal(productionEmploymentGapQueue(source), expected);
+
+  const before = { ...r, targetCommitSha: "a".repeat(40) };
+  const after = {
+    ...structuredClone(before),
+    targetCommitSha: "b".repeat(40),
+    completeForValidation: before.completeForValidation + 1,
+    needsReview: before.needsReview - 1,
+    employmentGapQueues: {
+      ...before.employmentGapQueues,
+      "project-or-client-heavy-needs-employment-evidence": 1,
+    },
+  };
+  const delta = compareOfflineCvAudits(before, after);
+  assert.equal(delta.samePopulation, true);
+  assert.equal(delta.delta.completeForValidation, 1);
+  assert.equal(delta.delta.needsReview, -1);
+  assert.equal(delta.delta.employmentGapSources, 1);
+  assert.equal(delta.readyForBulkUpload, false);
+  assert.equal(
+    compareOfflineCvAudits(before, {
+      ...after,
+      collectionFingerprint: "f".repeat(64),
+    }).samePopulation,
+    false,
+  );
   console.log("offlineCvParserAudit.test.ts passed");
 }
 

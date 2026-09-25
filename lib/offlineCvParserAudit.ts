@@ -2,8 +2,40 @@ import { createHash } from "node:crypto";
 import { prepareCandidateCv } from "./candidateCvIngestion";
 import { CvSourceError } from "./cvPdfOcr";
 import type { CandidateExtractionSection } from "./candidateExtractionCoverage";
+import {
+  isValidEmploymentEntry,
+  isValidProjectEntry,
+} from "./candidateProfileIngestion";
+import { productionEmploymentGapQueue } from "./productionEmploymentProjectionAudit";
+
+const REQUIRED_FIELDS = new Set([
+  "display_name",
+  "email",
+  "phone",
+  "location",
+  "current_role",
+  "employment_history",
+  "project_history",
+  "education",
+  "languages",
+  "sap_module",
+]);
+
+const EMPLOYMENT_GAP_QUEUES = [
+  "short-or-missing-source",
+  "headed-table-needs-layout-review",
+  "explicit-employer-label-needs-field-review",
+  "near-heading-date-needs-boundary-review",
+  "project-or-client-heavy-needs-employment-evidence",
+  "other-narrative-or-layout-review",
+] as const;
+
+type EmploymentGapQueue = (typeof EMPLOYMENT_GAP_QUEUES)[number];
 
 export type OfflineCvAudit = {
+  artifact: "offline_cv_parser_audit_v2";
+  targetCommitSha: string;
+  collectionFingerprint: string;
   files: number;
   uniqueFiles: number;
   duplicateFiles: number;
@@ -13,17 +45,73 @@ export type OfflineCvAudit = {
   qualityRejected: number;
   ocrRequired: number;
   sourceFailures: number;
+  employmentRows: number;
+  projectRows: number;
   missingRequiredFields: Record<string, number>;
   missedObservedSections: Partial<Record<CandidateExtractionSection, number>>;
+  employmentGapQueues: Record<EmploymentGapQueue, number>;
+  privacy: {
+    filenamesSerialized: 0;
+    candidateIdentifiersSerialized: 0;
+    sourceExcerptsSerialized: 0;
+    contactFieldsSerialized: 0;
+    fileDigestsSerialized: 0;
+  };
+  databaseWrites: 0;
   readyForBulkUpload: false;
 };
+
+export type OfflineCvAuditComparison = {
+  artifact: "offline_cv_parser_audit_comparison_v1";
+  samePopulation: boolean;
+  before: { uniqueFiles: number; employmentGapSources: number };
+  after: { uniqueFiles: number; employmentGapSources: number };
+  delta: {
+    completeForValidation: number;
+    needsReview: number;
+    employmentGapSources: number;
+    sourceFailures: number;
+  };
+  readyForBulkUpload: false;
+};
+
+function recordCount(
+  candidate: Record<string, unknown>,
+  aliases: string[],
+  valid: (item: unknown) => boolean,
+) {
+  const count = (value: unknown) => {
+    if (Array.isArray(value)) return value.filter(valid).length;
+    if (typeof value !== "string") return 0;
+    try {
+      const parsed: unknown = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.filter(valid).length : 0;
+    } catch {
+      return 0;
+    }
+  };
+  return Math.max(0, ...aliases.map((alias) => count(candidate[alias])));
+}
+
+function zeroGapQueues(): Record<EmploymentGapQueue, number> {
+  return Object.fromEntries(
+    EMPLOYMENT_GAP_QUEUES.map((queue) => [queue, 0]),
+  ) as Record<EmploymentGapQueue, number>;
+}
 
 /** Private aggregate only. Never return filenames, hashes, source text or
  * parser errors: those may contain candidate data. This audit has no writes.
  */
-export function createOfflineCvAudit() {
+export function createOfflineCvAudit(
+  options: { targetCommitSha?: string } = {},
+) {
   const hashes = new Set<string>();
   const report: OfflineCvAudit = {
+    artifact: "offline_cv_parser_audit_v2",
+    targetCommitSha: options.targetCommitSha || "",
+    collectionFingerprint: createHash("sha256")
+      .update("[]", "utf8")
+      .digest("hex"),
     files: 0,
     uniqueFiles: 0,
     duplicateFiles: 0,
@@ -33,8 +121,19 @@ export function createOfflineCvAudit() {
     qualityRejected: 0,
     ocrRequired: 0,
     sourceFailures: 0,
+    employmentRows: 0,
+    projectRows: 0,
     missingRequiredFields: {},
     missedObservedSections: {},
+    employmentGapQueues: zeroGapQueues(),
+    privacy: {
+      filenamesSerialized: 0,
+      candidateIdentifiersSerialized: 0,
+      sourceExcerptsSerialized: 0,
+      contactFieldsSerialized: 0,
+      fileDigestsSerialized: 0,
+    },
+    databaseWrites: 0,
     readyForBulkUpload: false,
   };
   const increment = (counts: Record<string, number>, value: string) => {
@@ -51,6 +150,9 @@ export function createOfflineCvAudit() {
       }
       hashes.add(hash);
       report.uniqueFiles++;
+      report.collectionFingerprint = createHash("sha256")
+        .update(JSON.stringify([...hashes].sort()), "utf8")
+        .digest("hex");
       try {
         const prepared = await prepareCandidateCv({
           buffer,
@@ -79,9 +181,38 @@ export function createOfflineCvAudit() {
         } else {
           report.needsReview++;
         }
+        if (prepared.accepted) {
+          const candidate = prepared.candidatePayload as Record<
+            string,
+            unknown
+          >;
+          const employmentRows = recordCount(
+            candidate,
+            [
+              "experience",
+              "employment",
+              "employment_history",
+              "employmentHistory",
+            ],
+            isValidEmploymentEntry,
+          );
+          report.employmentRows += employmentRows;
+          report.projectRows += recordCount(
+            candidate,
+            ["projects", "project_history", "projectHistory"],
+            isValidProjectEntry,
+          );
+          if (!employmentRows)
+            report.employmentGapQueues[
+              productionEmploymentGapQueue(prepared.rawText)
+            ]++;
+        }
         for (const field of prepared.extractionCoverage
           ?.missingRequiredFields || [])
-          increment(report.missingRequiredFields, field);
+          increment(
+            report.missingRequiredFields,
+            REQUIRED_FIELDS.has(field) ? field : "other",
+          );
         for (const section of prepared.extractionCoverage
           ?.missedObservedSections || [])
           increment(report.missedObservedSections, section);
@@ -94,5 +225,42 @@ export function createOfflineCvAudit() {
         else report.sourceFailures++;
       }
     },
+  };
+}
+
+const gapSources = (report: OfflineCvAudit) =>
+  Object.values(report.employmentGapQueues).reduce(
+    (total, count) => total + count,
+    0,
+  );
+
+export function compareOfflineCvAudits(
+  before: OfflineCvAudit,
+  after: OfflineCvAudit,
+): OfflineCvAuditComparison {
+  const beforeGaps = gapSources(before);
+  const afterGaps = gapSources(after);
+  return {
+    artifact: "offline_cv_parser_audit_comparison_v1",
+    samePopulation:
+      before.files === after.files &&
+      before.uniqueFiles === after.uniqueFiles &&
+      before.collectionFingerprint === after.collectionFingerprint,
+    before: {
+      uniqueFiles: before.uniqueFiles,
+      employmentGapSources: beforeGaps,
+    },
+    after: {
+      uniqueFiles: after.uniqueFiles,
+      employmentGapSources: afterGaps,
+    },
+    delta: {
+      completeForValidation:
+        after.completeForValidation - before.completeForValidation,
+      needsReview: after.needsReview - before.needsReview,
+      employmentGapSources: afterGaps - beforeGaps,
+      sourceFailures: after.sourceFailures - before.sourceFailures,
+    },
+    readyForBulkUpload: false,
   };
 }

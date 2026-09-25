@@ -1,5 +1,7 @@
 # Original CV layout verification — 2026-09-15
 
+> 2026-09-25 update: [v145](precision-v145-system-wide-private-cv-parser-audit-20260925.md) requires one aggregate audit of the complete 970+ unique original-CV population through the current shared parser, with the six employment layout queues and same-population before/after deltas. It does not publish filenames, hashes, excerpts or candidate data. No complete original-file run is claimed yet.
+
 > Full-collection upload checkpoint: [v140 resumable admin CV upload](precision-v140-resumable-admin-cv-upload-20260925.md). Original PDF/DOCX/TXT files are locally fingerprinted before transfer, exact byte duplicates are skipped, and the ordered one-at-a-time commit path prevents an older selected source from racing a newer source. A session-only checkpoint contains no file names, CV text, contacts or candidate IDs. The 970+ originals have not been uploaded or audited on this code, and live OCR remains required.
 
 > Candidate completion checkpoint: [v139 owned profile confirmation](precision-v139-candidate-profile-confirmation-20260925.md). Admin and candidate uploads now converge on the same parser, while the candidate portal requires review of employment, projects, education, languages, certifications, SAP modules and skills before an atomic searchable confirmation. This batch processed no original CV and does not change the 737/970 projection or the 233-source original-CV reprocessing queue. Live layout/OCR and full-population acceptance remain outstanding.
