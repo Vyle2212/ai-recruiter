@@ -44,6 +44,32 @@ function present(candidate: Record<string, unknown>, aliases: string[]) {
   return aliases.some((alias) => values(candidate[alias]).some(Boolean));
 }
 
+function projectRecordCount(value: unknown): number {
+  if (Array.isArray(value)) return value.filter(Boolean).length;
+  if (typeof value !== "string") return 0;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter(Boolean).length : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Count repeated project-entry labels without double-counting Client + Project in one entry. */
+function explicitProjectCount(rawText: string): number {
+  const labels = ["(?:client|customer)(?: name)?", "project(?: name| title)?"];
+  return Math.max(
+    ...labels.map(
+      (label) =>
+        (
+          rawText.match(
+            new RegExp(`^[ \\t]*${label}[ \\t]*:[ \\t]*\\S`, "gim"),
+          ) || []
+        ).length,
+    ),
+  );
+}
+
 const OBSERVED_PATTERNS: Record<
   Exclude<CandidateExtractionSection, "identity" | "sap_modules">,
   RegExp
@@ -98,6 +124,8 @@ export function evaluateCandidateExtractionCoverage(
     "identity",
     "sap_modules",
   ]);
+  const projectAnchors = explicitProjectCount(rawText);
+  if (projectAnchors) observed.add("projects");
   for (const [section, pattern] of Object.entries(OBSERVED_PATTERNS)) {
     if (pattern.test(rawText))
       observed.add(section as CandidateExtractionSection);
@@ -108,6 +136,18 @@ export function evaluateCandidateExtractionCoverage(
     if (present(candidate, aliases))
       extracted.add(section as CandidateExtractionSection);
   }
+
+  // Section presence is not enough when the source explicitly enumerates
+  // multiple projects. One extracted record must not hide omitted projects.
+  if (
+    projectAnchors > 1 &&
+    Math.max(
+      projectRecordCount(candidate.projects),
+      projectRecordCount(candidate.project_history),
+      projectRecordCount(candidate.projectHistory),
+    ) < projectAnchors
+  )
+    extracted.delete("projects");
 
   const observedSections = Array.from(observed);
   const extractedSections = Array.from(extracted);

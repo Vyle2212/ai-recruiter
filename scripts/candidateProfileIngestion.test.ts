@@ -199,6 +199,73 @@ const covered = evaluateCandidateExtractionCoverage(
 assert.equal(covered.status, "complete_for_validation");
 assert.equal(covered.coveragePercent, 100);
 
+const multipleProjectSource = `SYNTHETIC SAP CONSULTANT
+WORK EXPERIENCE
+SAP MM Consultant | Synthetic Consulting | Jan 2020 - Present
+PROJECT EXPERIENCE
+Client: Synthetic Client A
+Project: Procurement rollout
+Client: Synthetic Client B
+Project: S/4HANA migration
+EDUCATION
+Bachelor of Computing
+SKILLS
+SAP MM, Procurement
+LANGUAGES
+English`;
+const multipleProjectCandidate = {
+  name: "Synthetic Consultant",
+  email: "synthetic@example.invalid",
+  location: "Malaysia",
+  current_title: "SAP MM Consultant",
+  current_company: "Synthetic Consulting",
+  primary_module: "MM",
+  skills: ["SAP MM"],
+  experience: [
+    {
+      employer: "Synthetic Consulting",
+      title: "SAP MM Consultant",
+      start_date: "2020-01",
+      current: true,
+    },
+  ],
+  education: ["Bachelor of Computing"],
+  languages: ["English"],
+  is_sap_profile: true,
+};
+const oneProject = {
+  client: "Synthetic Client A",
+  role: "SAP MM Consultant",
+  start_date: "2020-01",
+  end_date: "2021-01",
+};
+const secondProject = {
+  client: "Synthetic Client B",
+  role: "SAP MM Consultant",
+  start_date: "2021-02",
+  end_date: "2022-03",
+};
+const partialProjects = evaluateCandidateExtractionCoverage(
+  multipleProjectSource,
+  { ...multipleProjectCandidate, projects: [oneProject] },
+);
+assert.equal(partialProjects.status, "incomplete_needs_review");
+assert.ok(partialProjects.missedObservedSections.includes("projects"));
+assert.equal(
+  evaluateCandidateExtractionCoverage(multipleProjectSource, {
+    ...multipleProjectCandidate,
+    projects: [oneProject, secondProject],
+  }).status,
+  "complete_for_validation",
+);
+assert.equal(
+  evaluateCandidateExtractionCoverage(multipleProjectSource, {
+    ...multipleProjectCandidate,
+    projects: JSON.stringify([oneProject, secondProject]),
+  }).status,
+  "complete_for_validation",
+);
+
 const missedEducation = evaluateCandidateExtractionCoverage(
   "Jane Doe\nWORK EXPERIENCE\nSAP Consultant 2022 - Present\nEDUCATION\nBachelor of Computing",
   {

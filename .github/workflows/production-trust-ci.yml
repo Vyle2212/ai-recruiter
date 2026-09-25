@@ -237,6 +237,7 @@ jobs:
       - name: Scoped formatting check
         run: |
           npm run check:production-trust:format
+          npx prettier --check lib/candidateExtractionCoverage.ts scripts/candidateProfileIngestion.test.ts
           npx prettier --check lib/cvPdfOcr.ts scripts/cvPdfOcr.test.ts
           npx prettier --check lib/originalCvArchive.ts lib/originalCvArchiveCommit.ts scripts/originalCvArchiveContract.test.ts
           npx prettier --check scripts/candidateCvReplayIntegrity.test.ts
