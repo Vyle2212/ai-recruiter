@@ -177,7 +177,9 @@ const legacyCandidateList = read("../app/api/get-candidates/route.ts");
 const persistedMatches = read("../app/api/get-matches/route.ts");
 const directMatchWrite = read("../app/api/ai-match/route.ts");
 const shortlistWrite = read("../app/api/shortlisted/route.ts");
-const shortlistCandidateWrite = read("../app/api/shortlist-candidates/route.ts");
+const shortlistCandidateWrite = read(
+  "../app/api/shortlist-candidates/route.ts",
+);
 const shortlistCollection = read("../app/api/shortlists/route.ts");
 const legacyMatchJob = read("../app/api/match-job/route.ts");
 const ownedUpdate = read(

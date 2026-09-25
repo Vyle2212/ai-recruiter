@@ -8,9 +8,7 @@ type CandidateLifecycleRow = {
 };
 
 const normalizedIds = (values: unknown[]) => [
-  ...new Set(
-    values.map((value) => String(value || "").trim()).filter(Boolean),
-  ),
+  ...new Set(values.map((value) => String(value || "").trim()).filter(Boolean)),
 ];
 
 export function candidateSearchMutationEligibility(
@@ -41,9 +39,7 @@ export async function loadCandidateSearchMutationEligibility(
     return candidateSearchMutationEligibility([], requestedIds);
   const { data, error } = await client
     .from("candidates")
-    .select(
-      "id,status,extraction_coverage_status,profile_confirmation_status",
-    )
+    .select("id,status,extraction_coverage_status,profile_confirmation_status")
     .in("id", requestedIds);
   if (error)
     throw new Error(error.message || "Unable to verify candidate eligibility.");
