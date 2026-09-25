@@ -95,4 +95,18 @@ assert.equal(
   nativeProjectCards(flattenedUnderHeading)[0].client,
   "Example Bank",
 );
+for (const delimiter of [" | ", "; "]) {
+  const inline = [
+    "Project: Finance Transformation",
+    "End Client: Example Bank",
+    "Role: SAP FICO Consultant",
+    "Duration: Jan 2020 to Dec 2021",
+    "Scope: SAP implementation, integration testing and cutover",
+  ].join(delimiter);
+  const cards = nativeProjectCards(`PROJECT HISTORY\n${inline}`);
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].name, "Finance Transformation");
+  assert.equal(cards[0].client, "Example Bank");
+  assert.equal(cards[0].role, "SAP FICO Consultant");
+}
 console.log("Native project card ownership and section boundaries: PASS");

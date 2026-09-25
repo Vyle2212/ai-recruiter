@@ -1,5 +1,7 @@
 import { careerMonthIndex } from "./candidateCareerExperience";
 
+const PROJECT_CLIENT_LABEL = "(?:End\\s+)?(?:Client|Customer)(?:\\s+Name)?";
+
 // Only explicit adjacent PDF labels form a card. A nearby employment date or
 // an unrelated client line must not complete a partial assignment.
 export function nativeProjectCards(source: string) {
@@ -7,8 +9,10 @@ export function nativeProjectCards(source: string) {
     /^\s*(?:DETAILED WORK EXPERIENCES|PROJECT (?:PROFILE|HISTORY|EXPERIENCES?))\s*:?\s*$/im,
   );
   const output = [];
-  const pattern =
-    /^Project\s*:[ \t]*([^\n]+)\n[ \t]*Environment\s*:[ \t]*([^\n]+)\n[ \t]*Client\s*:[ \t]*([^\n]+)\n[ \t]*(?:Project\s+)?Duration\s*:[ \t]*([^\n]+)\n[ \t]*Roles?\s*&\s*Responsibilities\s*:[ \t]*\n[ \t]*[•●▪-][ \t]*([^\n]+)/gim;
+  const pattern = new RegExp(
+    `^Project\\s*:[ \\t]*([^\\n]+)\\n[ \\t]*Environment\\s*:[ \\t]*([^\\n]+)\\n[ \\t]*${PROJECT_CLIENT_LABEL}\\s*:[ \\t]*([^\\n]+)\\n[ \\t]*(?:Project\\s+)?Duration\\s*:[ \\t]*([^\\n]+)\\n[ \\t]*Roles?\\s*&\\s*Responsibilities\\s*:[ \\t]*\\n[ \\t]*[•●▪-][ \\t]*([^\\n]+)`,
+    "gim",
+  );
   const bounded =
     heading < 0
       ? ""
@@ -74,7 +78,10 @@ export function nativeProjectCards(source: string) {
       ? projectAnchors
       : [
           ...broadSection.matchAll(
-            /^\s*(?:Client|Customer(?:\s+Name)?)\s*:\s*(?:\S.*)?$/gim,
+            new RegExp(
+              `^\\s*(?:${PROJECT_CLIENT_LABEL})\\s*:\\s*(?:\\S.*)?$`,
+              "gim",
+            ),
           ),
         ];
     const value = (block: string, label: string) =>
@@ -106,7 +113,7 @@ export function nativeProjectCards(source: string) {
       );
       if (block.length > 3000) return;
       const name = value(block, "Project(?:\\s+(?:Name|Title))?");
-      const client = value(block, "Client|Customer(?:\\s+Name)?");
+      const client = value(block, PROJECT_CLIENT_LABEL);
       const role = value(block, "Role|Position|Designation");
       const dates = range(block);
       const responsibility = value(
@@ -148,9 +155,12 @@ export function nativeProjectCards(source: string) {
     ];
     const inlineAnchors = inlineProjectAnchors.length
       ? inlineProjectAnchors
-      : [...inlineSection.matchAll(/\b(?:Client|Customer(?:\s+Name)?)\s*:/gi)];
-    const inlineLabels =
-      "Project(?:\\s+(?:Name|Title))?|Client|Customer(?:\\s+Name)?|Role|Position|Designation|Project\\s+Duration|Duration|Period|From\\s*\\/\\s*To|Roles?\\s*(?:&|and)\\s*Responsibilities|Responsibilities|Scope|Activities|Environment|System|Platform";
+      : [
+          ...inlineSection.matchAll(
+            new RegExp(`\\b(?:${PROJECT_CLIENT_LABEL})\\s*:`, "gi"),
+          ),
+        ];
+    const inlineLabels = `Project(?:\\s+(?:Name|Title))?|${PROJECT_CLIENT_LABEL}|Role|Position|Designation|Project\\s+Duration|Duration|Period|From\\s*\\/\\s*To|Roles?\\s*(?:&|and)\\s*Responsibilities|Responsibilities|Scope|Activities|Environment|System|Platform`;
     const inlineValue = (block: string, label: string) =>
       block
         .match(
@@ -159,7 +169,9 @@ export function nativeProjectCards(source: string) {
             "i",
           ),
         )?.[1]
-        ?.trim() || "";
+        ?.trim()
+        .replace(/[|;]+\s*$/, "")
+        .trim() || "";
     inlineAnchors.forEach((anchor, index) => {
       const block = inlineSection.slice(
         anchor.index || 0,
@@ -167,7 +179,7 @@ export function nativeProjectCards(source: string) {
       );
       if (block.length > 3000) return;
       const name = inlineValue(block, "Project(?:\\s+(?:Name|Title))?");
-      const client = inlineValue(block, "Client|Customer(?:\\s+Name)?");
+      const client = inlineValue(block, PROJECT_CLIENT_LABEL);
       const role = inlineValue(block, "Role|Position|Designation");
       const duration = inlineValue(
         block,

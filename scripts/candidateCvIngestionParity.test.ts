@@ -265,6 +265,46 @@ End Date: Dec 2023`,
       "reversed split project dates must remain unstructured for review",
     );
   }
+  for (const sourceType of ["admin_upload", "candidate_upload"] as const) {
+    for (const delimiter of [" | ", "; "]) {
+      const flattenedProject = await prepareCandidateCv({
+        buffer: Buffer.from(
+          source.replace(
+            `Client: Example Manufacturing
+Role: SAP MM Consultant
+Jan 2022 - Dec 2023
+Led workshops, configuration, testing, migration, training and go-live support.`,
+            [
+              "Project: Procurement Transformation",
+              "End Client: Example Manufacturing",
+              "Role: SAP MM Consultant",
+              "Duration: Jan 2022 - Dec 2023",
+              "Scope: SAP implementation, migration and cutover",
+            ].join(delimiter),
+          ),
+        ),
+        fileName: "synthetic-flattened-project.txt",
+        source: sourceType,
+      });
+      assert.equal(flattenedProject.accepted, true);
+      if (!flattenedProject.accepted)
+        throw new Error("flattened project fixture rejected");
+      assert.equal(flattenedProject.candidatePayload.project_history.length, 1);
+      assert.deepEqual(
+        {
+          name: flattenedProject.candidatePayload.project_history[0].name,
+          client: flattenedProject.candidatePayload.project_history[0].client,
+          role: flattenedProject.candidatePayload.project_history[0].role,
+        },
+        {
+          name: "Procurement Transformation",
+          client: "Example Manufacturing",
+          role: "SAP MM Consultant",
+        },
+        "flattened project delimiters and End Client labels must not pollute searchable fields",
+      );
+    }
+  }
   const projectSource = `SAP MM Consultant
 PROJECT EXPERIENCE
 Project Title: Synthetic Alpha

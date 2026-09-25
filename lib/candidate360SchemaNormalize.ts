@@ -1356,25 +1356,38 @@ function stableAssignmentHash(value: string) {
   return (hash >>> 0).toString(36);
 }
 
+function cleanFlattenedProjectField(value: string) {
+  return clean(value)
+    .replace(/^(?:[|;]\s*)+/, "")
+    .replace(/(?:\s*[|;])+$/, "")
+    .trim();
+}
+
 export function canonicalizeEnterpriseProjects(
   projects: readonly EnterpriseProject[],
 ) {
   const canonical: EnterpriseProject[] = [];
   for (const project of projects) {
+    const cleanProject = {
+      ...project,
+      name: cleanFlattenedProjectField(project.name),
+      client: cleanFlattenedProjectField(project.client),
+      role: cleanFlattenedProjectField(project.role),
+    };
     const existingIndex = canonical.findIndex((candidate) =>
-      projectsDescribeSameAssignment(candidate, project),
+      projectsDescribeSameAssignment(candidate, cleanProject),
     );
     if (existingIndex < 0)
       canonical.push({
-        ...project,
+        ...cleanProject,
         sourceAssignmentIds: [
-          ...new Set(project.sourceAssignmentIds || [project.id]),
+          ...new Set(cleanProject.sourceAssignmentIds || [cleanProject.id]),
         ],
       });
     else
       canonical[existingIndex] = mergeEnterpriseProjects(
         canonical[existingIndex],
-        project,
+        cleanProject,
       );
   }
   return canonical.map((project) => {
