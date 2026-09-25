@@ -160,6 +160,30 @@ assert.equal(
   classifyAdminCvUploadResult({ rejected: true, recordType: "JD" }),
   "source_review",
 );
+assert.equal(
+  classifyAdminCvUploadResult({
+    rejected: true,
+    recordType: "REJECTED_RESUME_QUALITY",
+  }),
+  "source_review",
+  "a preserved CV awaiting quality review must not repeatedly stop the batch",
+);
+assert.equal(
+  classifyAdminCvUploadResult({
+    rejected: true,
+    recordType: "REJECTED_NOISE",
+  }),
+  "source_review",
+  "a preserved CV rejected by the save gate must not be uploaded again",
+);
+assert.equal(
+  classifyAdminCvUploadResult({
+    rejected: false,
+    recordType: "REJECTED_NOISE",
+  }),
+  "failed",
+  "only an explicit archived-and-rejected outcome can be marked for review",
+);
 assert.equal(classifyAdminCvUploadResult({ errorCode: "NETWORK" }), "failed");
 
 const page = fs.readFileSync("app/upload/page.tsx", "utf8");

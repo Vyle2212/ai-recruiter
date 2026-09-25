@@ -150,6 +150,12 @@ export function classifyAdminCvUploadResult(
     return "non_sap_rejected";
   if (
     recordType === "SOURCE_REVIEW_REQUIRED" ||
+    // The upload API has already archived these originals and queued them for
+    // human review. Retrying cannot resolve a parser/quality rejection and
+    // would stop the rest of an otherwise valid collection at this file.
+    (result.rejected === true &&
+      (recordType === "REJECTED_RESUME_QUALITY" ||
+        recordType === "REJECTED_NOISE")) ||
     recordType === "UNKNOWN" ||
     recordType === "JD" ||
     errorCode.startsWith("CV_SOURCE_")
