@@ -81,8 +81,8 @@ async function main() {
   assert.equal(r.files, 8);
   assert.equal(r.uniqueFiles, 7);
   assert.equal(r.duplicateFiles, 1);
-  assert.equal(r.sourceFailures, 3);
-  assert.equal(r.unsupportedLegacyFiles, 1);
+  assert.equal(r.sourceFailures, 2);
+  assert.equal(r.unsupportedLegacyFiles, 0);
   assert.deepEqual(r.sourceFormats, {
     pdf: 1,
     docx: 1,
@@ -92,8 +92,8 @@ async function main() {
   });
   assert.equal(r.ocrRequired, 1);
   assert.equal(r.employmentLayoutUnresolved, 0);
-  assert.equal(r.classificationReview, 1);
-  assert.equal(r.classificationByType.UNKNOWN, 1);
+  assert.equal(r.classificationReview, 2);
+  assert.equal(r.classificationByType.UNKNOWN, 2);
   assert.equal(r.completeForValidation + r.needsReview, 2);
   assert.equal(r.artifact, "offline_cv_parser_audit_v3");
   assert.match(r.collectionFingerprint, /^[a-f0-9]{64}$/);
@@ -141,8 +141,8 @@ async function main() {
     assert.equal(cli.sourceFormats.txt, 1);
     assert.equal(cli.sourceFormats.doc, 1);
     assert.equal(cli.sourceFormats.rtf, 1);
-    assert.equal(cli.unsupportedLegacyFiles, 1);
-    assert.equal(cli.sourceFailures, 2);
+    assert.equal(cli.unsupportedLegacyFiles, 0);
+    assert.equal(cli.sourceFailures, 1);
     assert.match(cli.targetCommitSha, /^[a-f0-9]{40}$/);
     assert.equal(cli.readyForBulkUpload, false);
     assert.doesNotMatch(

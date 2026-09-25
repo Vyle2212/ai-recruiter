@@ -65,6 +65,22 @@ assert.equal(
   "ready",
   "the shared bulk uploader accepts legacy Word CVs for server-side validation",
 );
+assert.equal(
+  buildAdminCvUploadPlan(
+    [
+      {
+        digest: digest("e"),
+        name: "legacy.rtf",
+        size: 256,
+        lastModified: 1,
+        selectionIndex: 0,
+      },
+    ],
+    null,
+  )[0]?.disposition,
+  "ready",
+  "the shared bulk uploader sends RTF to the same parser",
+);
 
 let checkpoint = updateAdminCvCheckpoint({
   checkpoint: null,

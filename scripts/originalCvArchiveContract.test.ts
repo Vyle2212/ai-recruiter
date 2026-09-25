@@ -16,11 +16,12 @@ for (const [name, type] of [
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ],
   ["Private Applicant.doc", "application/msword"],
+  ["Private Applicant.rtf", "application/rtf"],
   ["Private Applicant.txt", "text/plain"],
 ] as const) {
   const { objectKey, contentType } = originalCvObjectKey(name, cv);
   assert.equal(contentType, type);
-  assert.match(objectKey, /^[0-9a-f-]{36}\.(?:pdf|docx|doc|txt)$/);
+  assert.match(objectKey, /^[0-9a-f-]{36}\.(?:pdf|docx|doc|rtf|txt)$/);
   assert.ok(!objectKey.includes("Applicant"));
   assert.equal(
     originalCvReference(`candidate-original-cvs/${objectKey}`),

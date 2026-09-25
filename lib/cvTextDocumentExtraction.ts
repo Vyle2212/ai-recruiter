@@ -1,5 +1,7 @@
 import { CvSourceError } from "./cvPdfOcr";
 import type { CvSourceExtraction } from "./cvPdfExtraction";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 type TextEncoding = "utf8" | "utf16le" | "utf16be";
 
@@ -11,6 +13,8 @@ export type CvTextDocumentExtractionOptions = {
 const OLE_COMPOUND_FILE_MAGIC = Buffer.from([
   0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1,
 ]);
+const RTF_MAGIC = /^\{\\rtf\d(?:[\s\\{}]|$)/;
+const MAX_RTF_TEXT_LENGTH = 1024 * 1024;
 
 function sourceError(code: string, message: string): never {
   throw new CvSourceError(code, message);
@@ -78,6 +82,49 @@ async function extractLegacyDocText(buffer: Buffer): Promise<string> {
     .map((section) => section.trim())
     .filter((section, index, all) => section && all.indexOf(section) === index);
   return sections.join("\n");
+}
+
+async function extractRtfText(buffer: Buffer): Promise<string> {
+  if (!RTF_MAGIC.test(buffer.subarray(0, 64).toString("latin1")))
+    sourceError(
+      "CV_SOURCE_RTF_INVALID",
+      "The RTF document is invalid. The original file needs review; no partial CV was saved.",
+    );
+  try {
+    const { initSync, parse_rtf } = await import("rtf-parser-wasm");
+    initSync({
+      module: readFileSync(
+        join(
+          dirname(require.resolve("rtf-parser-wasm/package.json")),
+          "rtf_parser_bg.wasm",
+        ),
+      ),
+    });
+    const document = parse_rtf(buffer.toString("latin1"));
+    try {
+      const parts = document.body.map((block) => block.text);
+      // Some RTF documents embed an image as one enormous hexadecimal text
+      // block. It is neither readable CV text nor evidence for a profile.
+      const text = parts
+        .map((part) => part.replace(/[a-f0-9]{1024,}/gi, ""))
+        .filter(Boolean)
+        .join("\n");
+      if (text.length > MAX_RTF_TEXT_LENGTH)
+        sourceError(
+          "CV_SOURCE_RTF_TEXT_INVALID",
+          "The RTF text is too large to verify safely. The original file needs review; no partial CV was saved.",
+        );
+      return validateReadableText(text, "CV_SOURCE_RTF_TEXT_INVALID");
+    } finally {
+      document.free();
+    }
+  } catch (error) {
+    if (error instanceof CvSourceError) throw error;
+    sourceError(
+      "CV_SOURCE_RTF_INVALID",
+      "The RTF document could not be read safely. The original file needs review; no partial CV was saved.",
+    );
+  }
 }
 
 export function decodeCvTxt(buffer: Buffer): {
@@ -169,6 +216,15 @@ export async function extractCvTextDocument(
   }
 
   if (extension === "doc") {
+    if (RTF_MAGIC.test(buffer.subarray(0, 64).toString("latin1")))
+      return {
+        text: await extractRtfText(buffer),
+        sourceExtraction: {
+          method: "native",
+          pageCount: 0,
+          reason: "LEGACY_DOC_RTF_NATIVE",
+        },
+      };
     if (
       buffer.length < OLE_COMPOUND_FILE_MAGIC.length ||
       !buffer
@@ -201,8 +257,18 @@ export async function extractCvTextDocument(
     }
   }
 
+  if (extension === "rtf")
+    return {
+      text: await extractRtfText(buffer),
+      sourceExtraction: {
+        method: "native",
+        pageCount: 0,
+        reason: "RTF_NATIVE",
+      },
+    };
+
   return sourceError(
     "CV_SOURCE_UNSUPPORTED",
-    "Only PDF, DOCX, DOC, and TXT CV files are supported. No candidate data was saved.",
+    "Only PDF, DOCX, DOC, RTF, and TXT CV files are supported. No candidate data was saved.",
   );
 }

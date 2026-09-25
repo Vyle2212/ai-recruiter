@@ -55,7 +55,7 @@ type UploadResult = {
 };
 
 function isSupportedFile(fileName: string) {
-  return /\.(pdf|docx|doc|txt)$/i.test(fileName || "");
+  return /\.(pdf|docx|doc|rtf|txt)$/i.test(fileName || "");
 }
 
 export async function POST(req: NextRequest) {
@@ -326,7 +326,7 @@ export async function POST(req: NextRequest) {
             ok: false,
             rejected: true,
             error:
-              "Unsupported file type. Please upload PDF, DOCX, DOC, or TXT.",
+              "Unsupported file type. Please upload PDF, DOCX, DOC, RTF, or TXT.",
           });
           continue;
         }

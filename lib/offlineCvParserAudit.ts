@@ -182,13 +182,6 @@ export function createOfflineCvAudit(
       report.collectionFingerprint = createHash("sha256")
         .update(JSON.stringify([...hashes].sort()), "utf8")
         .digest("hex");
-      if (format === "rtf") {
-        // Fail closed instead of turning binary/control data into plausible
-        // candidate text. RTF remains inventoried but unsupported.
-        report.unsupportedLegacyFiles++;
-        report.sourceFailures++;
-        return;
-      }
       try {
         const prepared = await prepareCandidateCv({
           buffer,

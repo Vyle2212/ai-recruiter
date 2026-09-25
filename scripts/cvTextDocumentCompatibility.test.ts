@@ -69,6 +69,43 @@ async function main() {
   assert.equal(legacyDoc.text, syntheticCv);
   assert.equal(legacyDoc.sourceExtraction.reason, "LEGACY_DOC_NATIVE");
 
+  const syntheticRtf = Buffer.from(
+    `{\\rtf1\\ansi ${syntheticCv.replace(/\r\n/g, "\\par\n")}\\par }`,
+    "latin1",
+  );
+  const rtf = await extractCvTextDocument(syntheticRtf, "synthetic.rtf");
+  assert.match(rtf.text, /Synthetic Consulting Ltd/);
+  assert.equal(rtf.sourceExtraction.reason, "RTF_NATIVE");
+  const disguisedRtf = await extractCvTextDocument(syntheticRtf, "legacy.doc");
+  assert.equal(disguisedRtf.text, rtf.text);
+  assert.equal(disguisedRtf.sourceExtraction.reason, "LEGACY_DOC_RTF_NATIVE");
+  const adminRtf = await prepareCandidateCv({
+    buffer: syntheticRtf,
+    fileName: "synthetic.rtf",
+    source: "admin_upload",
+  });
+  const candidateRtf = await prepareCandidateCv({
+    buffer: syntheticRtf,
+    fileName: "synthetic.rtf",
+    source: "candidate_upload",
+  });
+  assert.equal(adminRtf.accepted, candidateRtf.accepted);
+  if (adminRtf.accepted && candidateRtf.accepted) {
+    assert.deepEqual(
+      adminRtf.extractionCoverage,
+      candidateRtf.extractionCoverage,
+    );
+    assert.deepEqual(adminRtf.parserQuality, candidateRtf.parserQuality);
+    assert.equal(adminRtf.rawText, candidateRtf.rawText);
+  }
+  const imageRtf = Buffer.from(
+    `{\\rtf1\\ansi SAP FICO consultant\\par {\\pict ${"deadbeef".repeat(200)}}\\par WORK EXPERIENCE}`,
+    "latin1",
+  );
+  const imageText = (await extractCvTextDocument(imageRtf, "image.rtf")).text;
+  assert.match(imageText, /SAP FICO consultant/);
+  assert.doesNotMatch(imageText, /deadbeef/i);
+
   const prepared = await prepareCandidateCv({
     buffer: Buffer.concat([
       Buffer.from([0xff, 0xfe]),
@@ -110,14 +147,14 @@ async function main() {
       (error as { code?: string }).code === "CV_SOURCE_DOC_TEXT_INVALID",
   );
   await assert.rejects(
-    extractCvTextDocument(Buffer.from(syntheticCv), "synthetic.rtf"),
+    extractCvTextDocument(Buffer.from(syntheticCv), "invalid.rtf"),
     (error: unknown) =>
       error instanceof Error &&
-      (error as { code?: string }).code === "CV_SOURCE_UNSUPPORTED",
+      (error as { code?: string }).code === "CV_SOURCE_RTF_INVALID",
   );
 
   console.log(
-    "Shared TXT/DOCX/DOC encoding and corrupt-source compatibility regression passed.",
+    "Shared TXT/DOCX/DOC/RTF encoding and corrupt-source compatibility regression passed.",
   );
 }
 

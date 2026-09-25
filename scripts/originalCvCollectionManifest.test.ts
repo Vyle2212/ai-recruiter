@@ -126,14 +126,10 @@ try {
   fs.unlinkSync(path.join(verified, "legacy-candidate.doc"));
 
   fs.writeFileSync(path.join(source, "secret-candidate.rtf"), cvA);
-  assert.throws(
-    measure,
-    (error: unknown) =>
-      error instanceof Error &&
-      error.message === "original_cv_collection_unsupported_entry",
-    "errors must not reveal a CV filename",
-  );
+  fs.writeFileSync(path.join(verified, "secret-candidate.rtf"), cvA);
+  assert.equal(measure().sourceFileCount, 4);
   fs.unlinkSync(path.join(source, "secret-candidate.rtf"));
+  fs.unlinkSync(path.join(verified, "secret-candidate.rtf"));
   assert.equal(measure().sourceUniqueFileCount, 2);
 } finally {
   fs.rmSync(parent, { recursive: true, force: true });

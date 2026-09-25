@@ -315,10 +315,10 @@ export default function CandidatePortalClient() {
     setMessage("");
     try {
       if (
-        !/\.(pdf|docx|doc|txt)$/i.test(file.name) ||
+        !/\.(pdf|docx|doc|rtf|txt)$/i.test(file.name) ||
         file.size > 10 * 1024 * 1024
       )
-        throw new Error("Use one PDF, DOCX, DOC, or TXT CV up to 10 MB.");
+        throw new Error("Use one PDF, DOCX, DOC, RTF, or TXT CV up to 10 MB.");
       const contentDigest = await cvContentDigest(file);
       const signed = await json(
         await fetch("/api/candidate/profile/cv/sign", {
@@ -465,7 +465,7 @@ export default function CandidatePortalClient() {
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 <input
                   type="file"
-                  accept=".pdf,.docx,.doc,.txt"
+                  accept=".pdf,.docx,.doc,.rtf,.txt"
                   onChange={(event) => setFile(event.target.files?.[0] || null)}
                 />
                 <button

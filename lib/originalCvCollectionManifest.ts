@@ -5,7 +5,7 @@ import path from "node:path";
 import { MAX_ORIGINAL_BYTES } from "./originalCvArchiveKey";
 import type { ProductionRecoveryEvidence } from "./productionCutoverPlan";
 
-const SUPPORTED_CV = /\.(?:pdf|docx|doc|txt)$/i;
+const SUPPORTED_CV = /\.(?:pdf|docx|doc|rtf|txt)$/i;
 const MAX_COLLECTION_FILES = 100_000;
 
 class OriginalCvCollectionError extends Error {}
