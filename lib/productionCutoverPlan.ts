@@ -163,6 +163,10 @@ function verifyRecoveryEvidence(input: {
     verifiedAt > now + 5 * 60 * 1000
   )
     throw new Error("production_recovery_evidence_chronology_invalid");
+  // A recent verification of an old restore cannot protect writes against
+  // changes made to the production database since the backup was captured.
+  if (now - backupCapturedAt > MAX_EVIDENCE_AGE_MS)
+    throw new Error("production_recovery_backup_stale");
   if (now - verifiedAt > MAX_EVIDENCE_AGE_MS)
     throw new Error("production_recovery_evidence_stale");
 

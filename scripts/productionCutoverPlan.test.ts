@@ -93,6 +93,21 @@ refuses((copy) => {
 refuses((copy) => {
   copy.verifiedAt = "2026-09-23T00:00:00.000Z";
 }, /chronology_invalid|evidence_stale/);
+refuses((copy) => {
+  copy.backupCapturedAt = "2026-09-23T00:00:00.000Z";
+}, /backup_stale/);
+const exactlyOneDayOld = structuredClone(evidence);
+exactlyOneDayOld.backupCapturedAt = "2026-09-24T01:00:00.000Z";
+assert.equal(
+  buildProductionCutoverPlan({
+    evidence: exactlyOneDayOld,
+    artifacts,
+    currentCommitSha: commit,
+    now,
+  }).recoveryVerified,
+  true,
+  "backup at the 24-hour boundary remains eligible",
+);
 
 assert.throws(
   () =>
