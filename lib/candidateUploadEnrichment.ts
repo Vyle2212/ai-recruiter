@@ -24,19 +24,24 @@ function mergeGroundedProjects(
       .toLowerCase()
       .replace(/[^\p{L}\p{N}]+/gu, " ")
       .trim();
+  const projectEndIsCurrent = (value: Record<string, unknown>) =>
+    value.current === true ||
+    /^(?:present|current|now|till\s+date|to\s+date)$/i.test(
+      clean(value.end_date),
+    );
   for (const row of explicit.filter(isValidProjectEntry)) {
     const matching = projects.find((existing) => {
       if (!isValidProjectEntry(existing)) return false;
       const start = careerMonthIndex(existing.start_date);
       const end = careerMonthIndex(
         existing.end_date,
-        existing.current === true,
+        projectEndIsCurrent(existing),
       );
       const samePeriod =
         start !== null &&
         end !== null &&
         start === careerMonthIndex(row.start_date) &&
-        end === careerMonthIndex(row.end_date, row.current === true);
+        end === careerMonthIndex(row.end_date, projectEndIsCurrent(row));
       const sameRole = Boolean(
         key(existing.role) && key(existing.role) === key(row.role),
       );

@@ -109,6 +109,24 @@ for (const delimiter of [" | ", "; ", "|", ";", "•"]) {
   assert.equal(cards[0].client, "Example Bank");
   assert.equal(cards[0].role, "SAP FICO Consultant");
 }
+for (const [range, start, end] of [
+  ["01/2020 to 12/2021", "01/2020", "12/2021"],
+  ["2020-01 to 2021-12", "2020-01", "2021-12"],
+  ["Jan'20 to Dec'21", "Jan'20", "Dec'21"],
+  ["2020 to 2021", "2020", "2021"],
+  ["Jan 2020 to Present", "Jan 2020", "Present"],
+  ["Jan 2020 ~ Till date", "Jan 2020", "Till date"],
+  ["Jan 2020 to To date", "Jan 2020", "To date"],
+  ["Jan 2020 to Now", "Jan 2020", "Now"],
+] as const) {
+  const cards = nativeProjectCards(
+    labelled.replace("Jan 2020 to Dec 2021", range),
+  );
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].client, "Example Bank");
+  assert.equal(cards[0].start, start);
+  assert.equal(cards[0].end, end);
+}
 const canonicalPolluted = normalizeActualCandidateSchema({
   projects: [
     {

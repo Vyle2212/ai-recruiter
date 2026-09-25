@@ -3,6 +3,23 @@ import { careerMonthIndex } from "./candidateCareerExperience";
 const PROJECT_CLIENT_LABEL = "(?:End\\s+)?(?:Client|Customer)(?:\\s+Name)?";
 const PROJECT_FIELD_LABELS = `Project(?:\\s+(?:Name|Title))?|${PROJECT_CLIENT_LABEL}|Role|Position|Designation|Project\\s+Duration|Duration|Period|From\\s*\\/\\s*To|Roles?\\s*(?:&|and)\\s*Responsibilities|Responsibilities|Scope|Activities|Environment|System|Platform`;
 const PROJECT_INLINE_SEPARATOR = "[|;•·]";
+const PROJECT_MONTH_NAME =
+  "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
+const PROJECT_DATE_TOKEN = `(?:${PROJECT_MONTH_NAME}[\\s’'/-]+(?:\\d{2}|(?:19|20)\\d{2})|(?:0?[1-9]|1[0-2])\\s*\\/\\s*(?:\\d{2}|(?:19|20)\\d{2})|(?:19|20)\\d{2}(?:[-/](?:0?[1-9]|1[0-2]))?)`;
+const PROJECT_CURRENT_TOKEN = "(?:Present|Current|Now|Till\\s+date|To\\s+date)";
+
+function projectDateRange(value: string) {
+  return value.match(
+    new RegExp(
+      `\\b(${PROJECT_DATE_TOKEN})\\s*(?:-|–|—|to|~)\\s*(${PROJECT_DATE_TOKEN}|${PROJECT_CURRENT_TOKEN})\\b`,
+      "i",
+    ),
+  );
+}
+
+function projectDateIsCurrent(value: string) {
+  return new RegExp(`^${PROJECT_CURRENT_TOKEN}$`, "i").test(value.trim());
+}
 
 function cleanProjectCardValue(value: string) {
   return value
@@ -37,17 +54,10 @@ export function nativeProjectCards(source: string) {
             /^\s*(?:EDUCATION|ACADEMIC QUALIFICATIONS|REFERENCES|PERSONAL DETAILS)\s*:?\s*$/im,
           )[0];
   for (const match of bounded.matchAll(pattern)) {
-    const dates = match[4]
-      .trim()
-      .match(
-        /^([A-Za-z]+\s+(?:19|20)\d{2})\s*[-–—]\s*([A-Za-z]+\s+(?:19|20)\d{2}|Present|Current)$/i,
-      );
+    const dates = projectDateRange(match[4].trim());
     if (!dates) continue;
     const start = careerMonthIndex(dates[1]);
-    const end = careerMonthIndex(
-      dates[2],
-      /^(?:present|current)$/i.test(dates[2]),
-    );
+    const end = careerMonthIndex(dates[2], projectDateIsCurrent(dates[2]));
     if (start === null || end === null || start > end) continue;
     const prefix = bounded.slice(0, match.index).trimEnd();
     const role =
@@ -117,9 +127,7 @@ export function nativeProjectCards(source: string) {
         "Project\\s+Duration|Duration|Period|From\\s*\\/\\s*To",
       );
       const text = labelled || block;
-      return text.match(
-        /\b((?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+)?(?:19|20)\d{2})\s*(?:-|–|—|to)\s*((?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+)?(?:19|20)\d{2}|Present|Current|Now|Till date|To date)\b/i,
-      );
+      return projectDateRange(text);
     };
     anchors.forEach((anchor, index) => {
       const startOffset = anchor.index || 0;
@@ -148,10 +156,7 @@ export function nativeProjectCards(source: string) {
       )
         return;
       const from = careerMonthIndex(dates[1]);
-      const to = careerMonthIndex(
-        dates[2],
-        /^(?:present|current|now|till date|to date)$/i.test(dates[2]),
-      );
+      const to = careerMonthIndex(dates[2], projectDateIsCurrent(dates[2]));
       if (from === null || to === null || from > to) return;
       output.push({
         name,
@@ -198,9 +203,7 @@ export function nativeProjectCards(source: string) {
         block,
         "Project\\s+Duration|Duration|Period|From\\s*\\/\\s*To",
       );
-      const dates = (duration || block).match(
-        /\b((?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+)?(?:19|20)\d{2})\s*(?:-|–|—|to)\s*((?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+)?(?:19|20)\d{2}|Present|Current|Now|Till date|To date)\b/i,
-      );
+      const dates = projectDateRange(duration || block);
       const responsibility = inlineValue(
         block,
         "Roles?\\s*(?:&|and)\\s*Responsibilities|Responsibilities|Scope|Activities",
@@ -217,10 +220,7 @@ export function nativeProjectCards(source: string) {
       )
         return;
       const from = careerMonthIndex(dates[1]);
-      const to = careerMonthIndex(
-        dates[2],
-        /^(?:present|current|now|till date|to date)$/i.test(dates[2]),
-      );
+      const to = careerMonthIndex(dates[2], projectDateIsCurrent(dates[2]));
       if (from === null || to === null || from > to) return;
       output.push({
         name,

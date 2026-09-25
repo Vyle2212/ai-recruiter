@@ -304,6 +304,55 @@ Led workshops, configuration, testing, migration, training and go-live support.`
         "flattened project delimiters and End Client labels must not pollute searchable fields",
       );
     }
+    for (const [range, start, end] of [
+      ["01/2022 - 12/2023", "01/2022", "12/2023"],
+      ["2022-01 - 2023-12", "2022-01", "2023-12"],
+      ["Jan'22 - Dec'23", "Jan'22", "Dec'23"],
+      ["2022 - 2023", "2022", "2023"],
+      ["Jan 2022 - Present", "Jan 2022", "Present"],
+      ["Jan 2022 ~ Till date", "Jan 2022", "Till date"],
+      ["Jan 2022 to To date", "Jan 2022", "To date"],
+      ["Jan 2022 to Now", "Jan 2022", "Now"],
+    ] as const) {
+      const datedProject = await prepareCandidateCv({
+        buffer: Buffer.from(
+          source.replace(
+            `Client: Example Manufacturing
+Role: SAP MM Consultant
+Jan 2022 - Dec 2023
+Led workshops, configuration, testing, migration, training and go-live support.`,
+            `Project: Procurement Transformation
+End Client: Example Manufacturing
+Role: SAP MM Consultant
+Duration: ${range}
+Scope: SAP implementation, migration and cutover`,
+          ),
+        ),
+        fileName: "synthetic-project-date-formats.txt",
+        source: sourceType,
+      });
+      assert.equal(datedProject.accepted, true);
+      if (!datedProject.accepted)
+        throw new Error("project date-format fixture rejected");
+      assert.equal(datedProject.candidatePayload.project_history.length, 1);
+      assert.deepEqual(
+        {
+          name: datedProject.candidatePayload.project_history[0].name,
+          client: datedProject.candidatePayload.project_history[0].client,
+          role: datedProject.candidatePayload.project_history[0].role,
+          start: datedProject.candidatePayload.project_history[0].start_date,
+          end: datedProject.candidatePayload.project_history[0].end_date,
+        },
+        {
+          name: "Procurement Transformation",
+          client: "Example Manufacturing",
+          role: "SAP MM Consultant",
+          start,
+          end,
+        },
+        "admin and candidate uploads must retain the same complete project across supported date formats",
+      );
+    }
   }
   const projectSource = `SAP MM Consultant
 PROJECT EXPERIENCE
