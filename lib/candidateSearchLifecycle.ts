@@ -8,6 +8,15 @@ export const CANDIDATE_SEARCH_PERMANENTLY_BLOCKED_STATUSES = [
 
 export const CANDIDATE_SEARCH_REVIEW_STATUSES = ["needs_review"] as const;
 
+export const CANDIDATE_SEARCH_REVIEW_EXTRACTION_STATUSES = [
+  "incomplete_needs_review",
+] as const;
+
+export const CANDIDATE_SEARCH_REVIEW_CONFIRMATION_STATUSES = [
+  "claimed_incomplete",
+  "recruiter_review_required",
+] as const;
+
 export const CANDIDATE_SEARCH_BLOCKED_STATUSES = [
   ...CANDIDATE_SEARCH_PERMANENTLY_BLOCKED_STATUSES,
   ...CANDIDATE_SEARCH_REVIEW_STATUSES,
@@ -17,6 +26,12 @@ const permanentlyBlocked = new Set<string>(
   CANDIDATE_SEARCH_PERMANENTLY_BLOCKED_STATUSES,
 );
 const reviewOnly = new Set<string>(CANDIDATE_SEARCH_REVIEW_STATUSES);
+const reviewExtraction = new Set<string>(
+  CANDIDATE_SEARCH_REVIEW_EXTRACTION_STATUSES,
+);
+const reviewConfirmation = new Set<string>(
+  CANDIDATE_SEARCH_REVIEW_CONFIRMATION_STATUSES,
+);
 
 export function normalizedCandidateLifecycleStatus(value: unknown) {
   return String(value ?? "")
@@ -26,7 +41,14 @@ export function normalizedCandidateLifecycleStatus(value: unknown) {
 }
 
 export function candidateSearchLifecycleDecision(
-  candidate: { status?: unknown } | null | undefined,
+  candidate:
+    | {
+        status?: unknown;
+        extraction_coverage_status?: unknown;
+        profile_confirmation_status?: unknown;
+      }
+    | null
+    | undefined,
   options: { includeReview?: boolean } = {},
 ) {
   const status = normalizedCandidateLifecycleStatus(candidate?.status);
@@ -38,6 +60,23 @@ export function candidateSearchLifecycleDecision(
     };
   }
   if (!options.includeReview && reviewOnly.has(status)) {
+    return {
+      visible: false,
+      status,
+      reason: "review_required" as const,
+    };
+  }
+  if (
+    !options.includeReview &&
+    (reviewExtraction.has(
+      normalizedCandidateLifecycleStatus(candidate?.extraction_coverage_status),
+    ) ||
+      reviewConfirmation.has(
+        normalizedCandidateLifecycleStatus(
+          candidate?.profile_confirmation_status,
+        ),
+      ))
+  ) {
     return {
       visible: false,
       status,

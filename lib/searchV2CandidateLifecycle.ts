@@ -8,7 +8,12 @@ import { CANDIDATE_SEARCH_BLOCKED_STATUSES } from "./candidateSearchLifecycle";
 
 const PAGE_SIZE = 500;
 
-type BlockedCandidateRow = { id: unknown; status: unknown };
+type BlockedCandidateRow = {
+  id: unknown;
+  status: unknown;
+  extraction_coverage_status?: unknown;
+  profile_confirmation_status?: unknown;
+};
 type CurrentBlockedCandidatesResolver = (
   signal?: AbortSignal,
 ) => Promise<BlockedCandidateRow[]>;
@@ -22,8 +27,12 @@ async function currentBlockedCandidates(signal?: AbortSignal) {
   for (let from = 0; ; from += PAGE_SIZE) {
     let query = supabase
       .from("candidates")
-      .select("id,status")
-      .in("status", [...CANDIDATE_SEARCH_BLOCKED_STATUSES])
+      .select(
+        "id,status,extraction_coverage_status,profile_confirmation_status",
+      )
+      .or(
+        `status.in.(${CANDIDATE_SEARCH_BLOCKED_STATUSES.join(",")}),extraction_coverage_status.eq.incomplete_needs_review,profile_confirmation_status.in.(claimed_incomplete,recruiter_review_required)`,
+      )
       .order("id", { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
     if (signal) query = query.abortSignal(signal);
@@ -64,7 +73,10 @@ export async function applyCurrentCandidateSearchLifecycle(
   const visibilityRevision = createHash("sha256")
     .update(
       blockedRows
-        .map((row) => `${String(row.id || "")}:${String(row.status || "")}`)
+        .map(
+          (row) =>
+            `${String(row.id || "")}:${String(row.status || "")}:${String(row.extraction_coverage_status || "")}:${String(row.profile_confirmation_status || "")}`,
+        )
         .sort()
         .join("|"),
     )

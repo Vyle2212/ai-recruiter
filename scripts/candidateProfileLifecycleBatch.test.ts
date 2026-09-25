@@ -79,7 +79,18 @@ assert.match(uploadRoute, /prepareCandidateCv/);
 assert.match(sharedCvPipeline, /evaluateCandidateExtractionCoverage/);
 assert.match(sharedCvPipeline, /enrichCandidateUpload/);
 assert.match(sharedCvPipeline, /"admin_upload" \| "candidate_upload"/);
+assert.match(sharedCvPipeline, /sourceExtraction: parsed\.sourceExtraction/);
 assert.match(saveCandidate, /resolveCandidateIngestion/);
+assert.match(
+  saveCandidate,
+  /sourceRequiresReview\s*=\s*\n?\s*cleanCandidate\.sourceExtraction\?\.method === "ocr"/,
+  "OCR provenance must force the shared save path into review",
+);
+assert.ok(
+  saveCandidate.indexOf("sourceRequiresReview ||") <
+    saveCandidate.indexOf(": cleanCandidate.status || null"),
+  "review blockers must override a caller-provided active status",
+);
 assert.doesNotMatch(
   saveCandidate,
   /slice\(-8\) === phoneDigits\.slice\(-8\)/,

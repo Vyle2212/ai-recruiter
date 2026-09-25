@@ -8,7 +8,8 @@ export async function GET() {
   try {
     const { data, error } = await supabase
       .from("matches")
-      .select(`
+      .select(
+        `
         id,
         score,
         reason,
@@ -17,14 +18,17 @@ export async function GET() {
           name,
           email,
           current_title,
-          status
+          status,
+          extraction_coverage_status,
+          profile_confirmation_status
         ),
         jobs (
           id,
           title,
           company
         )
-      `)
+      `,
+      )
       .order("score", {
         ascending: false,
       });
@@ -36,15 +40,24 @@ export async function GET() {
         {
           error: error.message,
         },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     const visible = (data || [])
-      .filter((match: any) => Boolean(match.candidates) && candidateSearchLifecycleDecision(match.candidates).visible)
+      .filter(
+        (match: any) =>
+          Boolean(match.candidates) &&
+          candidateSearchLifecycleDecision(match.candidates).visible,
+      )
       .map((match: any) => ({
         ...match,
-        candidates: (({ status: _status, ...candidate }: any) => candidate)(match.candidates),
+        candidates: (({
+          status: _status,
+          extraction_coverage_status: _coverage,
+          profile_confirmation_status: _confirmation,
+          ...candidate
+        }: any) => candidate)(match.candidates),
       }));
     return NextResponse.json(visible);
   } catch (error: any) {
@@ -54,7 +67,7 @@ export async function GET() {
       {
         error: error.message,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

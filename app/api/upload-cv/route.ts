@@ -47,6 +47,7 @@ type UploadResult = {
   signals?: string[];
   parserQuality?: CandidateCvParserQuality;
   extractionCoverage?: CandidateExtractionCoverage;
+  reviewRequired?: boolean;
   ingestionAction?:
     | "create_new"
     | "update_existing"
@@ -463,7 +464,9 @@ export async function POST(req: NextRequest) {
           fileName,
           ok: true,
           recordType:
-            extractionCoverage.status === "complete_for_validation"
+            extractionCoverage.status === "complete_for_validation" &&
+            !parserQuality.needsManualReview &&
+            sourceExtraction.method !== "ocr"
               ? "SAP_CV"
               : "SAP_CV_INCOMPLETE_REVIEW",
           reason: classification.reason,
@@ -483,6 +486,10 @@ export async function POST(req: NextRequest) {
           ingestionAction: saved?.ingestion_action,
           sourceExtraction,
           extractionCoverage,
+          reviewRequired:
+            extractionCoverage.status !== "complete_for_validation" ||
+            parserQuality.needsManualReview ||
+            sourceExtraction.method === "ocr",
         });
       } catch (error: any) {
         if (error instanceof CvSourceError) {

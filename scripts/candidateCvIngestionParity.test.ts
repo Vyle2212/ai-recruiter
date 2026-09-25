@@ -76,6 +76,16 @@ async function main() {
   );
   assert.deepEqual(admin.extractionCoverage, candidate.extractionCoverage);
   assert.deepEqual(admin.parserQuality, candidate.parserQuality);
+  assert.deepEqual(
+    admin.candidatePayload.sourceExtraction,
+    admin.sourceExtraction,
+    "shared payload must carry source provenance to the save boundary",
+  );
+  assert.deepEqual(
+    candidate.candidatePayload.sourceExtraction,
+    candidate.sourceExtraction,
+    "candidate uploads must use the same source provenance contract",
+  );
   const projectSource = `SAP MM Consultant
 PROJECT EXPERIENCE
 Project Title: Synthetic Alpha

@@ -3,6 +3,8 @@ import fs from "node:fs";
 
 import {
   CANDIDATE_SEARCH_BLOCKED_STATUSES,
+  CANDIDATE_SEARCH_REVIEW_CONFIRMATION_STATUSES,
+  CANDIDATE_SEARCH_REVIEW_EXTRACTION_STATUSES,
   candidateSearchLifecycleDecision,
 } from "../lib/candidateSearchLifecycle";
 import { buildSearchIndexAudit } from "../lib/searchIndexAudit";
@@ -46,6 +48,34 @@ for (const status of ["deleted", "non_sap", "rejected_noise"]) {
   );
 }
 assert.deepEqual([...CANDIDATE_SEARCH_BLOCKED_STATUSES].sort(), blocked.sort());
+for (const extraction_coverage_status of CANDIDATE_SEARCH_REVIEW_EXTRACTION_STATUSES) {
+  assert.equal(
+    candidateSearchLifecycleDecision({
+      status: "active",
+      extraction_coverage_status,
+    }).visible,
+    false,
+    `${extraction_coverage_status} must stay out even if status is stale active`,
+  );
+}
+for (const profile_confirmation_status of CANDIDATE_SEARCH_REVIEW_CONFIRMATION_STATUSES) {
+  assert.equal(
+    candidateSearchLifecycleDecision({
+      status: "active",
+      profile_confirmation_status,
+    }).visible,
+    false,
+    `${profile_confirmation_status} must stay out even if status is stale active`,
+  );
+}
+assert.equal(
+  candidateSearchLifecycleDecision({
+    status: "active",
+    extraction_coverage_status: "complete_for_validation",
+    profile_confirmation_status: "candidate_confirmed",
+  }).visible,
+  true,
+);
 
 const reconciliation = buildSearchIndexAudit({
   candidates: [
@@ -141,7 +171,9 @@ assert.match(
   /datasetRevision = `\$\{datasetRevision\}:lifecycle-\$\{lifecycle\.visibilityRevision\}`/,
 );
 assert.match(lifecycleAdapter, /\.from\("candidates"\)/);
-assert.match(lifecycleAdapter, /\.select\("id,status"\)/);
+assert.match(lifecycleAdapter, /extraction_coverage_status/);
+assert.match(lifecycleAdapter, /profile_confirmation_status/);
+assert.match(lifecycleAdapter, /\.or\(/);
 assert.match(lifecycleAdapter, /CANDIDATE_SEARCH_BLOCKED_STATUSES/);
 assert.match(lifecycleAdapter, /documents\.filter\(/);
 assert.match(lifecycleAdapter, /setCurrentBlockedCandidatesResolverForTests/);
@@ -173,8 +205,10 @@ for (const [surface, source] of [
   );
 }
 assert.match(vectorSearch, /id,\s*status,/);
-assert.match(directMatchWrite, /\.select\("id,status"\)/);
-assert.match(shortlistWrite, /\.select\("id,name,email,raw_text,status"\)/);
+assert.match(directMatchWrite, /extraction_coverage_status/);
+assert.match(directMatchWrite, /profile_confirmation_status/);
+assert.match(shortlistWrite, /extraction_coverage_status/);
+assert.match(shortlistWrite, /profile_confirmation_status/);
 assert.match(
   ownedUpdate,
   /delete from public\.candidate_search_index where candidate_id = p_candidate_id/,

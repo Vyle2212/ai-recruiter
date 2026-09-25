@@ -1,21 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
-import { recruiterSearchAuthorizationDenied, recruiterSearchPrivateNoStoreHeaders, requireRecruiterSearchAuthorization } from "@/lib/recruiterSearchAuthorization";
+import {
+  recruiterSearchAuthorizationDenied,
+  recruiterSearchPrivateNoStoreHeaders,
+  requireRecruiterSearchAuthorization,
+} from "@/lib/recruiterSearchAuthorization";
 import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
 
 const supabase = createLazySupabaseServiceClient();
 
 export async function POST(req: NextRequest) {
   try {
-    const authorization = await requireRecruiterSearchAuthorization({ permission: "candidate-detail:read", route: "/api/shortlisted" });
-    if (!authorization.allowed) return recruiterSearchAuthorizationDenied(authorization);
+    const authorization = await requireRecruiterSearchAuthorization({
+      permission: "candidate-detail:read",
+      route: "/api/shortlisted",
+    });
+    if (!authorization.allowed)
+      return recruiterSearchAuthorizationDenied(authorization);
     const body = await req.json();
 
     const { candidate_id, job_id } = body;
 
     const { data: candidate } = await supabase
       .from("candidates")
-      .select("id,name,email,raw_text,status")
+      .select(
+        "id,name,email,raw_text,status,extraction_coverage_status,profile_confirmation_status",
+      )
       .eq("id", candidate_id)
       .single();
 
@@ -42,17 +52,19 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json(
         { error: error.message },
-        { status: 500, headers: recruiterSearchPrivateNoStoreHeaders }
+        { status: 500, headers: recruiterSearchPrivateNoStoreHeaders },
       );
     }
 
-    return NextResponse.json(data, { headers: recruiterSearchPrivateNoStoreHeaders });
+    return NextResponse.json(data, {
+      headers: recruiterSearchPrivateNoStoreHeaders,
+    });
   } catch (err: any) {
     console.log(err);
 
     return NextResponse.json(
       { error: err.message },
-      { status: 500, headers: recruiterSearchPrivateNoStoreHeaders }
+      { status: 500, headers: recruiterSearchPrivateNoStoreHeaders },
     );
   }
 }

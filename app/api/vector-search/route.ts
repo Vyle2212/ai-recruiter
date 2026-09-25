@@ -32,31 +32,42 @@ export async function POST(req: NextRequest) {
     const minYears = Number(body.minYears || body.years || 0);
     const contactableOnly = toBool(body.contactableOnly || body.contactOnly);
     const limit = Math.min(Number(body.limit || 100), 300);
-    const modules = Array.from(new Set([...(body.modules || []), ...modulesForKeyword(query)].filter(Boolean)));
+    const modules = Array.from(
+      new Set(
+        [...(body.modules || []), ...modulesForKeyword(query)].filter(Boolean),
+      ),
+    );
 
     const embedding = await createEmbedding(query);
 
-    const { data: vectorRows, error: rpcError } = await supabase.rpc("search_candidate_index_vector", {
-      p_embedding: embedding,
-      p_modules: modules.length ? modules : null,
-      p_country: country || null,
-      p_min_years: minYears || 0,
-      p_contactable_only: contactableOnly,
-      p_limit: limit,
-    });
+    const { data: vectorRows, error: rpcError } = await supabase.rpc(
+      "search_candidate_index_vector",
+      {
+        p_embedding: embedding,
+        p_modules: modules.length ? modules : null,
+        p_country: country || null,
+        p_min_years: minYears || 0,
+        p_contactable_only: contactableOnly,
+        p_limit: limit,
+      },
+    );
 
     if (rpcError) {
       return NextResponse.json({ error: rpcError.message }, { status: 500 });
     }
 
     const ids = (vectorRows || []).map((r: any) => r.candidate_id);
-    if (!ids.length) return NextResponse.json({ success: true, count: 0, results: [] });
+    if (!ids.length)
+      return NextResponse.json({ success: true, count: 0, results: [] });
 
     const { data: candidates, error } = await supabase
       .from("candidates")
-      .select(`
+      .select(
+        `
         id,
         status,
+        extraction_coverage_status,
+        profile_confirmation_status,
         name,
         email,
         phone,
@@ -85,30 +96,51 @@ export async function POST(req: NextRequest) {
         s4hana_project_count,
         s4_implementation_count,
         s4_greenfield_count
-      `)
+      `,
+      )
       .in("id", ids);
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error)
+      return NextResponse.json({ error: error.message }, { status: 500 });
 
-    const fitById = new Map((vectorRows || []).map((r: any) => [r.candidate_id, Number(r.search_fit || 0)]));
+    const fitById = new Map(
+      (vectorRows || []).map((r: any) => [
+        r.candidate_id,
+        Number(r.search_fit || 0),
+      ]),
+    );
     const orderById = new Map(ids.map((id: string, idx: number) => [id, idx]));
 
     const results = (candidates || [])
-      .filter((candidate: any) => candidateSearchLifecycleDecision(candidate).visible)
-      .sort((a: any, b: any) => Number(orderById.get(a.id) ?? 999999) - Number(orderById.get(b.id) ?? 999999))
-      .map(({ status: _status, ...c }: any) => ({
-        ...c,
-        candidate_id: c.id,
-        vectorFit: fitById.get(c.id) || 0,
-        search_fit: fitById.get(c.id) || 0,
-        email_masked: maskEmail(c.email),
-        contactable: Boolean(c.email || c.phone),
-        display_location: c.location || c.current_location || c.country || "",
-        display_company: c.current_company || c.company || "",
-        s4_implementation_projects: c.s4_implementation_count || c.s4hana_project_count || 0,
-        rollout_projects: c.rollout_project_count || 0,
-        greenfield_projects: c.s4_greenfield_count || 0,
-      }));
+      .filter(
+        (candidate: any) => candidateSearchLifecycleDecision(candidate).visible,
+      )
+      .sort(
+        (a: any, b: any) =>
+          Number(orderById.get(a.id) ?? 999999) -
+          Number(orderById.get(b.id) ?? 999999),
+      )
+      .map(
+        ({
+          status: _status,
+          extraction_coverage_status: _coverage,
+          profile_confirmation_status: _confirmation,
+          ...c
+        }: any) => ({
+          ...c,
+          candidate_id: c.id,
+          vectorFit: fitById.get(c.id) || 0,
+          search_fit: fitById.get(c.id) || 0,
+          email_masked: maskEmail(c.email),
+          contactable: Boolean(c.email || c.phone),
+          display_location: c.location || c.current_location || c.country || "",
+          display_company: c.current_company || c.company || "",
+          s4_implementation_projects:
+            c.s4_implementation_count || c.s4hana_project_count || 0,
+          rollout_projects: c.rollout_project_count || 0,
+          greenfield_projects: c.s4_greenfield_count || 0,
+        }),
+      );
 
     return NextResponse.json({
       success: true,
@@ -119,6 +151,9 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error("Vector search failed:", error);
-    return NextResponse.json({ error: error?.message || "Vector search failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: error?.message || "Vector search failed" },
+      { status: 500 },
+    );
   }
 }

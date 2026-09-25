@@ -2029,17 +2029,18 @@ export async function saveCandidate(candidate: any) {
     ? "SAP Functional"
     : productionSap.roleType;
 
+  const sourceRequiresReview =
+    cleanCandidate.sourceExtraction?.method === "ocr";
   const payload = sanitizeDeep({
     name: finalCandidateName,
     status:
-      cleanCandidate.status ||
-      (cleanCandidate.extraction_coverage_status ===
-        "incomplete_needs_review" ||
+      cleanCandidate.extraction_coverage_status === "incomplete_needs_review" ||
+      sourceRequiresReview ||
       resumeQualityGate.needsManualReview ||
       recruiterNoiseDecision.action === "REVIEW" ||
       weakCandidateName
         ? "needs_review"
-        : null),
+        : cleanCandidate.status || null,
     email: normalizeEmail(cleanCandidate.email || signals.email),
     phone: safePhone,
     normalized_email: normalizeEmail(cleanCandidate.email || signals.email),
@@ -2186,6 +2187,7 @@ export async function saveCandidate(candidate: any) {
     ),
     extraction_confidence:
       cleanCandidate.extraction_coverage_status === "incomplete_needs_review" ||
+      sourceRequiresReview ||
       recruiterNoiseDecision.action === "REVIEW"
         ? "Needs Review"
         : cleanCandidate.extraction_confidence ||
@@ -2202,7 +2204,7 @@ export async function saveCandidate(candidate: any) {
       ...(cleanCandidate.extraction_coverage?.missingRequiredFields || []).map(
         (field: string) => `MISSING_REQUIRED_FIELD:${field}`,
       ),
-      ...(cleanCandidate.sourceExtraction?.method === "ocr"
+      ...(sourceRequiresReview
         ? ["SOURCE_TEXT_RECOVERED_BY_DOCUMENT_OCR"]
         : []),
     ]),

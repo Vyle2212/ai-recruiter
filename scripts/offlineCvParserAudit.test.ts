@@ -128,16 +128,13 @@ async function main() {
   assert.deepEqual(ocrAudit.report.sourceExtraction, { native: 0, ocr: 1 });
   assert.deepEqual(ocrAudit.report.ocrOutcomes, {
     accepted: 1,
-    completeForValidation: ocrAudit.report.completeForValidation,
-    needsReview: ocrAudit.report.needsReview,
+    completeForValidation: 0,
+    needsReview: 1,
     classificationReview: 0,
     qualityRejected: 0,
   });
-  assert.equal(
-    ocrAudit.report.ocrOutcomes.completeForValidation +
-      ocrAudit.report.ocrOutcomes.needsReview,
-    1,
-  );
+  assert.equal(ocrAudit.report.completeForValidation, 0);
+  assert.equal(ocrAudit.report.needsReview, 1);
   assert.doesNotMatch(JSON.stringify(ocrAudit.report), /private-ocr-name/i);
 
   const outsideRepo = fs.mkdtempSync(

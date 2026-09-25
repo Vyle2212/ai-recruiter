@@ -243,6 +243,7 @@ export function createOfflineCvAudit(
               ]++;
           }
         } else if (
+          !usedOcr &&
           prepared.extractionCoverage.status === "complete_for_validation" &&
           !prepared.parserQuality.needsManualReview
         ) {

@@ -159,6 +159,11 @@ export async function prepareCandidateCv(input: {
     classification,
     candidatePayload: {
       ...candidatePayload,
+      // Keep extraction provenance attached to the shared payload until the
+      // persistence boundary. saveCandidate intentionally converts this
+      // ephemeral value into fixed review metadata instead of storing the
+      // provider response itself.
+      sourceExtraction: parsed.sourceExtraction,
       parser_quality: parserQuality,
       extraction_coverage: extractionCoverage,
       extraction_coverage_status: extractionCoverage.status,
