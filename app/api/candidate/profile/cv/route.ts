@@ -77,22 +77,6 @@ export async function POST(request: NextRequest) {
   }
 
   const sourceReference = `${ORIGINAL_CV_BUCKET}/${objectKey}`;
-  if (authorization.scope.candidateSourceFile === sourceReference) {
-    return NextResponse.json(
-      {
-        accepted: true,
-        alreadyProcessed: true,
-        candidateId: authorization.scope.candidateId,
-        cvVersion: authorization.scope.candidateCvVersion,
-        extractionCoverageStatus: authorization.scope.extractionCoverageStatus,
-        profileStatus: authorization.scope.profileConfirmationStatus,
-        searchable: false,
-        confirmationRequired: true,
-      },
-      { headers: privateHeaders },
-    );
-  }
-
   const downloaded = await supabase.storage
     .from(ORIGINAL_CV_BUCKET)
     .download(objectKey);
@@ -115,6 +99,24 @@ export async function POST(request: NextRequest) {
       return responseError("candidate_cv_review_queue_unavailable", 503);
     }
     return responseError("candidate_cv_content_digest_mismatch", 409);
+  }
+
+  // A replay is successful only if the linked original still exists and its
+  // bytes match the digest. Never acknowledge an absent or changed original.
+  if (authorization.scope.candidateSourceFile === sourceReference) {
+    return NextResponse.json(
+      {
+        accepted: true,
+        alreadyProcessed: true,
+        candidateId: authorization.scope.candidateId,
+        cvVersion: authorization.scope.candidateCvVersion,
+        extractionCoverageStatus: authorization.scope.extractionCoverageStatus,
+        profileStatus: authorization.scope.profileConfirmationStatus,
+        searchable: false,
+        confirmationRequired: true,
+      },
+      { headers: privateHeaders },
+    );
   }
 
   try {

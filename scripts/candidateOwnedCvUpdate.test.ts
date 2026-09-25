@@ -52,6 +52,13 @@ assert.match(processRoute, /candidateSourceFile === sourceReference/);
 assert.match(processRoute, /alreadyProcessed: true/);
 assert.match(processRoute, /cvContentDigestMatches\(buffer, contentDigest\)/);
 assert.ok(
+  processRoute.indexOf(".download(objectKey)") <
+    processRoute.indexOf("candidateSourceFile === sourceReference") &&
+    processRoute.indexOf("cvContentDigestMatches(buffer, contentDigest)") <
+      processRoute.indexOf("candidateSourceFile === sourceReference"),
+  "replayed uploads must verify the original exists and still matches the selected bytes",
+);
+assert.ok(
   processRoute.indexOf("cvContentDigestMatches(buffer, contentDigest)") <
     processRoute.indexOf("prepareCandidateCv({"),
   "candidate parser must not run before exact-byte integrity verification",
