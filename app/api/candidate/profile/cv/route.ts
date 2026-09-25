@@ -23,6 +23,7 @@ import {
   cvContentDigestMatches,
   normalizeCvContentDigest,
 } from "@/lib/serverCvContentDigest";
+import { originalCvStorageReadStatus } from "@/lib/originalCvStorageRead";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -76,11 +77,23 @@ export async function POST(request: NextRequest) {
   }
 
   const sourceReference = `${ORIGINAL_CV_BUCKET}/${objectKey}`;
-  const downloaded = await supabase.storage
-    .from(ORIGINAL_CV_BUCKET)
-    .download(objectKey);
-  if (downloaded.error || !downloaded.data)
-    return responseError("Original CV was not found in private storage.", 404);
+  let downloaded;
+  try {
+    downloaded = await supabase.storage
+      .from(ORIGINAL_CV_BUCKET)
+      .download(objectKey);
+  } catch {
+    return responseError("candidate_cv_storage_unavailable", 503);
+  }
+  if (downloaded.error || !downloaded.data) {
+    const missing = originalCvStorageReadStatus(downloaded.error) === 404;
+    return responseError(
+      missing
+        ? "Original CV was not found in private storage."
+        : "candidate_cv_storage_unavailable",
+      missing ? 404 : 503,
+    );
+  }
 
   const buffer = Buffer.from(await downloaded.data.arrayBuffer());
   if (buffer.length !== input.size || buffer.length > MAX_ORIGINAL_BYTES) {

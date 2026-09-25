@@ -7,6 +7,7 @@ import { CvSourceError } from "../lib/cvPdfOcr";
 import { candidateCvRejectedOriginalPolicy } from "../lib/candidateCvIngestion";
 import { commitCandidateWithArchivedCv } from "../lib/originalCvArchiveCommit";
 import * as originalCvArchiveKey from "../lib/originalCvArchiveKey";
+import { originalCvStorageReadStatus } from "../lib/originalCvStorageRead";
 async function main() {
   const saved: string[] = [];
   const archived: string[] = [];
@@ -14,12 +15,23 @@ async function main() {
   const queuedReasons: string[][] = [];
   const discarded: string[] = [];
   let processed = false;
+  let readbackUnavailable = false;
+  let throwReadback = false;
+  let storageError: unknown = null;
+  let throwDownload = false;
   let downloads = 0;
   const ownerId = "00000000-0000-4000-8000-000000000001";
   const signedObjectKey = `${ownerId}/00000000-0000-4000-8000-000000000002.pdf`;
   const validDigest = createHash("sha256").update("valid").digest("hex");
   const stubs: Record<string, unknown> = {
-    "next/server": { NextResponse: { json: (body: unknown) => body } },
+    "next/server": {
+      NextResponse: {
+        json: (body: object, options?: { status?: number }) => ({
+          ...body,
+          status: options?.status || 200,
+        }),
+      },
+    },
     "@/lib/cvPdfOcr": { CvSourceError },
     "@/lib/candidateCvIngestion": {
       prepareCandidateCv: async ({ fileName }: { fileName: string }) => {
@@ -119,6 +131,7 @@ async function main() {
     },
     "@/lib/originalCvArchiveCommit": { commitCandidateWithArchivedCv },
     "@/lib/originalCvArchiveKey": originalCvArchiveKey,
+    "@/lib/originalCvStorageRead": { originalCvStorageReadStatus },
     "@/lib/serverCvContentDigest": {
       normalizeCvContentDigest: (value: unknown) =>
         typeof value === "string" && /^[0-9a-f]{64}$/i.test(value)
@@ -148,17 +161,27 @@ async function main() {
           from: () => ({
             download: async () => {
               downloads++;
-              return { data: new Blob(["valid"]), error: null };
+              if (throwDownload) throw new Error("Storage connection lost");
+              return storageError
+                ? { data: null, error: storageError }
+                : { data: new Blob(["valid"]), error: null };
             },
           }),
         },
         from: () => ({
           select: () => ({
             eq: () => ({
-              limit: async () => ({
-                data: processed ? [{ id: "synthetic", name: "valid.pdf" }] : [],
-                error: null,
-              }),
+              limit: async () => {
+                if (throwReadback) throw new Error("database unavailable");
+                return {
+                  data: processed
+                    ? [{ id: "synthetic", name: "valid.pdf" }]
+                    : [],
+                  error: readbackUnavailable
+                    ? new Error("database unavailable")
+                    : null,
+                };
+              },
             }),
           }),
         }),
@@ -219,11 +242,53 @@ async function main() {
     Buffer,
     console,
   });
+  const oversizedHeader = await exports.POST({
+    headers: new Headers({
+      "content-type": "multipart/form-data",
+      "content-length": String(4 * 1024 * 1024 + 1),
+    }),
+    formData: async () => {
+      throw new Error("Oversized request must be refused before parsing");
+    },
+  });
+  assert.equal(oversizedHeader.status, 413);
+  const unbounded = await exports.POST({
+    headers: new Headers({ "content-type": "multipart/form-data" }),
+    formData: async () => {
+      throw new Error("Unbounded request must be refused before parsing");
+    },
+  });
+  assert.equal(unbounded.status, 411);
+  const multipartHeaders = () =>
+    new Headers({
+      "content-type": "multipart/form-data",
+      "content-length": "1024",
+    });
+  const tooMany = new FormData();
+  for (let i = 0; i < 6; i++)
+    tooMany.append("files", new File(["SAP"], `synthetic-${i}.pdf`));
+  const tooManyResult = await exports.POST({
+    headers: multipartHeaders(),
+    formData: async () => tooMany,
+  });
+  assert.equal(tooManyResult.status, 413);
+  const oversizedFile = new FormData();
+  oversizedFile.append(
+    "file",
+    new File([new Uint8Array(4 * 1024 * 1024 + 1)], "oversized.pdf"),
+  );
+  const oversizedFileResult = await exports.POST({
+    headers: multipartHeaders(),
+    formData: async () => oversizedFile,
+  });
+  assert.equal(oversizedFileResult.status, 413);
+  assert.equal(saved.length, 0, "Rejected batches cannot reach the CV parser");
+  assert.equal(archived.length, 0, "Rejected batches cannot archive a CV");
   const form = new FormData();
   form.append("files", new File(["broken"], "failed.pdf"));
   form.append("files", new File(["valid"], "valid.pdf"));
   const response = await exports.POST({
-    headers: new Headers({ "content-type": "multipart/form-data" }),
+    headers: multipartHeaders(),
     formData: async () => form,
   });
   assert.deepEqual(
@@ -251,11 +316,15 @@ async function main() {
   const errorForm = new FormData();
   errorForm.append("file", new File(["error"], "error.pdf"));
   const saveFailure = await exports.POST({
-    headers: new Headers({ "content-type": "multipart/form-data" }),
+    headers: multipartHeaders(),
     formData: async () => errorForm,
   });
   assert.equal(saveFailure.successCount, 0);
   assert.equal(saveFailure.failCount, 1);
+  assert.ok(
+    !JSON.stringify(saveFailure).includes("synthetic save failure"),
+    "Internal failures must not expose database or CV details to the browser",
+  );
   assert.equal(
     archived.filter((name) => name === "error.pdf").length,
     1,
@@ -288,13 +357,50 @@ async function main() {
   );
   assert.equal(invalid.success, false);
   assert.equal(downloads, 0, "Another admin's object cannot be downloaded");
+  storageError = { status: 404, statusCode: "NoSuchKey" };
+  assert.equal(
+    (await exports.POST(signedRequest(signedObjectKey))).status,
+    404,
+  );
+  for (const error of [
+    { status: 404, statusCode: "NoSuchBucket" },
+    new Error("Storage connection lost"),
+  ]) {
+    storageError = error;
+    const unavailable = await exports.POST(signedRequest(signedObjectKey));
+    assert.equal(unavailable.status, 503);
+    assert.equal(unavailable.success, false);
+  }
+  storageError = null;
+  throwDownload = true;
+  assert.equal(
+    (await exports.POST(signedRequest(signedObjectKey))).status,
+    503,
+  );
+  throwDownload = false;
+  readbackUnavailable = true;
+  const readback = await exports.POST(signedRequest(signedObjectKey));
+  assert.equal(readback.status, 409);
+  assert.equal(
+    queuedReasons.at(-1)?.join(","),
+    "candidate_readback_unavailable",
+  );
+  readbackUnavailable = false;
+  throwReadback = true;
+  const thrownReadback = await exports.POST(signedRequest(signedObjectKey));
+  assert.equal(thrownReadback.status, 409);
+  assert.equal(
+    queuedReasons.at(-1)?.join(","),
+    "candidate_readback_unavailable",
+  );
+  throwReadback = false;
   const wrongSize = await exports.POST(
     signedRequest(signedObjectKey, validDigest, 4),
   );
   assert.equal(wrongSize.success, false);
   assert.deepEqual(
     queued,
-    ["failed.pdf", "error.pdf", "valid.pdf"],
+    ["failed.pdf", "error.pdf", "valid.pdf", "valid.pdf", "valid.pdf"],
     "A present original with an unexpected size must enter private review",
   );
   assert.equal(queuedReasons.at(-1)?.join(","), "content_size_mismatch");
@@ -314,7 +420,14 @@ async function main() {
   );
   assert.deepEqual(
     queued,
-    ["failed.pdf", "error.pdf", "valid.pdf", "valid.pdf"],
+    [
+      "failed.pdf",
+      "error.pdf",
+      "valid.pdf",
+      "valid.pdf",
+      "valid.pdf",
+      "valid.pdf",
+    ],
     "Digest mismatch must preserve the private object for review",
   );
   const signed = await exports.POST(signedRequest(signedObjectKey));
@@ -339,7 +452,7 @@ async function main() {
   const heldForm = new FormData();
   heldForm.append("file", new File(["held"], "held.pdf"));
   const held = await exports.POST({
-    headers: new Headers({ "content-type": "multipart/form-data" }),
+    headers: multipartHeaders(),
     formData: async () => heldForm,
   });
   assert.equal(held.successCount, 0);
@@ -347,13 +460,21 @@ async function main() {
   assert.equal(held.results[0].ok, false);
   assert.deepEqual(
     queued,
-    ["failed.pdf", "error.pdf", "valid.pdf", "valid.pdf", "held.pdf"],
+    [
+      "failed.pdf",
+      "error.pdf",
+      "valid.pdf",
+      "valid.pdf",
+      "valid.pdf",
+      "valid.pdf",
+      "held.pdf",
+    ],
     "Held original must enter a durable review queue",
   );
   const uncertainForm = new FormData();
   uncertainForm.append("file", new File(["low evidence"], "low-evidence.pdf"));
   const uncertain = await exports.POST({
-    headers: new Headers({ "content-type": "multipart/form-data" }),
+    headers: multipartHeaders(),
     formData: async () => uncertainForm,
   });
   assert.equal(uncertain.results[0].recordType, "UNKNOWN");
@@ -368,7 +489,7 @@ async function main() {
   const gateForm = new FormData();
   gateForm.append("file", new File(["SAP synthetic CV"], "gate.pdf"));
   const gate = await exports.POST({
-    headers: new Headers({ "content-type": "multipart/form-data" }),
+    headers: multipartHeaders(),
     formData: async () => gateForm,
   });
   assert.equal(gate.results[0].recordType, "REJECTED_NOISE");

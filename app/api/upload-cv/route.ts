@@ -24,9 +24,15 @@ import {
   cvContentDigestMatches,
   normalizeCvContentDigest,
 } from "@/lib/serverCvContentDigest";
+import { originalCvStorageReadStatus } from "@/lib/originalCvStorageRead";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// The normal UI streams CVs directly to private Storage. Bound this older
+// multipart path so a large selection cannot fill the function's memory.
+const MAX_LEGACY_MULTIPART_BYTES = 4 * 1024 * 1024;
+const MAX_LEGACY_MULTIPART_FILES = 5;
 
 type UploadResult = {
   fileName: string;
@@ -100,16 +106,32 @@ export async function POST(req: NextRequest) {
           { status: 400 },
         );
       }
-      const { data, error } = await supabase.storage
-        .from(ORIGINAL_CV_BUCKET)
-        .download(objectKey);
-      if (error || !data) {
+      let download;
+      try {
+        download = await supabase.storage
+          .from(ORIGINAL_CV_BUCKET)
+          .download(objectKey);
+      } catch {
         return NextResponse.json(
           {
             success: false,
-            error: "Original CV was not found in private storage.",
+            error:
+              "Private CV storage is unavailable; retry the same reference.",
           },
-          { status: 404 },
+          { status: 503 },
+        );
+      }
+      const { data, error } = download;
+      if (error || !data) {
+        const missing = originalCvStorageReadStatus(error) === 404;
+        return NextResponse.json(
+          {
+            success: false,
+            error: missing
+              ? "Original CV was not found in private storage."
+              : "Private CV storage is unavailable; retry the same reference.",
+          },
+          { status: missing ? 404 : 503 },
         );
       }
       const buffer = Buffer.from(await data.arrayBuffer());
@@ -166,12 +188,30 @@ export async function POST(req: NextRequest) {
         );
       }
       const reference = `${ORIGINAL_CV_BUCKET}/${objectKey}`;
-      const processed = await supabase
-        .from("candidates")
-        .select("id,name,current_title,primary_module")
-        .eq("source_file", reference)
-        .limit(2);
-      if (processed.error || (processed.data?.length || 0) > 1) {
+      let processed;
+      try {
+        processed = await supabase
+          .from("candidates")
+          .select("id,name,current_title,primary_module")
+          .eq("source_file", reference)
+          .limit(2);
+      } catch {
+        // The original is still private. The review queue below tracks it.
+      }
+      if (!processed || processed.error || (processed.data?.length || 0) > 1) {
+        try {
+          await recordCandidateUploadReview({
+            objectKey,
+            fileName,
+            actorUserId: authorization.scope.subjectId,
+            reasonCodes: ["candidate_readback_unavailable"],
+          });
+        } catch {
+          return NextResponse.json(
+            { success: false, error: "CV review queue is unavailable." },
+            { status: 503 },
+          );
+        }
         return NextResponse.json(
           { success: false, error: "CV upload readback needs review." },
           { status: 409 },
@@ -208,6 +248,30 @@ export async function POST(req: NextRequest) {
         },
       ];
     } else {
+      const declaredLength = req.headers.get("content-length");
+      if (!declaredLength) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Use the private CV upload page for this request.",
+          },
+          { status: 411 },
+        );
+      }
+      const declaredBytes = Number(declaredLength);
+      if (
+        !Number.isSafeInteger(declaredBytes) ||
+        declaredBytes < 1 ||
+        declaredBytes > MAX_LEGACY_MULTIPART_BYTES
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Use the private CV upload page for this file size.",
+          },
+          { status: 413 },
+        );
+      }
       const formData = await req.formData();
       const filesFromBulk = formData
         .getAll("files")
@@ -218,6 +282,22 @@ export async function POST(req: NextRequest) {
         : singleFile instanceof File
           ? [singleFile]
           : [];
+      if (
+        selected.length > MAX_LEGACY_MULTIPART_FILES ||
+        selected.some(
+          (file) => file.size < 1 || file.size > MAX_LEGACY_MULTIPART_BYTES,
+        ) ||
+        selected.reduce((total, file) => total + file.size, 0) >
+          MAX_LEGACY_MULTIPART_BYTES
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Use the private CV upload page for this collection.",
+          },
+          { status: 413 },
+        );
+      }
       files = await Promise.all(
         selected.map(async (file) => ({
           fileName: file.name || "unknown-file",
@@ -426,8 +506,6 @@ export async function POST(req: NextRequest) {
           });
           continue;
         }
-        console.error("Upload CV failed:", error);
-
         if (!reviewObjectKey)
           reviewObjectKey = (await archiveOriginalCv(fileName, buffer))
             .objectKey;
@@ -439,10 +517,12 @@ export async function POST(req: NextRequest) {
             reasonCodes: ["processing_failure"],
           });
 
-        const message = error?.message || "Failed to parse/save CV.";
         const rejectedByGate =
-          String(error?.code || "").startsWith("REJECTED_") ||
-          /^REJECTED_/i.test(message);
+          typeof error?.code === "string" &&
+          /^REJECTED_[A-Z_]+$/.test(error.code);
+        const message = rejectedByGate
+          ? "CV requires quality review. The original was preserved privately."
+          : "CV processing failed. The original was preserved privately for review.";
 
         results.push({
           fileName,
@@ -485,12 +565,10 @@ export async function POST(req: NextRequest) {
       results,
     });
   } catch (error: any) {
-    console.error("Bulk upload CV API error:", error);
-
     return NextResponse.json(
       {
         success: false,
-        error: error?.message || "Upload CV failed.",
+        error: "CV upload could not be completed; retry the same file.",
       },
       { status: 500 },
     );

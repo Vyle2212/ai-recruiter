@@ -4,6 +4,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 import { candidateCvRejectedOriginalPolicy } from "../lib/candidateCvIngestion";
+import { originalCvStorageReadStatus } from "../lib/originalCvStorageRead";
 
 const bytes = Buffer.from("synthetic candidate CV bytes");
 const digest = createHash("sha256").update(bytes).digest("hex");
@@ -11,6 +12,8 @@ const owner = "00000000-0000-4000-8000-000000000001";
 const objectKey = `${owner}/00000000-0000-4000-8000-000000000002.pdf`;
 const sourceReference = `candidate-original-cvs/${objectKey}`;
 let stored: Buffer | null = null;
+let storageError: unknown = { status: 404, statusCode: "NoSuchKey" };
+let throwDownload = false;
 let reviewCalls = 0;
 const reviewReasons: string[][] = [];
 let saveCalls = 0;
@@ -65,6 +68,7 @@ const stubs: Record<string, unknown> = {
   },
   "@/lib/cvPdfOcr": { CvSourceError: class extends Error {} },
   "@/lib/originalCvArchive": {},
+  "@/lib/originalCvStorageRead": { originalCvStorageReadStatus },
   "@/lib/originalCvArchiveKey": {
     MAX_ORIGINAL_BYTES: 10 * 1024 * 1024,
     ORIGINAL_CV_BUCKET: "candidate-original-cvs",
@@ -81,10 +85,14 @@ const stubs: Record<string, unknown> = {
     supabase: {
       storage: {
         from: () => ({
-          download: async () => ({
-            data: stored === null ? null : new Blob([Uint8Array.from(stored)]),
-            error: stored === null ? new Error("not found") : null,
-          }),
+          download: async () => {
+            if (throwDownload) throw new Error("connection lost");
+            return {
+              data:
+                stored === null ? null : new Blob([Uint8Array.from(stored)]),
+              error: stored === null ? storageError : null,
+            };
+          },
         }),
       },
     },
@@ -131,6 +139,21 @@ async function main() {
   const missing = await request();
   assert.equal(missing.status, 404);
   assert.notEqual(missing.body.alreadyProcessed, true);
+
+  for (const error of [
+    { status: 404, statusCode: "NoSuchBucket" },
+    { status: 503, statusCode: "ServiceUnavailable" },
+    new Error("connection lost"),
+  ]) {
+    storageError = error;
+    const unavailable = await request();
+    assert.equal(unavailable.status, 503);
+    assert.notEqual(unavailable.body.alreadyProcessed, true);
+    assert.equal(saveCalls, 0);
+  }
+  throwDownload = true;
+  assert.equal((await request()).status, 503);
+  throwDownload = false;
 
   stored = Buffer.from(bytes);
   const wrongSize = await request(digest, bytes.length - 1);
