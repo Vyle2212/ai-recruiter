@@ -9,6 +9,7 @@ import { ORIGINAL_CV_BUCKET } from "@/lib/originalCvArchiveKey";
 import { originalCvStorageReadStatus } from "@/lib/originalCvStorageRead";
 import {
   recruiterOriginalCvAllowed,
+  recruiterOriginalCvCandidateAvailable,
   type RecruiterOriginalCvGrant,
 } from "@/lib/recruiterOriginalCvPolicy";
 
@@ -125,13 +126,21 @@ export async function GET(
   }
   const candidate = await supabase
     .from("candidates")
-    .select("source_file")
+    .select("source_file,status")
     .eq("id", candidateId)
     .maybeSingle();
   if (candidate.error)
     return Response.json(
       { error: "original_cv_lookup_unavailable" },
       { status: 503, headers: recruiterSearchPrivateNoStoreHeaders },
+    );
+  if (
+    authorization.scope.role !== "admin" &&
+    (!candidate.data || !recruiterOriginalCvCandidateAvailable(candidate.data))
+  )
+    return Response.json(
+      { error: "original_cv_not_found" },
+      { status: 404, headers: recruiterSearchPrivateNoStoreHeaders },
     );
   const grant = originalCvReadGrant(
     authorization.scope.role,

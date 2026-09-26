@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { originalCvReadGrant } from "../lib/originalCvAccess";
-import { recruiterOriginalCvAllowed } from "../lib/recruiterOriginalCvPolicy";
+import {
+  recruiterOriginalCvAllowed,
+  recruiterOriginalCvCandidateAvailable,
+} from "../lib/recruiterOriginalCvPolicy";
 import { recruiterApiPolicyForRequest } from "../lib/recruiterApiPolicyRegistry";
 import { recruiterApiRoleHasPermission } from "../lib/recruiterApiAuthorizationCore";
 
@@ -107,6 +110,24 @@ assert.equal(
   }),
   true,
 );
+assert.equal(recruiterOriginalCvCandidateAvailable({ status: "active" }), true);
+assert.equal(
+  recruiterOriginalCvCandidateAvailable({ status: "needs_review" }),
+  true,
+);
+for (const status of [
+  "deleted",
+  "non_sap",
+  "rejected_noise",
+  "hidden",
+  "archived",
+]) {
+  assert.equal(
+    recruiterOriginalCvCandidateAvailable({ status }),
+    false,
+    `${status} must invalidate recruiter original-CV access`,
+  );
+}
 
 const route = readFileSync(
   "app/api/candidate360/[candidateId]/resume/route.ts",
@@ -119,7 +140,8 @@ assert.ok(
 assert.match(route, /\.from\("recruiter_original_cv_grants"\)/);
 assert.match(route, /recruiterOriginalCvAllowed/);
 assert.match(route, /\.from\("client_candidate_access"\)/);
-assert.match(route, /\.select\("source_file"\)/);
+assert.match(route, /\.select\("source_file,status"\)/);
+assert.match(route, /recruiterOriginalCvCandidateAvailable/);
 assert.match(route, /\.from\(ORIGINAL_CV_BUCKET\)/);
 assert.match(route, /"X-Content-Type-Options": "nosniff"/);
 assert.doesNotMatch(route, /getPublicUrl|createSignedUrl/);
@@ -133,8 +155,12 @@ assert.match(
   approvalRoute,
   /originalCvReference\(candidate\.data\?\.source_file\)/,
 );
+assert.match(approvalRoute, /recruiterOriginalCvCandidateAvailable/);
 assert.match(approvalRoute, /\.from\("recruiter_original_cv_grants"\)/);
-assert.match(approvalRoute, /\.rpc\(\s*"approve_recruiter_original_cv_request"/);
+assert.match(
+  approvalRoute,
+  /\.rpc\(\s*"approve_recruiter_original_cv_request"/,
+);
 assert.match(approvalRoute, /pending_request_required/);
 const requestRoute = readFileSync(
   "app/api/recruiter/original-cv-requests/route.ts",
@@ -145,6 +171,7 @@ assert.match(requestRoute, /scope\.role === "admin"/);
 assert.match(requestRoute, /client_candidate_access/);
 assert.match(requestRoute, /client_feature_entitlements/);
 assert.match(requestRoute, /recruiter_original_cv_requests/);
+assert.match(requestRoute, /recruiterOriginalCvCandidateAvailable/);
 const sharingRoute = readFileSync(
   "app/api/client/recruiter-shares/route.ts",
   "utf8",
@@ -165,7 +192,10 @@ const requestSchema = readFileSync(
   "supabase/manual/202609260007_original_cv_approval_requests.sql",
   "utf8",
 );
-assert.match(requestSchema, /where id = p_request_id and status = 'pending' for update/);
+assert.match(
+  requestSchema,
+  /where id = p_request_id and status = 'pending' for update/,
+);
 assert.match(
   requestSchema,
   /on conflict \(candidate_id, recruiter_profile_id\) do update/,

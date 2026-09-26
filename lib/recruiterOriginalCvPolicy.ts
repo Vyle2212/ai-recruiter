@@ -1,3 +1,5 @@
+import { candidateSearchLifecycleDecision } from "./candidateSearchLifecycle";
+
 export type RecruiterOriginalCvGrant = {
   candidate_id: string;
   recruiter_profile_id: string;
@@ -9,6 +11,19 @@ export type RecruiterOriginalCvGrant = {
   revoked_at: string | null;
   status: string;
 };
+
+/**
+ * A review-only profile may still need its original CV for recruiter-assisted
+ * validation. Terminal/hidden lifecycle states must not remain downloadable
+ * merely because an older grant is still active.
+ */
+export function recruiterOriginalCvCandidateAvailable(candidate: {
+  status?: unknown;
+}) {
+  return candidateSearchLifecycleDecision(candidate, {
+    includeReview: true,
+  }).visible;
+}
 
 /** Client sharing never overrides admin approval. A support-scoped approval
  * also expires when the assignment, share or subscription feature is removed.

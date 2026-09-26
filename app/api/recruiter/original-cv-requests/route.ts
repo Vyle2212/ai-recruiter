@@ -6,6 +6,7 @@ import {
   requireRecruiterSearchAuthorization,
 } from "@/lib/recruiterSearchAuthorization";
 import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
+import { recruiterOriginalCvCandidateAvailable } from "@/lib/recruiterOriginalCvPolicy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,11 +62,15 @@ export async function POST(request: Request) {
   const db = createLazySupabaseServiceClient();
   const candidate = await db
     .from("candidates")
-    .select("source_file")
+    .select("source_file,status")
     .eq("id", candidateId)
     .maybeSingle();
   if (candidate.error) return response("candidate_lookup_unavailable", 503);
-  if (!originalCvReference(candidate.data?.source_file))
+  if (
+    !candidate.data ||
+    !recruiterOriginalCvCandidateAvailable(candidate.data) ||
+    !originalCvReference(candidate.data.source_file)
+  )
     return response("original_cv_not_available", 404);
 
   if (purpose === "client_support") {

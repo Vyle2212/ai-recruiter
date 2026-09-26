@@ -9,6 +9,7 @@ import {
   requireRecruiterSearchAuthorization,
 } from "@/lib/recruiterSearchAuthorization";
 import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
+import { recruiterOriginalCvCandidateAvailable } from "@/lib/recruiterOriginalCvPolicy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -157,7 +158,7 @@ export async function POST(request: Request) {
       .maybeSingle(),
     supabase
       .from("candidates")
-      .select("source_file")
+      .select("source_file,status")
       .eq("id", pending.candidate_id)
       .maybeSingle(),
   ]);
@@ -167,6 +168,8 @@ export async function POST(request: Request) {
     !recruiter.data ||
     recruiter.data.status !== "active" ||
     !["recruiter", "recruiter_manager"].includes(recruiter.data.role) ||
+    !candidate.data ||
+    !recruiterOriginalCvCandidateAvailable(candidate.data) ||
     !originalCvReference(candidate.data?.source_file)
   )
     return response("approval_target_unavailable", 404);
