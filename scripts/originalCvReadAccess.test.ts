@@ -226,6 +226,21 @@ assert.match(accessAuditSchema, /client_recruiter_assignments/);
 assert.match(accessAuditSchema, /client_candidate_shares/);
 assert.match(accessAuditSchema, /client_candidate_access/);
 assert.match(accessAuditSchema, /client_feature_entitlements/);
+assert.match(accessAuditSchema, /from public\.candidates c/);
+assert.match(accessAuditSchema, /for share of c/);
+for (const status of [
+  "deleted",
+  "non_sap",
+  "rejected_noise",
+  "hidden",
+  "archived",
+]) {
+  assert.match(
+    accessAuditSchema,
+    new RegExp(`'${status}'`),
+    `${status} must be rechecked by the audit trigger`,
+  );
+}
 assert.match(accessAuditSchema, /recruiter_original_cv_access_event_immutable/);
 assert.match(accessAuditSchema, /force row level security/);
 assert.match(accessAuditSchema, /from public, anon, authenticated/);
@@ -238,6 +253,10 @@ assert.match(
   /begin transaction isolation level repeatable read read only/i,
 );
 assert.match(accessAuditReadback, /original_cv_access_audit_readback_passed/);
+assert.match(
+  accessAuditReadback,
+  /original_cv_access_audit_candidate_lifecycle_readback_failed/,
+);
 assert.doesNotMatch(
   accessAuditReadback,
   /^\s*(?:alter|create|delete|drop|grant|insert|revoke|truncate|update)\b/im,

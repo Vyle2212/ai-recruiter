@@ -57,6 +57,18 @@ begin
       and g.expires_at > clock_timestamp()
       and g.purpose = new.purpose
       and g.client_id is not distinct from new.client_id
+      -- The API checks lifecycle before reading Storage, but the candidate can
+      -- be hidden or archived while that read is in flight. Recheck it in the
+      -- same database statement that appends the audit event so a stale grant
+      -- cannot authorize delivery after a terminal lifecycle transition.
+      and exists (
+        select 1 from public.candidates c
+        where c.id = g.candidate_id
+          and lower(btrim(coalesce(c.status, ''))) not in (
+            'deleted', 'non_sap', 'rejected_noise', 'hidden', 'archived'
+          )
+        for share of c
+      )
       and (
         g.purpose = 'headhunting'
         or (

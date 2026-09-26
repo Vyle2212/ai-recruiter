@@ -69,6 +69,24 @@ begin
     raise exception 'original_cv_access_audit_scope_readback_failed';
   end if;
 
+  -- Historical audit rows remain valid after a later lifecycle transition.
+  -- Verify the installed trigger contract instead of comparing old events to
+  -- the candidate's current status.
+  if position(
+       'from public.candidates c'
+       in lower(pg_get_functiondef(
+         to_regprocedure('public.validate_recruiter_original_cv_access_event()')
+       ))
+     ) = 0
+     or position('deleted' in lower(pg_get_functiondef(to_regprocedure('public.validate_recruiter_original_cv_access_event()')))) = 0
+     or position('non_sap' in lower(pg_get_functiondef(to_regprocedure('public.validate_recruiter_original_cv_access_event()')))) = 0
+     or position('rejected_noise' in lower(pg_get_functiondef(to_regprocedure('public.validate_recruiter_original_cv_access_event()')))) = 0
+     or position('hidden' in lower(pg_get_functiondef(to_regprocedure('public.validate_recruiter_original_cv_access_event()')))) = 0
+     or position('archived' in lower(pg_get_functiondef(to_regprocedure('public.validate_recruiter_original_cv_access_event()')))) = 0
+     or position('for share of c' in lower(pg_get_functiondef(to_regprocedure('public.validate_recruiter_original_cv_access_event()')))) = 0 then
+    raise exception 'original_cv_access_audit_candidate_lifecycle_readback_failed';
+  end if;
+
   raise notice 'original_cv_access_audit_readback_passed';
 end
 $readback$;
