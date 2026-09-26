@@ -20,6 +20,7 @@ export function recruiterOriginalCvAllowed(input: {
   support?: {
     assigned: boolean;
     candidateShared: boolean;
+    candidateVisible: boolean;
     featureActive: boolean;
   };
   now?: Date;
@@ -46,6 +47,7 @@ export function recruiterOriginalCvAllowed(input: {
     Boolean(grant.client_id) &&
     input.support?.assigned === true &&
     input.support.candidateShared === true &&
+    input.support.candidateVisible === true &&
     input.support.featureActive === true
   );
 }

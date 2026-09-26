@@ -120,7 +120,7 @@ export async function POST(request: Request) {
   // and active subscription. The resume route rechecks them at every read.
   if (purpose === "client_support") {
     const now = new Date().toISOString();
-    const [assignment, share, entitlement] = await Promise.all([
+    const [assignment, share, visibility, entitlement] = await Promise.all([
       supabase
         .from("client_recruiter_assignments")
         .select("id")
@@ -137,22 +137,37 @@ export async function POST(request: Request) {
         .eq("status", "active")
         .limit(1),
       supabase
+        .from("client_candidate_access")
+        .select("candidate_id")
+        .eq("client_id", clientId)
+        .eq("candidate_id", candidateId)
+        .eq("status", "active")
+        .limit(1),
+      supabase
         .from("client_feature_entitlements")
         .select("status,valid_from,valid_until")
         .eq("client_id", clientId)
         .eq("feature", "recruiter_support")
         .limit(1),
     ]);
-    if (assignment.error || share.error || entitlement.error)
+    if (
+      assignment.error ||
+      share.error ||
+      visibility.error ||
+      entitlement.error
+    )
       return response("approval_lookup_unavailable", 503);
     const feature = entitlement.data?.[0];
     if (
       !assignment.data?.length ||
       !share.data?.length ||
+      !visibility.data?.length ||
       feature?.status !== "active" ||
+      !Number.isFinite(Date.parse(String(feature.valid_from))) ||
       Date.parse(String(feature.valid_from)) > Date.parse(now) ||
       (feature.valid_until &&
-        Date.parse(String(feature.valid_until)) <= Date.parse(now))
+        (!Number.isFinite(Date.parse(String(feature.valid_until))) ||
+          Date.parse(String(feature.valid_until)) <= Date.parse(now)))
     )
       return response("client_support_not_entitled", 403);
   }

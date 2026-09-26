@@ -49,11 +49,16 @@ export async function GET(
       );
     const grant = grantResult.data as RecruiterOriginalCvGrant | null;
     let support:
-      | { assigned: boolean; candidateShared: boolean; featureActive: boolean }
+      | {
+          assigned: boolean;
+          candidateShared: boolean;
+          candidateVisible: boolean;
+          featureActive: boolean;
+        }
       | undefined;
     if (grant?.purpose === "client_support" && grant.client_id) {
       const now = new Date().toISOString();
-      const [assignment, share, entitlement] = await Promise.all([
+      const [assignment, share, visibility, entitlement] = await Promise.all([
         supabase
           .from("client_recruiter_assignments")
           .select("id")
@@ -70,13 +75,25 @@ export async function GET(
           .eq("status", "active")
           .limit(1),
         supabase
+          .from("client_candidate_access")
+          .select("candidate_id")
+          .eq("client_id", grant.client_id)
+          .eq("candidate_id", candidateId)
+          .eq("status", "active")
+          .limit(1),
+        supabase
           .from("client_feature_entitlements")
           .select("status,valid_from,valid_until")
           .eq("client_id", grant.client_id)
           .eq("feature", "recruiter_support")
           .limit(1),
       ]);
-      if (assignment.error || share.error || entitlement.error)
+      if (
+        assignment.error ||
+        share.error ||
+        visibility.error ||
+        entitlement.error
+      )
         return Response.json(
           { error: "original_cv_entitlement_unavailable" },
           { status: 503, headers: recruiterSearchPrivateNoStoreHeaders },
@@ -85,6 +102,7 @@ export async function GET(
       support = {
         assigned: assignment.data?.length === 1,
         candidateShared: share.data?.length === 1,
+        candidateVisible: visibility.data?.length === 1,
         featureActive: Boolean(
           feature?.status === "active" &&
             Date.parse(String(feature.valid_from)) <= Date.parse(now) &&

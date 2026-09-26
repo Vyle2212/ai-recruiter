@@ -77,11 +77,13 @@ assert.equal(recruiterOriginalCvAllowed({ ...evidence, grant: scoped }), false);
 for (const missing of [
   "assigned",
   "candidateShared",
+  "candidateVisible",
   "featureActive",
 ] as const) {
   const support = {
     assigned: true,
     candidateShared: true,
+    candidateVisible: true,
     featureActive: true,
   };
   support[missing] = false;
@@ -94,7 +96,12 @@ assert.equal(
   recruiterOriginalCvAllowed({
     ...evidence,
     grant: scoped,
-    support: { assigned: true, candidateShared: true, featureActive: true },
+    support: {
+      assigned: true,
+      candidateShared: true,
+      candidateVisible: true,
+      featureActive: true,
+    },
   }),
   true,
 );
@@ -109,6 +116,7 @@ assert.ok(
 );
 assert.match(route, /\.from\("recruiter_original_cv_grants"\)/);
 assert.match(route, /recruiterOriginalCvAllowed/);
+assert.match(route, /\.from\("client_candidate_access"\)/);
 assert.match(route, /\.select\("source_file"\)/);
 assert.match(route, /\.from\(ORIGINAL_CV_BUCKET\)/);
 assert.match(route, /"X-Content-Type-Options": "nosniff"/);
