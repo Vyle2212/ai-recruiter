@@ -9,6 +9,7 @@ export type PdfExtractionOptions = {
     pagesRequiringOcrText?: number[],
     fallbackReason?: string,
   ) => Promise<string>;
+  nativeEmploymentRecoverable?: (text: string) => boolean;
 };
 export type CvSourceExtraction = {
   method: "native" | "ocr";
@@ -28,6 +29,16 @@ export function pdfOcrReason(text: string): string {
   )
     return "PDF_EMPLOYMENT_UNRESOLVED";
   return "";
+}
+
+function pipelineOcrReason(text: string, options: PdfExtractionOptions) {
+  const reason = pdfOcrReason(text);
+  if (
+    reason === "PDF_EMPLOYMENT_UNRESOLVED" &&
+    options.nativeEmploymentRecoverable?.(text)
+  )
+    return "";
+  return reason;
 }
 
 export async function extractCvPdf(
@@ -64,7 +75,7 @@ export async function extractCvPdf(
     // A readable first page must not hide a scanned or otherwise unreadable
     // later page. OCR the full document and require those pages to recover.
     const reason =
-      pdfOcrReason(native) ||
+      pipelineOcrReason(native, options) ||
       (pagesNeedingText.length ? "PDF_PAGE_TEXT_INCOMPLETE" : "");
     if (!reason)
       return {
@@ -89,11 +100,7 @@ export async function extractCvPdf(
       pagesRequiringOcrText,
       reason,
     );
-    if (
-      pdfOcrReason(text) ||
-      (reason === "PDF_EMPLOYMENT_UNRESOLVED" &&
-        !extractCanonicalEmploymentFromResume(text).length)
-    )
+    if (pipelineOcrReason(text, options))
       throw new CvSourceError(
         "OCR_REVIEW_REQUIRED",
         "OCR could not recover a reliable CV with readable employment information. The original file needs review; no partial CV was saved.",

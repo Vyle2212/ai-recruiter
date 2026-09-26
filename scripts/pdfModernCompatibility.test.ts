@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 
-import { extractCvPdf } from "../lib/cvPdfExtraction";
+import { extractCvPdf, pdfOcrReason } from "../lib/cvPdfExtraction";
+import { prepareCandidateCv } from "../lib/candidateCvIngestion";
+import { isValidEmploymentEntry } from "../lib/candidateProfileIngestion";
 
 function pdfText(value: string) {
   return value
@@ -75,6 +77,60 @@ async function main() {
   assert.match(native.text, /Synthetic Consulting Ltd/);
   assert.match(native.text, /SAP FICO Consultant/);
 
+  const labelledEmployment = syntheticPdf([
+    "Jane Doe",
+    "SYNTHETIC SAP MM CONSULTANT",
+    "Email: synthetic@example.com",
+    "Location: Singapore",
+    "Employment History",
+    "Employer: Example Consulting",
+    "Role: SAP MM Consultant",
+    "Start Date: Jan 2020",
+    "End Date: Curr",
+    "Implemented SAP MM procurement configuration, migration, testing and go-live support.",
+    "Project Experience",
+    "Client: Example Manufacturing",
+    "Role: SAP MM Consultant",
+    "Duration: Jan 2022 - Dec 2023",
+    "SAP S/4HANA rollout, integration, workshops and cutover.",
+    "Education: Bachelor of Computing",
+    "Skills: SAP MM, Procurement, Inventory Management",
+    "Languages: English",
+  ]);
+  for (const source of ["admin_upload", "candidate_upload"] as const) {
+    const prepared = await prepareCandidateCv({
+      buffer: labelledEmployment,
+      fileName: "synthetic-employment.pdf",
+      source,
+      pdfOcr: async () => {
+        throw new Error(
+          "shared employment evidence must avoid unnecessary OCR",
+        );
+      },
+    });
+    assert.equal(prepared.accepted, true);
+    if (!prepared.accepted) throw new Error("synthetic employment rejected");
+    assert.equal(prepared.sourceExtraction.method, "native");
+    assert.ok(
+      prepared.candidatePayload.experience.some(isValidEmploymentEntry),
+    );
+  }
+
+  const narrowReaderMiss = syntheticPdf([
+    "Employment History",
+    "unreadable employment layout ".repeat(10),
+  ]);
+  const recoveredBySharedReader = await extractCvPdf(narrowReaderMiss, {
+    nativeEmploymentRecoverable: (text) => {
+      assert.equal(pdfOcrReason(text), "PDF_EMPLOYMENT_UNRESOLVED");
+      return true;
+    },
+    ocr: async () => {
+      throw new Error("shared employment evidence must avoid unnecessary OCR");
+    },
+  });
+  assert.equal(recoveredBySharedReader.sourceExtraction.method, "native");
+
   let ocrCalls = 0;
   const recovered = await extractCvPdf(
     syntheticPdf(["SCANNED IMAGE PLACEHOLDER"]),
@@ -114,6 +170,7 @@ async function main() {
       [],
     ),
     {
+      nativeEmploymentRecoverable: () => true,
       ocr: async (_buffer, pages, pagesRequiringOcrText) => {
         assert.equal(pages, 2);
         assert.deepEqual(pagesRequiringOcrText, [1, 2]);

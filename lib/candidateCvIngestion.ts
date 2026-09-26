@@ -14,6 +14,26 @@ import { enrichCandidateUpload } from "./candidateUploadEnrichment";
 import { evaluateResumeQualityGate } from "./resumeQualityGate";
 import { enrichCandidateWithSapTaxonomy } from "./sapTalentTaxonomy";
 
+/** The PDF readability check runs before full ingestion. Consult the same
+ * employment readers used by ingestion before treating readable text as an
+ * OCR failure; incomplete employment still remains behind the review gate. */
+function nativeEmploymentRecoverable(text: string, fileName: string) {
+  try {
+    const parsed = parseCvFromText(text, fileName);
+    const candidate = enrichCandidateUpload(
+      { ...parsed, raw_text: text, resume_text: text },
+      text,
+    );
+    const coverage = evaluateCandidateExtractionCoverage(text, candidate);
+    return (
+      coverage.extractedSections.includes("employment") &&
+      !coverage.missedObservedSections.includes("employment")
+    );
+  } catch {
+    return false;
+  }
+}
+
 export type CandidateCvIngestionSource = "admin_upload" | "candidate_upload";
 
 type CandidateClassification = ReturnType<typeof classifyCandidateText>;
@@ -81,11 +101,11 @@ export async function prepareCandidateCv(input: {
   pdfOcr?: PdfExtractionOptions["ocr"];
 }): Promise<PreparedCandidateCv | RejectedCandidateCv> {
   const parsed = input.fileName.toLowerCase().endsWith(".pdf")
-    ? await parseCv(
-        input.buffer,
-        input.fileName,
-        input.pdfOcr ? { ocr: input.pdfOcr } : {},
-      )
+    ? await parseCv(input.buffer, input.fileName, {
+        ...(input.pdfOcr ? { ocr: input.pdfOcr } : {}),
+        nativeEmploymentRecoverable: (text) =>
+          nativeEmploymentRecoverable(text, input.fileName),
+      })
     : await (async () => {
         const { text, sourceExtraction } = await extractCvTextDocument(
           input.buffer,
