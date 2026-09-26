@@ -12,6 +12,7 @@ import { requireRecruiterSearchAuthorization } from "@/lib/recruiterSearchAuthor
 import { buildCandidate360, type Candidate360Model } from "@/lib/candidate360Engine";
 import { buildCandidateValidationState } from "@/lib/candidateValidation";
 import { calculateSubmissionConfidence } from "@/lib/submissionConfidence";
+import { originalCvReference } from "@/lib/originalCvArchiveKey";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -874,6 +875,8 @@ export default async function Candidate360Page({
 
   candidate = mergeCandidateWithSearchIndex(candidate, indexQuery.data);
   const candidateRaw = candidate as AnyRecord;
+  const originalCvAvailable =
+    viewerRole === "admin" && Boolean(originalCvReference(candidateRaw.source_file));
   const validationState = buildCandidateValidationState(candidateRaw);
 
   const matchQuery = await supabase
@@ -1191,6 +1194,16 @@ export default async function Candidate360Page({
           >
             &larr; {backLabel}
           </Link>
+          {originalCvAvailable ? (
+            <a
+              href={`/api/candidate360/${encodeURIComponent(candidate.id)}/resume`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full border border-cyan-500/40 bg-cyan-500/15 px-4 py-2 text-sm font-semibold text-cyan-100"
+            >
+              Open original CV
+            </a>
+          ) : null}
           <div className="rounded-full border border-slate-700/40 bg-white/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
             Candidate 360
           </div>
@@ -1539,7 +1552,6 @@ export default async function Candidate360Page({
     </main>
   );
 }
-
 
 
 

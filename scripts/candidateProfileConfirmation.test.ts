@@ -77,6 +77,34 @@ if (accepted.accepted) {
   assert.equal(accepted.searchRow.candidate_id, current.id);
   assert.equal(accepted.searchRow.primary_module, "FICO");
 }
+const undatedProjects = buildCandidateProfileConfirmation({
+  candidateId: current.id,
+  submittedFields: {
+    ...fields,
+    projectExperience: JSON.stringify([
+      {
+        project: "S/4HANA Transformation",
+        client: "Client One",
+        role: "FICO Consultant",
+      },
+    ]),
+  },
+  profile,
+  currentCandidate: current,
+});
+assert.equal(
+  undatedProjects.accepted,
+  true,
+  "a project without source dates can be confirmed",
+);
+if (undatedProjects.accepted) {
+  assert.equal(undatedProjects.candidatePayload.projects[0].start_date, "");
+  assert.equal(undatedProjects.candidatePayload.projects[0].end_date, null);
+  assert.equal(
+    undatedProjects.candidatePayload.experience[0].start_date,
+    "2021-01",
+  );
+}
 
 for (const [label, patch] of [
   ["sharing consent", { consentToShare: false }],
@@ -160,6 +188,11 @@ assert.match(transaction, /insert into public\.candidate_search_index/);
 assert.match(transaction, /p_accuracy_consent is distinct from true/);
 assert.match(transaction, /p_sharing_consent is distinct from true/);
 assert.match(transaction, /security invoker/);
+assert.match(
+  transaction,
+  /coalesce\(btrim\(row->>'start_date'\), ''\) = ''\s+and \(\s+coalesce\(btrim\(row->>'end_date'\), ''\) <> ''/,
+  "the future database confirmation contract must allow wholly undated projects",
+);
 assert.match(transaction, /set search_path = ''/);
 assert.match(
   transaction,

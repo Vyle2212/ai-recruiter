@@ -564,12 +564,12 @@ export default function CandidatePortalClient() {
                 {
                   key: "start_date",
                   label: "Start date",
-                  placeholder: "YYYY-MM or source precision",
+                  placeholder: "YYYY-MM; optional if no project dates stated",
                 },
                 {
                   key: "end_date",
                   label: "End date",
-                  placeholder: "YYYY-MM; leave blank only if Current",
+                  placeholder: "YYYY-MM; optional if no project dates stated",
                 },
               ]}
               onChange={(next) => setStructured("projectExperience", next)}
@@ -666,9 +666,8 @@ export default function CandidatePortalClient() {
                   : "Confirm complete profile"}
               </button>
               <p className="mt-3 text-xs text-slate-500">
-                Confirmation fails closed if any required field, explicit date,
-                SAP evidence, ownership check, version check, or search-index
-                readback is missing.
+                Confirmation checks required fields, dates when provided, SAP
+                evidence, ownership, version, and search-index readback.
               </p>
             </section>
           </>
