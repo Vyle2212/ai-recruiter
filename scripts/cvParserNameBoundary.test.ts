@@ -22,5 +22,12 @@ assert.equal(
   ),
   "Elena Cruz",
 );
+assert.equal(
+  extractCandidateName(
+    "Candidate Name\nElena Cruz\nEmail: alias@example.com",
+    "cv.pdf",
+  ),
+  "Elena Cruz",
+);
 
 console.log("CV name source boundaries passed");
