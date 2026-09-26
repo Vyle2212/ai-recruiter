@@ -954,6 +954,97 @@ English`),
       labelledDuration.candidatePayload.project_history[0].name,
       "Synthetic Procurement Rollout",
     );
+    const projectFirstSplitCards = await prepareCandidateCv({
+      buffer: Buffer.from(`Jane Doe
+Email: jane.doe@example.com
+Location: Singapore
+SAP FICO consultant delivering SAP S/4HANA programmes.
+WORK EXPERIENCE
+SAP FICO Consultant | Example Consulting | Jan 2020 - Present
+PROJECT EXPERIENCE
+Project
+Synthetic S/4HANA migration
+Client
+Synthetic Manufacturing
+Role
+SAP FICO Consultant
+Start Date
+Jan 2022
+End Date
+Dec 2023
+Project
+Synthetic support transition
+Client
+Synthetic Logistics
+Role
+SAP FICO Lead
+EDUCATION
+Bachelor of Computing
+SKILLS
+SAP FICO, S/4HANA
+LANGUAGES
+English`),
+      fileName: "synthetic-project-first-split-cards.txt",
+      source: sourceType,
+    });
+    assert.equal(projectFirstSplitCards.accepted, true);
+    if (!projectFirstSplitCards.accepted)
+      throw new Error("project-first split fixture rejected");
+    assert.equal(
+      projectFirstSplitCards.candidatePayload.project_history.length,
+      2,
+    );
+    assert.deepEqual(
+      projectFirstSplitCards.candidatePayload.project_history.map(
+        (row: Record<string, unknown>) => ({
+          name: row.name,
+          client: row.client,
+          role: row.role,
+          start_date: row.start_date,
+          end_date: row.end_date,
+        }),
+      ),
+      [
+        {
+          name: "Synthetic S/4HANA migration",
+          client: "Synthetic Manufacturing",
+          role: "SAP FICO Consultant",
+          start_date: "Jan 2022",
+          end_date: "Dec 2023",
+        },
+        {
+          name: "Synthetic support transition",
+          client: "Synthetic Logistics",
+          role: "SAP FICO Lead",
+          start_date: "",
+          end_date: "",
+        },
+      ],
+    );
+    const partialProjectFirstDates = await prepareCandidateCv({
+      buffer: Buffer.from(
+        projectFirstSplitCards.rawText.replace("End Date\nDec 2023\n", ""),
+      ),
+      fileName: "synthetic-project-first-partial-dates.txt",
+      source: sourceType,
+    });
+    assert.equal(partialProjectFirstDates.accepted, true);
+    if (!partialProjectFirstDates.accepted)
+      throw new Error("partial project-first split fixture rejected");
+    assert.equal(
+      partialProjectFirstDates.candidatePayload.project_history.length,
+      1,
+      "a start-only project card must remain under review while a separate undated card remains valid",
+    );
+    assert.equal(
+      partialProjectFirstDates.candidatePayload.project_history[0].name,
+      "Synthetic support transition",
+    );
+    assert.equal(
+      partialProjectFirstDates.candidatePayload.experience[0].employer,
+      "Example Consulting",
+      "project dates and clients must not alter employer tenure",
+    );
     const missingDuration = await prepareCandidateCv({
       buffer: Buffer.from(
         labelledDuration.rawText.replace(

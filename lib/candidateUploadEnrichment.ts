@@ -175,7 +175,7 @@ function explicitProjectRecords(rawText: string) {
   const unresolvedDateClaim = (block: string, start: string, end: string) =>
     !start &&
     !end &&
-    (/(?:^|\n)\s*(?:duration|period|project\s+dates?|(?:project\s+)?(?:start|end)(?:ing)?\s+date|date\s+(?:from|to)|from|to)\s*:/im.test(
+    (/(?:^|\n)\s*(?:duration|period|project\s+dates?|(?:project\s+)?(?:start|end)(?:ing)?\s+date|date\s+(?:from|to)|from|to)\s*(?::|\n|$)/im.test(
       block,
     ) ||
       rangePattern.test(block));
@@ -409,6 +409,14 @@ function explicitProjectRecords(rawText: string) {
   const clientHeadings = lines.flatMap((line, index) =>
     /^(?:client|customer)$/i.test(line) ? [index] : [],
   );
+  const projectHeadings = lines.flatMap((line, index) =>
+    /^project(?:[ \t]+(?:name|title))?$/i.test(line) ? [index] : [],
+  );
+  const roleHeadings = lines.flatMap((line, index) =>
+    /^(?:project[ \t]+role|role|position|designation)$/i.test(line)
+      ? [index]
+      : [],
+  );
   const labelValue = (block: string[], label: RegExp) => {
     const index = block.findIndex((line) => label.test(line));
     const value = index < 0 ? "" : clean(block[index + 1]);
@@ -419,6 +427,15 @@ function explicitProjectRecords(rawText: string) {
       : "";
   };
   for (const [index, start] of clientHeadings.entries()) {
+    const priorProject = projectHeadings
+      .filter((value) => value < start)
+      .at(-1);
+    const priorRole = roleHeadings.filter((value) => value < start).at(-1);
+    // Project -> Client -> Role belongs to a Project-bounded card. Starting a
+    // second Client-bounded read here would attach the next Project name to
+    // the current client. Client -> Project -> Role remains handled below.
+    if (priorProject !== undefined && priorProject > (priorRole ?? -1))
+      continue;
     const end = clientHeadings[index + 1] ?? lines.length;
     const unboundedBlock = lines.slice(start, end);
     const sectionBoundary = unboundedBlock.findIndex(
@@ -464,6 +481,82 @@ function explicitProjectRecords(rawText: string) {
       modules: [],
       project_type: "",
     });
+  }
+  // Some source-owned project cards put every label and value on separate
+  // lines and begin with Project rather than Client. The Client-bounded pass
+  // above cannot look backwards for that Project value without crossing its
+  // own card boundary. Read the whole Project-bounded card instead, retaining
+  // its own client, role and date evidence. A partial date claim still blocks
+  // the row; employment dates are never used here.
+  for (const [index, start] of projectHeadings.entries()) {
+    const priorProject = projectHeadings[index - 1] ?? -1;
+    const priorClient = clientHeadings.filter((value) => value < start).at(-1);
+    const priorRole = roleHeadings.filter((value) => value < start).at(-1);
+    // Client -> Project -> Role is already a Client-bounded card. Starting a
+    // second card at its nested Project label would borrow the next client's
+    // fields and duplicate or cross-wire both assignments.
+    if (
+      priorClient !== undefined &&
+      priorClient > priorProject &&
+      priorClient > (priorRole ?? -1)
+    )
+      continue;
+    const end = projectHeadings[index + 1] ?? lines.length;
+    const unboundedBlock = lines.slice(start, end);
+    const sectionBoundary = unboundedBlock.findIndex(
+      (line, offset) => offset > 0 && PROJECT_SECTION_END_HEADINGS.test(line),
+    );
+    const block =
+      sectionBoundary < 0
+        ? unboundedBlock
+        : unboundedBlock.slice(0, sectionBoundary);
+    const blockText = block.join("\n");
+    const name = labelValue(block, /^project(?:[ \t]+(?:name|title))?$/i);
+    const client =
+      labelledLineValue(blockText, "client|customer") ||
+      labelValue(block, /^(?:client|customer)$/i);
+    const role =
+      labelledLineValue(
+        blockText,
+        "project[ \\t]+role|role|position|designation",
+      ) ||
+      labelValue(block, /^(?:project[ \t]+role|role|position|designation)$/i);
+    const duration = labelledLineValue(
+      blockText,
+      "duration|period|project[ \\t]+dates?",
+    );
+    const range = duration.match(rangePattern);
+    const splitRange = splitDateRange(blockText);
+    const startDate = range?.[1] || splitRange?.[0] || "";
+    const endDate = range?.[2] || splitRange?.[1] || "";
+    if (
+      !(name || client) ||
+      !role ||
+      unresolvedDateClaim(blockText, startDate, endDate)
+    )
+      continue;
+    const row = {
+      name,
+      client,
+      role,
+      start_date: dateValue(startDate),
+      end_date: dateValue(endDate),
+      modules: [],
+      project_type: "",
+    };
+    if (
+      isValidProjectEntry(row) &&
+      !records.some(
+        (known) =>
+          clean(known.name).toLowerCase() === name.toLowerCase() &&
+          clean(known.client).toLowerCase() === client.toLowerCase() &&
+          clean(known.role).toLowerCase() === role.toLowerCase() &&
+          careerMonthIndex(known.start_date) ===
+            careerMonthIndex(row.start_date) &&
+          careerMonthIndex(known.end_date) === careerMonthIndex(row.end_date),
+      )
+    )
+      records.push(row);
   }
   // A source can show a reversed or unparseable date range. Leave that
   // assignment in the original CV for review instead of structuring it.
