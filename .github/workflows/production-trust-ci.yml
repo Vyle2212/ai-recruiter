@@ -205,6 +205,7 @@ jobs:
           node --import tsx scripts/originalCareerLayouts.test.ts
           node --import tsx scripts/threeTierRecovery.test.ts
           node --import tsx scripts/candidateSecurityFixtureRls.test.ts
+          node --import tsx scripts/stagingAuthPrivatePolicyHelpers.test.ts
           node --import tsx scripts/productionPrivateDataRlsCutover.test.ts
           node --import tsx scripts/productionCutoverPlan.test.ts
           node --import tsx scripts/originalCvCollectionManifest.test.ts
