@@ -5,6 +5,7 @@ on:
     branches:
       - "codex/precision-*"
       - "codex/production-trust-*"
+      - "codex/production-admin-*"
       - "codex/recruiter-api-authorization-*"
       - "codex/dependency-security-*"
       - "codex/authenticated-acceptance-*"
@@ -13,6 +14,7 @@ on:
     branches:
       - "codex/profile-source-recovery"
       - "codex/production-trust-*"
+      - "codex/production-admin-*"
       - "codex/recruiter-api-authorization-*"
       - "codex/dependency-security-*"
       - "codex/authenticated-acceptance-*"
