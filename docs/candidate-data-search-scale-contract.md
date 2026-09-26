@@ -82,6 +82,15 @@ the readback returned no findings, and zero synthetic jobs remained. This
 orders one admin's uploads; it does not prove two different actors cannot
 submit CVs for the same person simultaneously.
 
+The worker now calls `claim_candidate_ingestion_jobs_for_revision` with its
+compiled CV extraction revision (`CANDIDATE_CV_INGESTION_REVISION`, distinct
+from the canonical search snapshot version). A job for another revision remains queued for the
+matching deployment rather than consuming a ten-minute lease in the wrong
+worker. The legacy unpinned claim RPC has no service-role execute grant. A
+staging rollback test covered an older job on a different revision, the next
+CV from the same actor, and a simultaneous CV from another actor. One actor's
+next CV became claimable only after the older revision was acknowledged.
+
 Before activation, enforce one canonical candidate per private source reference
 in the database, audit any existing duplicate references, prove concurrent
 worker recovery against an ambiguous in-flight save, and record historical

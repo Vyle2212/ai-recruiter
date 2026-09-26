@@ -138,6 +138,62 @@ begin
 end
 $function$;
 
+-- The active worker must claim only jobs written for its exact parser build.
+-- The older one-argument RPC is retained for migration compatibility but
+-- loses service-role EXECUTE below; it must never be used by a worker.
+create or replace function public.claim_candidate_ingestion_jobs_for_revision(
+  p_parser_revision text,
+  p_limit integer default 10
+) returns setof public.candidate_ingestion_jobs
+language plpgsql security invoker set search_path = '' as $function$
+begin
+  if p_parser_revision is null or length(p_parser_revision) not between 1 and 80
+     or p_parser_revision !~ '^[a-zA-Z0-9._-]+$'
+     or p_limit is null or p_limit < 1 or p_limit > 20 then
+    raise exception 'candidate_ingestion_claim_input_invalid';
+  end if;
+  update public.candidate_ingestion_jobs
+  set status = 'failed', lease_token = null, lease_expires_at = null,
+      outcome_code = 'retry_exhausted', updated_at = now()
+  where (status = 'running' and lease_expires_at < now() and attempts >= 5)
+     or (status = 'queued' and attempts >= 5);
+
+  return query
+  with next_jobs as (
+    select candidate_job.id from public.candidate_ingestion_jobs candidate_job
+    where candidate_job.parser_revision = p_parser_revision
+      and ((candidate_job.status = 'queued' and candidate_job.available_at <= now()
+            and candidate_job.attempts < 5)
+       or (candidate_job.status = 'running' and candidate_job.lease_expires_at < now()
+            and candidate_job.attempts < 5))
+      and not exists (
+        select 1 from public.candidate_ingestion_jobs earlier
+        where earlier.actor_user_id = candidate_job.actor_user_id
+          and (earlier.created_at, earlier.id) <
+              (candidate_job.created_at, candidate_job.id)
+          and earlier.status in ('queued', 'running')
+      )
+      and not exists (
+        select 1 from public.candidate_ingestion_jobs active_job
+        where active_job.actor_user_id = candidate_job.actor_user_id
+          and active_job.id <> candidate_job.id
+          and active_job.status = 'running'
+          and active_job.lease_expires_at > now()
+      )
+    order by candidate_job.created_at, candidate_job.id
+    for update of candidate_job skip locked
+    limit p_limit
+  )
+  update public.candidate_ingestion_jobs as jobs
+  set status = 'running', attempts = jobs.attempts + 1,
+      lease_token = gen_random_uuid(), lease_expires_at = now() + interval '10 minutes',
+      updated_at = now()
+  from next_jobs
+  where jobs.id = next_jobs.id
+  returning jobs.*;
+end
+$function$;
+
 -- A slow parser can extend only its own live lease. If the worker crashes,
 -- the token expires and another worker may claim the job.
 create or replace function public.renew_candidate_ingestion_job(
@@ -198,6 +254,8 @@ $function$;
 revoke all on function public.enqueue_candidate_ingestion_job(uuid,text,text,text,text,integer)
   from public, anon, authenticated;
 revoke all on function public.claim_candidate_ingestion_jobs(integer)
+  from public, anon, authenticated, service_role;
+revoke all on function public.claim_candidate_ingestion_jobs_for_revision(text,integer)
   from public, anon, authenticated;
 revoke all on function public.renew_candidate_ingestion_job(uuid,uuid)
   from public, anon, authenticated;
@@ -205,7 +263,7 @@ revoke all on function public.finish_candidate_ingestion_job(uuid,uuid,text,uuid
   from public, anon, authenticated;
 grant execute on function public.enqueue_candidate_ingestion_job(uuid,text,text,text,text,integer)
   to service_role;
-grant execute on function public.claim_candidate_ingestion_jobs(integer)
+grant execute on function public.claim_candidate_ingestion_jobs_for_revision(text,integer)
   to service_role;
 grant execute on function public.renew_candidate_ingestion_job(uuid,uuid)
   to service_role;

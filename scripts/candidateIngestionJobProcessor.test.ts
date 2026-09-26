@@ -17,7 +17,7 @@ const job: ClaimedIngestionJob = {
   source_file: source,
   original_filename: "synthetic.txt",
   content_sha256: createHash("sha256").update(bytes).digest("hex"),
-  parser_revision: "candidate-parser-v2",
+  parser_revision: "cv-ingestion-v178",
   byte_size: bytes.length,
   lease_token: "00000000-0000-4000-8000-000000000004",
 };

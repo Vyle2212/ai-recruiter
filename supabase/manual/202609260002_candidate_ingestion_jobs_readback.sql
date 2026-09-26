@@ -15,7 +15,7 @@ with target as (
 ), missing_functions as (
   select name from (values
     ('public.enqueue_candidate_ingestion_job(uuid,text,text,text,text,integer)'),
-    ('public.claim_candidate_ingestion_jobs(integer)'),
+    ('public.claim_candidate_ingestion_jobs_for_revision(text,integer)'),
     ('public.renew_candidate_ingestion_job(uuid,uuid)'),
     ('public.finish_candidate_ingestion_job(uuid,uuid,text,uuid,text)')
   ) required(name)
@@ -44,14 +44,19 @@ union all
 select 'actor_order_index_missing', 'candidate_ingestion_jobs_actor_order_idx'
 where to_regclass('public.candidate_ingestion_jobs_actor_order_idx') is null
 union all
-select 'actor_order_claim_guard_missing', 'claim_candidate_ingestion_jobs'
-where to_regprocedure('public.claim_candidate_ingestion_jobs(integer)') is not null
+select 'actor_order_claim_guard_missing', 'claim_candidate_ingestion_jobs_for_revision'
+where to_regprocedure('public.claim_candidate_ingestion_jobs_for_revision(text,integer)') is not null
   and (
-    pg_get_functiondef(to_regprocedure('public.claim_candidate_ingestion_jobs(integer)'))
+    pg_get_functiondef(to_regprocedure('public.claim_candidate_ingestion_jobs_for_revision(text,integer)'))
       not like '%earlier.actor_user_id = candidate_job.actor_user_id%'
-    or pg_get_functiondef(to_regprocedure('public.claim_candidate_ingestion_jobs(integer)'))
+    or pg_get_functiondef(to_regprocedure('public.claim_candidate_ingestion_jobs_for_revision(text,integer)'))
       not like '%active_job.actor_user_id = candidate_job.actor_user_id%'
   )
+union all
+select 'parser_revision_claim_guard_missing', 'claim_candidate_ingestion_jobs_for_revision'
+where to_regprocedure('public.claim_candidate_ingestion_jobs_for_revision(text,integer)') is not null
+  and pg_get_functiondef(to_regprocedure('public.claim_candidate_ingestion_jobs_for_revision(text,integer)'))
+      not like '%candidate_job.parser_revision = p_parser_revision%'
 union all
 select 'rls_not_forced', 'candidate_ingestion_jobs'
 from target join pg_catalog.pg_class c on c.oid = target.oid
@@ -75,6 +80,7 @@ from (values ('anon'), ('authenticated')) roles(role_name)
 cross join (values
   ('public.enqueue_candidate_ingestion_job(uuid,text,text,text,text,integer)'),
   ('public.claim_candidate_ingestion_jobs(integer)'),
+  ('public.claim_candidate_ingestion_jobs_for_revision(text,integer)'),
   ('public.renew_candidate_ingestion_job(uuid,uuid)'),
   ('public.finish_candidate_ingestion_job(uuid,uuid,text,uuid,text)')
 ) functions(function_name)
@@ -84,11 +90,16 @@ union all
 select 'service_function_privilege_missing', function_name
 from (values
   ('public.enqueue_candidate_ingestion_job(uuid,text,text,text,text,integer)'),
-  ('public.claim_candidate_ingestion_jobs(integer)'),
+  ('public.claim_candidate_ingestion_jobs_for_revision(text,integer)'),
   ('public.renew_candidate_ingestion_job(uuid,uuid)'),
   ('public.finish_candidate_ingestion_job(uuid,uuid,text,uuid,text)')
 ) functions(function_name)
 where to_regprocedure(function_name) is not null
   and not has_function_privilege(
     'service_role', to_regprocedure(function_name), 'execute'
-  );
+  )
+union all
+select 'unpinned_claim_executable', 'claim_candidate_ingestion_jobs(integer)'
+where to_regprocedure('public.claim_candidate_ingestion_jobs(integer)') is not null
+  and has_function_privilege('service_role',
+    to_regprocedure('public.claim_candidate_ingestion_jobs(integer)'), 'execute');

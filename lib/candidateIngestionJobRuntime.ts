@@ -5,10 +5,10 @@ import { saveCandidate } from "./saveCandidate";
 import {
   prepareCandidateCv,
   candidateCvRejectedOriginalPolicy,
+  CANDIDATE_CV_INGESTION_REVISION,
 } from "./candidateCvIngestion";
 import { recordCandidateUploadReview } from "./candidateUploadReviewQueue";
 import { CvSourceError } from "./cvPdfOcr";
-import { CANDIDATE_PARSER_VERSION } from "./candidateCanonicalPipeline";
 import { ORIGINAL_CV_BUCKET } from "./originalCvArchiveKey";
 import {
   processClaimedIngestionJob,
@@ -24,18 +24,21 @@ function requireData<T>(data: T, error: { message: string } | null): T {
 export async function claimAndProcessCandidateIngestionJobs(limit = 1) {
   if (!Number.isInteger(limit) || limit < 1 || limit > 20)
     throw new Error("INGESTION_LIMIT_INVALID");
-  const claimed = await supabase.rpc("claim_candidate_ingestion_jobs", {
-    p_limit: limit,
-  });
+  const claimed = await supabase.rpc(
+    "claim_candidate_ingestion_jobs_for_revision",
+    {
+      p_parser_revision: CANDIDATE_CV_INGESTION_REVISION,
+      p_limit: limit,
+    },
+  );
   const jobs = requireData(
     claimed.data,
     claimed.error,
   ) as ClaimedIngestionJob[];
   const outcomes: Array<{ jobId: string; status: string }> = [];
   for (const job of jobs) {
-    // An older parser must never silently process a job queued for a newer
-    // revision. Do not ACK it; let the correct deployment reclaim its lease.
-    if (job.parser_revision !== CANDIDATE_PARSER_VERSION)
+    // Fail closed if the RPC contract ever returns a different revision.
+    if (job.parser_revision !== CANDIDATE_CV_INGESTION_REVISION)
       throw new Error("INGESTION_PARSER_REVISION_MISMATCH");
     const dependencies: IngestionJobDependencies = {
       download: async (objectKey) => {
