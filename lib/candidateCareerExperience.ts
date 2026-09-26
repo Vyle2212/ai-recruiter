@@ -7,15 +7,19 @@ const clean = (value: unknown) => typeof value === "string" ? value.normalize("N
 export function careerMonthIndex(value: unknown, current = false, now = new Date()): number | null {
   const currentMonth = now.getUTCFullYear() * 12 + now.getUTCMonth();
   const source = clean(value);
-  if (current || /^(present|current|now)$/i.test(source)) return currentMonth;
+  const currentEndpoint = /^(?:present|current|curr|now|(?:till|to)(?:\s+to)?\s+date)$/i.test(source);
+  // A current flag cannot override a printed, historical end date. Keep that
+  // contradictory interval out of both validation and experience totals.
+  if (current && source && !currentEndpoint) return null;
+  if (current || currentEndpoint) return currentMonth;
   const names = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
   let year: number, month: number;
   const iso = source.match(/^(19\d{2}|20\d{2})(?:[-/](0?[1-9]|1[0-2]))?$/);
   const numeric = source.match(/^(0?[1-9]|1[0-2])\s*[/]\s*(\d{2}|19\d{2}|20\d{2})$/);
-  const named = source.match(/^(?:\d{1,2}(?:st|nd|rd|th)?\s+)?(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[\s’'-]+(\d{2}|19\d{2}|20\d{2})$/i);
+  const named = source.match(/^(?:(\d{1,2})(?:st|nd|rd|th)?\s+)?(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[\s’'-]+(\d{2}|19\d{2}|20\d{2})$/i);
   if (iso) { year = Number(iso[1]); month = Number(iso[2] || 1) - 1; }
   else if (numeric) { year = Number(numeric[2]); month = Number(numeric[1]) - 1; }
-  else if (named) { year = Number(named[2]); month = names.indexOf(named[1].slice(0,3).toLowerCase()); }
+  else if (named) { year = Number(named[3]); month = names.indexOf(named[2].slice(0,3).toLowerCase()); }
   else {
     // ISO calendar dates remain supported, with validation instead of Date.parse rollover.
     const day = source.match(/^(19\d{2}|20\d{2})-(\d{2})-(\d{2})(?:T00:00:00(?:\.000)?Z)?$/);
@@ -25,6 +29,13 @@ export function careerMonthIndex(value: unknown, current = false, now = new Date
     if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month || date.getUTCDate() !== Number(day[3])) return null;
   }
   if (year < 100) year += year <= 30 ? 2000 : 1900;
+  // Validate an explicitly supplied day before reducing it to month precision.
+  // UTC round-tripping rejects zero days, overflow and non-leap February 29.
+  if (named?.[1] !== undefined) {
+    const day = Number(named[1]);
+    const date = new Date(Date.UTC(year, month, day));
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month || date.getUTCDate() !== day) return null;
+  }
   const result = year * 12 + month;
   return result <= currentMonth ? result : null;
 }

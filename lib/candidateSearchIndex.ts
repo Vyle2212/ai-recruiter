@@ -1,6 +1,7 @@
-import { supabase } from "@/lib/supabase";
 import { textOf } from "@/lib/sapRecruiterRules";
 import { canonicalSapKey, parseSapModulesFromKeyword } from "@/lib/sapCanonicalModuleEngine";
+import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
+import { legacyIndexMutationRefusal } from "@/lib/search/legacyIndexMutationGate";
 
 type AnyRecord = Record<string, any>;
 
@@ -307,28 +308,12 @@ function qualityScore(candidate: AnyRecord, displayName: string | null, displayT
 }
 
 
-function isHiddenCandidateStatus(candidate: AnyRecord) {
-  const status = s(candidate.status).toUpperCase();
-  return ["REJECTED_NOISE", "DELETED", "NON_SAP"].includes(status);
-}
-
-function isNeedsReviewWithoutTrustedIdentity(candidate: AnyRecord, displayName: string | null, primary: string | null) {
-  const status = s(candidate.status).toUpperCase();
-  if (status !== "NEEDS_REVIEW") return false;
-
-  // Review rows with no reliable name or no trusted module should not enter recruiter search index.
-  if (!displayName) return true;
-  if (!primary || ["UNKNOWN", "SAP_GENERAL", "GENERAL_SAP", "SAP"].includes(primary)) return true;
-
-  return false;
-}
-
 function isIndexEligibleCandidate(candidate: AnyRecord, displayName: string | null, primary: string | null, displayTitle: string) {
   if (!candidate?.id) return false;
-  if (isHiddenCandidateStatus(candidate)) return false;
+  if (!candidateSearchLifecycleDecision(candidate).visible) return false;
+  if (s(candidate.extraction_coverage_status).toLowerCase() === "incomplete_needs_review") return false;
   if (!displayName) return false;
   if (!primary || ["UNKNOWN", "SAP_GENERAL", "GENERAL_SAP", "SAP"].includes(primary)) return false;
-  if (isNeedsReviewWithoutTrustedIdentity(candidate, displayName, primary)) return false;
 
   // Do not index placeholder names even if a module was inferred elsewhere.
   if (/^profile\s+under\s+review$/i.test(displayName)) return false;
@@ -455,33 +440,14 @@ export function buildCandidateSearchIndexRow(candidate: AnyRecord) {
 }
 
 export async function upsertCandidateSearchIndex(candidate: AnyRecord) {
-  if (!candidate?.id) return { error: new Error("Missing candidate id") };
-  const row = buildCandidateSearchIndexRow(candidate);
-  if (!row) return { error: new Error("Candidate is not SAP/search-index eligible") };
-  return supabase.from("candidate_search_index").upsert(row, { onConflict: "candidate_id" });
+  void candidate;
+  legacyIndexMutationRefusal();
 }
 
 export async function syncCandidateSearchIndexSince(sinceIso?: string, limit = 2000) {
-  let query = supabase
-    .from("candidates")
-    .select("*")
-    .order("updated_at", { ascending: false })
-    .order("id", { ascending: true })
-    .limit(limit);
-
-  if (sinceIso) query = query.gte("updated_at", sinceIso);
-
-  const { data, error } = await query;
-  if (error) return { error, count: 0 };
-
-  const rows = (data || []).map(buildCandidateSearchIndexRow).filter((row): row is NonNullable<ReturnType<typeof buildCandidateSearchIndexRow>> => row !== null);
-  if (!rows.length) return { count: 0 };
-
-  const { error: upsertError } = await supabase
-    .from("candidate_search_index")
-    .upsert(rows, { onConflict: "candidate_id" });
-
-  return { error: upsertError, count: rows.length };
+  void sinceIso;
+  void limit;
+  legacyIndexMutationRefusal();
 }
 
 export function modulesForKeyword(keyword: string) {

@@ -1063,12 +1063,12 @@ export function CompactCandidateCard({
                         : matchLabel
                     }${externalNeedsVerification ? " · Needs verification" : ""}`}
             </span>
-            {false && !identityLookup ? (
+            {!identityLookup ? (
               <span
                 className="text-[10px] text-slate-600"
                 title="Confidence measures the reliability and completeness of the evidence. It is independent of Match Quality."
               >
-                Search confidence{" "}
+                Search-evidence confidence{" "}
                 <span className="text-slate-400">
                   {diagnostic.evidenceConfidence} ·{" "}
                   {diagnostic.evidenceCoveragePercent}%

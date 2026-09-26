@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { normalizeActualCandidateSchema } from '../lib/candidate360SchemaNormalize';
+const jobs = (raw_text: string) => normalizeActualCandidateSchema({raw_text}).enterpriseProfile.employmentTimeline;
+const heading = 'Example Electronics Levant Co. Ltd. Amman, Jordan and Singapore May.2009 -March.2011 Role: IT system and Global ERP system Manager';
+const rows = jobs('Employment History ' + heading + ' Project: Global ERP Roll-Out March 2008 - April 2012 Responsibilities: Configuration');
+assert.equal(rows.length, 1);
+assert.equal(rows[0].company, 'Example Electronics Levant Co. Ltd.');
+assert.equal(rows[0].location, 'Amman, Jordan and Singapore');
+assert.equal(rows[0].title, 'IT system and Global ERP system Manager');
+assert.equal(rows[0].start, 'May 2009');
+assert.equal(rows[0].end, 'March 2011');
+assert.equal(jobs('Project History ' + heading).length, 0);
+assert.equal(jobs('Employment History Responsibilities: ' + heading).length, 0);
+assert.equal(jobs('Employment History ' + heading.replace('May.2009','May.2019')).length, 0);
+assert.equal(jobs('Employment History Example Ltd. Client Singapore May.2009 -March.2011 Role: SAP Consultant Project: Example').length, 0);
+console.log('Located employer, dotted dates and role label isolation: passed');

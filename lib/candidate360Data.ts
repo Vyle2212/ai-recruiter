@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { createCandidateSupabaseAdminClient } from "./candidateSupabase";
+import { redactCandidate360Contact } from "./candidate360ContactBoundary";
 
 import { buildCandidate360Profile } from "./candidate360Profile";
 import { normalizeActualCandidateSchema } from "./candidate360SchemaNormalize";
@@ -638,9 +639,9 @@ export type Candidate360LoadTimings = {
   totalMs: number;
 };
 
-export async function loadCandidate360Profile(
+async function loadCandidate360ProfileInternal(
   candidateId: string,
-  stageTimings?: Candidate360LoadTimings,
+  stageTimings: Candidate360LoadTimings | undefined,
 ) {
   const totalStartedAt = performance.now();
   const supabase = createCandidateSupabaseAdminClient();
@@ -755,4 +756,24 @@ export async function loadCandidate360Profile(
     stageTimings.totalMs = performance.now() - totalStartedAt;
   }
   return result;
+}
+
+export async function loadCandidate360Profile(
+  candidateId: string,
+  stageTimings?: Candidate360LoadTimings,
+) {
+  const result = await loadCandidate360ProfileInternal(
+    candidateId,
+    stageTimings,
+  );
+  if (!result) return null;
+  return redactCandidate360Contact(result);
+}
+
+/** Candidate-owned view; caller must prove the authenticated ownership chain. */
+export function loadCandidate360ProfileForOwner(
+  candidateId: string,
+  stageTimings?: Candidate360LoadTimings,
+) {
+  return loadCandidate360ProfileInternal(candidateId, stageTimings);
 }

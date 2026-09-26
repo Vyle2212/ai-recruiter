@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { createLazySupabaseServiceClient } from "@/lib/runtimeClients"
+import { recruiterSearchAuthorizationDenied, recruiterSearchPrivateNoStoreHeaders, requireRecruiterSearchAuthorization } from "@/lib/recruiterSearchAuthorization"
 
 export async function POST(req: Request) {
   try {
+    const authorization = await requireRecruiterSearchAuthorization({ permission: "candidate-detail:read", route: "/api/update-candidate-status" })
+    if (!authorization.allowed) return recruiterSearchAuthorizationDenied(authorization)
+    const supabase = createLazySupabaseServiceClient()
     const body = await req.json()
 
     const { candidate_id, status } = body
@@ -23,11 +27,12 @@ export async function POST(req: Request) {
         },
         {
           status: 500,
+          headers: recruiterSearchPrivateNoStoreHeaders,
         }
       )
     }
 
-    return NextResponse.json(data)
+    return NextResponse.json(data, { headers: recruiterSearchPrivateNoStoreHeaders })
   } catch (error: any) {
     return NextResponse.json(
       {
@@ -35,6 +40,7 @@ export async function POST(req: Request) {
       },
       {
         status: 500,
+        headers: recruiterSearchPrivateNoStoreHeaders,
       }
     )
   }

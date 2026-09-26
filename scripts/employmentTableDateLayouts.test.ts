@@ -1,0 +1,127 @@
+import assert from 'node:assert/strict';
+import { normalizeActualCandidateSchema } from '../lib/candidate360SchemaNormalize';
+import { employmentTimelineDiagnostics } from '../lib/candidate360Employment';
+const jobs = (raw_text: string) => normalizeActualCandidateSchema({raw_text}).enterpriseProfile.employmentTimeline;
+const table = jobs('Employment History Organization Designation Duration Example Systems Ltd. (SAP Partner) Sr. ERP Functional Consultant Aug/2014 – Aug/2024 Example Delivery (SAP Partner) ERP Functional Consultant (01/2008) – (08/2009) Example Services Customer Relationship Executive (12/2002) – (08/2005) Technical Skills Example Project SAP Consultant Jan 2000 – Jan 2001');
+assert.equal(table.length, 3);
+assert.equal(table[0].company, 'Example Systems Ltd. (SAP Partner)');
+assert.equal(table[0].title, 'Sr. ERP Functional Consultant');
+assert.equal(table[0].start, 'Aug 2014');
+assert.equal(table[1].company, 'Example Delivery (SAP Partner)');
+assert.equal(table[1].title, 'ERP Functional Consultant');
+assert.equal(table[2].title, 'Customer Relationship Executive');
+const spill = jobs('Organization Designation Duration Example Employer SAP Consultant Jan 2020 - Now SAP Experience Example Client SAP Consultant Jan 2019 - Dec 2019');
+assert.equal(spill.length, 1);
+assert.equal(spill[0].company, 'Example Employer');
+const flattened = jobs('Organization Designation Duration Example Employer SAP Consultant SAP Analyst SAP course training Feb 2011 - Nov 2012 Aug 2009 – Jan 2011 Feb 2009 – Jul 2009 SAP Experience Example Client SAP Consultant Jan 2013 - Now');
+assert.equal(flattened.length, 0, 'Do not guess alignment of several titles and date cells');
+const spaced = 'SAP QTC Consultant at Example Minerals, Petaling Jaya D E C E M B E R 2 0 2 2 — P R E S E N T - Configure orders.';
+const decoded = jobs(`Employment History ${spaced} Education`);
+assert.equal(decoded.length, 1);
+assert.equal(decoded[0].company, 'Example Minerals');
+assert.equal(decoded[0].location, 'Petaling Jaya');
+assert.equal(decoded[0].start, 'December 2022');
+assert.equal(decoded[0].current, true);
+assert.ok(decoded[0].provenance?.length);
+assert.equal(jobs(`Project Experience ${spaced}`).length, 0);
+assert.equal(jobs(`Employment History Project Experience ${spaced}`).length, 0);
+assert.equal(jobs(`Employment History ${spaced.replace('Example Minerals', 'Client Example Minerals')}`).length, 0);
+assert.equal(jobs(`Employment History ${spaced.replace('P R E S E N T', 'J A N U A R Y 2 0 2 0')}`).length, 0);
+const chronology = jobs('Employment History Sales Executive at Example Services, Kuala Lumpur J A N U A R Y 2 0 21 — F E B R U A R Y 2023 - Manage accounts. Sales Executive at Example Bank, Kuala Lumpur J A N U A R Y 2 0 1 8 — J A N U A R Y 2 0 2 0 - Manage sales. Education');
+assert.equal(chronology.length, 2);
+assert.equal(chronology[0].start, 'January 2021');
+assert.equal(chronology[1].company, 'Example Bank');
+const missingLeftDate = jobs('Employment History 1. Company Name: Example Consulting Position Title: SAP Senior Consultant Date Join: July 2015 Date Left: - Work Description: Delivery. Projects/Assignments Involved Company: Example Client Project Duration: July 2015 - Present 2. Company Name: Example Systems Position Title: SAP Analyst Date Join: January 2014 Date Left: June 2015 Work Description: Support.');
+assert.equal(missingLeftDate.length, 2);
+assert.equal(missingLeftDate[0].company, 'Example Consulting');
+assert.equal(missingLeftDate[0].start, 'July 2015');
+assert.equal(missingLeftDate[0].end, '');
+assert.equal(missingLeftDate[0].current, false);
+assert.equal(missingLeftDate[1].company, 'Example Systems');
+assert.equal(employmentTimelineDiagnostics(missingLeftDate).invalidRanges, 0);
+assert.equal(jobs('Project History Company Name: Example Client Position Title: SAP Consultant Date joined: July 2015 Date left: -').length, 0);
+const clientBoundedTitles = jobs('Working Experience (Mar 2022 – Present) Example Consulting Sdn. Bhd. (Client: Example Bank) Current Position Title: SAP ABAP Consultant Industry: Banking Work Description: Delivery. (Jul 2020 – Feb 2022) Example Systems Pte Ltd (Client: Example Manufacturer) Current Position Title: ABAP Consultant Industry: Manufacturing Work Description: Support. Education Example University');
+assert.equal(clientBoundedTitles.length, 2);
+assert.deepEqual(clientBoundedTitles.map((item) => item.company), ['Example Consulting Sdn. Bhd.', 'Example Systems Pte Ltd']);
+assert.deepEqual(clientBoundedTitles.map((item) => item.title), ['SAP ABAP Consultant', 'ABAP Consultant']);
+assert.equal(clientBoundedTitles[0].current, true);
+assert.equal(clientBoundedTitles[1].start, 'Jul 2020');
+assert.equal(jobs('Project History (Mar 2022 – Present) Example Client (Client: Example Bank) Current Position Title: SAP Consultant Industry: Banking').length, 0);
+assert.equal(jobs('Working Experience (Mar 2022 – Feb 2020) Example Consulting (Client: Example Bank) Current Position Title: SAP Consultant Industry: Banking').length, 0);
+const organizationDuration = jobs('Professional Experience Organization 1: Example Advisory Sdn Bhd Duration: From April 2019 – March 2021 Designation: SAP Solution Architect Responsibilities: Delivery. Organization 2: Example Systems Pte Ltd Duration: Feb 2016 to April 2019 Designation: ERP Practice Director Responsibilities: Leadership. Project Experience Organization 3: Example Client Duration: Jan 2015 – Oct 2015 Designation: SAP Consultant');
+assert.equal(organizationDuration.length, 2);
+assert.deepEqual(organizationDuration.map((item) => item.company), ['Example Advisory Sdn Bhd', 'Example Systems Pte Ltd']);
+assert.deepEqual(organizationDuration.map((item) => item.title), ['SAP Solution Architect', 'ERP Practice Director']);
+assert.equal(organizationDuration[0].start, 'April 2019');
+assert.equal(jobs('Professional Experience Organization 1: Example Advisory Duration: April 2021 – March 2019 Designation: SAP Architect Responsibilities: Delivery.').length, 0);
+const roleCompanyPeriod = jobs('Employment History Senior Systems Engineer Example Services Pte Limited Period: 2nd Jan 2024 - Current Salary: undisclosed Responsibilities: Delivery. Junior Support Engineer Example Digital Pte Ltd Period: 29th May 2023 – 19th Dec 2023 Salary: undisclosed Responsibilities: Support. Education Example University');
+assert.equal(roleCompanyPeriod.length, 2);
+assert.deepEqual(roleCompanyPeriod.map((item) => item.company), ['Example Services Pte Limited', 'Example Digital Pte Ltd']);
+assert.deepEqual(roleCompanyPeriod.map((item) => item.title), ['Senior Systems Engineer', 'Junior Support Engineer']);
+assert.equal(roleCompanyPeriod[0].start, '2nd Jan 2024');
+assert.equal(roleCompanyPeriod[0].current, true);
+assert.equal(jobs('Project Experience Senior Systems Engineer Example Client Pte Ltd Period: 2nd Jan 2024 - Current').length, 0);
+assert.equal(jobs('Employment History Senior Systems Engineer Example Services Pte Ltd Period: 2nd Jan 2025 - 2nd Jan 2024').length, 0);
+const locatedEmployers = jobs('Employment History Example Advisory (Kuala Lumpur), Malaysia from Jan 2019 to till date. Example Systems (Singapore), Singapore from April 2018 to Jan 2019. Example Manufacturing (Penang) MFG Ltd, Malaysia from Nov 2015 to March 2018. Projects Organization: Example Client Duration: Jan 2019 to till date Role: SAP Consultant');
+assert.equal(locatedEmployers.length, 3);
+assert.deepEqual(locatedEmployers.map((item) => item.company), ['Example Advisory', 'Example Systems', 'Example Manufacturing MFG Ltd']);
+assert.deepEqual(locatedEmployers.map((item) => item.location), ['Kuala Lumpur, Malaysia', 'Singapore, Singapore', 'Penang, Malaysia']);
+assert.equal(locatedEmployers[0].title, '');
+assert.equal(locatedEmployers[0].current, true);
+assert.equal(locatedEmployers[0].end, 'Present');
+assert.equal(jobs('Project History Example Client (Singapore), Singapore from Jan 2019 to till date').length, 0);
+assert.equal(jobs('Employment History Example Advisory (Kuala Lumpur), Malaysia from Jan 2022 to Jan 2020').length, 0);
+
+
+for (const endpoint of ['Jan 20200', 'Nowhere', 'Currently unavailable', 'Presently unknown', 'till dateUnknown']) {
+  assert.equal(jobs(`Employment History Example Advisory (Singapore), Singapore from Jan 2019 to ${endpoint}`).length, 0, `Reject truncated endpoint: ${endpoint}`);
+}
+for (const endpoint of ['Jan 20200', 'Nowhere', 'Currently unavailable', 'Presently unknown']) {
+  assert.equal(jobs(`Employment History Senior Systems Engineer Example Services Pte Ltd Period: Jan 2019 - ${endpoint}`).length, 0, `Reject truncated period endpoint: ${endpoint}`);
+}
+
+
+
+const durationEmployerRows = 'Duration: January 2020 – December 2022 Employer: Example Advisory (Malaysia) Sdn Bhd – Global consulting services SAP Consultant Scope of Work: Delivery. Duration: February 2017 – December 2019 Employer: Example Systems Pte Ltd – Business services Analyst Scope of Work: Support.';
+const durationEmployers = jobs(`Employment History ${durationEmployerRows} Education`);
+assert.equal(durationEmployers.length, 2);
+assert.deepEqual(durationEmployers.map(item => item.company), ['Example Advisory (Malaysia) Sdn Bhd', 'Example Systems Pte Ltd']);
+assert.ok(durationEmployers.every(item => item.title === ''), 'Unlabelled prose must not supply an employment title');
+assert.equal(durationEmployers[0].start, 'January 2020');
+assert.equal(durationEmployers[0].end, 'December 2022');
+assert.equal(jobs(`Project History ${durationEmployerRows}`).length, 0);
+assert.equal(jobs(`Employment History Project History ${durationEmployerRows}`).length, 0);
+assert.equal(jobs(`Employment History ${durationEmployerRows.replaceAll('Employer:', 'Client:')}`).length, 0);
+assert.equal(jobs(`Employment History ${durationEmployerRows.replaceAll('December 2022', 'December 2010').replaceAll('December 2019', 'December 2010')}`).length, 0);
+assert.equal(jobs('Employment History Duration: January 2020 - Nowhere Employer: Example Systems Ltd - Services').length, 0);
+assert.equal(jobs('Employment History Duration: January 2020 - January 20200 Employer: Example Systems Ltd - Services').length, 0);
+
+
+
+const terminalOrganization = 'Organization 1: Example Advisory Sdn Bhd Duration: April 2019 – March 2021 Designation: SAP Solution Architect';
+for (const ending of ['', '   ', ' Education Example University', ' Project History Organization 2: Example Client Duration: Jan 2022 – Dec 2022 Designation: SAP Analyst']) {
+  const terminalRows = jobs(`Professional Experience ${terminalOrganization}${ending}`);
+  assert.equal(terminalRows.length, 1, 'Retain a terminal labelled employment row');
+  assert.equal(terminalRows[0].title, 'SAP Solution Architect');
+  assert.equal(terminalRows[0].company, 'Example Advisory Sdn Bhd');
+}
+assert.equal(jobs(`Project History ${terminalOrganization}`).length, 0);
+assert.equal(jobs(`Professional Experience ${terminalOrganization.replace('March 2021', 'March 2018')}`).length, 0);
+
+
+
+const headingPosition = 'Working Experience Example Services Duration: March 2017 - March 2020 Position: Accounts Assistant Salary: undisclosed Responsibilities: Support.';
+const headingRows = jobs(`${headingPosition} Unbounded Employer Duration: Jan 2015 - Feb 2017 Position: Analyst Salary: undisclosed Working Experience Example Logistics Duration: July 2010 - Feb 2012 Position: Coordinator Salary: undisclosed Education`);
+assert.deepEqual(headingRows.map(item => item.company), ['Example Services', 'Example Logistics']);
+assert.deepEqual(headingRows.map(item => item.title), ['Accounts Assistant', 'Coordinator']);
+assert.ok(headingRows.every(item => item.provenance?.length && item.provenance.every(ref => !ref.excerpt?.includes('Salary'))));
+assert.equal(jobs(`Project History ${headingPosition}`).length, 0);
+assert.equal(jobs(headingPosition.replace('Example Services', 'Client Example Services')).length, 0);
+assert.equal(jobs(headingPosition.replace('March 2020', 'March 2010')).length, 0);
+assert.equal(jobs(headingPosition.replace('March 2020', 'March 20200')).length, 0);
+
+
+
+assert.equal(jobs(`Education Example University ${headingPosition}`).length, 1);
+
+console.log('Employment table dates, role boundaries and spaced-date layouts: passed');

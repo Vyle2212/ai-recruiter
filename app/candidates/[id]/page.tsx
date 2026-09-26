@@ -7,7 +7,8 @@ import Candidate360RiskWorkflow from "@/components/candidate-360-risk-workflow";
 import Candidate360WorkflowStrip from "@/components/candidate-360-workflow-strip";
 import CandidateValidationPanel from "@/components/candidate-validation-panel";
 import { deriveCandidateWorkflow } from "@/components/candidate-360-workflow-machine";
-import { supabase } from "@/lib/supabase";
+import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
+import { requireRecruiterSearchAuthorization } from "@/lib/recruiterSearchAuthorization";
 import { buildCandidate360, type Candidate360Model } from "@/lib/candidate360Engine";
 import { buildCandidateValidationState } from "@/lib/candidateValidation";
 import { calculateSubmissionConfidence } from "@/lib/submissionConfidence";
@@ -42,10 +43,6 @@ function safeExternalHref(value: any) {
   if (/^https?:\/\//i.test(text)) return text;
   if (/^www\./i.test(text)) return `https://${text}`;
   return "";
-}
-
-function truthyParam(value: string | string[] | undefined) {
-  return /^(true|1|yes|approved|paid)$/i.test(safeParam(value, "false"));
 }
 
 function hrefWithSource(baseHref: string, source: string, fallbackCompare: string) {
@@ -819,23 +816,18 @@ export default async function Candidate360Page({
   const returnTo = safeInternalHref(safeParam(sp.returnTo, ""), "/search");
   const backLabel = returnTo.startsWith("/compare") ? "Back to Compare" : returnTo.startsWith("/shortlist") ? "Back to Shortlist" : returnTo.startsWith("/matches") ? "Back to Matches" : "Return to Talent Search";
   const searchId = safeParam(sp.searchId, safeParam(sp.searchSessionId, ""));
-  const viewerRole = safeParam(sp.role, "recruiter");
-  const normalizedRole = viewerRole.toLowerCase();
-  const subscription = truthyParam(sp.subscription) || normalizedRole === "client_paid";
-  const isClient = normalizedRole === "client" || normalizedRole === "client_free" || normalizedRole === "client_paid";
-  const isAdmin = normalizedRole === "admin" || truthyParam(sp.admin);
-  const hasProfileAccess =
-    subscription ||
-    truthyParam(sp.hasProfileAccess) ||
-    truthyParam(sp.profileAccess) ||
-    truthyParam(sp.profileApproved) ||
-    isAdmin;
-  const recruiterProfileApproved = isAdmin || truthyParam(sp.profileApproved) || truthyParam(sp.adminApproved) || truthyParam(sp.reviewerApproved);
-  const contactUnlocked =
-    subscription ||
-    truthyParam(sp.contactUnlocked) ||
-    truthyParam(sp.admin) ||
-    recruiterProfileApproved;
+  const authorization = await requireRecruiterSearchAuthorization({
+    permission: "candidate-detail:read",
+    route: "/candidates/[id]",
+  });
+  if (!authorization.allowed) {
+    return <main className="c360-page min-h-screen p-6 text-white"><div className="mx-auto max-w-4xl rounded-2xl border border-red-900/60 bg-red-950/20 p-6"><h1 className="text-2xl font-bold text-red-200">Access denied</h1><p className="mt-2 text-slate-300">Sign in with an active recruiter account to view candidate details.</p><Link href={returnTo} className="mt-4 inline-flex items-center rounded-full border border-cyan-500/30 bg-cyan-500/15 px-4 py-2 text-sm font-semibold text-cyan-100">&larr; {backLabel}</Link></div></main>;
+  }
+  const viewerRole = authorization.scope.role;
+  const isClient = false;
+  const hasProfileAccess = true;
+  const contactUnlocked = false;
+  const supabase = createLazySupabaseServiceClient();
 
   let candidate: any = null;
 
@@ -1547,7 +1539,6 @@ export default async function Candidate360Page({
     </main>
   );
 }
-
 
 
 

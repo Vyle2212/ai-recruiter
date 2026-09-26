@@ -239,10 +239,12 @@ export function classifyCandidateText(rawText: string, fileName?: string): Candi
     return { recordType: "SAP_CV", isSapProfile: true, shouldSave: true, reason: "SAP candidate profile detected.", confidence: Math.min(0.98, 0.65 + sapScore * 0.08), signals };
   }
 
-  if (nonSapHits > 0 || sapScore < 2) {
-    return { recordType: "NON_SAP_CV", isSapProfile: false, shouldSave: false, reason: "Non-SAP candidate profile detected. This file was not saved to SAP Talent Hub.", confidence: nonSapHits > 0 ? 0.93 : 0.78, signals: [`non_sap_hits:${nonSapHits}`, `sap_score:${sapScore}`] };
+  if (nonSapHits > 0) {
+    return { recordType: "NON_SAP_CV", isSapProfile: false, shouldSave: false, reason: "Non-SAP candidate profile detected. This file was not saved to SAP Talent Hub.", confidence: 0.93, signals: [`non_sap_hits:${nonSapHits}`, `sap_score:${sapScore}`] };
   }
 
+  // Missing SAP evidence is not affirmative non-SAP evidence. In particular,
+  // imperfect OCR can hide modules; never make a deletion decision from it.
   return { recordType: "UNKNOWN", isSapProfile: false, shouldSave: false, reason: "Unable to confirm this is a SAP candidate profile.", confidence: 0.7, signals: [`sap_score:${sapScore}`] };
 }
 

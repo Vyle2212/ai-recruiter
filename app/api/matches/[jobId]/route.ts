@@ -1,14 +1,22 @@
+import { recruiterSearchAuthorizationDenied, requireRecruiterSearchAuthorization } from "@/lib/recruiterSearchAuthorization";
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import {
   normalizeText,
   parseSkills,
 } from "@/lib/candidate-utils";
+import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
+  const authorization = await requireRecruiterSearchAuthorization({
+    permission: "search:read",
+    route: "/api/matches/[jobId]",
+  });
+  if (!authorization.allowed)
+    return recruiterSearchAuthorizationDenied(authorization);
   try {
     const { jobId } = await params;
 
@@ -54,7 +62,9 @@ export async function GET(
     // MATCHING
     // =========================
 
-    const matches = candidates.map(
+    const matches = candidates
+      .filter((candidate: any) => candidateSearchLifecycleDecision(candidate).visible)
+      .map(
       (candidate: any) => {
         const candidateSkills = parseSkills(
           candidate.skills

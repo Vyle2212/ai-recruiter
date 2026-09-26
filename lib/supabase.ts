@@ -1,22 +1,9 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import "server-only";
 
-let client: SupabaseClient | undefined;
+import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
 
-function getPublicSupabaseClient() {
-  if (client) return client;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const anonymousKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-  if (!url || !anonymousKey) {
-    throw new Error("The application data service is not configured.");
-  }
-  client = createClient(url, anonymousKey);
-  return client;
-}
-
-export const supabase = new Proxy({} as SupabaseClient, {
-  get(_target, property) {
-    const instance = getPublicSupabaseClient();
-    const value = Reflect.get(instance, property);
-    return typeof value === "function" ? value.bind(instance) : value;
-  },
-});
+// Legacy API handlers import this shared client. Keep it server-only so
+// candidate and recruiter data never depends on browser/anon table grants.
+// Route authorization is enforced by the policy-aware proxy before any of
+// these handlers run; the database client is initialized lazily at runtime.
+export const supabase = createLazySupabaseServiceClient();

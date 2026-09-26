@@ -267,15 +267,17 @@ export function classifySearchableProfileQuality(candidate: AnyRecord): Searchab
   else reviewCategory = "searchable_but_needs_enrichment";
 
   const draftResult = { missingFields: Array.from(new Set(missingFields)), riskFlags: Array.from(new Set(riskFlags.filter(Boolean))), searchableFields };
-  const recommendedAction: SearchableProfileRecommendedAction = reviewCategory === "search_ready"
-    ? "keep_searchable"
-    : reviewCategory === "blocked_validation_queue"
-      ? "send_to_validation_queue"
-      : reviewCategory === "must_repair_before_search"
-        ? "remove_from_search_until_repaired"
-        : onlyMissingCompany(draftResult, candidate)
-          ? "enrich_company_before_market_release"
-          : "enrich_before_market_release";
+  const recommendedAction: SearchableProfileRecommendedAction = CRITICAL_STATUSES.test(statusValue)
+    ? "remove_from_search_until_repaired"
+    : reviewCategory === "search_ready"
+      ? "keep_searchable"
+      : reviewCategory === "blocked_validation_queue"
+        ? "send_to_validation_queue"
+        : reviewCategory === "must_repair_before_search"
+          ? "remove_from_search_until_repaired"
+          : onlyMissingCompany(draftResult, candidate)
+            ? "enrich_company_before_market_release"
+            : "enrich_before_market_release";
 
   return {
     candidateId: candidateId(candidate),

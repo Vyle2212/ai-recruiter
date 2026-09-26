@@ -1,290 +1,113 @@
+import "server-only";
+
 import { createClient } from "@supabase/supabase-js";
-import { buildSearchIndexRow, CandidateRow } from "./buildSearchIndexRow";
+import { buildCandidateSearchIndexRow } from "../candidateSearchIndex";
+import { buildSearchIndexAudit } from "../searchIndexAudit";
+import { legacyIndexMutationRefusal } from "./legacyIndexMutationGate";
 
-const SUPABASE_URL =
-  process.env.CANDIDATE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+const PAGE_SIZE = 300;
 
-const SUPABASE_SERVICE_ROLE_KEY =
-  process.env.CANDIDATE_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
-
-const CANDIDATE_PAGE_SIZE = 300;
-const INDEX_PAGE_SIZE = 1000;
-const UPSERT_BATCH_SIZE = 100;
-
-const EXCLUDED_STATUSES = new Set(["deleted", "needs_review", "non_sap"]);
-
-function normalizeStatus(value: any): string {
-  return String(value || "").trim().toLowerCase();
+function getAdminSupabase() {
+  const url =
+    process.env.CANDIDATE_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.SUPABASE_URL;
+  const key =
+    process.env.CANDIDATE_SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_KEY;
+  if (!url || !key)
+    throw new Error("Server service-role configuration required");
+  return createClient(url, key, { auth: { persistSession: false } });
 }
 
-function isIndexableCandidate(candidate: CandidateRow): boolean {
-  return !EXCLUDED_STATUSES.has(normalizeStatus((candidate as any).status));
+export async function rebuildOneCandidate(
+  _candidateId: string,
+): Promise<never> {
+  return legacyIndexMutationRefusal();
 }
 
-export function getAdminSupabase() {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error(
-      "Missing SUPABASE_URL/NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY."
-    );
-  }
-
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false },
-  });
-}
-
-async function fetchAllCandidateRows(supabase: any): Promise<CandidateRow[]> {
-  let from = 0;
-  let all: CandidateRow[] = [];
-
-  while (true) {
-    const to = from + CANDIDATE_PAGE_SIZE - 1;
-
-    const { data, error } = await supabase
-      .from("candidates")
-      .select("*")
-      .range(from, to);
-
-    if (error) throw error;
-    if (!data || data.length === 0) break;
-
-    all = all.concat(data);
-
-    if (data.length < CANDIDATE_PAGE_SIZE) break;
-    from += CANDIDATE_PAGE_SIZE;
-  }
-
-  return all;
-}
-
-async function fetchAllCandidates(supabase: any): Promise<CandidateRow[]> {
-  const candidates = await fetchAllCandidateRows(supabase);
-  return candidates.filter(isIndexableCandidate);
-}
-
-async function cleanupSearchIndexOrphans(
-  supabase: any,
-  activeCandidateIds: string[]
-) {
-  const keep = new Set(activeCandidateIds);
-  let from = 0;
-  let removed = 0;
-
-  while (true) {
-    const to = from + INDEX_PAGE_SIZE - 1;
-
-    const { data, error } = await supabase
-      .from("candidate_search_index")
-      .select("candidate_id")
-      .range(from, to);
-
-    if (error) throw error;
-    if (!data || data.length === 0) break;
-
-    const orphanIds = data
-      .map((row: any) => row.candidate_id)
-      .filter((id: string) => id && !keep.has(id));
-
-    for (let i = 0; i < orphanIds.length; i += UPSERT_BATCH_SIZE) {
-      const batch = orphanIds.slice(i, i + UPSERT_BATCH_SIZE);
-
-      const { error: deleteError } = await supabase
-        .from("candidate_search_index")
-        .delete()
-        .in("candidate_id", batch);
-
-      if (deleteError) throw deleteError;
-      removed += batch.length;
-    }
-
-    if (data.length < INDEX_PAGE_SIZE) break;
-    from += INDEX_PAGE_SIZE;
-  }
-
-  return removed;
-}
-
-export async function rebuildOneCandidate(candidateId: string) {
-  const supabase = getAdminSupabase();
-
-  const { data: candidate, error } = await supabase
-    .from("candidates")
-    .select("*")
-    .eq("id", candidateId)
-    .single();
-
-  if (error) throw error;
-  if (!candidate) throw new Error("Candidate not found.");
-
-  if (!isIndexableCandidate(candidate)) {
-    const { error: deleteError } = await supabase
-      .from("candidate_search_index")
-      .delete()
-      .eq("candidate_id", candidateId);
-
-    if (deleteError) throw deleteError;
-
-    return {
-      candidate_id: candidateId,
-      indexed: false,
-      action: "removed_from_index",
-      reason: "excluded_status",
-      status: candidate.status || null,
-    };
-  }
-
-  const row = buildSearchIndexRow(candidate);
-
-  if (!row) {
-    const { error: deleteError } = await supabase
-      .from("candidate_search_index")
-      .delete()
-      .eq("candidate_id", candidateId);
-
-    if (deleteError) throw deleteError;
-
-    return {
-      candidate_id: candidateId,
-      indexed: false,
-      action: "removed_from_index",
-      reason: "buildSearchIndexRow_returned_null",
-      status: candidate.status || null,
-    };
-  }
-
-  const { error: upsertError } = await supabase
-    .from("candidate_search_index")
-    .upsert(row, { onConflict: "candidate_id" });
-
-  if (upsertError) throw upsertError;
-
-  return {
-    candidate_id: candidateId,
-    indexed: true,
-    action: "upserted",
-    status: candidate.status || null,
-  };
-}
-
-export async function rebuildSearchIndex() {
-  const supabase = getAdminSupabase();
-
-  const candidates = await fetchAllCandidates(supabase);
-  const activeCandidateIds = candidates
-    .map((candidate) => candidate.id)
-    .filter(Boolean);
-
-  const rows = candidates
-    .map((candidate) => buildSearchIndexRow(candidate))
-    .filter(Boolean);
-
-  const removed_orphans = await cleanupSearchIndexOrphans(
-    supabase,
-    activeCandidateIds
-  );
-
-  let indexed = 0;
-
-  for (let i = 0; i < rows.length; i += UPSERT_BATCH_SIZE) {
-    const batch = rows.slice(i, i + UPSERT_BATCH_SIZE);
-
-    const { error } = await supabase
-      .from("candidate_search_index")
-      .upsert(batch, { onConflict: "candidate_id" });
-
-    if (error) throw error;
-
-    indexed += batch.length;
-  }
-
-  return {
-    candidates_read: candidates.length,
-    indexed,
-    skipped: candidates.length - rows.length,
-    removed_orphans,
-    mode: "upsert_with_orphan_cleanup",
-  };
+export async function rebuildSearchIndex(): Promise<never> {
+  return legacyIndexMutationRefusal();
 }
 
 export async function auditSearchIndex() {
-  const supabase = getAdminSupabase();
+  const db = getAdminSupabase();
+  const candidates: Array<Record<string, any>> = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await db
+      .from("candidates")
+      .select("*")
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = data || [];
+    candidates.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
 
-  const candidates = await fetchAllCandidates(supabase);
-
-  const { count: indexed, error: indexedError } = await supabase
-    .from("candidate_search_index")
-    .select("candidate_id", { count: "exact", head: true });
-
-  if (indexedError) throw indexedError;
-
-  const { count: missingPrimaryModule, error: moduleCountError } =
-    await supabase
+  const indexRows: Array<Record<string, any>> = [];
+  const byModule: Record<string, number> = {};
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await db
       .from("candidate_search_index")
-      .select("candidate_id", { count: "exact", head: true })
-      .or("primary_module.is.null,primary_module.eq.UNKNOWN");
+      .select(
+        "candidate_id,source_updated_at,updated_at,primary_module,display_name,quality_score",
+      )
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = data || [];
+    indexRows.push(...page);
+    for (const { primary_module } of page) {
+      const moduleName = primary_module || "NULL";
+      byModule[moduleName] = (byModule[moduleName] || 0) + 1;
+    }
+    if (page.length < PAGE_SIZE) break;
+  }
 
-  if (moduleCountError) throw moduleCountError;
-
-  const { count: missingDisplayName, error: displayNameError } = await supabase
-    .from("candidate_search_index")
-    .select("candidate_id", { count: "exact", head: true })
-    .or(
-      "display_name.is.null,display_name.eq.Review Required,display_name.eq.Profile Under Review"
-    );
-
-  if (displayNameError) throw displayNameError;
-
-  const { count: qualityBelow50, error: qualityBelow50Error } = await supabase
-    .from("candidate_search_index")
-    .select("candidate_id", { count: "exact", head: true })
-    .lt("quality_score", 50);
-
-  if (qualityBelow50Error) throw qualityBelow50Error;
-
-  const { count: qualityBelow60, error: qualityBelow60Error } = await supabase
-    .from("candidate_search_index")
-    .select("candidate_id", { count: "exact", head: true })
-    .lt("quality_score", 60);
-
-  if (qualityBelow60Error) throw qualityBelow60Error;
-
-  const { count: reviewNames, error: reviewNamesError } = await supabase
-    .from("candidate_search_index")
-    .select("candidate_id", { count: "exact", head: true })
-    .ilike("display_name", "%review%");
-
-  if (reviewNamesError) throw reviewNamesError;
-
-  const { data: moduleDistribution, error: moduleError } = await supabase
-    .from("candidate_search_index")
-    .select("primary_module");
-
-  if (moduleError) throw moduleError;
-
-  const byModule = (moduleDistribution || []).reduce(
-    (acc: Record<string, number>, row: any) => {
-      const key = row.primary_module || "NULL";
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    },
-    {}
-  );
+  const indexableCandidateIds = candidates.flatMap((candidate) => {
+    const row = buildCandidateSearchIndexRow(candidate);
+    return row ? [String(row.candidate_id)] : [];
+  });
+  const reconciliation = buildSearchIndexAudit({
+    candidates,
+    indexRows,
+    indexableCandidateIds,
+    sampleSize: 20,
+  });
+  const missingPrimaryModule = indexRows.filter(
+    (row) => !row.primary_module || row.primary_module === "UNKNOWN",
+  ).length;
+  const missingDisplayName = indexRows.filter((row) =>
+    ["", "Review Required", "Profile Under Review"].includes(
+      String(row.display_name || ""),
+    ),
+  ).length;
+  const qualityBelow50 = indexRows.filter(
+    (row) => Number(row.quality_score || 0) < 50,
+  ).length;
+  const qualityBelow60 = indexRows.filter(
+    (row) => Number(row.quality_score || 0) < 60,
+  ).length;
+  const reviewNames = indexRows.filter((row) =>
+    /review/i.test(String(row.display_name || "")),
+  ).length;
+  const readyForSearch =
+    reconciliation.exactSetAligned &&
+    missingPrimaryModule === 0 &&
+    missingDisplayName === 0 &&
+    qualityBelow50 === 0 &&
+    reviewNames === 0;
 
   return {
-    totalCandidates: candidates.length,
-    indexed: indexed || 0,
-    missingPrimaryModule: missingPrimaryModule || 0,
-    missingDisplayName: missingDisplayName || 0,
-
-    // Main warning threshold for production data quality.
-    // This prevents valid but incomplete profiles such as "Rudolf N. Peralta"
-    // from being treated as broken data.
-    qualityBelow50: qualityBelow50 || 0,
-
-    // Kept for backward compatibility / monitoring only.
-    qualityBelow60: qualityBelow60 || 0,
-
-    reviewNames: reviewNames || 0,
+    readyForSearch,
+    totalCandidates: reconciliation.eligibleCandidates,
+    indexed: reconciliation.searchIndexRows,
+    missingPrimaryModule,
+    missingDisplayName,
+    qualityBelow50,
+    qualityBelow60,
+    reviewNames,
     byModule,
+    reconciliation,
   };
 }

@@ -1,14 +1,92 @@
 import fs from "node:fs";
 import path from "node:path";
-import {recruiterRouteRegistry} from "../lib/recruiterRouteRegistry";
-import {buildUiSmokeTestData} from "../lib/uiSmokeTestData";
+import { recruiterRouteRegistry } from "../lib/recruiterRouteRegistry";
 
-export async function buildCandidatePortalAudit(){
-  const smoke=await buildUiSmokeTestData();
-  const portalSource=fs.readFileSync(path.join(process.cwd(),"app/candidate/portal/page.tsx"),"utf8")+fs.readFileSync(path.join(process.cwd(),"app/candidate/portal/CandidatePortalClient.tsx"),"utf8");
-  const confirmSource=fs.readFileSync(path.join(process.cwd(),"app/candidate/self-confirm/[candidateId]/page.tsx"),"utf8");
-  const reviewSource=fs.readFileSync(path.join(process.cwd(),"app/recruiter/candidate-self-confirm-review/page.tsx"),"utf8");
-  return{generatedAt:new Date().toISOString(),mode:"read-only Candidate Portal audit; no candidate DB writes; no OpenAI calls",candidatePortalRoute:"/candidate/portal",selfConfirmRouteSample:smoke.sampleSelfConfirmUrl,candidateSelfConfirmPreview:/Preview only/i.test(confirmSource),consentRequired:/disabled=\{!Boolean\(values\.confirmAccuracy\)\}/.test(confirmSource),submitDisabled:/Submit confirmation[^<]*coming soon/.test(confirmSource)&&/<button type="button" disabled/.test(confirmSource),recruiterReviewRoute:"/recruiter/candidate-self-confirm-review",routesRegistered:["/candidate/portal","/candidate/self-confirm/[candidateId]","/recruiter/candidate-self-confirm-review"].every(route=>recruiterRouteRegistry.some(item=>item.route===route)),candidateFacingAdminLinksExposed:/\/recruiter\/(?:dashboard|workflow|import-)/.test(portalSource),recruiterReviewReadOnly:/Preview only/.test(reviewSource)&&!/(?:fetch\([^)]*,\s*\{[^}]*method:\s*["'](?:POST|PUT|PATCH|DELETE))/.test(reviewSource),noCandidateDbWrites:true,noOpenAiCalls:true,emailSends:0,candidateDbWrites:0,passed:true};
+const read = (file: string) =>
+  fs.readFileSync(path.join(process.cwd(), file), "utf8");
+
+export async function buildCandidatePortalAudit() {
+  const portalSource =
+    read("app/candidate/portal/page.tsx") +
+    read("app/candidate/portal/CandidatePortalClient.tsx");
+  const profileRoute = read("app/api/candidate/profile/route.ts");
+  const confirmationRoute = read(
+    "app/api/candidate/profile/confirmation/route.ts",
+  );
+  const reviewSource = read(
+    "app/recruiter/candidate-self-confirm-review/page.tsx",
+  );
+  return {
+    generatedAt: new Date().toISOString(),
+    mode: "candidate-owned portal contract audit; runtime writes disabled by default",
+    candidatePortalRoute: "/candidate/portal",
+    ownershipResolvedServerSide:
+      /authorizeCandidateCvUpload/.test(profileRoute) &&
+      /authorizeCandidateCvUpload/.test(confirmationRoute),
+    arbitraryCandidateIdInputRemoved: !/setCandidateId|Enter candidate ID/.test(
+      portalSource,
+    ),
+    twoConsentsRequired:
+      /confirmAccuracy:\s*accuracy/.test(portalSource) &&
+      /consentToShare:\s*sharing/.test(portalSource) &&
+      /disabled=\{!accuracy \|\| !sharing/.test(portalSource),
+    confirmationFeatureFlagged: /CANDIDATE_PROFILE_CONFIRMATION_ENABLED/.test(
+      confirmationRoute,
+    ),
+    atomicConfirmationRpc: /apply_candidate_profile_confirmation/.test(
+      confirmationRoute,
+    ),
+    cvUploadAvailable:
+      /\/api\/candidate\/profile\/cv\/sign/.test(portalSource) &&
+      /uploadToSignedUrl/.test(portalSource),
+    routesRegistered: [
+      "/candidate/portal",
+      "/api/candidate/profile",
+      "/api/candidate/profile/confirmation",
+      "/api/candidate/profile/cv",
+      "/api/candidate/profile/cv/sign",
+    ].every((route) =>
+      recruiterRouteRegistry.some((item) => item.route === route),
+    ),
+    candidateFacingAdminLinksExposed:
+      /\/recruiter\/(?:dashboard|workflow|import-)/.test(portalSource),
+    recruiterReviewReadOnly:
+      /Preview only/.test(reviewSource) &&
+      !/(?:fetch\([^)]*,\s*\{[^}]*method:\s*["'](?:POST|PUT|PATCH|DELETE))/.test(
+        reviewSource,
+      ),
+    noOpenAiCalls: true,
+    productionEnabledByDefault: false,
+  };
 }
-async function main(){const report=await buildCandidatePortalAudit();report.passed=report.candidateSelfConfirmPreview&&report.consentRequired&&report.submitDisabled&&report.routesRegistered&&!report.candidateFacingAdminLinksExposed&&report.recruiterReviewReadOnly;fs.writeFileSync(path.join(process.cwd(),"reports","candidate-portal-audit.json"),`${JSON.stringify(report,null,2)}\n`);console.log("Mode: read-only Candidate Portal audit; no candidate DB writes; no OpenAI calls");console.log(`Candidate portal route: ${report.candidatePortalRoute}`);console.log(`Self-confirm route sample: ${report.selfConfirmRouteSample}`);console.log(`Candidate self-confirm preview: ${report.candidateSelfConfirmPreview?"yes":"no"}`);console.log(`Consent required: ${report.consentRequired?"yes":"no"}`);console.log(`Submit disabled: ${report.submitDisabled?"yes":"no"}`);console.log(`Recruiter review route: ${report.recruiterReviewRoute}`);console.log(`No candidate DB writes: ${report.noCandidateDbWrites?"yes":"no"}`);console.log(`No OpenAI calls: ${report.noOpenAiCalls?"yes":"no"}`);console.log("Candidate DB writes: 0");}
-if(process.argv[1]?.replace(/\\/g,"/").endsWith("scripts/auditCandidatePortal.ts"))main().catch(error=>{console.error(error);process.exitCode=1;});
+
+async function main() {
+  const report = await buildCandidatePortalAudit();
+  const passed =
+    report.ownershipResolvedServerSide &&
+    report.arbitraryCandidateIdInputRemoved &&
+    report.twoConsentsRequired &&
+    report.confirmationFeatureFlagged &&
+    report.atomicConfirmationRpc &&
+    report.cvUploadAvailable &&
+    report.routesRegistered &&
+    !report.candidateFacingAdminLinksExposed &&
+    report.recruiterReviewReadOnly;
+  fs.writeFileSync(
+    path.join(process.cwd(), "reports", "candidate-portal-audit.json"),
+    `${JSON.stringify({ ...report, passed }, null, 2)}\n`,
+  );
+  if (!passed) throw new Error("Candidate portal contract audit failed.");
+  console.log(
+    "Candidate portal contract audit passed; production remains disabled.",
+  );
+}
+if (
+  process.argv[1]
+    ?.replace(/\\/g, "/")
+    .endsWith("scripts/auditCandidatePortal.ts")
+)
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

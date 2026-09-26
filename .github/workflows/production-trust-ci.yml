@@ -3,6 +3,7 @@ name: Production Trust Foundation CI
 on:
   push:
     branches:
+      - "codex/precision-*"
       - "codex/production-trust-*"
       - "codex/recruiter-api-authorization-*"
       - "codex/dependency-security-*"
@@ -10,6 +11,7 @@ on:
       - "codex/acceptance-workflow-*"
   pull_request:
     branches:
+      - "codex/profile-source-recovery"
       - "codex/production-trust-*"
       - "codex/recruiter-api-authorization-*"
       - "codex/dependency-security-*"
@@ -142,16 +144,97 @@ jobs:
         run: npm run test:production-trust:authorization
 
       - name: Authenticated acceptance harness safety contracts
+        env:
+          NODE_OPTIONS: --conditions=react-server
         run: npm run test:acceptance:harness
 
       - name: Search authorization, cache scope, and candidate privacy
-        run: npm run test:production-trust:search-security
+        run: |
+          npm run test:production-trust:search-security
+          node --import tsx scripts/candidate360ContactBoundary.test.ts
+          node --import tsx scripts/candidateResponsePrivacy.test.ts
 
       - name: Internal and external Search V2 regressions
         run: npm run test:production-trust:search-regression
 
       - name: Canonical evidence and immutable golden regressions
-        run: npm run test:production-trust:canonical
+        run: |
+          npm run test:production-trust:canonical
+          node --import tsx scripts/currentEmploymentInference.test.ts
+
+      - name: CV source layout and complete-document OCR regressions
+        run: |
+          node --import tsx scripts/candidateSourcePreservation.test.ts
+          node --import tsx scripts/pdfTextLayout.test.ts
+          node --import tsx scripts/docxTextLayout.test.ts
+          node --import tsx scripts/layoutEmployment.test.ts
+          node --import tsx scripts/dateCompanyRoleEmployment.test.ts
+          node --import tsx scripts/employmentTableDateLayouts.test.ts
+          node --import tsx scripts/careerDateConsistency.test.ts
+          node --import tsx scripts/careerOwnershipQuality.test.ts
+          node --import tsx scripts/labelledClientEmployerEmployment.test.ts
+          node --import tsx scripts/headedChronologicalEmployment.test.ts
+          node --import tsx scripts/headedCareerCards.test.ts
+          node --import tsx scripts/boundedCareerSummary.test.ts
+          node --import tsx scripts/boundedEmployerRoleCards.test.ts
+          node --import tsx scripts/boundedEmploymentFieldCards.test.ts
+          node --import tsx scripts/reorderedEmploymentFieldCards.test.ts
+          node --import tsx scripts/employmentEvidenceDeduplication.test.ts
+          node --import tsx scripts/profileSourceAuditEvidence.test.ts
+          node --import tsx scripts/flattenedEmployment.test.ts
+          node --import tsx scripts/exportedCareerEmployment.test.ts
+          node --import tsx scripts/anchoredEmployment.test.ts
+          node --import tsx scripts/boundedEmploymentBatch.test.ts
+          node --import tsx scripts/delimitedEmploymentBatch.test.ts
+          node --import tsx scripts/careerHeadingBatch.test.ts
+          node --import tsx scripts/labelledCareerBatch.test.ts
+          node --import tsx scripts/interleavedCareerBatch.test.ts
+          node --import tsx scripts/careerLedgerBatch.test.ts
+          node --import tsx scripts/labelledCareerRecords.test.ts
+          node --import tsx scripts/numericContractCareer.test.ts
+          node --import tsx scripts/nativeProjectCards.test.ts
+          node --import tsx scripts/customerObjectiveCareerCards.test.ts
+          node --import tsx scripts/sectionedProjectExperienceCards.test.ts
+          node --import tsx scripts/employerPromotionSpells.test.ts
+          node --import tsx scripts/explicitEmployerFieldFamilies.test.ts
+          node --import tsx scripts/originalCareerLayouts.test.ts
+          node --import tsx scripts/threeTierRecovery.test.ts
+          node --import tsx scripts/candidateSecurityFixtureRls.test.ts
+          node --import tsx scripts/productionPrivateDataRlsCutover.test.ts
+          node --import tsx scripts/productionCutoverPlan.test.ts
+          node --import tsx scripts/originalCvCollectionManifest.test.ts
+          node --import tsx scripts/productionAuthFoundation.test.ts
+          node --import tsx scripts/candidateProfileLifecycleBatch.test.ts
+          node --import tsx scripts/candidateCvIngestionParity.test.ts
+          node --import tsx scripts/offlineCvParserAudit.test.ts
+          node --import tsx scripts/legacyCvUploadBoundary.test.ts
+          node --import tsx scripts/candidateOwnedCvUpdate.test.ts
+          node --import tsx scripts/candidateCvReplayIntegrity.test.ts
+          node --import tsx scripts/candidateProfileConfirmation.test.ts
+          node --import tsx scripts/candidatePortal.test.ts
+          node --import tsx scripts/adminCvBulkUpload.test.ts
+          node --import tsx scripts/candidateSearchLifecycleConsistency.test.ts
+          node --import tsx scripts/searchIndexEligibilityAudit.test.ts
+          node --import tsx scripts/searchIndexExactSetRepair.test.ts
+          NODE_OPTIONS=--conditions=react-server node --import tsx scripts/searchIndexExactSetRepairOperator.test.ts
+          node --import tsx scripts/productionEmploymentGapInventory.test.ts
+          node --import tsx scripts/productionEmploymentProjectionAudit.test.ts
+          node --import tsx scripts/productionEmploymentAdditivePromotion.test.ts
+          node --import tsx scripts/productionEmploymentPromotionBatch.test.ts
+          NODE_OPTIONS=--conditions=react-server node --import tsx scripts/productionEmploymentPromotionSupabase.test.ts
+          NODE_OPTIONS=--conditions=react-server node --import tsx scripts/searchIndexRebuildPlan.test.ts
+          NODE_OPTIONS=--conditions=react-server node --import tsx scripts/legacyIndexMutationGate.test.ts
+          node --import tsx scripts/productionEmploymentPromotionOperator.test.ts
+          node --import tsx scripts/productionEmploymentReviewPack.test.ts
+          node --import tsx scripts/privateReviewFilePermissions.test.ts
+          node --import tsx scripts/productionEmploymentPromotionBackup.test.ts
+          node --import tsx scripts/productionEmploymentPromotionAuthorization.test.ts
+          node --import tsx scripts/releaseDocumentationIntegrity.test.ts
+          node --import tsx scripts/candidateDetailAuthorization.test.ts
+          node --import tsx scripts/cvPdfOcr.test.ts
+          node --import tsx scripts/pdfModernCompatibility.test.ts
+          node --import tsx scripts/cvTextDocumentCompatibility.test.ts
+          node --import tsx scripts/uploadCvSourceFailure.test.ts
 
       - name: Spreadsheet export and lazy-client regressions
         run: npm run test:production-trust:dependencies
@@ -162,6 +245,24 @@ jobs:
       - name: Scoped formatting check
         run: |
           npm run check:production-trust:format
+          npx prettier --check docs/precision-v172-blank-project-anchor-20260926.md
+          npx prettier --check docs/precision-v171-leading-client-project-card-20260926.md
+          npx prettier --check docs/precision-v170-split-role-project-cards-20260926.md
+          npx prettier --check lib/candidateExtractionCoverage.ts scripts/candidateProfileIngestion.test.ts docs/precision-v169-split-employer-anchor-coverage-20260926.md
+          npx prettier --check lib/boundedEmploymentFieldCards.ts lib/candidateUploadEnrichment.ts scripts/boundedEmploymentFieldCards.test.ts scripts/candidateCvIngestionParity.test.ts docs/precision-v156-split-employment-date-cards-20260925.md docs/precision-v157-project-merge-deduplication-20260925.md docs/precision-v158-current-employer-evidence-20260926.md docs/precision-v159-split-project-date-cards-20260926.md
+          npx prettier --check lib/careerDateEvidence.ts lib/nativeProjectCards.ts lib/projectDateEvidence.ts scripts/nativeProjectCards.test.ts docs/precision-v160-flattened-project-labels-20260926.md docs/precision-v161-tight-project-delimiters-20260926.md docs/precision-v162-project-date-format-parity-20260926.md docs/precision-v163-shared-project-date-evidence-20260926.md docs/precision-v164-shared-career-date-evidence-20260926.md docs/precision-v165-contradictory-current-endpoints-20260926.md docs/precision-v166-profile-current-date-conflict-gate-20260926.md docs/precision-v167-shared-employment-before-pdf-ocr-20260926.md
+          npx prettier --check lib/customerObjectiveCareerCards.ts scripts/customerObjectiveCareerCards.test.ts docs/precision-v175-customer-project-employer-boundary-20260926.md
+          npx prettier --check lib/sectionedProjectExperienceCards.ts scripts/sectionedProjectExperienceCards.test.ts
+          npx prettier --check lib/reorderedEmploymentFieldCards.ts scripts/reorderedEmploymentFieldCards.test.ts docs/precision-v153-reordered-employment-field-cards-20260925.md
+          npx prettier --check lib/candidateSearchMutationGate.ts
+          npx prettier --check lib/candidateCvIngestion.ts lib/offlineCvParserAudit.ts scripts/auditOfflineCvParser.ts scripts/offlineCvParserAudit.test.ts
+          npx prettier --check lib/cvPdfOcr.ts scripts/cvPdfOcr.test.ts
+          npx prettier --check lib/originalCvArchive.ts lib/originalCvArchiveCommit.ts scripts/originalCvArchiveContract.test.ts
+          npx prettier --check scripts/candidateCvReplayIntegrity.test.ts
+          npx prettier --check lib/originalCvStorageRead.ts
+          npx prettier --check app/upload-cv/page.tsx app/api/parse-cv/route.ts scripts/legacyCvUploadBoundary.test.ts
+          npx prettier --check lib/originalCvCollectionManifest.ts scripts/originalCvCollectionManifest.test.ts
+          npx prettier --check lib/cvPdfExtraction.ts lib/pdfTextLayout.ts scripts/pdfModernCompatibility.test.ts lib/cvTextDocumentExtraction.ts scripts/cvTextDocumentCompatibility.test.ts docs/precision-v143-shared-text-document-extraction-20260925.md lib/searchIndexAudit.ts lib/searchIndexExactSetRepair.ts lib/searchIndexExactSetRepairOperator.ts scripts/runSearchIndexExactSetRepair.ts scripts/searchIndexExactSetRepairOperator.test.ts docs/precision-v142-search-index-repair-operator-20260925.md scripts/searchIndexEligibilityAudit.test.ts scripts/searchIndexExactSetRepair.test.ts scripts/prepareSearchIndexExactSetRepair.ts scripts/auditSearchIndex.ts docs/precision-v141-canonical-search-index-eligibility-20260925.md lib/search/legacyIndexMutationGate.ts lib/search/rebuildSearchIndex.ts lib/candidateCvIngestion.ts lib/candidateCvAuthorization.ts lib/candidateProfileConfirmation.ts lib/candidateSelfConfirmSubmission.ts lib/candidateSearchLifecycle.ts lib/candidateSearchVisibility.ts lib/searchV2CandidateLifecycle.ts lib/productionCutoverPlan.ts lib/adminCvBulkUpload.ts lib/serverCvContentDigest.ts lib/signedCvUploadFinalization.ts app/upload/page.tsx app/candidate/portal/CandidatePortalClient.tsx app/candidate/portal/page.tsx app/api/admin/rebuild-search-index/route.ts app/api/admin/rebuild-candidate/route.ts app/api/candidate-search-index/rebuild/route.ts app/api/candidate-search-index/sync/route.ts app/api/upload-cv/route.ts app/api/candidate/profile/route.ts app/api/candidate/profile/confirmation/route.ts app/api/candidate/profile/cv/sign/route.ts app/api/candidate/profile/cv/route.ts app/api/recruiter/search-v2/route.ts scripts/legacyIndexMutationGate.test.ts scripts/rebuild-index.ts scripts/releaseDocumentationIntegrity.test.ts scripts/productionAuthFoundation.test.ts scripts/productionCutoverPlan.test.ts scripts/prepareProductionCutoverPlan.ts scripts/candidateCvIngestionParity.test.ts scripts/candidateOwnedCvUpdate.test.ts scripts/candidateProfileConfirmation.test.ts scripts/candidatePortal.test.ts scripts/adminCvBulkUpload.test.ts scripts/candidateSearchLifecycleConsistency.test.ts scripts/uploadCvSourceFailure.test.ts scripts/signedCvUploadFinalization.test.ts docs/precision-v131-production-readonly-reverification-20260924.md docs/precision-v135-production-auth-foundation-20260924.md docs/precision-v137-candidate-owned-cv-update-20260924.md docs/precision-v138-search-lifecycle-invalidation-20260924.md docs/precision-v139-candidate-profile-confirmation-20260925.md docs/precision-v140-resumable-admin-cv-upload-20260925.md
           npm run check:acceptance:format
 
       - name: Commit whitespace check

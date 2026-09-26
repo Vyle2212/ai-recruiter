@@ -1,0 +1,7 @@
+# Candidate 360 contact boundary checkpoint (2026-09-24)
+
+The recruiter Candidate 360 profile previously returned direct contact values and evidence through its general read path. Its resume endpoint returned source CV text without a database-backed contact unlock. The profile loader now blanks direct email and phone values and evidence for all its consumers, the read route sets private no-store caching, and the resume endpoint returns `contact_approval_required` after the existing authorization check. A synthetic regression verifies preservation of non-contact fields and the blocked resume read. No production data was changed.
+
+Source projection before and after this security batch is unchanged: **737/970 sources, 2,160 employment rows**, with **233 sources** still lacking employment. These are the last available figures, not a new full-population comparison. The private source archive is unavailable in this workspace following the previous HTTP 502 transfer, so no new layout group or extraction claim is made. Stored production inventory remains **231/970 sources, 715 rows**. The separate review queues remain **533 additive sources** and **108 conflicting sources**.
+
+Production remains **NO_GO**. Private adjudication and backup, reviewed backfill/readback and exact-set index reconstruction, RLS cutover/readback, live OCR, and authenticated acceptance on the promoted artifact remain required. Contact reveal requires a reviewed database-backed approval before this endpoint can serve direct contact or a raw CV again.

@@ -208,23 +208,17 @@ function shouldMarkAsNonSap(classification: any, c: any, rawText: string) {
   return true;
 }
 
-async function rebuildCandidate(candidateId: string) {
-  try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    await fetch(`${baseUrl}/api/admin/rebuild-candidate?id=${candidateId}`, {
-      method: "POST",
-    });
-  } catch {
-    // Non-blocking. Full rebuild can be run after repair.
-  }
-}
-
 export async function POST(req: NextRequest) {
   try {
     const url = new URL(req.url);
     const dryRun =
       url.searchParams.get("dryRun") === "1" ||
       url.searchParams.get("dryRun") === "true";
+    if (!dryRun)
+      return NextResponse.json(
+        { success: false, error: "reviewed_repair_transaction_required" },
+        { status: 503, headers: { "Cache-Control": "no-store" } },
+      );
     const limit = Number(url.searchParams.get("limit") || 1000);
 
     const { data, error } = await supabase
@@ -356,14 +350,6 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        if (!dryRun) {
-          const { error: updateError } = await supabase
-            .from("candidates")
-            .update(update)
-            .eq("id", c.id);
-          if (updateError) throw updateError;
-          await rebuildCandidate(c.id);
-        }
       }
     }
 
@@ -374,9 +360,7 @@ export async function POST(req: NextRequest) {
       changed: actions.length,
       summary,
       actions,
-      message: dryRun
-        ? "Dry run only. Add ?dryRun=0 or remove dryRun to apply."
-        : "Candidate data repaired. Run full rebuild-search-index after this.",
+      message: "Dry run only. Mutations require reviewed transaction and search-index readback.",
     });
   } catch (error: any) {
     console.error("Repair candidate data failed:", error);

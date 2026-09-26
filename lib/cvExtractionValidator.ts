@@ -1,3 +1,4 @@
+import { validateAiEmploymentEvidence } from "./aiEmploymentEvidence";
 import { extractFullCandidateProfile } from "./fullCandidateExtractionEngine";
 import type { AiExtractionProviderMeta, AnyRecord, RawAiCandidateExtraction, ValidatedAiCandidateExtraction } from "./cvExtractionSchema";
 
@@ -50,7 +51,7 @@ const COUNTRIES: Array<[string, RegExp]> = [
   ["Saudi Arabia", /Saudi Arabia|KSA|Riyadh|Jeddah/i],
 ];
 
-const BAD_NAME_RE = /candidate profile pending validation|profile under review|personal particulars?|personal details|resume|curriculum vitae|monitoring compliance|external stakeholders|technical skills|professional summary|work experience|employment history|career objective|project experience|application development|^sap consultant$|^sap fico$|^sap hana$|robot framework/i;
+const BAD_NAME_RE = /candidate profile pending validation|profile under review|personal particulars?|personal details|resume|curriculum vitae|monitoring compliance|external stakeholders|customer request|technical skills|professional summary|work experience|employment history|career objective|project experience|application development|^sap consultant$|^sap fico$|^sap hana$|robot framework/i;
 const BAD_TITLE_RE = /^(?:\d{1,2}(?:\.\d)?\+?\s+years?\s+as\b)|implementation projects?|roll-?out projects?|support projects?|years as|experience in|worked as|recently worked|^i am\b/i;
 const BAD_COMPANY_RE = /(?:^\d{4}\s*-\s*(?:present|now|current)$)|(?:\bLocation:)|(?:^product group$)|(?:^led\s+it systems$)|(?:^business development\s*&\s*operation$)|(?:^director oversee)|(?:^welcome to\b)|^by\s+|achieving|requirements|analy[sz]ed|designed new solutions|implemented solutions|client name|^client\s+|date of birth|personal particulars?|professional objective|authorization concepts|sap ecc|hana system solutions|jul\s+\d{4}\s+to|flavor\s*&\s*fragrance\s+solutions|creating functional designs|action is growing fast|system solutions/i;
 
@@ -186,6 +187,9 @@ export function validateAiCandidateExtraction(raw: RawAiCandidateExtraction, can
 
   raw = normalizeAiExtractionResult(raw);
   const normalizationWarnings = (raw as any).normalizationWarnings || [];
+  const proposedEmployment = raw.experience.employmentHistory.length ? raw.experience.employmentHistory : raw.employer.employerHistory;
+  const aiUsed = (providerMeta?.providerUsed || raw.providerMeta?.providerUsed || providerMeta?.mode || raw.providerMeta?.mode) === "openai";
+  const employmentEvidence = aiUsed ? validateAiEmploymentEvidence(proposedEmployment, rawText) : {accepted: proposedEmployment, reasons: []};
   const current = currentParser(candidate);
   const nameValue = clean(raw.identity.fullName?.value);
   let nameReason = nameRejectReason(nameValue);
@@ -232,7 +236,7 @@ export function validateAiCandidateExtraction(raw: RawAiCandidateExtraction, can
     !hasContact ? "contact_missing" : "",
     !hasLocation ? "location_missing" : "",
     rawTextQuality ? `raw_text_quality:${rawTextQuality}` : "",
-  ].filter(Boolean).concat(normalizationWarnings);
+  ].filter(Boolean).concat(normalizationWarnings, employmentEvidence.reasons);
   let reviewClassification: ValidatedAiCandidateExtraction["reviewClassification"] = "manual_review_required";
   if (rawTextQuality) reviewClassification = "likely_reupload_required";
   else if (nameReason) reviewClassification = "blocked_identity";
@@ -240,6 +244,7 @@ export function validateAiCandidateExtraction(raw: RawAiCandidateExtraction, can
   else if (!hasSapEvidence || !hasKnownPrimaryModule) reviewClassification = "likely_non_sap_or_low_quality";
   else if (!hasContact && !hasLocation) reviewClassification = "blocked_contact_location";
   else if (employerReason) reviewClassification = "parser_recoverable";
+  else if (employmentEvidence.reasons.length) reviewClassification = "manual_review_required";
   else reviewClassification = "search_ready_after_extraction";
   const searchReadiness = reviewClassification === "search_ready_after_extraction";
   const fieldCompletenessScore = Math.round([!nameReason, !titleReason, modules.length, (raw.sap.sapSkills || []).length, hasContact, hasLocation, Boolean(currentEmployer), raw.experience.totalYearsExperience?.value, raw.compensation.expectedSalary?.value].filter(Boolean).length / 9 * 100);
@@ -294,7 +299,7 @@ export function validateAiCandidateExtraction(raw: RawAiCandidateExtraction, can
     previousCompanyEndDate,
     previousCompanyYearsExperience,
     previousCompanyTenureText,
-    employmentHistory: raw.experience.employmentHistory || raw.employer.employerHistory || [],
+    employmentHistory: employmentEvidence.accepted,
     clientCompanies,
     projectCompanies: raw.clientProjects.projectCompanies || [],
     currentEmployerEvidence: raw.employer.currentEmployer?.evidence,

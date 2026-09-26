@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dedupeByCanonicalIdentity } from "@/lib/identityResolution";
 import { classifyCandidateSearchVisibility } from "@/lib/candidateSearchVisibility";
+import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
 import { buildTalentSearchPaginationMeta } from "@/lib/talentSearchPagination";
 import { buildSearchIndexAudit } from "@/lib/searchIndexAudit";
 import { candidateProfileTimestampLabels } from "@/lib/candidateDuplicateIdentity";
 import { classifySearchableProfileQuality } from "@/lib/searchableProfileQualityGate";
 import { talentSearchEmployerDisplay, talentSearchExpectedSalaryDisplay } from "@/lib/talentSearchCardDisplay";
 import { TALENT_SEARCH_DISPLAY_RESOLVER_VERSION, cleanTalentSearchTitle, classifyTalentSearchQuery, extractTalentSearchExplicitName, isTalentSearchBadDisplayName, isTalentSearchPlaceholderName, resolveTalentSearchViewerRole, safeTalentSearchCompany, talentSearchIdentityRank, talentSearchSummaryVisibility } from "@/lib/talentSearchDisplay";
-import { supabase } from "@/lib/supabase";
+import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
+import {
+  recruiterSearchAuthorizationDenied,
+  requireRecruiterSearchAuthorization,
+} from "@/lib/recruiterSearchAuthorization";
 import {
   buildCandidateSapText,
   buildSapSearchIntent,
@@ -22,6 +27,7 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+const supabase = createLazySupabaseServiceClient();
 
 // Keep this aligned with the actual candidates table. Avoid adding columns that are not confirmed in Supabase.
 const CANDIDATE_LIGHT_FIELDS = `
@@ -417,10 +423,13 @@ function hasStrongSapTitleEvidenceForSearch(value: any) {
 }
 
 function hiddenReasonForRecruiterSearch(candidate: AnyRecord, showReview = false) {
-  if (showReview) {
-    const status = cleanSearchKey(candidate.status);
-    if (SEARCH_HIDDEN_STATUSES.has(status)) return "archivedOrInactive";
-  }
+  const lifecycle = candidateSearchLifecycleDecision(candidate, {
+    includeReview: showReview,
+  });
+  if (!lifecycle.visible)
+    return lifecycle.reason === "review_required"
+      ? "visibility"
+      : "archivedOrInactive";
   const visibility = classifyCandidateSearchVisibility(candidate);
   return visibility.blocked_from_recruiter_search ? visibility.validation_queue_reason : "";
 }
@@ -1389,6 +1398,11 @@ async function fetchCandidates(args: {
 export async function GET(req: NextRequest) {
   const timing: SearchTiming = { startedAt: performance.now() };
   try {
+    const authorization = await requireRecruiterSearchAuthorization({
+      permission: "search:read",
+      route: "/api/search-candidates",
+    });
+    if (!authorization.allowed) return recruiterSearchAuthorizationDenied(authorization);
     const url = new URL(req.url);
 
     const rawKeyword = firstParam(url, ["keyword", "q", "search"], "");
@@ -1406,9 +1420,9 @@ export async function GET(req: NextRequest) {
     const includeReview = toBool(firstParam(url, ["includeReview"], "false"));
     const includeReviewRecords = showReview || reviewMode || includeReview;
     const viewerRole = resolveTalentSearchViewerRole({
-      requestedRole: firstParam(url, ["viewerRole", "role"], ""),
-      adminFlag: firstParam(url, ["internalTalentSearchAdmin", "adminSummary", "admin"], ""),
-      adminEnabled: process.env.NODE_ENV !== "production" || process.env.TALENT_SEARCH_ADMIN_SUMMARY === "true" || process.env.NEXT_PUBLIC_TALENT_SEARCH_ADMIN_SUMMARY === "true",
+      requestedRole: authorization.scope.role === "admin" ? "admin" : "recruiter",
+      adminFlag: "",
+      adminEnabled: true,
     });
     const summaryVisibility = talentSearchSummaryVisibility(viewerRole);
     const requestedPageSize = n(firstParam(url, ["pageSize", "limit"], String(DEFAULT_SEARCH_PAGE_SIZE)), DEFAULT_SEARCH_PAGE_SIZE);
@@ -1683,9 +1697,6 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-
-
-
 
 
 

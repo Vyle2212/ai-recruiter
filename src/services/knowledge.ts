@@ -1,31 +1,31 @@
-import { supabase } from './supabase'
+import "server-only";
+
+import { supabase } from "./supabase";
 
 export async function getSAPModules() {
   const { data, error } = await supabase
-    .from('sap_modules')
-    .select('*')
-    .order('module')
+    .from("sap_modules")
+    .select("*")
+    .order("module");
 
   if (error) {
-    console.error('Supabase error:', error)
-    return []
+    console.error("Supabase error:", error);
+    return [];
   }
 
-  return data
+  return data;
 }
 
-export async function searchSAPModules(
-  keyword: string,
-) {
+export async function searchSAPModules(keyword: string) {
   const { data, error } = await supabase
-    .from('sap_modules')
-    .select('*')
-    .ilike('module', `%${keyword}%`)
+    .from("sap_modules")
+    .select("*")
+    .ilike("module", `%${keyword}%`);
 
   if (error) {
-    console.error(error)
-    return []
+    console.error(error);
+    return [];
   }
 
-  return data
+  return data;
 }

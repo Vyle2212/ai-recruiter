@@ -1,22 +1,51 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import {buildCandidatePortalAudit} from "./auditCandidatePortal";
-import {recruiterRouteRegistry} from "../lib/recruiterRouteRegistry";
+import { buildCandidatePortalAudit } from "./auditCandidatePortal";
+import { recruiterRouteRegistry } from "../lib/recruiterRouteRegistry";
 
-async function main(){
-  const audit=await buildCandidatePortalAudit();
-  assert.equal(fs.existsSync("app/candidate/portal/page.tsx"),true);
-  assert.match(audit.selfConfirmRouteSample,/^\/candidate\/self-confirm\/.+/);
-  assert.equal(audit.candidateSelfConfirmPreview,true);
-  assert.equal(audit.consentRequired,true);
-  assert.equal(audit.submitDisabled,true);
-  assert.equal(audit.recruiterReviewReadOnly,true);
-  assert.equal(audit.candidateFacingAdminLinksExposed,false);
-  assert.ok(recruiterRouteRegistry.some(item=>item.route==="/candidate/portal"&&item.readOnly&&!item.candidateDbWrites&&!item.openAiCallsDefault));
-  const files=["app/candidate/portal/page.tsx","app/candidate/portal/CandidatePortalClient.tsx","app/candidate/self-confirm/[candidateId]/page.tsx","app/recruiter/candidate-self-confirm-review/page.tsx"];
-  const source=files.map(file=>fs.readFileSync(file,"utf8")).join("\n");
-  assert.doesNotMatch(source,/new OpenAI|responses\.create|sendMail|sendEmail|\.delete\(|unlink|rmSync/i);
-  assert.doesNotMatch(source,/supabase[\s\S]{0,100}\.(?:insert|update|upsert|delete)\(/i);
+async function main() {
+  const audit = await buildCandidatePortalAudit();
+  assert.equal(audit.ownershipResolvedServerSide, true);
+  assert.equal(audit.arbitraryCandidateIdInputRemoved, true);
+  assert.equal(audit.twoConsentsRequired, true);
+  assert.equal(audit.confirmationFeatureFlagged, true);
+  assert.equal(audit.atomicConfirmationRpc, true);
+  assert.equal(audit.cvUploadAvailable, true);
+  assert.equal(audit.routesRegistered, true);
+  assert.equal(audit.candidateFacingAdminLinksExposed, false);
+  assert.equal(audit.recruiterReviewReadOnly, true);
+  assert.equal(audit.productionEnabledByDefault, false);
+  const portal = recruiterRouteRegistry.find(
+    (item) => item.route === "/candidate/portal",
+  );
+  assert.equal(portal?.readOnly, false);
+  assert.equal(portal?.candidateDbWrites, true);
+  const source = [
+    "app/candidate/portal/page.tsx",
+    "app/candidate/portal/CandidatePortalClient.tsx",
+    "app/api/candidate/profile/route.ts",
+    "app/api/candidate/profile/confirmation/route.ts",
+  ]
+    .map((file) => fs.readFileSync(file, "utf8"))
+    .join("\n");
+  assert.match(source, /Legal employer/);
+  assert.match(source, /Client \(not employer\)/);
+  assert.match(source, /setStructured\("workExperience"/);
+  assert.match(source, /setStructured\("projectExperience"/);
+  assert.match(source, /setStructured\("education"/);
+  assert.match(source, /setStructured\("languages"/);
+  assert.match(
+    source,
+    /finalizePossiblyCompletedSignedCvUpload\(\{[\s\S]*uploadError: uploaded\.error/,
+    "candidate upload must ask the server to resolve an ambiguous Storage response",
+  );
+  assert.doesNotMatch(
+    source,
+    /new OpenAI|responses\.create|sendMail|sendEmail/i,
+  );
   console.log("candidatePortal.test.ts passed");
 }
-main().catch(error=>{console.error(error);process.exitCode=1;});
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

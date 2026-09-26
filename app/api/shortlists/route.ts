@@ -1,3 +1,5 @@
+import { loadCandidateSearchMutationEligibility } from "@/lib/candidateSearchMutationGate";
+import { recruiterSearchAuthorizationDenied, recruiterSearchPrivateNoStoreHeaders, requireRecruiterSearchAuthorization } from "@/lib/recruiterSearchAuthorization";
 import { NextRequest, NextResponse } from "next/server";
 import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
 
@@ -18,6 +20,12 @@ function normalizeMode(value: any) {
 }
 
 export async function GET(req: NextRequest) {
+  const authorization = await requireRecruiterSearchAuthorization({
+    permission: "search:read",
+    route: "/api/shortlists",
+  });
+  if (!authorization.allowed)
+    return recruiterSearchAuthorizationDenied(authorization);
   try {
     const url = new URL(req.url);
     const jobId = url.searchParams.get("jobId") || url.searchParams.get("job_id");
@@ -41,7 +49,27 @@ export async function GET(req: NextRequest) {
     const { data, error } = await query;
     if (error) throw error;
 
-    return NextResponse.json({ success: true, shortlists: data || [] });
+    let shortlists = data || [];
+    if (includeCandidates) {
+      const candidateIds = shortlists.flatMap((shortlist: any) =>
+        (shortlist.shortlist_candidates || []).map((item: any) => item.candidate_id),
+      );
+      const eligibility = await loadCandidateSearchMutationEligibility(
+        supabase,
+        candidateIds,
+      );
+      shortlists = shortlists.map((shortlist: any) => ({
+        ...shortlist,
+        shortlist_candidates: (shortlist.shortlist_candidates || []).filter(
+          (item: any) => eligibility.eligibleIds.has(String(item.candidate_id || "").trim()),
+        ),
+      }));
+    }
+
+    return NextResponse.json(
+      { success: true, shortlists },
+      { headers: recruiterSearchPrivateNoStoreHeaders },
+    );
   } catch (error: any) {
     return NextResponse.json(
       {
@@ -56,9 +84,22 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const authorization = await requireRecruiterSearchAuthorization({
+    permission: "candidate-detail:read",
+    route: "/api/shortlists",
+  });
+  if (!authorization.allowed)
+    return recruiterSearchAuthorizationDenied(authorization);
   try {
     const body = await req.json().catch(() => ({}));
     const candidateIds = asArray(body.candidateIds || body.candidate_ids);
+
+    const eligibility = await loadCandidateSearchMutationEligibility(supabase, candidateIds);
+    if (!eligibility.allEligible)
+      return NextResponse.json(
+        { success: false, error: "Every candidate must be eligible for shortlisting." },
+        { status: 409, headers: recruiterSearchPrivateNoStoreHeaders },
+      );
 
     const { data: shortlist, error: shortlistError } = await supabase
       .from("shortlists")

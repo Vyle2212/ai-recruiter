@@ -2,6 +2,8 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { formatProjectTenureEstimate } from "@/lib/projectEmploymentEstimate";
+import { formatEmploymentTenure } from "@/lib/employmentTenure";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Candidate360Field, Candidate360Profile } from "@/lib/candidate360Types";
@@ -455,7 +457,7 @@ export default function Candidate360V2Client({ candidateId }: { candidateId: str
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div><h3 className="text-base font-semibold text-white">{role.company}</h3>{role.location ? <p className="mt-1 text-sm text-slate-400">{role.location}</p> : null}</div>
-                          <div className="text-right text-xs text-slate-400"><p>{[role.start, role.end || (role.current ? "Present" : "")].filter(Boolean).join("–")}</p>{role.duration ? <p className="mt-1">{role.duration}</p> : null}</div>
+                          <div className="text-right text-xs text-slate-400">{role.estimatedTenure ? <p className="text-amber-200">{formatProjectTenureEstimate(role.estimatedTenure)}</p> : null}<p>{[role.start, role.current ? "Present" : role.end].filter(Boolean).join("–")}</p>{formatEmploymentTenure(role.start, role.end, role.current) ? <p className="mt-1">{formatEmploymentTenure(role.start, role.end, role.current)}</p> : null}</div>
                         </div>
                         <div className="mt-4 flex flex-wrap items-center gap-2">{role.title ? <p className="font-medium text-slate-100">{role.title}</p> : null}<span className="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] text-slate-400" title="Structured resume evidence; not independently confirmed.">Structured employment · strong</span>{role.current ? <span className="rounded-full border border-cyan-500/50 bg-cyan-950/40 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-200">Current role</span> : null}{badge ? <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[11px] font-medium text-slate-300">{badge}</span> : null}{promoted ? <span className="rounded-full border border-emerald-600/50 bg-emerald-950/30 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-200">Promotion</span> : null}</div>
                         {role.modules.length ? <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Key modules">{role.modules.map((module) => <span key={module} className="rounded-md bg-slate-900 px-2 py-1 text-xs text-slate-300 ring-1 ring-inset ring-slate-800">{module}</span>)}</div> : null}
@@ -521,7 +523,6 @@ export default function Candidate360V2Client({ candidateId }: { candidateId: str
     </main>
   );
 }
-
 
 
 

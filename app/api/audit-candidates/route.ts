@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { recruiterSearchPrivateNoStoreHeaders } from "@/lib/recruiterSearchAuthorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,10 +18,10 @@ export async function GET() {
     const { data, error } = await supabase
       .from("candidates")
       .select(
-        "id,name,current_title,title,email,phone,primary_module,role_type,years,contact_missing,name_review_required,profile_quality_score,extraction_notes,created_at"
+        "id,name,current_title,title,primary_module,role_type,years,contact_missing,name_review_required,profile_quality_score,extraction_notes,created_at",
       )
       .or(
-        "contact_missing.eq.true,name_review_required.eq.true,profile_quality_score.lt.70"
+        "contact_missing.eq.true,name_review_required.eq.true,profile_quality_score.lt.70",
       )
       .order("profile_quality_score", { ascending: true })
       .limit(500);
@@ -52,20 +53,22 @@ export async function GET() {
       totalNeedsReview: rows.length,
       missingContact: rows.filter((r: any) => r.contact_missing).length,
       nameReview: rows.filter((r: any) => r.name_review_required).length,
-      lowQuality: rows.filter(
-        (r: any) => (r.profile_quality_score || 0) < 70
-      ).length,
+      lowQuality: rows.filter((r: any) => (r.profile_quality_score || 0) < 70)
+        .length,
     };
 
-    return NextResponse.json({
-      success: true,
-      stats,
-      candidates: rows,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        stats,
+        candidates: rows,
+      },
+      { headers: recruiterSearchPrivateNoStoreHeaders },
+    );
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || "Audit failed" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

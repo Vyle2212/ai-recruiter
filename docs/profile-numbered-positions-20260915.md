@@ -1,0 +1,9 @@
+# Numbered employment forms — 2026-09-15
+
+Explicit numbered employment entries with `Position Title (Level)` were not recognized. This change binds the employer, date range and title in those headings, including year-first month dates. It does not use responsibility text or project dates to fill missing fields.
+
+On the supplied 277-source review subset, v93 recovers 18 employment records across two previously empty profiles: 61 profiles / 260 records, with 216 profiles still without extracted employment. This subset is not the full 970-profile population. Projects and direct FICO assignment counts are unchanged. Malformed records, duplicate records and invalid ranges remain zero. Overlap flags increase from six to seven: the newly recovered source explicitly states December 1989–July 1999 while also listing other work in that period. Preserve the source and flag review; do not silently repair dates.
+
+Validation: numbered-position regression, all nine previous employment/presentation regression scripts, assignment-scoped delivery and pinned v63 fixture passed. Production authorization, search security, search regression, dependency and acceptance-harness groups passed using `node --import tsx` (the tsx CLI cannot create its IPC socket in this runtime). Webpack production build passed before the cache/version string update; typecheck rerun afterward.
+
+Release remains NO_GO: the complete source population is unavailable locally; Supabase and Vercel connections are not confirmed; authenticated deployment acceptance has not run. Per `production-trust-release-promotion.md`, local build/harness results do not authorize claiming the production artifact accepted. The user has authorized continued fixing and production deployment once verified; no additional generic deployment permission is needed.

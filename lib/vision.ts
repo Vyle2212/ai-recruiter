@@ -31,6 +31,10 @@ function getVisionClient(): ImageAnnotatorClient {
 export async function extractTextFromImage(
   buffer: Buffer,
 ): Promise<string> {
+  if (buffer.subarray(0, 5).toString() === '%PDF-') {
+    const { extractTextFromPDF } = await import('./ocr');
+    return extractTextFromPDF(buffer);
+  }
   try {
     const visionClient = getVisionClient();
 

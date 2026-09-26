@@ -6,7 +6,7 @@ import {
 } from "./candidatePresentationText";
 
 export const CANDIDATE_PROFILE_PRESENTATION_VERSION =
-  "candidate-profile-presentation-v9-canonical-education-lists";
+  "candidate-profile-presentation-v10-precise-periods";
 
 export type CandidateProfileTab =
   "Overview" | "Experience" | "Projects" | "Education" | "Skills";
@@ -35,6 +35,11 @@ export function formatCandidateProfileDate(value: unknown) {
     .trim();
   if (!source) return "";
   if (/^(?:present|current|now)$/i.test(source)) return "Present";
+  const isoMonth = source.match(/^((?:19|20)\d{2})-(0[1-9]|1[0-2])(?:-\d{2})?$/);
+  if (isoMonth) {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return `${months[Number(isoMonth[2]) - 1]} ${isoMonth[1]}`;
+  }
   const monthYear = source.match(
     /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s*((?:19|20)\d{2})\b/i,
   );
@@ -54,7 +59,7 @@ export function formatCandidateProfilePeriod(
 ) {
   const from = formatCandidateProfileDate(start);
   const to = current ? "Present" : formatCandidateProfileDate(end);
-  return from && to ? `${from} – ${to}` : from || to || "Dates not provided";
+  return from && to ? `${from} – ${to}` : from ? `${from} – End date not provided` : to ? `Start date not provided – ${to}` : "Dates not provided";
 }
 
 const tabBase =

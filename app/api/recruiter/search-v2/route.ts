@@ -30,6 +30,7 @@ import {
   prewarmCandidateSearchV2Dataset,
   searchV2ProjectionReadiness,
 } from "@/lib/searchV2Dataset";
+import { applyCurrentCandidateSearchLifecycle } from "@/lib/searchV2CandidateLifecycle";
 import { searchV2ReadinessHttpContract } from "@/lib/searchV2ReadinessContract";
 import {
   buildSearchExecutionProfile,
@@ -748,6 +749,7 @@ export async function POST(request: NextRequest) {
       evidenceProjectionMs = 0,
       datasetRevision = "",
       sourceRows = 0,
+      lifecycleBlockedCount = 0,
       datasetCache: "hit" | "miss" | "request" = "request";
     let documents: CandidateSearchV2Document[];
     if (lightweightIdentityLookup) {
@@ -788,6 +790,13 @@ export async function POST(request: NextRequest) {
             .join("|"),
         ).slice(0, 12);
     }
+    const lifecycle = await applyCurrentCandidateSearchLifecycle(
+      documents,
+      request.signal,
+    );
+    documents = lifecycle.documents;
+    lifecycleBlockedCount = lifecycle.blockedCount;
+    datasetRevision = `${datasetRevision}:lifecycle-${lifecycle.visibilityRevision}`;
     unifiedIntent = confirmSearchV2IdentityIntent(
       documents,
       body.query,
@@ -814,6 +823,7 @@ export async function POST(request: NextRequest) {
       matchQuality: profile.matchQuality,
       readiness: searchV2ProjectionReadiness().status,
       datasetCache,
+      lifecycleBlockedCount,
     };
     const integrityPlan =
       body.integrityPlan?.version === SEARCH_INTEGRITY_VERSION

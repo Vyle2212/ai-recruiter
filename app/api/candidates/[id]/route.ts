@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
+import {
+  recruiterSearchAuthorizationDenied,
+  recruiterSearchPrivateNoStoreHeaders,
+  requireRecruiterSearchAuthorization,
+} from "@/lib/recruiterSearchAuthorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,85 +17,7 @@ function normalize(value: string) {
   return decodeURIComponent(value || "").trim();
 }
 
-function boolish(value: any) {
-  return value === true || value === "true" || value === 1 || value === "1";
-}
-
-function getContactAccess(candidate: any, req: NextRequest) {
-  const params = req.nextUrl.searchParams;
-  const role = String(params.get("role") || candidate.viewer_role || "recruiter").toLowerCase();
-  const hasSubscription =
-    params.get("subscription") === "true" ||
-    boolish(candidate.client_has_subscription) ||
-    boolish(candidate.subscription_active) ||
-    boolish(candidate.contact_subscription_active);
-
-  const adminApproved =
-    params.get("adminApproved") === "true" ||
-    boolish(candidate.contact_unlock_approved) ||
-    boolish(candidate.admin_contact_approved) ||
-    boolish(candidate.recruiter_contact_approved);
-
-  const adminOverride = role === "admin" || boolish(candidate.admin_access);
-
-  if (adminOverride) {
-    return { canView: true, role: "admin", reason: "Admin access granted.", cta: "Contact visible" };
-  }
-
-  if (role === "client") {
-    if (hasSubscription) {
-      return {
-        canView: true,
-        role: "client",
-        reason: "Visible under active client subscription.",
-        cta: "Contact visible",
-      };
-    }
-
-    return {
-      canView: false,
-      role: "client",
-      reason: "Contact protected. Client contact details are available only with an active subscription package.",
-      cta: "Upgrade subscription to unlock contact",
-    };
-  }
-
-  if (role === "recruiter") {
-    if (adminApproved) {
-      return {
-        canView: true,
-        role: "recruiter",
-        reason: "Admin approval granted for recruiter contact access.",
-        cta: "Contact visible",
-      };
-    }
-
-    return {
-      canView: false,
-      role: "recruiter",
-      reason: "Contact protected. Recruiters must request admin approval before viewing full candidate contact details.",
-      cta: "Request admin approval",
-    };
-  }
-
-  if (role === "candidate") {
-    return {
-      canView: false,
-      role: "candidate",
-      reason: "Candidate view does not expose third-party contact data.",
-      cta: "Contact locked",
-    };
-  }
-
-  return {
-    canView: false,
-    role: "recruiter",
-    reason: "Contact protected.",
-    cta: "Contact locked",
-  };
-}
-
-function redactCandidate(candidate: any, canViewContact: boolean) {
+function redactCandidate(candidate: any) {
   const hasOriginalCv = Boolean(
     candidate.cv_url ||
       candidate.resume_url ||
@@ -99,17 +26,13 @@ function redactCandidate(candidate: any, canViewContact: boolean) {
       candidate.originalCv
   );
 
-  if (canViewContact) {
-    return {
-      ...candidate,
-      has_original_cv: hasOriginalCv,
-    };
-  }
-
   const redacted = { ...candidate };
-
-  // Keep email and phone available for a locked/blurred UI preview.
-  // Do not expose direct CV URLs until subscription/admin approval is granted.
+  // Contact approval is intentionally DB-backed only. Until that workflow exists,
+  // this endpoint never returns direct contact or source-document fields.
+  redacted.email = "";
+  redacted.phone = "";
+  redacted.mobile = "";
+  redacted.phone_number = "";
   redacted.cv_url = "";
   redacted.resume_url = "";
   redacted.file_url = "";
@@ -144,10 +67,16 @@ function mergeCandidateWithSearchIndex(candidate: any, indexRow: any) {
 }
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authorization = await requireRecruiterSearchAuthorization({
+      permission: "candidate-detail:read",
+      route: "/api/candidates/[id]",
+    });
+    if (!authorization.allowed) return recruiterSearchAuthorizationDenied(authorization);
+
     const { id: rawId } = await params;
     const id = normalize(rawId);
 
@@ -155,6 +84,14 @@ export async function GET(
       return NextResponse.json({ error: "Missing candidate id" }, { status: 400 });
     }
 
+    if (!isUuid(id)) {
+      return NextResponse.json(
+        { error: "Candidate id must be a UUID" },
+        { status: 400, headers: recruiterSearchPrivateNoStoreHeaders },
+      );
+    }
+
+    const supabase = createLazySupabaseServiceClient();
     let data: any = null;
     let error: any = null;
 
@@ -164,35 +101,8 @@ export async function GET(
       error = result.error;
     }
 
-    if (!data && id.includes("@")) {
-      const result = await supabase
-        .from("candidates")
-        .select("*")
-        .ilike("email", id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      data = result.data;
-      error = result.error;
-    }
-
-    if (!data) {
-      const result = await supabase
-        .from("candidates")
-        .select("*")
-        .or(`candidate_slug.eq.${id},slug.eq.${id}`)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      data = result.data;
-      error = result.error;
-    }
-
     if (error || !data) {
-      return NextResponse.json(
-        { error: error?.message || "Candidate not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: error?.message || "Candidate not found" }, { status: 404, headers: recruiterSearchPrivateNoStoreHeaders });
     }
 
     const indexResult = await supabase
@@ -203,8 +113,13 @@ export async function GET(
 
     data = mergeCandidateWithSearchIndex(data, indexResult.data);
 
-    const contactAccess = getContactAccess(data, req);
-    const safeCandidate = redactCandidate(data, contactAccess.canView);
+    const contactAccess = {
+      canView: false,
+      role: authorization.scope.role,
+      reason: "Contact protected until a DB-backed approval workflow is available.",
+      cta: "Contact locked",
+    };
+    const safeCandidate = redactCandidate(data);
 
     return NextResponse.json({
       candidate: {
@@ -212,7 +127,7 @@ export async function GET(
         contactAccess,
         viewerRole: contactAccess.role,
       },
-    });
+    }, { headers: recruiterSearchPrivateNoStoreHeaders });
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || "Failed to load candidate" },

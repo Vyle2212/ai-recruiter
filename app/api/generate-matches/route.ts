@@ -1,3 +1,4 @@
+import { recruiterSearchAuthorizationDenied, requireRecruiterSearchAuthorization } from "@/lib/recruiterSearchAuthorization";
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { calculateRecruiterMatch } from "@/lib/recruiterMatchEngine";
@@ -5,6 +6,7 @@ import { getFinalClientReady } from "@/lib/matchDisplayUtils";
 import { modulesForKeyword } from "@/lib/candidateSearchIndex";
 import { derivePrimarySapModule, primarySapModuleCanSatisfySearch } from "@/lib/sapCanonicalModuleEngine";
 import { normalizeSapModule, textOf, type SapPrimaryModule } from "@/lib/sapRecruiterRules";
+import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -333,6 +335,7 @@ async function fetchCandidatePool(job: any, clientMode: boolean) {
 
   return {
     candidates: (candidates || [])
+      .filter((candidate: any) => candidateSearchLifecycleDecision(candidate).visible)
       .filter((candidate: any) => {
         if (!explicitModules?.length || requiredModule === "UNKNOWN") return true;
         const primary = derivePrimarySapModule(candidate, {});
@@ -555,6 +558,12 @@ function enforceBtpRouteCap(job: any, candidate: any, result: any, details: any)
 }
 
 export async function POST(req: NextRequest) {
+  const authorization = await requireRecruiterSearchAuthorization({
+    permission: "search:read",
+    route: "/api/generate-matches",
+  });
+  if (!authorization.allowed)
+    return recruiterSearchAuthorizationDenied(authorization);
   try {
     const body = await req.json();
     const jobId = body.jobId || body.job_id;

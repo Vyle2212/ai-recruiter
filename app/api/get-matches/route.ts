@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
+import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
 
 const supabase = createLazySupabaseServiceClient();
 
@@ -7,7 +8,8 @@ export async function GET() {
   try {
     const { data, error } = await supabase
       .from("matches")
-      .select(`
+      .select(
+        `
         id,
         score,
         reason,
@@ -15,14 +17,18 @@ export async function GET() {
           id,
           name,
           email,
-          current_title
+          current_title,
+          status,
+          extraction_coverage_status,
+          profile_confirmation_status
         ),
         jobs (
           id,
           title,
           company
         )
-      `)
+      `,
+      )
       .order("score", {
         ascending: false,
       });
@@ -34,11 +40,26 @@ export async function GET() {
         {
           error: error.message,
         },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
-    return NextResponse.json(data || []);
+    const visible = (data || [])
+      .filter(
+        (match: any) =>
+          Boolean(match.candidates) &&
+          candidateSearchLifecycleDecision(match.candidates).visible,
+      )
+      .map((match: any) => ({
+        ...match,
+        candidates: (({
+          status: _status,
+          extraction_coverage_status: _coverage,
+          profile_confirmation_status: _confirmation,
+          ...candidate
+        }: any) => candidate)(match.candidates),
+      }));
+    return NextResponse.json(visible);
   } catch (error: any) {
     console.log(error);
 
@@ -46,7 +67,7 @@ export async function GET() {
       {
         error: error.message,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
