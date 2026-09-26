@@ -91,8 +91,8 @@ staging rollback test covered an older job on a different revision, the next
 CV from the same actor, and a simultaneous CV from another actor. One actor's
 next CV became claimable only after the older revision was acknowledged.
 
-Before activation, enforce one canonical candidate per private source reference
-in the database, audit any existing duplicate references, prove concurrent
+Before activation, keep the unique private source-reference guard in the
+target database, audit any existing duplicate references, prove concurrent
 worker recovery against an ambiguous in-flight save, and record historical
 source-to-candidate links when a candidate uploads a newer CV. A query of the
 current `candidates.source_file` alone cannot find an older original after its
@@ -100,6 +100,17 @@ candidate row has been updated to another source. Pin parser revision per job
 and add a controlled re-extraction path; the current runtime rejects a claimed
 job with a different revision. Add the authorized enqueue/progress routes only
 after those constraints and an end-to-end staging test pass.
+
+On 26 Sep 2026, production had 970 candidate rows and zero private original-CV
+references. The narrow unique index in
+`supabase/manual/202609260003_private_original_cv_source_unique.sql` was applied
+to `candidates.source_file` only for `candidate-original-cvs/%` references.
+The exact readback returned no findings, the index was unique/valid, and the
+candidate and private-reference counts stayed 970 and zero. A synthetic
+rolled-back test confirmed that a duplicate private reference is rejected
+while null and legacy paths remain allowed. This fences two writes of the same
+private document. It does not archive the existing 970 originals or solve
+cross-document candidate identity and historical source lineage.
 
 - Verify bytes, size, and SHA-256 in private Storage before enqueueing. The
   unique `(actor, digest, parser revision)` key makes a retry idempotent while
