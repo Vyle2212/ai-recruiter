@@ -9,6 +9,7 @@ import {
 import { estimateEmploymentFromProjects, ownedProjectRangesFromResume, supportedSapYears, type ProjectTenureEstimate } from "./projectEmploymentEstimate";
 import { ownedProjectCareerLedger } from "./ownedProjectCareerLedger";
 import { customerObjectiveCareerCards } from "./customerObjectiveCareerCards";
+import { sectionedProjectExperienceCards } from "./sectionedProjectExperienceCards";
 import { calculateTotalCareerYears } from "./candidateCareerExperience";
 import {
   CANDIDATE_EMPLOYMENT_TIMELINE_VERSION,
@@ -28,7 +29,7 @@ export const CANDIDATE_DETAIL_PROJECTION_VERSION =
 export const CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION =
   `${CANDIDATE_EMPLOYMENT_TIMELINE_VERSION}:sap-sales-distribution-v2`;
 export const CANDIDATE_PROJECT_EXTRACTOR_VERSION =
-  "candidate-projects-v26-customer-objective-cards";
+  "candidate-projects-v27-sectioned-experience-cards";
 
 type NormalizedCandidateProjection = ReturnType<
   typeof normalizeActualCandidateSchemaFresh
@@ -3287,6 +3288,39 @@ function normalizeProjects(
   output.push(...narrativeProjects(sourceScopes));
   const nativeSource = firstValue(sourceScopes, ["resume_text", "raw_text", "cv_text", "raw_cv"]);
   if (typeof unwrap(nativeSource) === "string") {
+    output.push(
+      ...sectionedProjectExperienceCards(String(unwrap(nativeSource))).map(
+        (card, index) =>
+          withProjectEvidence(
+            {
+              id: `sectioned-project-experience-${index + 1}`,
+              name: card.name,
+              client: card.client,
+              employer: "",
+              industry: "",
+              country: "",
+              role: card.role,
+              modules: stringList(
+                `${card.role} ${card.name} ${card.environment}`.match(
+                  /\b(?:FICO|FI|CO|MM|SD|PP|PS|BW|BI|HCM|CS|ABAP)\b/gi,
+                ) || [],
+              ),
+              projectType: labelledAssignmentType(card.name),
+              implementationType: labelledAssignmentType(card.name),
+              start: card.start,
+              end: card.end,
+              duration: projectDuration(card.start, card.end),
+              responsibilities: card.responsibilities,
+              teamSize: null,
+              environment: card.environment,
+            },
+            "parsed_resume",
+            `resume.sectionedProjectExperience.${index + 1}`,
+            false,
+            card.excerpt,
+          ),
+      ),
+    );
     output.push(...nativeProjectCards(String(unwrap(nativeSource))).map((card, index) => withProjectEvidence({
       id: `native-project-card-${index + 1}`,
       name: card.name, client: card.client, employer: "", industry: "", country: "",
