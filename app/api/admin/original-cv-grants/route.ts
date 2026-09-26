@@ -17,24 +17,53 @@ const response = (error: string, status: number) =>
     { status, headers: recruiterSearchPrivateNoStoreHeaders },
   );
 
-/** Admin-only approval/revocation. The database trigger records every change atomically. */
-export async function POST(request: Request) {
-  const rejected = validateRecruiterApiWriteRequest({
-    method: request.method,
-    url: request.url,
-    headers: request.headers,
-    policyId: "admin-original-cv-approval",
-    maxRequestBytes: 4096,
-  });
-  if (rejected) return response(rejected.code, rejected.status);
+async function requireAdmin() {
   const authorization = await requireRecruiterSearchAuthorization({
     permission: "candidate-detail:read",
     route: "/api/admin/original-cv-grants",
   });
   if (!authorization.allowed)
-    return recruiterSearchAuthorizationDenied(authorization);
+    return {
+      profileId: null,
+      denial: recruiterSearchAuthorizationDenied(authorization),
+    };
   if (authorization.scope.role !== "admin")
-    return response("admin_required", 403);
+    return { profileId: null, denial: response("admin_required", 403) };
+  return { profileId: authorization.scope.profileId, denial: null };
+}
+
+export async function GET() {
+  const { denial } = await requireAdmin();
+  if (denial) return denial;
+  const { data, error } = await createLazySupabaseServiceClient()
+    .from("recruiter_original_cv_requests")
+    .select(
+      "id,candidate_id,recruiter_profile_id,purpose,client_id,requested_at",
+    )
+    .eq("status", "pending")
+    .order("requested_at", { ascending: true })
+    .limit(50);
+  if (error) return response("approval_queue_unavailable", 503);
+  return Response.json(
+    { requests: data || [] },
+    { headers: recruiterSearchPrivateNoStoreHeaders },
+  );
+}
+
+/** Approval is linked to a pending request and committed atomically with the
+ * immutable grant event. Admins may also deny requests or revoke grants.
+ */
+export async function POST(request: Request) {
+  const rejected = validateRecruiterApiWriteRequest({
+    method: request.method,
+    url: request.url,
+    headers: request.headers,
+    policyId: "admin-original-cv-approval-write",
+    maxRequestBytes: 4096,
+  });
+  if (rejected) return response(rejected.code, rejected.status);
+  const { profileId, denial } = await requireAdmin();
+  if (denial || !profileId) return denial || response("admin_required", 403);
 
   let body: Record<string, unknown>;
   try {
@@ -46,30 +75,27 @@ export async function POST(request: Request) {
   } catch {
     return response("invalid_json", 400);
   }
-  const candidateId = body.candidateId;
-  const recruiterProfileId = body.recruiterProfileId;
   const action = body.action;
-  if (
-    typeof candidateId !== "string" ||
-    !uuid.test(candidateId) ||
-    typeof recruiterProfileId !== "string" ||
-    !uuid.test(recruiterProfileId) ||
-    (action !== "approve" && action !== "revoke")
-  )
-    return response("invalid_approval_request", 400);
-
   const supabase = createLazySupabaseServiceClient();
   if (action === "revoke") {
+    if (
+      typeof body.candidateId !== "string" ||
+      !uuid.test(body.candidateId) ||
+      typeof body.recruiterProfileId !== "string" ||
+      !uuid.test(body.recruiterProfileId)
+    )
+      return response("invalid_approval_request", 400);
+    const now = new Date().toISOString();
     const { data, error } = await supabase
       .from("recruiter_original_cv_grants")
       .update({
         status: "revoked",
-        revoked_at: new Date().toISOString(),
-        updated_by_profile_id: authorization.scope.profileId,
-        updated_at: new Date().toISOString(),
+        revoked_at: now,
+        updated_by_profile_id: profileId,
+        updated_at: now,
       })
-      .eq("candidate_id", candidateId)
-      .eq("recruiter_profile_id", recruiterProfileId)
+      .eq("candidate_id", body.candidateId)
+      .eq("recruiter_profile_id", body.recruiterProfileId)
       .eq("status", "active")
       .select("id");
     if (error) return response("approval_store_unavailable", 503);
@@ -79,15 +105,41 @@ export async function POST(request: Request) {
     );
   }
 
-  const purpose = body.purpose;
-  const clientId = body.clientId;
-  const expiresAt = body.expiresAt;
-  const expiry = typeof expiresAt === "string" ? Date.parse(expiresAt) : NaN;
   if (
-    (purpose !== "headhunting" && purpose !== "client_support") ||
-    (purpose === "headhunting" && clientId != null) ||
-    (purpose === "client_support" &&
-      (typeof clientId !== "string" || !uuid.test(clientId))) ||
+    (action !== "approve" && action !== "deny") ||
+    typeof body.requestId !== "string" ||
+    !uuid.test(body.requestId)
+  )
+    return response("invalid_approval_request", 400);
+  const { data: pending, error: requestError } = await supabase
+    .from("recruiter_original_cv_requests")
+    .select("id,candidate_id,recruiter_profile_id,purpose,client_id,status")
+    .eq("id", body.requestId)
+    .eq("status", "pending")
+    .maybeSingle();
+  if (requestError) return response("approval_queue_unavailable", 503);
+  if (!pending) return response("pending_request_required", 409);
+  if (action === "deny") {
+    const { data, error } = await supabase
+      .from("recruiter_original_cv_requests")
+      .update({
+        status: "denied",
+        resolved_at: new Date().toISOString(),
+        resolved_by_profile_id: profileId,
+      })
+      .eq("id", pending.id)
+      .eq("status", "pending")
+      .select("id");
+    if (error) return response("approval_store_unavailable", 503);
+    if (!data?.length) return response("pending_request_required", 409);
+    return Response.json(
+      { denied: true },
+      { headers: recruiterSearchPrivateNoStoreHeaders },
+    );
+  }
+  const expiry =
+    typeof body.expiresAt === "string" ? Date.parse(body.expiresAt) : NaN;
+  if (
     !Number.isFinite(expiry) ||
     expiry <= Date.now() ||
     expiry > Date.now() + 90 * 24 * 60 * 60 * 1000
@@ -98,12 +150,12 @@ export async function POST(request: Request) {
     supabase
       .from("user_profiles")
       .select("id,role,status")
-      .eq("id", recruiterProfileId)
+      .eq("id", pending.recruiter_profile_id)
       .maybeSingle(),
     supabase
       .from("candidates")
       .select("source_file")
-      .eq("id", candidateId)
+      .eq("id", pending.candidate_id)
       .maybeSingle(),
   ]);
   if (recruiter.error || candidate.error)
@@ -118,35 +170,36 @@ export async function POST(request: Request) {
 
   // Client support additionally requires a current assignment, explicit CV share
   // and active subscription. The resume route rechecks them at every read.
-  if (purpose === "client_support") {
+  if (pending.purpose === "client_support") {
+    if (!pending.client_id) return response("client_support_not_entitled", 403);
     const now = new Date().toISOString();
     const [assignment, share, visibility, entitlement] = await Promise.all([
       supabase
         .from("client_recruiter_assignments")
         .select("id")
-        .eq("client_id", clientId)
-        .eq("recruiter_profile_id", recruiterProfileId)
+        .eq("client_id", pending.client_id)
+        .eq("recruiter_profile_id", pending.recruiter_profile_id)
         .eq("status", "active")
         .limit(1),
       supabase
         .from("client_candidate_shares")
         .select("id")
-        .eq("client_id", clientId)
-        .eq("recruiter_profile_id", recruiterProfileId)
-        .eq("candidate_id", candidateId)
+        .eq("client_id", pending.client_id)
+        .eq("recruiter_profile_id", pending.recruiter_profile_id)
+        .eq("candidate_id", pending.candidate_id)
         .eq("status", "active")
         .limit(1),
       supabase
         .from("client_candidate_access")
         .select("candidate_id")
-        .eq("client_id", clientId)
-        .eq("candidate_id", candidateId)
+        .eq("client_id", pending.client_id)
+        .eq("candidate_id", pending.candidate_id)
         .eq("status", "active")
         .limit(1),
       supabase
         .from("client_feature_entitlements")
         .select("status,valid_from,valid_until")
-        .eq("client_id", clientId)
+        .eq("client_id", pending.client_id)
         .eq("feature", "recruiter_support")
         .limit(1),
     ]);
@@ -172,24 +225,16 @@ export async function POST(request: Request) {
       return response("client_support_not_entitled", 403);
   }
 
-  const approvedAt = new Date().toISOString();
-  const { error } = await supabase.from("recruiter_original_cv_grants").upsert(
+  const { data, error } = await supabase.rpc(
+    "approve_recruiter_original_cv_request",
     {
-      candidate_id: candidateId,
-      recruiter_profile_id: recruiterProfileId,
-      approved_by_profile_id: authorization.scope.profileId,
-      updated_by_profile_id: authorization.scope.profileId,
-      purpose,
-      client_id: purpose === "client_support" ? clientId : null,
-      status: "active",
-      approved_at: approvedAt,
-      expires_at: new Date(expiry).toISOString(),
-      revoked_at: null,
-      updated_at: approvedAt,
+      p_request_id: pending.id,
+      p_admin_profile_id: profileId,
+      p_expires_at: new Date(expiry).toISOString(),
     },
-    { onConflict: "candidate_id,recruiter_profile_id" },
   );
   if (error) return response("approval_store_unavailable", 503);
+  if (!data) return response("pending_request_required", 409);
   return Response.json(
     { approved: true, expiresAt: new Date(expiry).toISOString() },
     { headers: recruiterSearchPrivateNoStoreHeaders },

@@ -6,6 +6,7 @@ import { productionAdminSignOut } from "../auth/production/actions";
 
 const links = [
   ["Admin Portal", "/admin/portal"],
+  ["CV Approvals", "/admin/original-cv-approvals"],
   ["Platform Readiness", "/admin/platform-readiness"],
   ["Staging Readiness", "/admin/staging-readiness"],
   ["Staging Evidence", "/admin/staging-evidence"],
@@ -36,6 +37,12 @@ export default function AdminLayout({
           <div className="mx-auto flex max-w-4xl items-center justify-between">
             <Link href="/admin/production" className="font-semibold">
               AI Recruiter Admin
+            </Link>
+            <Link
+              href="/admin/original-cv-approvals"
+              className="text-sm text-cyan-300"
+            >
+              CV approvals
             </Link>
             <form action={productionAdminSignOut}>
               <button className="text-sm text-cyan-300">Sign out</button>

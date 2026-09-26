@@ -83,7 +83,15 @@ export const RECRUITER_API_ROUTE_POLICIES = [
   // the proxy applies the same authenticated recruiter boundary before their
   // server-only service-role database client can run.
   p(
-    "admin-original-cv-approval",
+    "admin-original-cv-approval-read",
+    "/api/admin/original-cv-grants",
+    ["GET"],
+    "recruiter.data_quality.review",
+    "candidate_access",
+    { serviceRoleAccess: true },
+  ),
+  p(
+    "admin-original-cv-approval-write",
     "/api/admin/original-cv-grants",
     ["POST"],
     "recruiter.data_quality.apply",
@@ -239,6 +247,18 @@ export const RECRUITER_API_ROUTE_POLICIES = [
     "recruiter.candidate.read",
     "candidate_access",
     { serviceRoleAccess: true },
+  ),
+  p(
+    "recruiter-original-cv-request",
+    "/api/recruiter/original-cv-requests",
+    ["POST"],
+    "recruiter.workflow.write",
+    "candidate_access",
+    {
+      persistentMutation: true,
+      serviceRoleAccess: true,
+      maxRequestBytes: 4096,
+    },
   ),
   p(
     "candidate360-original-cv-read",
