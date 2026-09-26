@@ -300,3 +300,107 @@ Earlier Services Ltd | SAP Finance Analyst | January 2018 - December 2021`).map(
   ],
   "A complete pipe-delimited job must never become the title of the next employer",
 );
+const separatedFields = `Working Experience
+1.
+Company’s name
+Example Online Sdn Bhd
+Position title
+Trainee (SAP Content Developer)
+Period
+June 2005 – September 2005
+Salary
+Private
+2.
+Company’s name
+Earlier Medical Ltd
+Position title
+Business Process Coordinator
+Period
+August 2006 – Dec 2006`;
+assert.deepEqual(
+  jobs(separatedFields).map((j) => [j.company, j.title, j.start, j.end]),
+  [
+    [
+      "Earlier Medical Ltd",
+      "Business Process Coordinator",
+      "August 2006",
+      "Dec 2006",
+    ],
+    [
+      "Example Online Sdn Bhd",
+      "Trainee (SAP Content Developer)",
+      "June 2005",
+      "September 2005",
+    ],
+  ],
+);
+assert.equal(
+  jobs(separatedFields.replace("Working Experience", "Project Experience"))
+    .length,
+  0,
+);
+assert.equal(
+  jobs(separatedFields.replace("Company’s name", "Client’s name")).length,
+  1,
+);
+assert.equal(
+  jobs(
+    separatedFields.replace(
+      "June 2005 – September 2005",
+      "June 2005 – May 2004",
+    ),
+  ).length,
+  1,
+);
+const parenthesizedJobs = `Employment History
+Example Services Ltd (June 1997 - April 2000)
+Customer Relations Officer
+Handled support.
+Example Consulting Sdn Bhd (Jan 2004 - Jan 2006)
+SAP Consultant
+Project: Customer Holdings (Feb 2010 - Mar 2011)
+SAP Consultant
+Education
+University (Jan 2000 - Jan 2003)
+SAP Consultant`;
+assert.deepEqual(
+  jobs(parenthesizedJobs).map((j) => j.company),
+  ["Example Consulting Sdn Bhd", "Example Services Ltd"],
+);
+assert.equal(
+  jobs(parenthesizedJobs.replace("Employment History", "Project History"))
+    .length,
+  0,
+);
+assert.equal(
+  jobs(parenthesizedJobs.replace("Jan 2004 - Jan 2006", "Jan 2006 - Jan 2004"))
+    .length,
+  1,
+);
+assert.equal(
+  jobs(`Employment History
+Service Integration Change Manager (Oct 2015 - Mar 2017)
+Applied a structured methodology as an Analyst.`).length,
+  0,
+);
+const addressSeparated = `Working Experience
+Example Consulting (M) Sdn Bhd
+Office Tower
+Manager\tSep 05 - Current
+Project: Customer Ltd
+Customer Ltd
+Office Tower
+Manager\tSep 15 - Current`;
+assert.deepEqual(
+  jobs(addressSeparated).map((j) => [j.company, j.title, j.start, j.end]),
+  [["Example Consulting (M) Sdn Bhd", "Manager", "Sep 05", "Current"]],
+);
+assert.equal(
+  jobs(addressSeparated.replace("Working Experience", "Project Experience"))
+    .length,
+  0,
+);
+assert.equal(
+  jobs(addressSeparated.replace("Sep 05 - Current", "Sep 29 - Current")).length,
+  0,
+);

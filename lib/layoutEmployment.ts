@@ -1,3 +1,5 @@
+import { careerDateRange, validCareerDateRange } from "./careerDateEvidence";
+
 export type LayoutEmployment = {
   company: string;
   title: string;
@@ -52,6 +54,7 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
   }
   const output: LayoutEmployment[] = [];
   let active = false;
+  let projectDetails = false;
   let table:
     | "career"
     | "year"
@@ -63,6 +66,7 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
     let line = lines[i];
     if (heading.test(line)) {
       active = true;
+      projectDetails = false;
       continue;
     }
     // A narrow left sidebar can put a two-line heading beside the first role.
@@ -71,7 +75,14 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
       line = line.replace(/^EMPLOYMENT\s+/, "");
     }
     if (stop.test(line)) active = false;
-    if (/EMPLOYMENT HISTORY/.test(line)) active = true;
+    if (/EMPLOYMENT HISTORY/.test(line)) {
+      active = true;
+      projectDetails = false;
+    }
+    // A project subsection can name a client and a role with its own dates.
+    // Only a fresh employment heading may re-enable the new career-card rules.
+    if (/^(?:implementations?\s*\/\s*)?projects?\s*:/i.test(line))
+      projectDetails = true;
     if (
       active &&
       /^Year\tEmployer \/ Company\tRole\tResponsibilities\tYears in Company$/.test(
@@ -114,8 +125,12 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
         forbidden.test(company) ||
         // PDF bullet glyphs can disappear. A following imperative duty must
         // not become the employer in a date/title/company layout.
-        /^(?:Conduct(?:ed|ing)?|Perform(?:ed|ing)?|Maintain(?:ed|ing)?|Provide[ds]?|Ensure[ds]?|Develop(?:ed|ing)?|Prepare[ds]?)\s+[a-z]/.test(company) ||
-        /^(?:Provided?|Designed?|Developed?|Conducted?|Maintained?|Performed?)\s/i.test(title) ||
+        /^(?:Conduct(?:ed|ing)?|Perform(?:ed|ing)?|Maintain(?:ed|ing)?|Provide[ds]?|Ensure[ds]?|Develop(?:ed|ing)?|Prepare[ds]?)\s+[a-z]/.test(
+          company,
+        ) ||
+        /^(?:Provided?|Designed?|Developed?|Conducted?|Maintained?|Performed?)\s/i.test(
+          title,
+        ) ||
         /^Support (?:day to day|daily|the|all|users?\b)/i.test(title) ||
         forbidden.test(title)
       )
@@ -129,10 +144,118 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
       });
     };
     const cells = line.split("\t").map((x) => x.trim());
+    if (!projectDetails) {
+      // DOC/DOCX can place each explicitly named employment field in its own
+      // paragraph. Require the full local card, not a date from a later row.
+      if (/^(?:company[’']?s?\s+name|employer\s+name)$/i.test(line)) {
+        const company = next;
+        const titleLabel = lines[i + 2] || "";
+        const title = lines[i + 3] || "";
+        const periodLabel = lines[i + 4] || "";
+        const printedPeriod = lines[i + 5] || "";
+        const dates = careerDateRange(printedPeriod);
+        if (
+          /^position\s+title$/i.test(titleLabel) &&
+          /^period$/i.test(periodLabel) &&
+          dates?.[0] === printedPeriod &&
+          validCareerDateRange(dates[1], dates[2]) &&
+          /^[\p{L}][^\t:@!?]{2,120}$/u.test(company) &&
+          !forbidden.test(company) &&
+          !forbidden.test(title) &&
+          title.length >= 3 &&
+          title.length <= 120 &&
+          !careerDateRange(title)
+        ) {
+          output.push({
+            company,
+            title,
+            start: dates[1],
+            end: dates[2],
+            excerpt: lines.slice(i, i + 6).join("\n"),
+          });
+          i += 5;
+          continue;
+        }
+      }
+      // In a headed chronology the parenthesized tenure belongs to this
+      // company line, with the position on the immediately following line.
+      const parenthesized = line.match(
+        /^([^\t:@!?()]{3,120})\s+\(([^()]{7,75})\)$/,
+      );
+      const parenthesizedDates =
+        parenthesized && careerDateRange(parenthesized[2]);
+      if (
+        parenthesized &&
+        parenthesizedDates &&
+        parenthesizedDates[0] === parenthesized[2] &&
+        validCareerDateRange(parenthesizedDates[1], parenthesizedDates[2]) &&
+        /\b(?:Sdn\.?\s*Bhd\.?|Pte\.?\s*Ltd\.?|Pty\.?\s*Ltd\.?|Berhad|Limited|Ltd\.?|Inc\.?)$/i.test(
+          parenthesized[1],
+        ) &&
+        !/\b(?:consultant|manager|analyst|engineer|developer|architect|programmer|supervisor|associate|specialist)\b/i.test(
+          parenthesized[1],
+        ) &&
+        role.test(next) &&
+        next.length <= 100 &&
+        !forbidden.test(parenthesized[1]) &&
+        !forbidden.test(next) &&
+        !/\b(?:client|customer|project)\b/i.test(parenthesized[1])
+      ) {
+        output.push({
+          company: parenthesized[1].trim(),
+          title: next,
+          start: parenthesizedDates[1],
+          end: parenthesizedDates[2],
+          excerpt: line + "\n" + next,
+        });
+        i++;
+        continue;
+      }
+      // A legal employer may precede one short address line and a right-
+      // aligned role/tenure. The legal suffix anchors employer ownership.
+      const roleLine = lines[i + 2] || "";
+      const roleDates = careerDateRange(roleLine);
+      const legalEmployer =
+        /\b(?:Sdn\.?\s*Bhd\.?|Pte\.?\s*Ltd\.?|Pty\.?\s*Ltd\.?|Limited|Ltd\.?|Inc\.?|Berhad)$/i.test(
+          line,
+        );
+      if (
+        legalEmployer &&
+        next.length <= 55 &&
+        !role.test(next) &&
+        !careerDateRange(next) &&
+        !forbidden.test(next) &&
+        roleDates &&
+        roleDates.index! > 0 &&
+        !roleLine.slice(roleDates.index! + roleDates[0].length).trim() &&
+        role.test(roleLine.slice(0, roleDates.index)) &&
+        validCareerDateRange(roleDates[1], roleDates[2])
+      ) {
+        output.push({
+          company: line,
+          title: roleLine.slice(0, roleDates.index).trim(),
+          start: roleDates[1],
+          end: roleDates[2],
+          excerpt: lines.slice(i, i + 3).join("\n"),
+        });
+        i += 2;
+        continue;
+      }
+    }
     if (table === "career" && cells.length === 4) {
-      const years = cells[3].match(/^((?:19|20)\d{2})\s*(?:[-–—]|to)\s*((?:19|20)\d{2}|Present)$/i);
-      const half = cells[3].match(/^((?:19|20)\d{2})\s*\((1st|2nd) 6 months\)$/i);
-      const dates = years || (half ? `${half[2] === "1st" ? "Jan" : "Jul"} ${half[1]} - ${half[2] === "1st" ? "Jun" : "Dec"} ${half[1]}`.match(range) : null);
+      const years = cells[3].match(
+        /^((?:19|20)\d{2})\s*(?:[-–—]|to)\s*((?:19|20)\d{2}|Present)$/i,
+      );
+      const half = cells[3].match(
+        /^((?:19|20)\d{2})\s*\((1st|2nd) 6 months\)$/i,
+      );
+      const dates =
+        years ||
+        (half
+          ? `${half[2] === "1st" ? "Jan" : "Jul"} ${half[1]} - ${half[2] === "1st" ? "Jun" : "Dec"} ${half[1]}`.match(
+              range,
+            )
+          : null);
       if (dates) add(cells[0], cells[1], dates, 1);
       continue;
     }
@@ -308,7 +431,12 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
       wholeDates.index === 0 &&
       !line.slice(wholeDates[0].length).replace(/[-–—]/g, "").trim()
     ) {
-      if (!role.test(next) && !next.includes("\t") && !stop.test(next) && role.test(lines[i + 2] || "")) {
+      if (
+        !role.test(next) &&
+        !next.includes("\t") &&
+        !stop.test(next) &&
+        role.test(lines[i + 2] || "")
+      ) {
         add(next, lines[i + 2], wholeDates, 3);
         i += 2;
         continue;
@@ -325,7 +453,13 @@ export function layoutEmployment(source: string): LayoutEmployment[] {
       }
     }
     // ISO month sidebar followed by a title cell and the employer below it.
-    if (wholeDates?.index === 0 && /^\t/.test(line.slice(wholeDates[0].length)) && role.test(line.slice(wholeDates[0].length)) && !role.test(next) && !stop.test(next)) {
+    if (
+      wholeDates?.index === 0 &&
+      /^\t/.test(line.slice(wholeDates[0].length)) &&
+      role.test(line.slice(wholeDates[0].length)) &&
+      !role.test(next) &&
+      !stop.test(next)
+    ) {
       add(next, line.slice(wholeDates[0].length).trim(), wholeDates, 2);
       continue;
     }
