@@ -12,6 +12,10 @@ export const PRODUCTION_CUTOVER_SQL_SEQUENCE = [
   // Installed on production 2026-09-26; revalidate the private bucket below.
   "supabase/manual/202609260000_private_original_cv_bucket_limit.sql",
   "supabase/manual/202609240004_private_original_cv_archive_readback.sql",
+  "supabase/manual/202609260006_recruiter_client_entitlements.sql",
+  "supabase/manual/202609260007_original_cv_approval_requests.sql",
+  "supabase/manual/202609260008_original_cv_access_audit.sql",
+  "supabase/manual/202609260009_original_cv_access_audit_readback.sql",
   "supabase/manual/202609240005_candidate_profile_claim_and_provenance.sql",
   "supabase/manual/202609240006_candidate_profile_claim_readback.sql",
   "supabase/manual/202609240007_candidate_full_profile_fields.sql",

@@ -32,6 +32,7 @@ const recruiterId = "22222222-2222-4222-8222-222222222222";
 const approvedBy = "33333333-3333-4333-8333-333333333333";
 const now = new Date("2026-09-26T12:00:00.000Z");
 const grant = {
+  id: "44444444-4444-4444-8444-444444444444",
   candidate_id: id,
   recruiter_profile_id: recruiterId,
   approved_by_profile_id: approvedBy,
@@ -143,6 +144,16 @@ assert.match(route, /\.from\("client_candidate_access"\)/);
 assert.match(route, /\.select\("source_file,status"\)/);
 assert.match(route, /recruiterOriginalCvCandidateAvailable/);
 assert.match(route, /\.from\(ORIGINAL_CV_BUCKET\)/);
+assert.match(route, /\.from\("recruiter_original_cv_access_events"\)/);
+assert.match(route, /original_cv_audit_unavailable/);
+assert.ok(
+  route.indexOf(".download(grant.objectKey)") <
+    route.indexOf('.from("recruiter_original_cv_access_events")'),
+);
+assert.ok(
+  route.indexOf('.from("recruiter_original_cv_access_events")') <
+    route.indexOf("return new Response(downloaded.data"),
+);
 assert.match(route, /"X-Content-Type-Options": "nosniff"/);
 assert.doesNotMatch(route, /getPublicUrl|createSignedUrl/);
 const approvalRoute = readFileSync(
@@ -204,6 +215,32 @@ assert.match(requestSchema, /force row level security/);
 assert.match(
   requestSchema,
   /grant execute on function public\.approve_recruiter_original_cv_request/,
+);
+const accessAuditSchema = readFileSync(
+  "supabase/manual/202609260008_original_cv_access_audit.sql",
+  "utf8",
+);
+assert.match(accessAuditSchema, /recruiter_original_cv_access_events/);
+assert.match(accessAuditSchema, /validate_recruiter_original_cv_access_event/);
+assert.match(accessAuditSchema, /client_recruiter_assignments/);
+assert.match(accessAuditSchema, /client_candidate_shares/);
+assert.match(accessAuditSchema, /client_candidate_access/);
+assert.match(accessAuditSchema, /client_feature_entitlements/);
+assert.match(accessAuditSchema, /recruiter_original_cv_access_event_immutable/);
+assert.match(accessAuditSchema, /force row level security/);
+assert.match(accessAuditSchema, /from public, anon, authenticated/);
+const accessAuditReadback = readFileSync(
+  "supabase/manual/202609260009_original_cv_access_audit_readback.sql",
+  "utf8",
+);
+assert.match(
+  accessAuditReadback,
+  /begin transaction isolation level repeatable read read only/i,
+);
+assert.match(accessAuditReadback, /original_cv_access_audit_readback_passed/);
+assert.doesNotMatch(
+  accessAuditReadback,
+  /^\s*(?:alter|create|delete|drop|grant|insert|revoke|truncate|update)\b/im,
 );
 const approvalPolicy = recruiterApiPolicyForRequest(
   "/api/admin/original-cv-grants",

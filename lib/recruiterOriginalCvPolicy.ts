@@ -1,6 +1,7 @@
 import { candidateSearchLifecycleDecision } from "./candidateSearchLifecycle";
 
 export type RecruiterOriginalCvGrant = {
+  id: string;
   candidate_id: string;
   recruiter_profile_id: string;
   approved_by_profile_id: string;

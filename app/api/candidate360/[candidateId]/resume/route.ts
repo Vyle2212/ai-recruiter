@@ -34,11 +34,12 @@ export async function GET(
     );
   const supabase = createLazySupabaseServiceClient();
   let recruiterApproved = false;
+  let activeGrant: RecruiterOriginalCvGrant | null = null;
   if (authorization.scope.role !== "admin") {
     const grantResult = await supabase
       .from("recruiter_original_cv_grants")
       .select(
-        "candidate_id,recruiter_profile_id,approved_by_profile_id,purpose,client_id,approved_at,expires_at,revoked_at,status",
+        "id,candidate_id,recruiter_profile_id,approved_by_profile_id,purpose,client_id,approved_at,expires_at,revoked_at,status",
       )
       .eq("candidate_id", candidateId)
       .eq("recruiter_profile_id", authorization.scope.profileId)
@@ -49,6 +50,7 @@ export async function GET(
         { status: 503, headers: recruiterSearchPrivateNoStoreHeaders },
       );
     const grant = grantResult.data as RecruiterOriginalCvGrant | null;
+    activeGrant = grant;
     let support:
       | {
           assigned: boolean;
@@ -168,6 +170,24 @@ export async function GET(
           status: originalCvStorageReadStatus(downloaded.error),
           headers: recruiterSearchPrivateNoStoreHeaders,
         },
+      );
+    const accessAudit = await supabase
+      .from("recruiter_original_cv_access_events")
+      .insert({
+        candidate_id: candidateId,
+        actor_profile_id: authorization.scope.profileId,
+        actor_role: authorization.scope.role,
+        grant_id: activeGrant?.id || null,
+        purpose:
+          authorization.scope.role === "admin"
+            ? "administration"
+            : activeGrant?.purpose,
+        client_id: activeGrant?.client_id || null,
+      });
+    if (accessAudit.error)
+      return Response.json(
+        { error: "original_cv_audit_unavailable" },
+        { status: 503, headers: recruiterSearchPrivateNoStoreHeaders },
       );
     return new Response(downloaded.data, {
       headers: {
