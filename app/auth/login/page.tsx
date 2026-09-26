@@ -25,7 +25,15 @@ export default async function LoginPage({
         <div className="mx-auto max-w-lg px-6 py-8">
           <section className={card}>
             {enabled ? (
-              <ProductionAdminSignInForm />
+              <>
+                <ProductionAdminSignInForm />
+                <Link
+                  className="mt-5 block text-sm text-cyan-300 underline"
+                  href="/auth/production/recover"
+                >
+                  Set or reset password
+                </Link>
+              </>
             ) : (
               <p>
                 Production admin sign-in is being prepared. Please return after

@@ -2,6 +2,7 @@
 
 import { productionAuthConfigured } from "@/lib/productionAuthConfiguration";
 import { createClient } from "@/utils/supabase/server";
+import { createClient as createPublicAuthClient } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 
 export type ProductionSignInState = { ok: boolean; message: string };
@@ -89,4 +90,30 @@ export async function productionAdminSignOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/auth/login");
+}
+
+export async function productionAdminRequestRecovery(emailInput: string) {
+  if (!productionAuthConfigured()) return false;
+  const email = emailInput.trim();
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    return false;
+
+  // The SSR client uses PKCE, whose verifier cookie would tie the email link
+  // to this browser. Use an ephemeral public-key client for the email request
+  // so the recovery link carries the same implicit hash as admin invitations.
+  const supabase = createPublicAuthClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: {
+        flowType: "implicit",
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    },
+  );
+  // The production Site URL is the root page, which handles the recovery hash.
+  // Keep the response identical whether or not the account exists.
+  await supabase.auth.resetPasswordForEmail(email);
+  return true;
 }
