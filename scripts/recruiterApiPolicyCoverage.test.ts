@@ -204,7 +204,10 @@ for (const item of previousHighRiskRoutes) {
 
 const proxySource = readFileSync(path.join(process.cwd(), "proxy.ts"), "utf8");
 assert.match(proxySource, /recruiterApiPolicyForRequest/);
-assert.match(proxySource, /"\/api\/:path\*"/);
+assert.ok(
+  proxySource.includes('"/((?!_next/static|_next/image|favicon.ico).*)"'),
+  "Proxy must cover API and public routes during the production cutover",
+);
 for (const file of legacyServiceFiles) {
   const source = readFileSync(file, "utf8");
   const route = path.relative(root, file).split(path.sep).join("/");
