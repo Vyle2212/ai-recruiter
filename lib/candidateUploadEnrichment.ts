@@ -507,6 +507,7 @@ export function enrichCandidateUpload(
     (item: any) => ({
       name: clean(item.name),
       client: clean(item.client),
+      employer: clean(item.employer),
       role: clean(item.role),
       modules: Array.isArray(item.modules) ? item.modules : [],
       location: clean(item.location),

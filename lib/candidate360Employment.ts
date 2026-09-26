@@ -15,6 +15,7 @@ import { boundedEmployerRoleCards } from "./boundedEmployerRoleCards";
 import { boundedCareerTables } from "./boundedCareerTables";
 import { companyDurationRoleCards, datedRoleCompanyCards, labelledEmploymentFieldCards, multilineEmploymentTriples } from "./boundedEmploymentFieldCards";
 import { reorderedEmploymentFieldCards } from "./reorderedEmploymentFieldCards";
+import { customerObjectiveCareerCards } from "./customerObjectiveCareerCards";
 import type {
   EnterpriseEmployment,
   EnterpriseProject,
@@ -24,7 +25,7 @@ import { cleanEmploymentResponsibilities } from "./candidateProfilePresentation"
 import type { Candidate360Profile } from "./candidate360Types";
 
 export const CANDIDATE_EMPLOYMENT_TIMELINE_VERSION =
-  "candidate-employment-v106-bounded-employer-field-tables";
+  "candidate-employment-v107-customer-project-boundaries";
 
 export function associatedEmploymentTitle(
   employment: EnterpriseEmployment,
@@ -1491,6 +1492,12 @@ function labelledClientEmployerEmployment(source: string): EnterpriseEmployment[
 
 function resumeEmployment(resumeText: string) {
   const output: EnterpriseEmployment[] = [];
+  for (const [index, row] of customerObjectiveCareerCards(resumeText).employment.entries()) {
+    const parsed = entry({ company: row.company, title: row.title,
+      sourceRef: `resume.customerObjectiveEmployer.${index + 1}`,
+      sourceType: "parsed_resume", confidence: 94, excerpt: row.excerpt });
+    if (parsed) output.push(parsed);
+  }
   const namedMonth = "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
   const abbreviatedTenure = new RegExp(`\\b(${namedMonth})\\s+(\\d{2})\\s*([-–—]|to)\\s*(${namedMonth})\\s+(\\d{2})(?![\\da-z])`, "gi");
   const expandYear = (year: string) => `${Number(year) <= 30 ? '20' : '19'}${year}`;

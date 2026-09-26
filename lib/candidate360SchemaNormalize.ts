@@ -8,6 +8,7 @@ import {
 } from "./candidate360Completeness";
 import { estimateEmploymentFromProjects, ownedProjectRangesFromResume, supportedSapYears, type ProjectTenureEstimate } from "./projectEmploymentEstimate";
 import { ownedProjectCareerLedger } from "./ownedProjectCareerLedger";
+import { customerObjectiveCareerCards } from "./customerObjectiveCareerCards";
 import { calculateTotalCareerYears } from "./candidateCareerExperience";
 import {
   CANDIDATE_EMPLOYMENT_TIMELINE_VERSION,
@@ -27,7 +28,7 @@ export const CANDIDATE_DETAIL_PROJECTION_VERSION =
 export const CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION =
   `${CANDIDATE_EMPLOYMENT_TIMELINE_VERSION}:sap-sales-distribution-v2`;
 export const CANDIDATE_PROJECT_EXTRACTOR_VERSION =
-  "candidate-projects-v25-native-project-cards";
+  "candidate-projects-v26-customer-objective-cards";
 
 type NormalizedCandidateProjection = ReturnType<
   typeof normalizeActualCandidateSchemaFresh
@@ -907,6 +908,7 @@ function withProjectEvidence(
   sourceType: EvidenceRef["sourceType"],
   sourceRef: string,
   hasExplicitDuration = false,
+  sourceExcerpt = "",
 ): EnterpriseProject {
   const assignmentText = project.responsibilities
     .join(" ")
@@ -945,24 +947,25 @@ function withProjectEvidence(
       ),
     ],
   };
+  const excerpt = sourceExcerpt || sanitizedProject.responsibilities.join(" ");
   const fields = {
     name: directProjectField(
       sanitizedProject.name || null,
       sourceRef + ".name",
       sourceType,
-      sanitizedProject.responsibilities.join(" "),
+      excerpt,
     ),
     client: directProjectField(
       sanitizedProject.client || null,
       sourceRef + ".client",
       sourceType,
-      sanitizedProject.responsibilities.join(" "),
+      excerpt,
     ),
     employer: directProjectField(
       sanitizedProject.employer || null,
       sourceRef + ".employer",
       sourceType,
-      sanitizedProject.responsibilities.join(" "),
+      excerpt,
     ),
     industry: directProjectField(
       sanitizedProject.industry || null,
@@ -978,6 +981,7 @@ function withProjectEvidence(
       sanitizedProject.role || null,
       sourceRef + ".role",
       sourceType,
+      excerpt,
     ),
     modules: directProjectField(
       sanitizedProject.modules.length ? sanitizedProject.modules : null,
@@ -1000,6 +1004,7 @@ function withProjectEvidence(
         : null,
       sourceRef + ".dates",
       sourceType,
+      excerpt,
     ),
     responsibilities: directProjectField(
       sanitizedProject.responsibilities.length
@@ -3267,6 +3272,15 @@ function normalizeProjects(
         teamSize: null, environment: "",
       }, "parsed_resume", row.sourceRef)];
     }));
+    output.push(...customerObjectiveCareerCards(String(unwrap(ownedLedgerText))).projects.map((row, index) => withProjectEvidence({
+      id: `customer-objective-project-${index + 1}`,
+      name: row.name, employer: validEmploymentCompany(row.employer), client: row.client,
+      role: row.role, industry: "", country: "", modules: [],
+      projectType: labelledAssignmentType(row.name),
+      implementationType: labelledAssignmentType(row.name),
+      start: row.start, end: row.end, duration: projectDuration(row.start, row.end),
+      responsibilities: [], teamSize: null, environment: "",
+    }, "parsed_resume", `resume.customerObjectiveProject.${index + 1}`, false, row.excerpt)));
   }
   output.push(...inlineClientAssignmentProjects(sourceScopes));
   output.push(...extractExplicitResponsibilityProjects(sourceScopes));
@@ -4931,6 +4945,7 @@ function normalizeActualCandidateSchemaFresh(
     id: project.id,
     name: project.name,
     client: project.client,
+    employer: project.employer,
     role: project.role,
     modules: project.modules,
     location: project.country,
