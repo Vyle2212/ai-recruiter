@@ -129,6 +129,8 @@ function explicitEmploymentCount(rawText: string): number {
 /** Count repeated project-entry labels without double-counting Client + Project in one entry. */
 function explicitProjectCount(rawText: string): number {
   const labels = ["(?:client|customer)(?: name)?", "project(?: name| title)?"];
+  const nextField =
+    "(?:project(?: name| title| role| duration| dates?| experience)?|client(?: name)?|customer(?: name)?|role|position|designation|duration|period|start date|end date|education|skills?|languages?)";
   return Math.max(
     ...labels.map((label) => {
       const colon = (
@@ -139,7 +141,7 @@ function explicitProjectCount(rawText: string): number {
       const nextLine = (
         rawText.match(
           new RegExp(
-            `^[ \\t]*${label}[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n){0,2}[ \\t]*\\S`,
+            `^[ \\t]*${label}[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n){0,2}[ \\t]*(?!${nextField}[ \\t]*(?::|\\r?\\n|$))\\S`,
             "gim",
           ),
         ) || []

@@ -413,6 +413,57 @@ const secondProject = {
   start_date: "2021-02",
   end_date: "2022-03",
 };
+const completeProjectWithEmptyLabel = `SYNTHETIC SAP CONSULTANT
+PROJECT EXPERIENCE
+Project: Procurement rollout
+Client: Synthetic Client A
+Role: SAP MM Consultant
+Duration: Jan 2020 - Jan 2021
+Client
+Role: SAP MM Consultant
+EDUCATION
+Bachelor of Computing`;
+assert.ok(
+  !evaluateCandidateExtractionCoverage(completeProjectWithEmptyLabel, {
+    ...multipleProjectCandidate,
+    projects: [oneProject],
+  }).missedObservedSections.includes("projects"),
+  "an empty Client label followed by a Role label is not a second project",
+);
+const splitProjectWithEmptyLabel = `SYNTHETIC SAP CONSULTANT
+PROJECT EXPERIENCE
+Project Name
+Procurement rollout
+Client
+Synthetic Client A
+Role: SAP MM Consultant
+Duration: Jan 2020 - Jan 2021
+Project
+Duration: Jan 2022 - Dec 2022`;
+assert.ok(
+  !evaluateCandidateExtractionCoverage(splitProjectWithEmptyLabel, {
+    ...multipleProjectCandidate,
+    projects: [oneProject],
+  }).missedObservedSections.includes("projects"),
+  "split project and client values count once; a blank Project label cannot add an anchor",
+);
+const twoSplitClients = `SYNTHETIC SAP CONSULTANT
+PROJECT EXPERIENCE
+Client
+Synthetic Client A
+Role: SAP MM Consultant
+Duration: Jan 2020 - Jan 2021
+Client
+Synthetic Client B
+Role: SAP MM Consultant
+Duration: Feb 2021 - Mar 2022`;
+assert.ok(
+  evaluateCandidateExtractionCoverage(twoSplitClients, {
+    ...multipleProjectCandidate,
+    projects: [oneProject],
+  }).missedObservedSections.includes("projects"),
+  "two real split Client values still require two structured projects",
+);
 const partialProjects = evaluateCandidateExtractionCoverage(
   multipleProjectSource,
   { ...multipleProjectCandidate, projects: [oneProject] },
