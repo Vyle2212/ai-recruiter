@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import {
+  ADMIN_CV_CHECKPOINT_VERSION,
   buildAdminCvUploadPlan,
   MAX_ADMIN_CV_BYTES,
   classifyAdminCvUploadResult,
@@ -10,6 +11,7 @@ import {
   summarizeAdminCvPlan,
   updateAdminCvCheckpoint,
 } from "../lib/adminCvBulkUpload";
+import { CANDIDATE_CV_INGESTION_REVISION } from "../lib/cvIngestionRevision";
 
 const digest = (character: string) => character.repeat(64);
 const files = [
@@ -122,9 +124,42 @@ checkpoint = updateAdminCvCheckpoint({
   now: "2026-09-25T00:01:00.000Z",
 });
 const serialized = JSON.stringify(checkpoint);
+assert.equal(checkpoint.schemaVersion, ADMIN_CV_CHECKPOINT_VERSION);
+assert.equal(checkpoint.parserRevision, CANDIDATE_CV_INGESTION_REVISION);
 assert.doesNotMatch(serialized, /older|latest|copy|\.pdf|\.docx/i);
 assert.equal(parseAdminCvCheckpoint(serialized, digest("f"))?.items.length, 2);
 assert.equal(parseAdminCvCheckpoint(serialized, digest("e")), null);
+const outdated = { ...checkpoint, parserRevision: "cv-ingestion-older" };
+assert.equal(
+  parseAdminCvCheckpoint(JSON.stringify(outdated), digest("f")),
+  null,
+);
+assert.equal(
+  buildAdminCvUploadPlan([files[1]], outdated as typeof checkpoint)[0]
+    ?.disposition,
+  "ready",
+  "a newer parser must reconsider CVs completed by an older parser",
+);
+assert.equal(
+  updateAdminCvCheckpoint({
+    checkpoint: outdated as typeof checkpoint,
+    selectionFingerprint: digest("f"),
+    digest: digest("d"),
+    outcome: "created",
+  }).items.length,
+  1,
+);
+assert.equal(
+  parseAdminCvCheckpoint(
+    JSON.stringify({
+      ...checkpoint,
+      schemaVersion: 1,
+      parserRevision: undefined,
+    }),
+    digest("f"),
+  ),
+  null,
+);
 
 const plan = buildAdminCvUploadPlan(files, checkpoint);
 assert.deepEqual(

@@ -18,6 +18,7 @@ import {
   type AdminCvUploadResultLike,
 } from "@/lib/adminCvBulkUpload";
 import { finalizePossiblyCompletedSignedCvUpload } from "@/lib/signedCvUploadFinalization";
+import { CANDIDATE_CV_INGESTION_REVISION } from "@/lib/cvIngestionRevision";
 
 type PreparedItem = AdminCvPlanItem & {
   file: File;
@@ -25,7 +26,7 @@ type PreparedItem = AdminCvPlanItem & {
   error?: string;
 };
 
-const CHECKPOINT_KEY = "ai-recruiter:admin-cv-upload:v1";
+const CHECKPOINT_KEY = `ai-recruiter:admin-cv-upload:v2:${CANDIDATE_CV_INGESTION_REVISION}`;
 const MAX_CV_BYTES = MAX_ADMIN_CV_BYTES;
 const FATAL_UPLOAD_ERROR =
   /Authentication|Access is not permitted|not configured|Private CV storage is unavailable/i;

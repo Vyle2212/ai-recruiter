@@ -36,10 +36,9 @@ function nativeEmploymentRecoverable(text: string, fileName: string) {
 
 export type CandidateCvIngestionSource = "admin_upload" | "candidate_upload";
 
-// This labels the shared original-CV extraction rules, separately from the
-// canonical search snapshot version. Bump with a parser rule change before
-// enqueueing new documents; an older worker cannot claim a newer revision.
-export const CANDIDATE_CV_INGESTION_REVISION = "cv-ingestion-v178";
+// Keep the public ingestion revision in a browser-safe module so resumable
+// admin uploads and revision-pinned workers use the same value.
+export { CANDIDATE_CV_INGESTION_REVISION } from "./cvIngestionRevision";
 
 type CandidateClassification = ReturnType<typeof classifyCandidateText>;
 export type CandidateCvParserQuality = ReturnType<
