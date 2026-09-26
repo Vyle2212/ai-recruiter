@@ -62,6 +62,27 @@ prepares a private job ledger. It does not activate a worker or change the
 current upload route. Apply only after its target-environment preflight and
 readback pass; keep the existing route until the full worker is proven.
 
+`lib/candidateIngestionJobRuntime.ts` now connects a claimed job to the shared
+CV parser, private object read, source readback, candidate save, review queue,
+lease renewal and fixed-code acknowledgement. The focused synthetic contract
+test is `scripts/candidateIngestionJobProcessor.test.ts`. This callable runtime
+is deliberately not scheduled or called by the upload route yet. It requires
+the full candidate schema, private Storage bucket, review queue and verified
+source identity invariant in the target environment. Staging currently has a
+job ledger but does not have the candidate tables and original CV bucket.
+Never point this runtime at the production candidates table in its present
+state. A worker cannot make that environment ready by restoring a backup.
+
+Before activation, enforce one canonical candidate per private source reference
+in the database, audit any existing duplicate references, prove concurrent
+worker recovery against an ambiguous in-flight save, and record historical
+source-to-candidate links when a candidate uploads a newer CV. A query of the
+current `candidates.source_file` alone cannot find an older original after its
+candidate row has been updated to another source. Pin parser revision per job
+and add a controlled re-extraction path; the current runtime rejects a claimed
+job with a different revision. Add the authorized enqueue/progress routes only
+after those constraints and an end-to-end staging test pass.
+
 - Verify bytes, size, and SHA-256 in private Storage before enqueueing. The
   unique `(actor, digest, parser revision)` key makes a retry idempotent while
   permitting deliberate re-extraction after a parser upgrade. Keep one source
