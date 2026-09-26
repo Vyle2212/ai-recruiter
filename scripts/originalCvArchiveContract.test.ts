@@ -9,7 +9,7 @@ import {
 import { commitCandidateWithArchivedCv } from "../lib/originalCvArchiveCommit";
 
 const cv = Buffer.from("synthetic resume fixture");
-for (const [name, type] of [
+const supportedSources = [
   ["Private Applicant.pdf", "application/pdf"],
   [
     "Private Applicant.DOCX",
@@ -18,7 +18,8 @@ for (const [name, type] of [
   ["Private Applicant.doc", "application/msword"],
   ["Private Applicant.rtf", "application/rtf"],
   ["Private Applicant.txt", "text/plain"],
-] as const) {
+] as const;
+for (const [name, type] of supportedSources) {
   const { objectKey, contentType } = originalCvObjectKey(name, cv);
   assert.equal(contentType, type);
   assert.match(objectKey, /^[0-9a-f-]{36}\.(?:pdf|docx|doc|rtf|txt)$/);
@@ -132,6 +133,10 @@ const readback = fs.readFileSync(
 assert.match(readback, /BEGIN READ ONLY/);
 assert.match(readback, /bucket\.public IS DISTINCT FROM false/);
 assert.match(readback, /roles && ARRAY\['public', 'anon', 'authenticated'\]/);
+for (const [, type] of supportedSources) {
+  assert.match(sql, new RegExp(`'${type}'`));
+  assert.match(readback, new RegExp(`'${type}'`));
+}
 const reviewSchema = fs.readFileSync(
   "supabase/manual/202609240009_candidate_upload_review_queue.sql",
   "utf8",

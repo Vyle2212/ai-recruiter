@@ -9,6 +9,8 @@ BEGIN
      OR bucket.allowed_mime_types IS DISTINCT FROM ARRAY[
        'application/pdf',
        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+       'application/msword',
+       'application/rtf',
        'text/plain']::text[] THEN
     RAISE EXCEPTION 'Original CV private bucket not ready';
   END IF;

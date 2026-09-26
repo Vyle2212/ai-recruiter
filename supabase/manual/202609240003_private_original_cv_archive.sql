@@ -8,6 +8,8 @@ VALUES (
   'candidate-original-cvs', 'candidate-original-cvs', false, 10485760,
   ARRAY['application/pdf',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/msword',
+        'application/rtf',
         'text/plain']
 )
 ON CONFLICT (id) DO NOTHING;
@@ -21,6 +23,8 @@ BEGIN
      OR bucket.allowed_mime_types IS DISTINCT FROM ARRAY[
         'application/pdf',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/msword',
+        'application/rtf',
         'text/plain']::text[] THEN
     RAISE EXCEPTION 'Private original CV bucket configuration mismatch';
   END IF;
