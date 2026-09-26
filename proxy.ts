@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import {
   isStagingPortalGuardEnabled,
   shouldProtectPortal,
+  updateClientShareApiSession,
   updateRecruiterApiSession,
   updateStagingSession,
 } from "./utils/supabase/proxy";
@@ -18,6 +19,8 @@ export async function proxy(request: NextRequest) {
   );
   const recruiterApiNamespace =
     request.nextUrl.pathname.startsWith("/api/recruiter/");
+  const clientShareApi =
+    request.nextUrl.pathname === "/api/client/recruiter-shares";
   if (
     process.env.VERCEL_ENV === "production" &&
     process.env.PRODUCTION_AUTH_ENABLED === "true" &&
@@ -35,6 +38,7 @@ export async function proxy(request: NextRequest) {
     !acceptanceAuthConfigured() &&
     (shouldProtectPortal(request.nextUrl.pathname) ||
       recruiterApiNamespace ||
+      clientShareApi ||
       Boolean(apiPolicy))
   ) {
     return new NextResponse("Acceptance authentication is not configured.", {
@@ -44,6 +48,10 @@ export async function proxy(request: NextRequest) {
   }
   if (recruiterApiNamespace || apiPolicy) {
     return updateRecruiterApiSession(request);
+  }
+
+  if (clientShareApi) {
+    return updateClientShareApiSession(request);
   }
 
   if (

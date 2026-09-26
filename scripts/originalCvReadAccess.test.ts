@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { originalCvReadGrant } from "../lib/originalCvAccess";
 import { recruiterOriginalCvAllowed } from "../lib/recruiterOriginalCvPolicy";
+import { recruiterApiPolicyForRequest } from "../lib/recruiterApiPolicyRegistry";
+import { recruiterApiRoleHasPermission } from "../lib/recruiterApiAuthorizationCore";
 
 const id = "11111111-1111-4111-8111-111111111111";
 const reference = `candidate-original-cvs/${id}.pdf`;
@@ -148,4 +150,33 @@ const schema = readFileSync(
 assert.match(schema, /recruiter_original_cv_grant_event_immutable/);
 assert.match(schema, /force row level security/g);
 assert.match(schema, /from public, anon, authenticated/);
+const approvalPolicy = recruiterApiPolicyForRequest(
+  "/api/admin/original-cv-grants",
+  "POST",
+);
+assert.equal(
+  approvalPolicy?.requiredPermission,
+  "recruiter.data_quality.apply",
+);
+assert.equal(
+  recruiterApiRoleHasPermission(
+    "recruiter",
+    approvalPolicy!.requiredPermission,
+  ),
+  false,
+);
+assert.equal(
+  recruiterApiRoleHasPermission("admin", approvalPolicy!.requiredPermission),
+  true,
+);
+assert.equal(
+  recruiterApiPolicyForRequest(`/api/candidate360/${id}/resume`, "GET")
+    ?.requiredPermission,
+  "recruiter.candidate.read",
+);
+const proxy = readFileSync("proxy.ts", "utf8");
+assert.match(
+  proxy,
+  /clientShareApi\) \{\s*return updateClientShareApiSession\(request\)/,
+);
 console.log("originalCvReadAccess.test.ts passed");

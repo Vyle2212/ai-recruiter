@@ -13,6 +13,27 @@ const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 const reject = (error: string, status: number) =>
   Response.json({ error }, { status, headers });
 
+async function requireClientShareAuthorization() {
+  const auth = await createClient();
+  const { data: authData, error: authError } = await auth.auth.getUser();
+  if (authError || !authData.user)
+    return { profile: null, denial: reject("authentication_required", 401) };
+  const { data: profile, error: profileError } = await auth
+    .from("user_profiles")
+    .select("id,role,status,client_id")
+    .eq("auth_user_id", authData.user.id)
+    .maybeSingle();
+  if (
+    profileError ||
+    !profile ||
+    profile.role !== "client" ||
+    profile.status !== "active" ||
+    !profile.client_id
+  )
+    return { profile: null, denial: reject("active_client_required", 403) };
+  return { profile, denial: null };
+}
+
 /** A client can share only an explicitly visible CV or owned job with their
  * assigned recruiter, while the support feature is active. Shares are not
  * original-file approval grants.
@@ -26,23 +47,9 @@ export async function POST(request: Request) {
     maxRequestBytes: 4096,
   });
   if (invalid) return reject(invalid.code, invalid.status);
-  const auth = await createClient();
-  const { data: authData, error: authError } = await auth.auth.getUser();
-  if (authError || !authData.user)
-    return reject("authentication_required", 401);
-  const { data: profile, error: profileError } = await auth
-    .from("user_profiles")
-    .select("id,role,status,client_id")
-    .eq("auth_user_id", authData.user.id)
-    .maybeSingle();
-  if (
-    profileError ||
-    !profile ||
-    profile.role !== "client" ||
-    profile.status !== "active" ||
-    !profile.client_id
-  )
-    return reject("active_client_required", 403);
+  const { profile, denial } = await requireClientShareAuthorization();
+  if (denial || !profile)
+    return denial || reject("active_client_required", 403);
 
   let body: Record<string, unknown>;
   try {

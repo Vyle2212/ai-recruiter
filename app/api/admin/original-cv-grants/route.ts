@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     method: request.method,
     url: request.url,
     headers: request.headers,
-    policyId: "admin.original-cv-grants.write",
+    policyId: "admin-original-cv-approval",
     maxRequestBytes: 4096,
   });
   if (rejected) return response(rejected.code, rejected.status);

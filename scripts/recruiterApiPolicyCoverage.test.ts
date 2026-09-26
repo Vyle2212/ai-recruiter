@@ -33,7 +33,9 @@ const auditedFiles = files.filter((file) => {
     recruiterApiPolicyForRequest(route, method),
   );
   const hasLocalBoundary =
-    /requireRecruiter(?:ApiRoute|Search)Authorization/.test(source);
+    /requireRecruiter(?:ApiRoute|Search)Authorization|requireClientShareAuthorization/.test(
+      source,
+    );
   const hasCandidateBoundary = /authorizeCandidateCvUpload/.test(source);
   const usesPrivilegedCandidateData =
     /SUPABASE_SERVICE_ROLE|createLazySupabaseServiceClient|createCandidateSupabaseAdminClient|\.from\(["']candidates["']\)/.test(
@@ -86,7 +88,7 @@ const uncoveredRouteMethods = allRouteMethods.filter(
   ({ route, method, source }) => {
     if (explicitPublicMethods.has(`${method} ${route}`)) return false;
     if (
-      /requireRecruiter(?:ApiRoute|Search)Authorization|authorizeCandidateCvUpload/.test(
+      /requireRecruiter(?:ApiRoute|Search)Authorization|requireClientShareAuthorization|authorizeCandidateCvUpload/.test(
         source,
       )
     )
@@ -123,8 +125,8 @@ assert.equal(
 );
 assert.equal(
   legacyServiceFiles.length,
-  54,
-  "Expected the audited 54 legacy privileged route files",
+  56,
+  "Expected the audited 56 legacy privileged route files",
 );
 assert.ok(
   routeMethods.length > auditedFiles.length,
@@ -204,6 +206,7 @@ for (const item of previousHighRiskRoutes) {
 
 const proxySource = readFileSync(path.join(process.cwd(), "proxy.ts"), "utf8");
 assert.match(proxySource, /recruiterApiPolicyForRequest/);
+assert.match(proxySource, /updateClientShareApiSession/);
 assert.ok(
   proxySource.includes('"/((?!_next/static|_next/image|favicon.ico).*)"'),
   "Proxy must cover API and public routes during the production cutover",

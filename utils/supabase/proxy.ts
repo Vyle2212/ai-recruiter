@@ -13,7 +13,11 @@ import {
 } from "@/lib/recruiterApiPolicyRegistry";
 
 type PortalRole =
-  "admin" | "recruiter_manager" | "recruiter" | "client" | "candidate";
+  | "admin"
+  | "recruiter_manager"
+  | "recruiter"
+  | "client"
+  | "candidate";
 
 type ProtectedArea = {
   prefix: string;
@@ -287,6 +291,82 @@ export async function updateRecruiterApiSession(request: NextRequest) {
 
   for (const [key, value] of Object.entries(recruiterApiHeaders))
     response.headers.set(key, value);
+  return response;
+}
+
+/** Client share writes use the client role, which is intentionally outside
+ * the recruiter policy registry. Refresh auth cookies and reject at the edge;
+ * the route repeats authorization and verifies membership and ownership.
+ */
+export async function updateClientShareApiSession(request: NextRequest) {
+  if (request.method !== "POST")
+    return recruiterApiJson(405, "method_not_allowed", "Method not allowed.");
+  const rejection = validateRecruiterApiWriteRequest({
+    method: request.method,
+    url: request.url,
+    headers: request.headers,
+    policyId: "client.recruiter-shares.write",
+    maxRequestBytes: 4096,
+  });
+  if (rejection)
+    return recruiterApiJson(
+      rejection.status,
+      rejection.code,
+      "Access is not permitted.",
+    );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key)
+    return recruiterApiJson(
+      401,
+      "authentication_required",
+      "Authentication is required.",
+    );
+  let response = NextResponse.next({ request });
+  const supabase = createServerClient(url, key, {
+    cookieOptions: supabaseServerCookieOptions(),
+    cookies: {
+      getAll: () => request.cookies.getAll(),
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) =>
+          request.cookies.set(name, value),
+        );
+        response = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          response.cookies.set(name, value, options),
+        );
+      },
+    },
+  });
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+  if (userError || !user)
+    return recruiterApiJson(
+      401,
+      "authentication_required",
+      "Authentication is required.",
+    );
+  const { data: profile, error: profileError } = await supabase
+    .from("user_profiles")
+    .select("role,status")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (profileError || profile?.role !== "client" || profile.status !== "active")
+    return recruiterApiJson(
+      403,
+      "active_client_required",
+      "Access is not permitted.",
+    );
+  if ((await request.clone().arrayBuffer()).byteLength > 4096)
+    return recruiterApiJson(
+      413,
+      "request_too_large",
+      "The request cannot be processed.",
+    );
+  for (const [name, value] of Object.entries(recruiterApiHeaders))
+    response.headers.set(name, value);
   return response;
 }
 
