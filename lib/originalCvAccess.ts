@@ -11,12 +11,23 @@ const CONTENT_TYPES: Record<string, string> = {
   txt: "text/plain; charset=utf-8",
 };
 
-/** Only the admin role has a server-verified original-CV grant today.
- * Recruiter/client access must be backed by a persisted entitlement before
- * widening this decision; URL query flags are never authorization evidence.
+/** The caller must verify a persisted recruiter approval and, for client
+ * support, the active assignment/share/subscription before passing approved.
+ * Client and URL-supplied flags are never access evidence.
  */
-export function originalCvReadGrant(role: string, sourceFile: unknown) {
-  if (role !== "admin") return null;
+export function originalCvReadGrant(
+  role: string,
+  sourceFile: unknown,
+  recruiterApproved = false,
+) {
+  if (
+    role !== "admin" &&
+    !(
+      (role === "recruiter" || role === "recruiter_manager") &&
+      recruiterApproved
+    )
+  )
+    return null;
   const reference = originalCvReference(sourceFile);
   if (!reference) return null;
   const objectKey = reference.slice(`${ORIGINAL_CV_BUCKET}/`.length);
