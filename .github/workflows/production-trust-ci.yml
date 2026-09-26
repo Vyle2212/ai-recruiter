@@ -5,6 +5,7 @@ on:
     branches:
       - "codex/precision-*"
       - "codex/production-trust-*"
+      - "codex/production-admin-*"
       - "codex/recruiter-api-authorization-*"
       - "codex/dependency-security-*"
       - "codex/authenticated-acceptance-*"
@@ -13,6 +14,7 @@ on:
     branches:
       - "codex/profile-source-recovery"
       - "codex/production-trust-*"
+      - "codex/production-admin-*"
       - "codex/recruiter-api-authorization-*"
       - "codex/dependency-security-*"
       - "codex/authenticated-acceptance-*"
@@ -141,7 +143,9 @@ jobs:
         run: npm run test:github-actions-pinning
 
       - name: Route policy and authorization matrix
-        run: npm run test:production-trust:authorization
+        run: |
+          npm run test:production-trust:authorization
+          node --import tsx scripts/productionAuthConfiguration.test.ts
 
       - name: Authenticated acceptance harness safety contracts
         env:
@@ -164,6 +168,7 @@ jobs:
 
       - name: CV source layout and complete-document OCR regressions
         run: |
+          node --import tsx scripts/cvParserNameBoundary.test.ts
           node --import tsx scripts/candidateSourcePreservation.test.ts
           node --import tsx scripts/pdfTextLayout.test.ts
           node --import tsx scripts/docxTextLayout.test.ts
@@ -309,6 +314,9 @@ jobs:
 
       - name: Next.js 16.3.5 Webpack production build
         run: npm run build:webpack
+
+      - name: Verify PDF fonts are bundled with CV upload routes
+        run: node --import tsx scripts/pdfFontTrace.test.ts
 
       - name: Scan client bundle for server secret material
         run: npm run scan:production-trust:bundle

@@ -7,6 +7,7 @@ import {
   originalCvObjectKey,
 } from "@/lib/originalCvArchiveKey";
 import { normalizeCvContentDigest } from "@/lib/serverCvContentDigest";
+import { adminCvUploadFoundationReady } from "@/lib/adminCvUploadReadiness";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +19,11 @@ export async function POST(request: NextRequest) {
     request,
   });
   if (!authorization.allowed) return authorization.response;
+  if (!(await adminCvUploadFoundationReady()))
+    return NextResponse.json(
+      { error: "CV upload is waiting for database and review-queue setup." },
+      { status: 503, headers: privateHeaders },
+    );
 
   let input: {
     fileName?: unknown;

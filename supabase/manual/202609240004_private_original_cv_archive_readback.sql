@@ -5,7 +5,7 @@ DECLARE bucket storage.buckets%ROWTYPE;
 BEGIN
   SELECT * INTO bucket FROM storage.buckets WHERE id = 'candidate-original-cvs';
   IF NOT FOUND OR bucket.public IS DISTINCT FROM false
-     OR bucket.file_size_limit IS DISTINCT FROM 10485760
+     OR bucket.file_size_limit IS DISTINCT FROM 20971520
      OR bucket.allowed_mime_types IS DISTINCT FROM ARRAY[
        'application/pdf',
        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

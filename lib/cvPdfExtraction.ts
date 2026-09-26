@@ -1,6 +1,15 @@
+import path from "node:path";
+import { createRequire } from "node:module";
 import { extractCanonicalEmploymentFromResume } from "./candidate360Employment";
 import { CvSourceError, googlePdfOcr } from "./cvPdfOcr";
 import { createCvPdfRenderer } from "./pdfTextLayout";
+
+const require = createRequire(import.meta.url);
+const standardFontDataUrl =
+  path.join(
+    path.dirname(require.resolve("pdfjs-dist/package.json")),
+    "standard_fonts",
+  ) + path.sep;
 
 export type PdfExtractionOptions = {
   ocr?: (
@@ -48,7 +57,10 @@ export async function extractCvPdf(
   const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
   // PDF.js may transfer/detach the supplied typed array. Always give it an
   // isolated copy so the original bytes remain available for OCR/archive.
-  const loadingTask = getDocument({ data: Uint8Array.from(buffer) });
+  const loadingTask = getDocument({
+    data: Uint8Array.from(buffer),
+    standardFontDataUrl,
+  });
   try {
     const document = await loadingTask.promise;
     if (

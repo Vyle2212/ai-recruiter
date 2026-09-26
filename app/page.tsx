@@ -1,66 +1,25 @@
-"use client";
+import { productionAuthConfigured } from "@/lib/productionAuthConfiguration";
+import LegacyHome from "./LegacyHome";
+import { ProductionAuthEntry } from "./auth/production/ProductionAuthEntry";
 
-import { useState } from "react";
-import Link from "next/link";
+export const dynamic = "force-dynamic";
 
 export default function Home() {
-  const [jd, setJd] = useState<File | null>(null);
-  const [cvs, setCvs] = useState<File[]>([]);
-  const [results, setResults] = useState<any[]>([]);
-
-  const handleSubmit = async () => {
-    if (!jd || cvs.length === 0) {
-      alert("Upload JD + at least 1 CV");
-      return;
-    }
-
-    const formData = new FormData();
-
-    formData.append("jd", jd);
-    cvs.forEach((cv) => formData.append("cvs", cv));
-
-    const res = await fetch("/api/analyze", {
-      method: "POST",
-      body: formData,
-    });
-
-    const data = await res.json();
-    setResults(data.results || []);
-  };
-
-  return (
-    <div className="p-10 text-white bg-black min-h-screen">
-      <Link className="mb-6 inline-block text-cyan-300" href="/portal">Open AI Primus Portal</Link>
-      <h1 className="text-3xl mb-4">🚀 AI Recruiter Pro</h1>
-
-      <div className="mb-4">
-        <p>Upload JD:</p>
-        <input type="file" onChange={(e) => setJd(e.target.files?.[0] || null)} />
-      </div>
-
-      <div className="mb-4">
-        <p>Upload CVs:</p>
-        <input
-          type="file"
-          multiple
-          onChange={(e) => setCvs(Array.from(e.target.files || []))}
-        />
-      </div>
-
-      <button onClick={handleSubmit} className="bg-blue-500 px-4 py-2">
-        Analyze
-      </button>
-
-      <div className="mt-6">
-        {results.map((r, i) => (
-          <div key={i} className="border p-4 mb-2">
-            <h2>{r.name}</h2>
-            <p>Score: {r.score}</p>
-            <p>Strengths: {r.strengths?.join(", ")}</p>
-            <p>Gaps: {r.gaps?.join(", ")}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  if (productionAuthConfigured()) return <ProductionAuthEntry />;
+  if (
+    process.env.VERCEL_ENV === "production" &&
+    process.env.PRODUCTION_AUTH_ENABLED === "true"
+  )
+    return (
+      <main className="min-h-screen bg-[#05070A] px-6 py-12 text-slate-100">
+        <div className="mx-auto max-w-lg rounded-2xl border border-slate-800 bg-[#0B0F16] p-6">
+          <h1 className="text-2xl font-semibold">AI Recruiter Admin</h1>
+          <p className="mt-6">
+            Admin access is temporarily unavailable while data protection is
+            being verified.
+          </p>
+        </div>
+      </main>
+    );
+  return <LegacyHome />;
 }

@@ -1315,18 +1315,32 @@ async function fetchBroadCandidatePage(args: {
   offset: number;
   hasContactInfoOnly?: boolean;
 }) {
-  let query = supabase
-    .from("candidates")
-    .select(CANDIDATE_LIGHT_FIELDS, { count: "exact" })
-    .order("updated_at", { ascending: false, nullsFirst: false })
-    .limit(2000);
-  if (args.hasContactInfoOnly) query = query.or("email.not.is.null,phone.not.is.null");
-  const { data, error, count } = await query;
-  if (error) throw error;
-  const rows = data || [];
+  const rows: AnyRecord[] = [];
+  let lastId: string | null = null;
+  const pageSize = 500;
+  for (;;) {
+    let query = supabase
+      .from("candidates")
+      .select(CANDIDATE_LIGHT_FIELDS)
+      .order("id", { ascending: true })
+      .limit(pageSize);
+    if (lastId) query = query.gt("id", lastId);
+    if (args.hasContactInfoOnly)
+      query = query.or("email.not.is.null,phone.not.is.null");
+    const { data, error } = await query;
+    if (error) throw error;
+    const page = data || [];
+    for (const candidate of page) {
+      if (!candidate.id || (lastId && String(candidate.id) <= lastId))
+        throw new Error("Candidate page order is invalid");
+      rows.push(candidate);
+      lastId = String(candidate.id);
+    }
+    if (page.length < pageSize) break;
+  }
   return {
     rows: rows.map((candidate: AnyRecord) => mergeIndexCandidate(indexRowFromCandidate(candidate), candidate)),
-    totalMatched: count || rows.length,
+    totalMatched: rows.length,
   };
 }
 async function fetchCandidateDetailsByIds(ids: string[]) {
@@ -1345,18 +1359,6 @@ async function fetchCandidateDetailsByIds(ids: string[]) {
 async function fetchExactNameRawTextFallback(rawKeyword: string, existingIds: Set<string>) {
   const keyword = String(rawKeyword || "").replace(/[%_]/g, " ").replace(/\s+/g, " ").trim();
   if (!keyword || classifyTalentSearchQuery(keyword) !== "human-name") return [];
-  const normalizedKeyword = keyword.toLowerCase();
-  const knownExactNameFallbackIds: Record<string, { id: string; name: string }> = {
-    "kaarthi duraisamy chandrasakar": { id: "a81f6236-85f1-4b70-87ce-3cfb61275c62", name: "Kaarthi Duraisamy Chandrasakar" },
-  };
-  const knownFallback = knownExactNameFallbackIds[normalizedKeyword];
-  if (knownFallback) {
-    const { data } = await supabase.from("candidates").select(CANDIDATE_LIGHT_FIELDS).eq("id", knownFallback.id).limit(1);
-    return (data || []).map((candidate: AnyRecord) => ({
-      ...mergeIndexCandidate(indexRowFromCandidate({ ...candidate, name: knownFallback.name }), candidate),
-      raw_exact_display_name: knownFallback.name,
-    }));
-  }
   const firstToken = keyword.split(/\s+/).find(Boolean) || keyword;
   const pattern = `%${firstToken}%`;
   const { data, error } = await supabase
@@ -1697,8 +1699,6 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-
-
 
 
 

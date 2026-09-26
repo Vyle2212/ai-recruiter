@@ -20,6 +20,8 @@ async function main() {
   let storageError: unknown = null;
   let throwDownload = false;
   let downloads = 0;
+  let signedUrls = 0;
+  let uploadFoundationReady = false;
   const ownerId = "00000000-0000-4000-8000-000000000001";
   const signedObjectKey = `${ownerId}/00000000-0000-4000-8000-000000000002.pdf`;
   const validDigest = createHash("sha256").update("valid").digest("hex");
@@ -155,10 +157,17 @@ async function main() {
         scope: { subjectId: ownerId },
       }),
     },
+    "@/lib/adminCvUploadReadiness": {
+      adminCvUploadFoundationReady: async () => uploadFoundationReady,
+    },
     "@/lib/supabase": {
       supabase: {
         storage: {
           from: () => ({
+            createSignedUploadUrl: async () => {
+              signedUrls++;
+              return { data: { token: "synthetic" }, error: null };
+            },
             download: async () => {
               downloads++;
               if (throwDownload) throw new Error("Storage connection lost");
@@ -242,6 +251,49 @@ async function main() {
     Buffer,
     console,
   });
+  const signExports: Record<string, any> = {};
+  vm.runInNewContext(
+    ts.transpileModule(
+      fs.readFileSync("app/api/upload-cv/sign/route.ts", "utf8"),
+      { compilerOptions: { module: ts.ModuleKind.CommonJS } },
+    ).outputText,
+    {
+      exports: signExports,
+      require: (name: string) => {
+        assert.ok(name in stubs, name);
+        return stubs[name];
+      },
+      Buffer,
+    },
+  );
+  const blockedSign = await signExports.POST({
+    json: async () => ({
+      fileName: "synthetic.pdf",
+      size: 5,
+      contentDigest: validDigest,
+    }),
+  });
+  assert.equal(blockedSign.status, 503);
+  const blockedProcessing = await exports.POST({
+    headers: new Headers({ "content-type": "application/json" }),
+    json: async () => {
+      throw new Error("Blocked processing must not read the request body");
+    },
+  });
+  assert.equal(blockedProcessing.status, 503);
+  assert.equal(signedUrls, 0);
+  assert.equal(downloads, 0);
+  assert.equal(archived.length, 0);
+  uploadFoundationReady = true;
+  const allowedSign = await signExports.POST({
+    json: async () => ({
+      fileName: "synthetic.pdf",
+      size: 5,
+      contentDigest: validDigest,
+    }),
+  });
+  assert.equal(allowedSign.status, 200);
+  assert.equal(signedUrls, 1);
   const oversizedHeader = await exports.POST({
     headers: new Headers({
       "content-type": "multipart/form-data",

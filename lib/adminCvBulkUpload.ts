@@ -1,5 +1,8 @@
-export const ADMIN_CV_CHECKPOINT_VERSION = 1 as const;
-export const MAX_ADMIN_CV_BYTES = 10 * 1024 * 1024;
+import { MAX_ORIGINAL_BYTES } from "./cvUploadLimits";
+import { CANDIDATE_CV_INGESTION_REVISION } from "./cvIngestionRevision";
+
+export const ADMIN_CV_CHECKPOINT_VERSION = 2 as const;
+export const MAX_ADMIN_CV_BYTES = MAX_ORIGINAL_BYTES;
 
 export type AdminCvUploadOutcome =
   | "created"
@@ -33,6 +36,7 @@ export type AdminCvCheckpointItem = {
 
 export type AdminCvCheckpoint = {
   schemaVersion: typeof ADMIN_CV_CHECKPOINT_VERSION;
+  parserRevision: typeof CANDIDATE_CV_INGESTION_REVISION;
   selectionFingerprint: string;
   updatedAt: string;
   items: AdminCvCheckpointItem[];
@@ -85,7 +89,8 @@ export function buildAdminCvUploadPlan(
   checkpoint?: AdminCvCheckpoint | null,
 ): AdminCvPlanItem[] {
   const prior = new Map(
-    checkpoint?.schemaVersion === ADMIN_CV_CHECKPOINT_VERSION
+    checkpoint?.schemaVersion === ADMIN_CV_CHECKPOINT_VERSION &&
+    checkpoint.parserRevision === CANDIDATE_CV_INGESTION_REVISION
       ? checkpoint.items.map((item) => [item.digest, item])
       : [],
   );
@@ -174,6 +179,7 @@ export function updateAdminCvCheckpoint(params: {
   const { checkpoint, selectionFingerprint, digest, outcome } = params;
   const reusable =
     checkpoint?.schemaVersion === ADMIN_CV_CHECKPOINT_VERSION &&
+    checkpoint.parserRevision === CANDIDATE_CV_INGESTION_REVISION &&
     checkpoint.selectionFingerprint === selectionFingerprint;
   const items = new Map(
     reusable ? checkpoint.items.map((item) => [item.digest, item]) : [],
@@ -186,6 +192,7 @@ export function updateAdminCvCheckpoint(params: {
   });
   return {
     schemaVersion: ADMIN_CV_CHECKPOINT_VERSION,
+    parserRevision: CANDIDATE_CV_INGESTION_REVISION,
     selectionFingerprint,
     updatedAt: params.now || new Date().toISOString(),
     items: [...items.values()].sort((a, b) => a.digest.localeCompare(b.digest)),
@@ -201,6 +208,7 @@ export function parseAdminCvCheckpoint(
     const value = JSON.parse(raw) as Partial<AdminCvCheckpoint>;
     if (
       value.schemaVersion !== ADMIN_CV_CHECKPOINT_VERSION ||
+      value.parserRevision !== CANDIDATE_CV_INGESTION_REVISION ||
       value.selectionFingerprint !== selectionFingerprint ||
       !Array.isArray(value.items)
     )
@@ -225,6 +233,7 @@ export function parseAdminCvCheckpoint(
     );
     return {
       schemaVersion: ADMIN_CV_CHECKPOINT_VERSION,
+      parserRevision: CANDIDATE_CV_INGESTION_REVISION,
       selectionFingerprint,
       updatedAt: String(value.updatedAt || ""),
       items,

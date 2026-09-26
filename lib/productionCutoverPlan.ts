@@ -10,6 +10,7 @@ export const PRODUCTION_CUTOVER_SQL_SEQUENCE = [
   "supabase/manual/202609240012_production_initial_owner_bootstrap.sql",
   "supabase/manual/202609240013_production_auth_foundation_readback.sql",
   // Installed on production 2026-09-26; revalidate the private bucket below.
+  "supabase/manual/202609260000_private_original_cv_bucket_limit.sql",
   "supabase/manual/202609240004_private_original_cv_archive_readback.sql",
   "supabase/manual/202609240005_candidate_profile_claim_and_provenance.sql",
   "supabase/manual/202609240006_candidate_profile_claim_readback.sql",

@@ -172,6 +172,9 @@ assert.match(serverClient, /import "server-only"/);
 assert.match(serverClient, /createLazySupabaseServiceClient/);
 assert.doesNotMatch(serverClient, /NEXT_PUBLIC_SUPABASE_ANON_KEY/);
 assert.match(proxy, /recruiterApiPolicyForRequest/);
-assert.match(proxy, /"\/api\/:path\*"/);
+assert.ok(
+  proxy.includes('"/((?!_next/static|_next/image|favicon.ico).*)"'),
+  "The production cutover guard must cover API and public routes",
+);
 
 console.log("Production private-data RLS cutover regression passed.");

@@ -126,6 +126,7 @@ const sql = fs.readFileSync(
 );
 assert.match(sql, /'candidate-original-cvs', 'candidate-original-cvs', false/);
 assert.doesNotMatch(sql, /CREATE POLICY|TO authenticated|TO anon/i);
+assert.match(sql, new RegExp(`false, ${MAX_ORIGINAL_BYTES},`));
 const readback = fs.readFileSync(
   "supabase/manual/202609240004_private_original_cv_archive_readback.sql",
   "utf8",
@@ -133,6 +134,23 @@ const readback = fs.readFileSync(
 assert.match(readback, /BEGIN READ ONLY/);
 assert.match(readback, /bucket\.public IS DISTINCT FROM false/);
 assert.match(readback, /roles && ARRAY\['public', 'anon', 'authenticated'\]/);
+assert.match(
+  readback,
+  new RegExp(`file_size_limit IS DISTINCT FROM ${MAX_ORIGINAL_BYTES}`),
+);
+const limitCutover = fs.readFileSync(
+  "supabase/manual/202609260000_private_original_cv_bucket_limit.sql",
+  "utf8",
+);
+assert.match(
+  limitCutover,
+  new RegExp(`SET file_size_limit = ${MAX_ORIGINAL_BYTES}`),
+);
+assert.match(limitCutover, /bucket\.public IS DISTINCT FROM false/);
+assert.match(
+  limitCutover,
+  /roles && ARRAY\['public', 'anon', 'authenticated'\]/,
+);
 for (const [, type] of supportedSources) {
   assert.match(sql, new RegExp(`'${type}'`));
   assert.match(readback, new RegExp(`'${type}'`));

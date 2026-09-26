@@ -51,7 +51,7 @@ const plan = buildProductionCutoverPlan({
   currentCommitSha: commit,
   now,
 });
-assert.equal(plan.steps.length, 18);
+assert.equal(plan.steps.length, 19);
 assert.equal(
   plan.steps.some((step) =>
     step.path.endsWith("production_auth_foundation.sql"),

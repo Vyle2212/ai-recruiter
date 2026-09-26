@@ -1,4 +1,5 @@
 import type { protos } from "@google-cloud/vision";
+import { MAX_ORIGINAL_BYTES } from "./cvUploadLimits";
 
 type Request = protos.google.cloud.vision.v1.IBatchAnnotateFilesRequest;
 type Response = protos.google.cloud.vision.v1.IBatchAnnotateFilesResponse;
@@ -31,7 +32,7 @@ export async function ocrPdfPages(
       "OCR_PAGE_LIMIT",
       "PDF OCR supports 1–50 pages per CV. Split longer documents before uploading.",
     );
-  if (buffer.length > 20 * 1024 * 1024)
+  if (buffer.length > MAX_ORIGINAL_BYTES)
     throw new CvSourceError(
       "OCR_FILE_LIMIT",
       "This PDF is too large for OCR. Upload a PDF smaller than 20 MB.",

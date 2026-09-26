@@ -138,6 +138,20 @@ assert.equal(
   true,
 );
 assert.equal(
+  isValidProjectEntry({ client: "Example Client", role: "SAP Consultant" }),
+  true,
+  "a source-backed client assignment can be valid without individual dates",
+);
+assert.equal(
+  isValidProjectEntry({
+    client: "Example Client",
+    role: "SAP Consultant",
+    end_date: "2023-12",
+  }),
+  false,
+  "an incomplete date range is not an undated project",
+);
+assert.equal(
   isValidEmploymentEntry({
     company: "Example Consulting",
     title: "SAP Consultant",
@@ -511,7 +525,6 @@ assert.equal(
 );
 for (const partial of [
   [oneProject, {}],
-  [oneProject, { client: "Synthetic Client B", role: "SAP MM Consultant" }],
   JSON.stringify([oneProject, { client: "Synthetic Client B" }]),
 ]) {
   const coverage = evaluateCandidateExtractionCoverage(multipleProjectSource, {
@@ -521,6 +534,17 @@ for (const partial of [
   assert.equal(coverage.status, "incomplete_needs_review");
   assert.ok(coverage.missedObservedSections.includes("projects"));
 }
+assert.equal(
+  evaluateCandidateExtractionCoverage(multipleProjectSource, {
+    ...multipleProjectCandidate,
+    projects: [
+      oneProject,
+      { client: "Synthetic Client B", role: "SAP MM Consultant" },
+    ],
+  }).status,
+  "complete_for_validation",
+  "two identified assignments cover the source even if one has no individual dates",
+);
 
 const multipleEmploymentSource = `SYNTHETIC SAP CONSULTANT
 PROFESSIONAL EXPERIENCE
