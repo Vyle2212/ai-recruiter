@@ -55,6 +55,35 @@ the candidate ID, not a client-provided path or subscription query parameter.
   Deactivate deleted, non-SAP, or unreviewed rows before they can appear in a
   new query. Reconciliation checks source IDs against search IDs in batches.
 
+## Durable ingestion rollout
+
+The reviewed SQL in `supabase/manual/202609260001_candidate_ingestion_jobs.sql`
+prepares a private job ledger. It does not activate a worker or change the
+current upload route. Apply only after its target-environment preflight and
+readback pass; keep the existing route until the full worker is proven.
+
+- Verify bytes, size, and SHA-256 in private Storage before enqueueing. The
+  unique `(actor, digest, parser revision)` key makes a retry idempotent while
+  permitting deliberate re-extraction after a parser upgrade. Keep one source
+  object and canonical candidate identity across those revisions.
+- Workers atomically claim a small batch with `FOR UPDATE SKIP LOCKED`, a lease
+  token, renewal for slow parsing, and bounded retry count. A crashed worker's
+  lease expires. Before any save, inspect the source-file and parser-revision
+  readback so an ambiguous
+  previous commit cannot create a duplicate. A stale token cannot acknowledge
+  a job claimed by another worker.
+- Parse outside the request that accepts the upload. Persist only fixed outcome
+  codes in the job ledger; raw CV and parser details remain private. Add an
+  authorized progress endpoint and a dead-letter review path before enabling
+  this workflow for admin batches or candidate signups.
+- Limit concurrency by observed database, Storage, and parser capacity. A
+  million documents require load tests and operational throughput budgets,
+  rather than a browser tab or one server request processing the collection.
+- A retried upload may leave a second private Storage object even when the
+  digest key resolves to an existing job. Reconcile those unattached objects
+  by digest and reference before retention or deletion; never discard a file
+  after an ambiguous candidate save.
+
 ## Release evidence
 
 - Run synthetic 10k, 100k, and 1M candidate loads without private CVs;
