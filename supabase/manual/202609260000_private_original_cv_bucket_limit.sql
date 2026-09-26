@@ -1,5 +1,5 @@
--- Prepared for supervised cutover after a verified isolated restore.
--- This changes only the private original-CV bucket's per-file limit.
+-- Independent, reversible Storage setting. This does not change CV bytes,
+-- candidate rows, RLS or the private bucket's allowed MIME types.
 -- Confirm the project's global Storage limit is at least 20 MiB before running.
 BEGIN;
 DO $$

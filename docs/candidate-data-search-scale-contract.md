@@ -112,6 +112,13 @@ while null and legacy paths remain allowed. This fences two writes of the same
 private document. It does not archive the existing 970 originals or solve
 cross-document candidate identity and historical source lineage.
 
+The same day, the private original-CV bucket's file limit was changed from
+10 MiB to 20 MiB to match the shared parser and signing endpoint. The bucket
+remained private with the same allowed MIME types and no broad Storage object
+policy; the readback returned no findings and candidate count stayed 970. This
+enables the known 14.9 MB DOCX to be stored later, but it does not upload that
+file or validate its extracted fields.
+
 - Verify bytes, size, and SHA-256 in private Storage before enqueueing. The
   unique `(actor, digest, parser revision)` key makes a retry idempotent while
   permitting deliberate re-extraction after a parser upgrade. Keep one source
