@@ -1,4 +1,7 @@
-import { originalCvReference } from "@/lib/originalCvArchiveKey";
+import {
+  ORIGINAL_CV_BUCKET,
+  originalCvReference,
+} from "@/lib/originalCvArchiveKey";
 import { validateRecruiterApiWriteRequest } from "@/lib/recruiterApiAuthorizationCore";
 import {
   recruiterSearchAuthorizationDenied,
@@ -167,6 +170,16 @@ export async function POST(request: Request) {
     !originalCvReference(candidate.data?.source_file)
   )
     return response("approval_target_unavailable", 404);
+
+  const reference = originalCvReference(candidate.data?.source_file)!;
+  const object = await supabase.storage
+    .from(ORIGINAL_CV_BUCKET)
+    .info(reference.slice(`${ORIGINAL_CV_BUCKET}/`.length));
+  if (object.error) {
+    if (object.error.status === 404)
+      return response("original_cv_not_available", 404);
+    return response("original_cv_storage_unavailable", 503);
+  }
 
   // Client support additionally requires a current assignment, explicit CV share
   // and active subscription. The resume route rechecks them at every read.
