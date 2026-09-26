@@ -1,5 +1,7 @@
 # Production Trust release promotion
 
+> Available-original scope update (2026-09-26): [v174](precision-v174-available-originals-scope-20260926.md) accepts the independently verified 905-file/892-distinct collection instead of blocking on 78 unavailable originals. The private production CV bucket and Auth foundation are installed and read back. Parser review, isolated database restore, legacy-data RLS, initial owner, live OCR and authenticated acceptance are separate open gates; production remains NO_GO.
+
 > Latest current-field correction: [v158 current-employer evidence gate](precision-v158-current-employer-evidence-20260926.md). Shared admin/candidate enrichment now permits `current_company` only from an explicitly open-ended canonical employment row. Completed work, undated labels and stale upstream values remain review evidence instead of current facts. Private aggregate counts are unchanged; no production data or configuration changed, and release remains NO_GO.
 
 > Latest parser batches: [v157 project merge deduplication](precision-v157-project-merge-deduplication-20260925.md) removes duplicate polluted project rows without collapsing distinct roles; [v156 split employment date cards](precision-v156-split-employment-date-cards-20260925.md) adds bounded `From/To`, `Start Date/End Date` and `Date From/Date To` employment cards. Both use the shared admin/candidate parser and preserve production NO_GO.

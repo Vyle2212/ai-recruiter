@@ -58,6 +58,20 @@ assert.equal(plan.originalCvCollectionVerified, true);
 assert.equal(plan.readyForSupervisedCutover, true);
 assert.equal(plan.readyForBulkUpload, false);
 assert.equal(plan.databaseWrites, 0);
+const availableCollection = structuredClone(evidence);
+availableCollection.originalCvCollection.sourceFileCount = 905;
+availableCollection.originalCvCollection.verifiedFileCount = 905;
+availableCollection.originalCvCollection.sourceUniqueFileCount = 892;
+availableCollection.originalCvCollection.verifiedUniqueFileCount = 892;
+assert.equal(
+  buildProductionCutoverPlan({
+    evidence: availableCollection,
+    artifacts,
+    currentCommitSha: commit,
+    now,
+  }).originalCvCollectionVerified,
+  true,
+);
 assert.deepEqual(plan.privacy, {
   candidateIdentifiersSerialized: 0,
   candidateContactsSerialized: 0,
@@ -95,6 +109,10 @@ refuses((copy) => {
 refuses((copy) => {
   copy.originalCvCollection.sourceUniqueFileCount = 1;
   copy.originalCvCollection.verifiedUniqueFileCount = 1;
+}, /cv_collection_incomplete/);
+refuses((copy) => {
+  copy.originalCvCollection.sourceUniqueFileCount = 891;
+  copy.originalCvCollection.verifiedUniqueFileCount = 891;
 }, /cv_collection_incomplete/);
 refuses((copy) => {
   copy.originalCvCollection.verifiedUniqueFileCount--;

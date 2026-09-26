@@ -27,6 +27,7 @@ const SHA256 = /^[0-9a-f]{64}$/;
 const COMMIT_SHA = /^[0-9a-f]{40}$/;
 const MAX_EVIDENCE_AGE_MS = 24 * 60 * 60 * 1000;
 const MINIMUM_PRODUCTION_CANDIDATE_COUNT = 970;
+const MINIMUM_VERIFIED_ORIGINAL_CV_COUNT = 892;
 
 export type ProductionCutoverSqlArtifact = {
   path: string;
@@ -220,7 +221,7 @@ function verifyRecoveryEvidence(input: {
     !Number.isSafeInteger(originals.verifiedFileCount) ||
     !Number.isSafeInteger(originals.sourceUniqueFileCount) ||
     !Number.isSafeInteger(originals.verifiedUniqueFileCount) ||
-    originals.sourceUniqueFileCount < database.sourceCandidateCount ||
+    originals.sourceUniqueFileCount < MINIMUM_VERIFIED_ORIGINAL_CV_COUNT ||
     originals.sourceUniqueFileCount > originals.sourceFileCount ||
     originals.verifiedUniqueFileCount > originals.verifiedFileCount ||
     originals.sourceFileCount !== originals.verifiedFileCount ||

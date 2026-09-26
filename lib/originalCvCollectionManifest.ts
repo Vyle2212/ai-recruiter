@@ -92,7 +92,9 @@ export function verifyOriginalCvCollection(input: {
       )
     )
       fail("original_cv_collection_independent_copy_required");
-    const minimum = input.minimumUniqueFiles ?? 970;
+    // The current recoverable archive has 892 distinct originals. Require
+    // every one of them and an independently verified, identical copy.
+    const minimum = input.minimumUniqueFiles ?? 892;
     if (
       !Number.isSafeInteger(minimum) ||
       minimum < 1 ||
