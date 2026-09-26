@@ -3,6 +3,8 @@ import { safeRequestedAuthRoute } from "../../../lib/stagingAuthRedirect";
 
 import { AuthHeader, card } from "../AuthUiPreview";
 import { StagingRuntimeSignInForm } from "../staging/runtime/StagingRuntimeAuthForms";
+import { productionAuthConfigured } from "../../../lib/productionAuthConfiguration";
+import { ProductionAdminSignInForm } from "../production/SignInForm";
 
 export default async function LoginPage({
   searchParams,
@@ -10,6 +12,31 @@ export default async function LoginPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const acceptance = process.env.APP_ENV === "acceptance";
+  if (process.env.VERCEL_ENV === "production") {
+    const enabled = productionAuthConfigured();
+    return (
+      <main className="min-h-screen bg-[#05070A] text-slate-100">
+        <header className="border-b border-slate-800 bg-[#070A0F] px-6 py-8">
+          <div className="mx-auto max-w-3xl">
+            <h1 className="text-3xl font-semibold">Admin sign in</h1>
+            <p className="mt-2 text-cyan-100">AI Recruiter production</p>
+          </div>
+        </header>
+        <div className="mx-auto max-w-lg px-6 py-8">
+          <section className={card}>
+            {enabled ? (
+              <ProductionAdminSignInForm />
+            ) : (
+              <p>
+                Production admin sign-in is being prepared. Please return after
+                the security cutover is complete.
+              </p>
+            )}
+          </section>
+        </div>
+      </main>
+    );
+  }
   const query = await searchParams;
   const requestedNext = safeRequestedAuthRoute(
     typeof query.next === "string" ? query.next : null,

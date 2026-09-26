@@ -23,6 +23,9 @@ export default function AuthLayout({
 }: {
   children: React.ReactNode;
 }) {
+  if (process.env.VERCEL_ENV === "production") {
+    return <>{children}</>;
+  }
   return (
     <>
       <nav className="border-b border-violet-500/20 bg-violet-500/5 px-6 py-3">

@@ -141,7 +141,9 @@ jobs:
         run: npm run test:github-actions-pinning
 
       - name: Route policy and authorization matrix
-        run: npm run test:production-trust:authorization
+        run: |
+          npm run test:production-trust:authorization
+          node --import tsx scripts/productionAuthConfiguration.test.ts
 
       - name: Authenticated acceptance harness safety contracts
         env:

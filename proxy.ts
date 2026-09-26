@@ -1,4 +1,5 @@
 import { acceptanceAuthConfigured } from "./lib/acceptanceAuthConfiguration";
+import { productionAuthConfigured } from "./lib/productionAuthConfiguration";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
@@ -18,6 +19,19 @@ export async function proxy(request: NextRequest) {
   const recruiterApiNamespace =
     request.nextUrl.pathname.startsWith("/api/recruiter/");
   if (
+    process.env.VERCEL_ENV === "production" &&
+    process.env.PRODUCTION_AUTH_ENABLED === "true" &&
+    !productionAuthConfigured() &&
+    (shouldProtectPortal(request.nextUrl.pathname) ||
+      recruiterApiNamespace ||
+      Boolean(apiPolicy))
+  ) {
+    return new NextResponse("Production authentication is not configured.", {
+      status: 503,
+      headers: { "Cache-Control": "private, no-store" },
+    });
+  }
+  if (
     process.env.APP_ENV === "acceptance" &&
     !acceptanceAuthConfigured() &&
     (shouldProtectPortal(request.nextUrl.pathname) ||
@@ -33,8 +47,25 @@ export async function proxy(request: NextRequest) {
     return updateRecruiterApiSession(request);
   }
 
+  if (
+    productionAuthConfigured() &&
+    request.nextUrl.pathname.startsWith("/api/")
+  ) {
+    return new NextResponse(
+      "This API is not available during the production Auth cutover.",
+      {
+        status: 403,
+        headers: { "Cache-Control": "private, no-store" },
+      },
+    );
+  }
+
   if (!shouldProtectPortal(request.nextUrl.pathname)) {
     return NextResponse.next();
+  }
+
+  if (productionAuthConfigured()) {
+    return updateStagingSession(request);
   }
 
   if (process.env.APP_ENV === "acceptance") {
