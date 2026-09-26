@@ -243,6 +243,7 @@ jobs:
       - name: Scoped formatting check
         run: |
           npm run check:production-trust:format
+          npx prettier --check docs/precision-v171-leading-client-project-card-20260926.md
           npx prettier --check docs/precision-v170-split-role-project-cards-20260926.md
           npx prettier --check lib/candidateExtractionCoverage.ts scripts/candidateProfileIngestion.test.ts docs/precision-v169-split-employer-anchor-coverage-20260926.md
           npx prettier --check lib/boundedEmploymentFieldCards.ts lib/candidateUploadEnrichment.ts scripts/boundedEmploymentFieldCards.test.ts scripts/candidateCvIngestionParity.test.ts docs/precision-v156-split-employment-date-cards-20260925.md docs/precision-v157-project-merge-deduplication-20260925.md docs/precision-v158-current-employer-evidence-20260926.md docs/precision-v159-split-project-date-cards-20260926.md

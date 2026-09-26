@@ -553,6 +553,53 @@ Jan 2023 - Dec 2024`;
     3,
     "a labelled client-only card between named projects is retained once; later education cannot create a project",
   );
+  const leadingClientProjectSource = source.replace(
+    /PROJECT EXPERIENCE[\s\S]*?EDUCATION/,
+    `PROJECT EXPERIENCE
+Client: Alpha Manufacturing
+Role: SAP MM Consultant
+Duration: Jan 2021 - Dec 2022
+SAP procurement configuration and testing
+Project: Beta rollout
+Client: Beta Retail
+Role: SAP MM Lead
+Duration: Jan 2023 - Dec 2024
+SAP deployment and cutover
+EDUCATION`,
+  );
+  for (const origin of ["admin_upload", "candidate_upload"] as const) {
+    const prepared = await prepareCandidateCv({
+      buffer: Buffer.from(leadingClientProjectSource),
+      fileName: "synthetic.txt",
+      source: origin,
+    });
+    assert.equal(prepared.accepted, true);
+    if (!prepared.accepted) throw new Error("leading client project rejected");
+    const projects =
+      prepared.candidatePayload.project_history.filter(isValidProjectEntry);
+    assert.equal(projects.length, 2, "both project cards need their own rows");
+    assert.deepEqual(
+      new Set(projects.map((item: Record<string, unknown>) => item.client)),
+      new Set(["Alpha Manufacturing", "Beta Retail"]),
+    );
+  }
+  for (const leadingSection of [
+    "WORK EXPERIENCE\nClient: Employer Operations\nRole: SAP MM Consultant\nDuration: Jan 2021 - Dec 2022\nPROJECT EXPERIENCE",
+    "PROJECT EXPERIENCE\nWORK EXPERIENCE\nClient: Employer Operations\nRole: SAP MM Consultant\nDuration: Jan 2021 - Dec 2022",
+    "PROJECT EXPERIENCE\nClient: Partial Manufacturing\nRole: SAP MM Consultant",
+  ]) {
+    const bounded = enrichCandidateUpload(
+      { name: "Jane Doe" },
+      `SAP MM Consultant\n${leadingSection}\nProject: Beta rollout\nClient: Beta Retail\nRole: SAP MM Lead\nDuration: Jan 2023 - Dec 2024`,
+    );
+    const projects = bounded.project_history.filter(isValidProjectEntry);
+    assert.equal(
+      projects.length,
+      1,
+      "an employment Client or incomplete leading card cannot borrow the named project's dates",
+    );
+    assert.equal(projects[0].client, "Beta Retail");
+  }
   const splitRoleProjectSource = source.replace(
     /PROJECT EXPERIENCE[\s\S]*?EDUCATION/,
     `PROJECT EXPERIENCE

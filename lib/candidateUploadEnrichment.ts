@@ -292,10 +292,10 @@ function explicitProjectRecords(rawText: string) {
     });
   }
   // A document can mix named Project cards with Client-only cards. The
-  // primary pass above uses Project markers, so a Client-only assignment
-  // between them would otherwise disappear. Read a Client card only within
-  // the same nearby project section; its own Role and Duration labels must
-  // occur before the next Project or Client marker.
+  // primary pass above uses Project markers, so Client-only assignments
+  // before or between them would otherwise disappear. A leading Client card
+  // must be inside an explicit project section; later cards need a nearby
+  // Project marker. Each card owns its own Role and Duration labels.
   if (projectMarkers.length) {
     const boundaries = [...projectMarkers, ...clientMarkers]
       .map((marker) => marker.index || 0)
@@ -306,10 +306,22 @@ function explicitProjectRecords(rawText: string) {
         .map((marker) => marker.index || 0)
         .filter((index) => index < start)
         .at(-1);
-      if (priorProject === undefined || start - priorProject > 2400) continue;
+      const priorProjectHeading = [
+        ...normalized
+          .slice(0, start)
+          .matchAll(
+            /(?:^|\n)[ \t]*(?:projects?|project[ \t]+(?:experience|history|profile|details|portfolio|assignments?))[ \t]*:?[ \t]*(?:\n|$)/gim,
+          ),
+      ].at(-1);
+      const anchor =
+        priorProject ??
+        (priorProjectHeading?.index === undefined
+          ? undefined
+          : priorProjectHeading.index + priorProjectHeading[0].length);
+      if (anchor === undefined || start - anchor > 2400) continue;
       if (
-        /\n\s*(?:(?:work(?:ing)?|professional|employment)\s+(?:experience|history)|education|academic\s+(?:background|qualifications?)|skills?|languages?|references?)\s*:?\s*(?:\n|$)/i.test(
-          normalized.slice(priorProject, start),
+        /(?:^|\n)\s*(?:(?:work(?:ing)?|professional|employment)\s+(?:experience|history)|education|academic\s+(?:background|qualifications?)|skills?|languages?|references?)\s*:?\s*(?:\n|$)/i.test(
+          normalized.slice(anchor, start),
         )
       )
         continue;
