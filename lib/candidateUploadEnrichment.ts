@@ -40,10 +40,14 @@ function mergeGroundedProjects(
         projectEndIsCurrent(existing),
       );
       const samePeriod =
-        start !== null &&
-        end !== null &&
-        start === careerMonthIndex(row.start_date) &&
-        end === careerMonthIndex(row.end_date, projectEndIsCurrent(row));
+        (start !== null &&
+          end !== null &&
+          start === careerMonthIndex(row.start_date) &&
+          end === careerMonthIndex(row.end_date, projectEndIsCurrent(row))) ||
+        (!clean(existing.start_date) &&
+          !clean(existing.end_date) &&
+          !clean(row.start_date) &&
+          !clean(row.end_date));
       const sameRole = Boolean(
         key(existing.role) && key(existing.role) === key(row.role),
       );
@@ -166,6 +170,15 @@ function explicitProjectRecords(rawText: string) {
     "i",
   );
   const dateValue = (value: string) => clean(value.replace(/[’']/g, " "));
+  // An invalid or partial date claim is not an undated assignment. Preserve
+  // that claim only in the source text until it can be reviewed.
+  const unresolvedDateClaim = (block: string, start: string, end: string) =>
+    !start &&
+    !end &&
+    (/(?:^|\n)\s*(?:duration|period|project\s+dates?|(?:project\s+)?(?:start|end)(?:ing)?\s+date|date\s+(?:from|to)|from|to)\s*:/im.test(
+      block,
+    ) ||
+      rangePattern.test(block));
   const projectFieldValue = (value: unknown) => {
     const normalized = clean(value);
     return /^(?:project(?:[ \t]+(?:name|title|role|dates?|duration|type))?|end[ \t]+client|client|customer|role|position|designation|duration|period|(?:project[ \t]+)?start(?:ing)?[ \t]+date|(?:project[ \t]+)?end(?:ing)?[ \t]+date|date[ \t]+(?:from|to)|from|to|sap[ \t]+modules?|modules?|type|education|skills?)[ \t]*(?::|$)/i.test(
@@ -267,7 +280,12 @@ function explicitProjectRecords(rawText: string) {
     const splitRange = splitDateRange(block);
     const startDate = range?.[1] || splitRange?.[0] || "";
     const endDate = range?.[2] || splitRange?.[1] || "";
-    if (!(name || client) || !role || !startDate || !endDate) continue;
+    if (
+      !(name || client) ||
+      !role ||
+      unresolvedDateClaim(block, startDate, endDate)
+    )
+      continue;
     const moduleLine = clean(
       block.match(
         /(?:^|\n)\s*(?:sap\s+modules?|modules?)\s*:\s*([^\n]{1,160})/im,
@@ -351,8 +369,7 @@ function explicitProjectRecords(rawText: string) {
       if (
         !client ||
         !role ||
-        !startDate ||
-        !endDate ||
+        unresolvedDateClaim(block, startDate, endDate) ||
         /^(?:role|duration|project|client|customer|education)\s*:/i.test(
           client,
         ) ||
@@ -431,7 +448,13 @@ function explicitProjectRecords(rawText: string) {
         .replace((block[1] || "").match(rangePattern)?.[0] || /$^/, "")
         .replace(/[\s,;|–—-]+$/, ""),
     );
-    if (!client || !name || !role || !startDate || !endDate) continue;
+    if (
+      !client ||
+      !name ||
+      !role ||
+      unresolvedDateClaim(block.join("\n"), startDate, endDate)
+    )
+      continue;
     records.push({
       name,
       client,
@@ -520,7 +543,8 @@ export function enrichCandidateUpload(
   const explicitProjects = explicitProjectRecords(rawText);
   // The two source-backed readers may recover different assignments. Count
   // alone must not discard a distinct explicit project or a canonical one.
-  // Match the same role, period and named project/client before deduplicating.
+  // Match role, project/client and either the same period or both undated
+  // records before deduplicating. Never copy employment dates to a project.
   const projects = mergeGroundedProjects(canonicalProjects, explicitProjects);
   const education = explicitEducation.length
     ? explicitEducation

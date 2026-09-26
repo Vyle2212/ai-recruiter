@@ -214,11 +214,14 @@ export function isValidProjectEntry(item: unknown): boolean {
   const role = rowText(row, "role", "title", "position");
   const start = rowText(row, "start_date", "startDate", "from");
   const end = rowText(row, "end_date", "endDate", "to");
+  // A project can be explicitly identified without an individual date range.
+  // Its dates must never be filled from the parent employment period.
   return Boolean(
     identity &&
       role &&
-      start &&
-      validDatedRange(start, end, row.current === true),
+      (start
+        ? validDatedRange(start, end, row.current === true)
+        : !end && row.current !== true),
   );
 }
 

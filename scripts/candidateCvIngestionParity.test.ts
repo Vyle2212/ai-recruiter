@@ -85,6 +85,60 @@ async function main() {
     admin.candidatePayload.project_history[0].role,
     "SAP MM Consultant",
   );
+  const undatedProjectSource = source.replace(
+    /PROJECT EXPERIENCE[\s\S]*?EDUCATION/,
+    `PROJECT EXPERIENCE
+Project: S/4HANA rollout
+Client: Synthetic Retail
+Role: SAP MM Consultant
+Project: AMS support
+Client: Synthetic Manufacturing
+Role: SAP MM Lead
+EDUCATION`,
+  );
+  for (const origin of ["admin_upload", "candidate_upload"] as const) {
+    const prepared = await prepareCandidateCv({
+      buffer: Buffer.from(undatedProjectSource),
+      fileName: "synthetic-undated-client-projects.txt",
+      source: origin,
+    });
+    assert.equal(prepared.accepted, true);
+    if (!prepared.accepted) throw new Error("undated projects rejected");
+    const profile = prepared.candidatePayload;
+    assert.equal(profile.current_company, "Example Consulting");
+    assert.equal(profile.employment_history[0].employer, "Example Consulting");
+    assert.equal(profile.employment_history[0].start_date, "Jan 2020");
+    assert.equal(profile.employment_history[0].current, true);
+    assert.deepEqual(
+      profile.project_history.map((row: Record<string, unknown>) => ({
+        name: row.name,
+        client: row.client,
+        role: row.role,
+        start_date: row.start_date,
+        end_date: row.end_date,
+      })),
+      [
+        {
+          name: "S/4HANA rollout",
+          client: "Synthetic Retail",
+          role: "SAP MM Consultant",
+          start_date: "",
+          end_date: "",
+        },
+        {
+          name: "AMS support",
+          client: "Synthetic Manufacturing",
+          role: "SAP MM Lead",
+          start_date: "",
+          end_date: "",
+        },
+      ],
+      "clients and projects remain separate from the employer and cannot inherit its tenure",
+    );
+    assert.ok(
+      !prepared.extractionCoverage.missedObservedSections.includes("projects"),
+    );
+  }
   assert.deepEqual(
     admin.candidatePayload.sourceExtraction,
     admin.sourceExtraction,
@@ -583,22 +637,40 @@ EDUCATION`,
       new Set(["Alpha Manufacturing", "Beta Retail"]),
     );
   }
-  for (const leadingSection of [
-    "WORK EXPERIENCE\nClient: Employer Operations\nRole: SAP MM Consultant\nDuration: Jan 2021 - Dec 2022\nPROJECT EXPERIENCE",
-    "PROJECT EXPERIENCE\nWORK EXPERIENCE\nClient: Employer Operations\nRole: SAP MM Consultant\nDuration: Jan 2021 - Dec 2022",
-    "PROJECT EXPERIENCE\nClient: Partial Manufacturing\nRole: SAP MM Consultant",
-  ]) {
+  for (const [leadingSection, expectedClients] of [
+    [
+      "WORK EXPERIENCE\nClient: Employer Operations\nRole: SAP MM Consultant\nDuration: Jan 2021 - Dec 2022\nPROJECT EXPERIENCE",
+      ["Beta Retail"],
+    ],
+    [
+      "PROJECT EXPERIENCE\nWORK EXPERIENCE\nClient: Employer Operations\nRole: SAP MM Consultant\nDuration: Jan 2021 - Dec 2022",
+      ["Beta Retail"],
+    ],
+    [
+      "PROJECT EXPERIENCE\nClient: Partial Manufacturing\nRole: SAP MM Consultant",
+      ["Partial Manufacturing", "Beta Retail"],
+    ],
+  ] as const) {
     const bounded = enrichCandidateUpload(
       { name: "Jane Doe" },
       `SAP MM Consultant\n${leadingSection}\nProject: Beta rollout\nClient: Beta Retail\nRole: SAP MM Lead\nDuration: Jan 2023 - Dec 2024`,
     );
     const projects = bounded.project_history.filter(isValidProjectEntry);
-    assert.equal(
-      projects.length,
-      1,
-      "an employment Client or incomplete leading card cannot borrow the named project's dates",
+    assert.deepEqual(
+      new Set(
+        projects.map((project: Record<string, unknown>) => project.client),
+      ),
+      new Set(expectedClients),
+      "employment clients stay out of projects, while an undated project card remains present",
     );
-    assert.equal(projects[0].client, "Beta Retail");
+    assert.equal(
+      projects.find(
+        (project: Record<string, unknown>) =>
+          project.client === "Partial Manufacturing",
+      )?.start_date || "",
+      "",
+      "the adjacent named project cannot supply dates to an undated client card",
+    );
   }
   const splitRoleProjectSource = source.replace(
     /PROJECT EXPERIENCE[\s\S]*?EDUCATION/,
@@ -656,8 +728,8 @@ EDUCATION`,
   );
   assert.equal(
     incompleteClientCard.project_history.filter(isValidProjectEntry).length,
-    2,
-    "a Client-only card cannot borrow a later project's dates",
+    3,
+    "an undated Client-only card remains present without borrowing a later project's dates",
   );
   const unfinishedNamedCard = enrichCandidateUpload(
     { name: "Jane Doe" },
@@ -665,8 +737,8 @@ EDUCATION`,
   );
   assert.equal(
     unfinishedNamedCard.project_history.filter(isValidProjectEntry).length,
-    2,
-    "an incomplete named card cannot borrow the next Client-only card's duration",
+    3,
+    "an undated named card remains present without borrowing the next Client-only card's duration",
   );
   const conflictingSource = `SAP MM Consultant\nPROJECT EXPERIENCE\nProject Title: Synthetic Alpha\nClient: Synthetic Logistics\nRole: SAP MM Consultant\nDuration: Jan 2020 - Dec 2021`;
   const conflictingProjects = enrichCandidateUpload(
@@ -799,11 +871,12 @@ English
     });
     assert.equal(partial.accepted, true);
     if (!partial.accepted) throw new Error("partial fixture rejected");
-    assert.equal(partial.candidatePayload.project_history.length, 1);
+    assert.equal(partial.candidatePayload.project_history.length, 2);
+    assert.equal(partial.candidatePayload.project_history[1].start_date, "");
+    assert.equal(partial.candidatePayload.project_history[1].end_date, "");
     assert.ok(
-      partial.extractionCoverage.missedObservedSections.includes("projects"),
+      !partial.extractionCoverage.missedObservedSections.includes("projects"),
     );
-    assert.equal(partial.extractionCoverage.status, "incomplete_needs_review");
     const dateBeforeClient = await prepareCandidateCv({
       buffer: Buffer.from(
         multilineProjects
@@ -837,11 +910,10 @@ English
     });
     assert.equal(unrelatedYear.accepted, true);
     if (!unrelatedYear.accepted) throw new Error("undated fixture rejected");
-    assert.equal(unrelatedYear.candidatePayload.project_history.length, 1);
-    assert.ok(
-      unrelatedYear.extractionCoverage.missedObservedSections.includes(
-        "projects",
-      ),
+    assert.equal(unrelatedYear.candidatePayload.project_history.length, 2);
+    assert.equal(
+      unrelatedYear.candidatePayload.project_history[1].start_date,
+      "",
     );
     const labelledDuration = await prepareCandidateCv({
       buffer: Buffer.from(`Jane Doe
