@@ -73,6 +73,15 @@ job ledger but does not have the candidate tables and original CV bucket.
 Never point this runtime at the production candidates table in its present
 state. A worker cannot make that environment ready by restoring a backup.
 
+The ledger now claims at most one unfinished CV job per uploading actor at a
+time, in enqueue order. Other actors remain parallel. This preserves the
+admin batch's oldest-to-newest CV order even when more than one worker polls.
+Staging tested two actors and two ordered CVs in a rolled-back transaction;
+the next version became claimable only after the older job was acknowledged,
+the readback returned no findings, and zero synthetic jobs remained. This
+orders one admin's uploads; it does not prove two different actors cannot
+submit CVs for the same person simultaneously.
+
 Before activation, enforce one canonical candidate per private source reference
 in the database, audit any existing duplicate references, prove concurrent
 worker recovery against an ambiguous in-flight save, and record historical

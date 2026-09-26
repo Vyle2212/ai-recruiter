@@ -47,6 +47,12 @@ create index if not exists candidate_ingestion_jobs_ready_idx
 create index if not exists candidate_ingestion_jobs_expired_idx
   on public.candidate_ingestion_jobs (lease_expires_at, id)
   where status = 'running';
+-- The admin browser enqueues old CV versions before new ones. Workers may
+-- process different actors concurrently, but only the oldest unfinished job
+-- for one actor may be claimed at a time.
+create index if not exists candidate_ingestion_jobs_actor_order_idx
+  on public.candidate_ingestion_jobs (actor_user_id, created_at, id)
+  where status in ('queued', 'running');
 
 alter table public.candidate_ingestion_jobs enable row level security;
 alter table public.candidate_ingestion_jobs force row level security;
@@ -99,11 +105,27 @@ begin
 
   return query
   with next_jobs as (
-    select id from public.candidate_ingestion_jobs
-    where (status = 'queued' and available_at <= now() and attempts < 5)
-       or (status = 'running' and lease_expires_at < now() and attempts < 5)
-    order by created_at, id
-    for update skip locked
+    select candidate_job.id from public.candidate_ingestion_jobs candidate_job
+    where ((candidate_job.status = 'queued' and candidate_job.available_at <= now()
+            and candidate_job.attempts < 5)
+       or (candidate_job.status = 'running' and candidate_job.lease_expires_at < now()
+            and candidate_job.attempts < 5))
+      and not exists (
+        select 1 from public.candidate_ingestion_jobs earlier
+        where earlier.actor_user_id = candidate_job.actor_user_id
+          and (earlier.created_at, earlier.id) <
+              (candidate_job.created_at, candidate_job.id)
+          and earlier.status in ('queued', 'running')
+      )
+      and not exists (
+        select 1 from public.candidate_ingestion_jobs active_job
+        where active_job.actor_user_id = candidate_job.actor_user_id
+          and active_job.id <> candidate_job.id
+          and active_job.status = 'running'
+          and active_job.lease_expires_at > now()
+      )
+    order by candidate_job.created_at, candidate_job.id
+    for update of candidate_job skip locked
     limit p_limit
   )
   update public.candidate_ingestion_jobs as jobs

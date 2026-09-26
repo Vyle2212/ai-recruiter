@@ -41,6 +41,18 @@ select 'function_missing', name from missing_functions
 union all
 select 'constraint_missing', name from missing_constraints
 union all
+select 'actor_order_index_missing', 'candidate_ingestion_jobs_actor_order_idx'
+where to_regclass('public.candidate_ingestion_jobs_actor_order_idx') is null
+union all
+select 'actor_order_claim_guard_missing', 'claim_candidate_ingestion_jobs'
+where to_regprocedure('public.claim_candidate_ingestion_jobs(integer)') is not null
+  and (
+    pg_get_functiondef(to_regprocedure('public.claim_candidate_ingestion_jobs(integer)'))
+      not like '%earlier.actor_user_id = candidate_job.actor_user_id%'
+    or pg_get_functiondef(to_regprocedure('public.claim_candidate_ingestion_jobs(integer)'))
+      not like '%active_job.actor_user_id = candidate_job.actor_user_id%'
+  )
+union all
 select 'rls_not_forced', 'candidate_ingestion_jobs'
 from target join pg_catalog.pg_class c on c.oid = target.oid
 where not c.relrowsecurity or not c.relforcerowsecurity
