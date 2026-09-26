@@ -24,6 +24,9 @@ user's own `user_profiles` row is readable by an authenticated user. A live
 catalog readback confirmed these grants and the single self-read policy.
 There are still zero production Auth users, so owner bootstrap and a real
 signed-in acceptance run have not happened.
+The cutover planner now treats the installed foundation and bucket as
+preexisting production configuration. It retains their readbacks and does
+not try to replay the one-shot foundation migration.
 
 The complete available offline audit is bound to the exact collection. Its
 review and OCR outcomes must remain visible in the release decision; lowering

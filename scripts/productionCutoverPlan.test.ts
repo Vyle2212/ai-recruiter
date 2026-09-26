@@ -51,7 +51,19 @@ const plan = buildProductionCutoverPlan({
   currentCommitSha: commit,
   now,
 });
-assert.equal(plan.steps.length, 20);
+assert.equal(plan.steps.length, 18);
+assert.equal(
+  plan.steps.some((step) =>
+    step.path.endsWith("production_auth_foundation.sql"),
+  ),
+  false,
+);
+assert.equal(
+  plan.steps.some((step) =>
+    step.path.endsWith("private_original_cv_archive.sql"),
+  ),
+  false,
+);
 assert.equal(plan.recoveryVerified, true);
 assert.equal(plan.databaseRestoreVerified, true);
 assert.equal(plan.originalCvCollectionVerified, true);

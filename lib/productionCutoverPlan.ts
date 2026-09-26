@@ -6,10 +6,10 @@ export const PRODUCTION_CUTOVER_SQL_SEQUENCE = [
   "supabase/manual/202609230000_production_private_data_rls_snapshot.sql",
   "supabase/manual/202609230001_production_private_data_rls_cutover.sql",
   "supabase/manual/202609230002_production_private_data_rls_readback.sql",
-  "supabase/manual/202609240011_production_auth_foundation.sql",
+  // Installed on production 2026-09-26; its readback remains mandatory.
   "supabase/manual/202609240012_production_initial_owner_bootstrap.sql",
   "supabase/manual/202609240013_production_auth_foundation_readback.sql",
-  "supabase/manual/202609240003_private_original_cv_archive.sql",
+  // Installed on production 2026-09-26; revalidate the private bucket below.
   "supabase/manual/202609240004_private_original_cv_archive_readback.sql",
   "supabase/manual/202609240005_candidate_profile_claim_and_provenance.sql",
   "supabase/manual/202609240006_candidate_profile_claim_readback.sql",
