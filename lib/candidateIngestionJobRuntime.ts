@@ -10,6 +10,7 @@ import {
 import { recordCandidateUploadReview } from "./candidateUploadReviewQueue";
 import { CvSourceError } from "./cvPdfOcr";
 import { ORIGINAL_CV_BUCKET } from "./originalCvArchiveKey";
+import { findCandidateForIngestedSource } from "./candidateIngestionSourceReadback";
 import {
   processClaimedIngestionJob,
   type ClaimedIngestionJob,
@@ -49,15 +50,41 @@ export async function claimAndProcessCandidateIngestionJobs(limit = 1) {
         return Buffer.from(await data.arrayBuffer());
       },
       findBySource: async (reference) => {
-        const { data, error } = await supabase
-          .from("candidates")
-          .select("id")
-          .eq("source_file", reference)
-          .limit(2);
-        requireData(data, error);
-        if ((data?.length || 0) > 1)
-          throw new Error("INGESTION_SOURCE_AMBIGUOUS");
-        return data?.[0] ?? null;
+        return findCandidateForIngestedSource(reference, {
+          current: async (source) => {
+            const { data, error } = await supabase
+              .from("candidates")
+              .select("id")
+              .eq("source_file", source)
+              .limit(2);
+            requireData(data, error);
+            if ((data?.length || 0) > 1)
+              throw new Error("INGESTION_SOURCE_AMBIGUOUS");
+            return data?.[0] ?? null;
+          },
+          completedCandidateIds: async (source) => {
+            const { data, error } = await supabase
+              .from("candidate_ingestion_jobs")
+              .select("result_candidate_id")
+              .eq("source_file", source)
+              .eq("status", "completed")
+              .not("result_candidate_id", "is", null)
+              .limit(21);
+            requireData(data, error);
+            if ((data?.length || 0) > 20)
+              throw new Error("INGESTION_SOURCE_HISTORY_LIMIT");
+            return (data || []).map((row) => String(row.result_candidate_id));
+          },
+          candidateById: async (id) => {
+            const { data, error } = await supabase
+              .from("candidates")
+              .select("id")
+              .eq("id", id)
+              .maybeSingle();
+            requireData(data, error);
+            return data ?? null;
+          },
+        });
       },
       prepare: async (bytes, filename) => {
         try {

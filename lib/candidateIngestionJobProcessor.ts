@@ -184,6 +184,16 @@ export async function processClaimedIngestionJob(
         /INGESTION_JOB_(?:LEASE_LOST|ACK_LOST)/.test(error.message))
     )
       throw error;
+    if (error instanceof Error) {
+      if (
+        error.message === "INGESTION_SOURCE_OWNERSHIP_CONFLICT" ||
+        error.message === "INGESTION_SOURCE_AMBIGUOUS" ||
+        error.message === "INGESTION_SOURCE_HISTORY_LIMIT"
+      )
+        return await review(["source_history_conflict"], "source_review");
+      if (error.message === "INGESTION_SOURCE_CANDIDATE_MISSING")
+        return await review(["source_candidate_missing"], "source_review");
+    }
     // If review or ACK failed, do not mark a terminal failure: on retry the
     // source readback recognizes any committed candidate.
     await finish({ status: "queued", outcomeCode: "processing_failure" });

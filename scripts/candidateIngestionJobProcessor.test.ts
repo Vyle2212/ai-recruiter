@@ -87,6 +87,26 @@ async function main() {
   );
   assert(!committed.events.includes("save"));
 
+  for (const [message, reason] of [
+    ["INGESTION_SOURCE_OWNERSHIP_CONFLICT", "source_history_conflict"],
+    ["INGESTION_SOURCE_CANDIDATE_MISSING", "source_candidate_missing"],
+    ["INGESTION_SOURCE_HISTORY_LIMIT", "source_history_conflict"],
+  ]) {
+    const flagged = fixture({
+      findBySource: async () => {
+        throw new Error(message);
+      },
+      review: async (_job, codes) => {
+        assert.deepEqual(codes, [reason]);
+      },
+    });
+    assert.deepEqual(await processClaimedIngestionJob(job, flagged.deps), {
+      status: "review",
+      outcomeCode: "source_review",
+    });
+    assert(!flagged.events.includes("save"));
+  }
+
   let reads = 0;
   const wonDuringParse = fixture({
     findBySource: async () => (++reads === 2 ? { id: "other-id" } : null),
