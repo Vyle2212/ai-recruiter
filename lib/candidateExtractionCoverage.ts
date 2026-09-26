@@ -110,11 +110,20 @@ function employmentSection(rawText: string): string {
 function explicitEmploymentCount(rawText: string): number {
   const section = employmentSection(rawText);
   if (!section) return 0;
-  return (
+  const label =
+    "(?:employer|company|organisation|organization)(?:[ \\t]+name)?";
+  const inline = (
+    section.match(new RegExp(`^[ \\t]*${label}[ \\t]*:[ \\t]*\\S`, "gim")) || []
+  ).length;
+  const nextLine = (
     section.match(
-      /^[ \t]*(?:employer|company|organisation|organization)(?:[ \t]+name)?[ \t]*:[ \t]*\S/gim,
+      new RegExp(
+        `^[ \\t]*${label}[ \\t]*:?[ \\t]*\\r?\\n(?:[ \\t]*\\r?\\n){0,2}[ \\t]*(?!(?:role|job title|duration|start date|end date|employer|company|client|project)[ \\t]*:)\\S`,
+        "gim",
+      ),
     ) || []
   ).length;
+  return inline + nextLine;
 }
 
 /** Count repeated project-entry labels without double-counting Client + Project in one entry. */

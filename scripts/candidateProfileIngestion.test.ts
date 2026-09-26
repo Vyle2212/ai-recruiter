@@ -542,6 +542,46 @@ assert.equal(
   false,
 );
 
+const splitEmployerSource = `SYNTHETIC SAP CONSULTANT
+PROFESSIONAL EXPERIENCE
+Employer:
+Synthetic Consulting A
+Role: SAP MM Consultant
+Duration: Jan 2020 - Dec 2022
+Company Name
+Synthetic Consulting B
+Job Title: Senior SAP MM Consultant
+Duration: Jan 2023 - Present
+PROJECT EXPERIENCE
+Company: Project Customer
+Client: Synthetic Client`;
+assert.ok(
+  evaluateCandidateExtractionCoverage(splitEmployerSource, {
+    ...multipleEmploymentCandidate,
+    experience: [firstEmployment],
+  }).missedObservedSections.includes("employment"),
+  "a second employer printed below its label must not be hidden by one parsed job",
+);
+assert.equal(
+  evaluateCandidateExtractionCoverage(splitEmployerSource, {
+    ...multipleEmploymentCandidate,
+    experience: [firstEmployment, currentEmployment],
+  }).missedObservedSections.includes("employment"),
+  false,
+  "the project company after the section must not inflate the employment count",
+);
+assert.equal(
+  evaluateCandidateExtractionCoverage(
+    splitEmployerSource.replace(
+      "Synthetic Consulting B",
+      "Role: SAP MM Consultant",
+    ),
+    { ...multipleEmploymentCandidate, experience: [firstEmployment] },
+  ).missedObservedSections.includes("employment"),
+  false,
+  "a blank company label followed by another field is not a second employer",
+);
+
 const projectsWithCompanyLabels = multipleEmploymentSource
   .replace(
     /PROFESSIONAL EXPERIENCE[\s\S]*?PROJECT EXPERIENCE/,
