@@ -66,7 +66,7 @@ assert.equal(
   "hold_for_identity_review",
 );
 
-const complete = evaluateCandidateProfileCompletion({
+const completeCandidate = {
   name: "Jane Doe",
   email: "jane@example.com",
   location: "Malaysia",
@@ -94,8 +94,30 @@ const complete = evaluateCandidateProfileCompletion({
       current: true,
     },
   ],
-});
+};
+const complete = evaluateCandidateProfileCompletion(completeCandidate);
 assert.equal(complete.searchable, true);
+for (const field of ["experience", "projects"] as const) {
+  const conflicting = evaluateCandidateProfileCompletion({
+    ...completeCandidate,
+    [field]: [
+      ...completeCandidate[field],
+      {
+        company: "Previous Employer",
+        client: "Previous Client",
+        title: "SAP Consultant",
+        role: "SAP Consultant",
+        start_date: "Jan 2018",
+        end_date: "Dec 2020",
+        current: true,
+      },
+    ],
+  });
+  assert.equal(conflicting.searchable, false, `${field} must require review`);
+  assert.ok(
+    conflicting.missingRequiredFields.includes("current_date_conflict"),
+  );
+}
 assert.equal(
   isValidProjectEntry({
     client: "Example Client",

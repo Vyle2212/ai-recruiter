@@ -226,6 +226,18 @@ function validProject(value: unknown) {
   return list(value).some(isValidProjectEntry);
 }
 
+function contradictoryCurrentEnd(value: unknown) {
+  return list(value).some((item) => {
+    if (!item || typeof item !== "object") return false;
+    const row = item as Record<string, unknown>;
+    const current = [row.current, row.is_current, row.isCurrent].some(
+      (flag) => flag === true || /^(?:true|yes|1)$/i.test(clean(flag)),
+    );
+    const end = rowText(row, "end_date", "endDate", "to");
+    return current && Boolean(end) && careerMonthIndex(end, true) === null;
+  });
+}
+
 export function evaluateCandidateProfileCompletion(
   candidate: Record<string, unknown>,
   options: { requireCandidateConfirmation?: boolean } = {},
@@ -254,6 +266,18 @@ export function evaluateCandidateProfileCompletion(
     !present(candidate, ["primary_module", "sap_modules", "secondary_modules"])
   )
     missing.push("sap_module");
+  if (
+    [
+      candidate.experience,
+      candidate.employment,
+      candidate.employment_history,
+      candidate.employmentHistory,
+      candidate.projects,
+      candidate.project_history,
+      candidate.projectHistory,
+    ].some(contradictoryCurrentEnd)
+  )
+    missing.push("current_date_conflict");
   const candidateConfirmed =
     candidate.candidate_confirmed === true ||
     candidate.profile_confirmation_status === "candidate_confirmed" ||
