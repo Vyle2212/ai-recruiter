@@ -315,6 +315,9 @@ jobs:
       - name: Next.js 16.3.5 Webpack production build
         run: npm run build:webpack
 
+      - name: Verify PDF fonts are bundled with CV upload routes
+        run: node --import tsx scripts/pdfFontTrace.test.ts
+
       - name: Scan client bundle for server secret material
         run: npm run scan:production-trust:bundle
 
