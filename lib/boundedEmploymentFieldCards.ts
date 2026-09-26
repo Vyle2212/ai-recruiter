@@ -1,10 +1,14 @@
 import { careerMonthIndex } from "./candidateCareerExperience";
+import {
+  CAREER_CURRENT_TOKEN_PATTERN,
+  CAREER_DATE_TOKEN_PATTERN,
+  careerDateIsCurrent,
+} from "./careerDateEvidence";
 import type { BoundedCareerTableRow } from "./boundedCareerTables";
 
-const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*";
-const date = `(?:${month}\\s+(?:19|20)\\d{2}|(?:19|20)\\d{2}|(?:0?[1-9]|1[0-2])\\s*[/]\\s*(?:\\d{2}|(?:19|20)\\d{2}))`;
+const date = CAREER_DATE_TOKEN_PATTERN;
 const range = new RegExp(
-  `\\b(${date})\\s*(?:[-–—]|to)\\s*(${date}|Present|Current|Now|Till\\s+(?:to\\s+)?Date)\\b`,
+  `\\b(${date})\\s*(?:[-–—]|to|~)\\s*(${date}|${CAREER_CURRENT_TOKEN_PATTERN})\\b`,
   "gi",
 );
 const roleWord =
@@ -31,7 +35,7 @@ function closed(
     /\b(?:client|customer|project\s+description|responsibilities)\b/i.test(
       title,
     ) ||
-    /^(?:present|current|now|till\s+(?:to\s+)?date)$/i.test(end)
+    careerDateIsCurrent(end)
   )
     return null;
   const first = careerMonthIndex(start),
@@ -147,7 +151,7 @@ export function companyDurationRoleCards(
       first !== null &&
       last !== null &&
       first <= last &&
-      !/^(?:present|current|now|till\s+(?:to\s+)?date)$/i.test(period[2])
+      !careerDateIsCurrent(period[2])
     ) {
       const span = `${first}:${last}`;
       assertedSpans.set(span, (assertedSpans.get(span) || 0) + 1);
@@ -277,15 +281,13 @@ export function labelledEmploymentFieldCards(
       const exactEnd = (value: string) =>
         value.match(
           new RegExp(
-            `^(${date}|Present|Current|Now|Till\\s+(?:to\\s+)?Date)(?=\\s|$)`,
+            `^(${date}|${CAREER_CURRENT_TOKEN_PATTERN})(?=\\s|$)`,
             "i",
           ),
         )?.[1] || "";
       const start = period?.[1] || exactStart(joined) || exactStart(splitStart);
       const end = period?.[2] || exactEnd(left) || exactEnd(splitEnd);
-      const current = /^(?:present|current|now|till\s+(?:to\s+)?date)$/i.test(
-        end,
-      );
+      const current = careerDateIsCurrent(end);
       const first = careerMonthIndex(start),
         last = careerMonthIndex(end, current);
       if (
@@ -385,9 +387,7 @@ export function multilineEmploymentTriples(
     const after = parsePair(lines.slice(index + 1, index + 3));
     const owned = before || after;
     if (!owned) return;
-    const current = /^(?:present|current|now|till\s+(?:to\s+)?date)$/i.test(
-      period[2],
-    );
+    const current = careerDateIsCurrent(period[2]);
     const first = careerMonthIndex(period[1]),
       last = careerMonthIndex(period[2], current);
     if (first === null || last === null || first > last) return;

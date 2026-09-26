@@ -1,10 +1,14 @@
 import { careerMonthIndex } from "./candidateCareerExperience";
+import {
+  CAREER_CURRENT_TOKEN_PATTERN,
+  CAREER_DATE_TOKEN_PATTERN,
+  careerDateIsCurrent,
+} from "./careerDateEvidence";
 import type { BoundedCareerTableRow } from "./boundedCareerTables";
 
-const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*";
-const date = `(?:${month}\\s+(?:19|20)\\d{2}|(?:19|20)\\d{2}|(?:0?[1-9]|1[0-2])\\s*[/]\\s*(?:\\d{2}|(?:19|20)\\d{2}))`;
+const date = CAREER_DATE_TOKEN_PATTERN;
 const range = new RegExp(
-  `\\b(${date})\\s*(?:[-–—]|to)\\s*(${date}|Present|Current|Now|Till\\s+(?:to\\s+)?Date)\\b`,
+  `\\b(${date})\\s*(?:[-–—]|to|~)\\s*(${date}|${CAREER_CURRENT_TOKEN_PATTERN})\\b`,
   "gi",
 );
 const employerLabel =
@@ -31,7 +35,7 @@ const valueAfter = (card: string, label: RegExp) => {
 const exactDate = (value: string, allowCurrent = false) =>
   value.match(
     new RegExp(
-      `^(${date}${allowCurrent ? "|Present|Current|Now|Till\\s+(?:to\\s+)?Date" : ""})$`,
+      `^(${date}${allowCurrent ? `|${CAREER_CURRENT_TOKEN_PATTERN}` : ""})$`,
       "i",
     ),
   )?.[1] || "";
@@ -85,9 +89,7 @@ export function reorderedEmploymentFieldCards(
     const title = valueAfter(card, new RegExp(`\\b${roleLabel}\\s*:\\s*`, "i"))
       .replace(/[.;,\s]+$/g, "")
       .trim();
-    const current = /^(?:present|current|now|till\s+(?:to\s+)?date)$/i.test(
-      end,
-    );
+    const current = careerDateIsCurrent(end);
     const first = careerMonthIndex(start),
       last = careerMonthIndex(end, current);
     if (

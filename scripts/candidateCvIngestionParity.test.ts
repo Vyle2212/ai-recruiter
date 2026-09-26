@@ -154,6 +154,88 @@ async function main() {
       "a stale upstream current_company cannot override closed employment evidence",
     );
   }
+  const employmentDateFamilies = [
+    {
+      card: "Employer: Example Consulting\nJob Title: SAP MM Consultant\nDuration: Jan'22 - Present",
+      start: "Jan'22",
+      end: "Present",
+    },
+    {
+      card: "Employer: Example Consulting\nJob Title: SAP MM Consultant\nDuration: 2022-01 - Now",
+      start: "2022-01",
+      end: "Now",
+    },
+    {
+      card: "Employer: Example Consulting\nJob Title: SAP MM Consultant\nStart Date: Jan'22\nEnd Date: To date",
+      start: "Jan'22",
+      end: "To date",
+    },
+    {
+      card: "Employer: Example Consulting\nJob Title: SAP MM Consultant\nDate From: 2022-01\nDate To: Current",
+      start: "2022-01",
+      end: "Current",
+    },
+  ] as const;
+  for (const sourceType of ["admin_upload", "candidate_upload"] as const) {
+    for (const fixture of employmentDateFamilies) {
+      const prepared = await prepareCandidateCv({
+        buffer: Buffer.from(
+          source.replace(
+            "SAP MM Consultant | Example Consulting | Jan 2020 - Present",
+            fixture.card,
+          ),
+        ),
+        fileName: "synthetic-employment-date-formats.txt",
+        source: sourceType,
+      });
+      assert.equal(prepared.accepted, true);
+      if (!prepared.accepted)
+        throw new Error("employment date-format fixture rejected");
+      assert.deepEqual(prepared.candidatePayload.employment_history, [
+        {
+          employer: "Example Consulting",
+          company: "Example Consulting",
+          title: "SAP MM Consultant",
+          start_date: fixture.start,
+          end_date: fixture.end,
+          current: true,
+        },
+      ]);
+      assert.equal(
+        prepared.candidatePayload.current_company,
+        "Example Consulting",
+        "all supported current markers must supply the same grounded employer",
+      );
+      assert.ok(
+        !prepared.extractionCoverage.missingRequiredFields.includes(
+          "employment_history",
+        ),
+      );
+    }
+    const adjacentPartialEmployment = await prepareCandidateCv({
+      buffer: Buffer.from(
+        source.replace(
+          "SAP MM Consultant | Example Consulting | Jan 2020 - Present",
+          "Employer: Example Alpha Consulting\nJob Title: SAP MM Consultant\nStart Date: Jan 2022\nEmployer: Example Beta Consulting\nJob Title: SAP MM Lead\nEnd Date: Dec 2023",
+        ),
+      ),
+      fileName: "synthetic-incomplete-employment-dates.txt",
+      source: sourceType,
+    });
+    assert.equal(adjacentPartialEmployment.accepted, true);
+    if (!adjacentPartialEmployment.accepted)
+      throw new Error("incomplete employment fixture rejected");
+    assert.equal(
+      adjacentPartialEmployment.candidatePayload.employment_history.length,
+      0,
+      "adjacent employment cards must not lend split dates to each other",
+    );
+    assert.ok(
+      adjacentPartialEmployment.extractionCoverage.missingRequiredFields.includes(
+        "employment_history",
+      ),
+    );
+  }
   const splitProjectDateFamilies = [
     "Start Date: Jan 2022\nEnd Date: Dec 2023",
     "From: Jan 2022\nTo: Dec 2023",

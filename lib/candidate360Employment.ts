@@ -1,4 +1,5 @@
 import { careerMonthIndex } from "./candidateCareerExperience";
+import { careerDateIsCurrent } from "./careerDateEvidence";
 import { formatEmploymentTenure } from "./employmentTenure";
 import { layoutEmployment } from "./layoutEmployment";
 import { flattenedEmployment } from "./flattenedEmployment";
@@ -380,8 +381,7 @@ function entry(input: {
   const title = validEmploymentTitle(input.title);
   const start = clean(input.start);
   const end = clean(input.end);
-  const current =
-    input.current === true || /^(?:present|current|now)$/i.test(end);
+  const current = input.current === true || careerDateIsCurrent(end);
   const hasGroundedRange = supportedRange(start, end, current);
   const groundedStructuredPartial = input.sourceType === "employment" && Boolean(company || title);
   if (!(company && title) && !groundedStructuredPartial && !(input.allowGroundedEmployerOnly && company && hasGroundedRange)) return null;
@@ -2150,7 +2150,7 @@ function resumeEmployment(resumeText: string) {
   if (!hasCompleteEmployment) {
     const broadensKnownEmployer = (row: { company: string; start: string; end: string }) => {
       const start = monthIndex(row.start);
-      const current = /^(?:present|current|now|till\s+(?:to\s+)?date)$/i.test(row.end);
+      const current = careerDateIsCurrent(row.end);
       const end = monthIndex(row.end, current);
       if (start === null || end === null) return false;
       return output.some(known => {
