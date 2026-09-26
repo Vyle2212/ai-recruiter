@@ -29,7 +29,7 @@ type PreparedItem = AdminCvPlanItem & {
 const CHECKPOINT_KEY = `ai-recruiter:admin-cv-upload:v2:${CANDIDATE_CV_INGESTION_REVISION}`;
 const MAX_CV_BYTES = MAX_ADMIN_CV_BYTES;
 const FATAL_UPLOAD_ERROR =
-  /Authentication|Access is not permitted|not configured|Private CV storage is unavailable/i;
+  /Authentication|Access is not permitted|not configured|Private CV storage is unavailable|waiting for database and review-queue setup/i;
 
 const cardStyle = {
   background: "#15171c",
