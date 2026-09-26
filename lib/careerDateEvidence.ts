@@ -5,7 +5,7 @@ const CAREER_MONTH_NAME =
 
 export const CAREER_DATE_TOKEN_PATTERN = `(?:${CAREER_MONTH_NAME}[\\s’'/-]+(?:\\d{2}|(?:19|20)\\d{2})|(?:0?[1-9]|1[0-2])\\s*\\/\\s*(?:\\d{2}|(?:19|20)\\d{2})|(?:19|20)\\d{2}(?:[-/](?:0?[1-9]|1[0-2]))?)`;
 export const CAREER_CURRENT_TOKEN_PATTERN =
-  "(?:Present|Current|Now|Till(?:\\s+to)?\\s+date|To\\s+date)";
+  "(?:Present|Current|Curr|Now|Till(?:\\s+to)?\\s+date|To\\s+date)";
 
 export function careerDateRange(value: string) {
   return value.match(

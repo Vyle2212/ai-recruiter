@@ -125,6 +125,19 @@ assert.equal(
   false,
   "reversed employment cannot qualify a profile for search",
 );
+for (const valid of [isValidEmploymentEntry, isValidProjectEntry]) {
+  const row = {
+    company: "Example Consulting",
+    client: "Example Client",
+    title: "SAP Consultant",
+    role: "SAP Consultant",
+    start_date: "Jan 2018",
+    current: true,
+  };
+  assert.equal(valid({ ...row, end_date: "Dec 2020" }), false);
+  assert.equal(valid({ ...row, end_date: "Curr" }), true);
+  assert.equal(valid(row), true);
+}
 assert.equal(
   evaluateCandidateProfileCompletion({
     ...{
