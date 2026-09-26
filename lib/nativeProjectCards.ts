@@ -5,7 +5,7 @@ const PROJECT_CLIENT_LABEL = "(?:End\\s+)?(?:Client|Customer)(?:\\s+Name)?";
 const PROJECT_FIELD_LABELS = `Project(?:\\s+(?:Name|Title))?|${PROJECT_CLIENT_LABEL}|Role|Position|Designation|Project\\s+Duration|Duration|Period|From\\s*\\/\\s*To|Roles?\\s*(?:&|and)\\s*Responsibilities|Responsibilities|Scope|Activities|Environment|System|Platform`;
 const PROJECT_INLINE_SEPARATOR = "[|;•·]";
 function cleanProjectCardValue(value: string) {
-  return value
+  const cleaned = value
     .split(
       new RegExp(
         `${PROJECT_INLINE_SEPARATOR}\\s*(?=(?:${PROJECT_FIELD_LABELS})\\s*:)`,
@@ -14,6 +14,11 @@ function cleanProjectCardValue(value: string) {
     )[0]
     .replace(new RegExp(`(?:\\s*${PROJECT_INLINE_SEPARATOR})+$`), "")
     .trim();
+  return new RegExp(`^(?:${PROJECT_FIELD_LABELS})\\s*(?::|$)`, "i").test(
+    cleaned,
+  )
+    ? ""
+    : cleaned;
 }
 
 // Only explicit adjacent PDF labels form a card. A nearby employment date or
@@ -165,14 +170,16 @@ export function nativeProjectCards(source: string) {
           ),
         ];
     const inlineValue = (block: string, label: string) =>
-      block
-        .match(
-          new RegExp(
-            `\\b(?:${label})\\s*:\\s*([\\s\\S]{1,300}?)(?=(?:\\s+|${PROJECT_INLINE_SEPARATOR}\\s*)\\b(?:${PROJECT_FIELD_LABELS})\\s*:|$)`,
-            "i",
-          ),
-        )?.[1]
-        ?.trim() || "";
+      cleanProjectCardValue(
+        block
+          .match(
+            new RegExp(
+              `\\b(?:${label})\\s*:\\s*([\\s\\S]{1,300}?)(?=(?:\\s+|${PROJECT_INLINE_SEPARATOR}\\s*)\\b(?:${PROJECT_FIELD_LABELS})\\s*:|$)`,
+              "i",
+            ),
+          )?.[1]
+          ?.trim() || "",
+      );
     inlineAnchors.forEach((anchor, index) => {
       const block = inlineSection.slice(
         anchor.index || 0,

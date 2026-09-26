@@ -553,6 +553,56 @@ Jan 2023 - Dec 2024`;
     3,
     "a labelled client-only card between named projects is retained once; later education cannot create a project",
   );
+  const splitRoleProjectSource = source.replace(
+    /PROJECT EXPERIENCE[\s\S]*?EDUCATION/,
+    `PROJECT EXPERIENCE
+Project: Procurement rollout
+Client: Example Manufacturing
+Role
+SAP MM Consultant
+Duration: Jan 2022 - Dec 2023
+SAP configuration, integration testing and cutover
+EDUCATION`,
+  );
+  for (const origin of ["admin_upload", "candidate_upload"] as const) {
+    const prepared = await prepareCandidateCv({
+      buffer: Buffer.from(splitRoleProjectSource),
+      fileName: "synthetic.txt",
+      source: origin,
+    });
+    assert.equal(prepared.accepted, true);
+    if (!prepared.accepted) throw new Error("split role project rejected");
+    const projects =
+      prepared.candidatePayload.project_history.filter(isValidProjectEntry);
+    assert.equal(
+      projects.length,
+      1,
+      "one labelled project must produce one row",
+    );
+    assert.equal(projects[0].name, "Procurement rollout");
+    assert.equal(projects[0].client, "Example Manufacturing");
+  }
+  for (const emptyRole of ["Role", "Role:"]) {
+    const blankRoleSource = splitRoleProjectSource.replace(
+      "Role\nSAP MM Consultant",
+      emptyRole,
+    );
+    for (const origin of ["admin_upload", "candidate_upload"] as const) {
+      const prepared = await prepareCandidateCv({
+        buffer: Buffer.from(blankRoleSource),
+        fileName: "synthetic.txt",
+        source: origin,
+      });
+      assert.equal(prepared.accepted, true);
+      if (!prepared.accepted) throw new Error("blank role project rejected");
+      assert.equal(
+        prepared.candidatePayload.project_history.filter(isValidProjectEntry)
+          .length,
+        0,
+        "a blank role cannot use the following Duration label as its role",
+      );
+    }
+  }
   const incompleteClientCard = enrichCandidateUpload(
     { name: "Jane Doe" },
     `SAP MM Consultant\nPROJECT EXPERIENCE\nProject Title: Synthetic Alpha\nClient: Synthetic Manufacturing\nRole: SAP MM Consultant\nDuration: Jan 2020 - Dec 2021\nClient: Synthetic Logistics\nRole: SAP MM Lead\nProject Title: Synthetic Gamma\nClient: Synthetic Retail\nRole: SAP MM Architect\nDuration: Jan 2023 - Dec 2024`,

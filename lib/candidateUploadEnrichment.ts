@@ -166,8 +166,16 @@ function explicitProjectRecords(rawText: string) {
     "i",
   );
   const dateValue = (value: string) => clean(value.replace(/[’']/g, " "));
+  const projectFieldValue = (value: unknown) => {
+    const normalized = clean(value);
+    return /^(?:project(?:[ \t]+(?:name|title|role|dates?|duration|type))?|end[ \t]+client|client|customer|role|position|designation|duration|period|(?:project[ \t]+)?start(?:ing)?[ \t]+date|(?:project[ \t]+)?end(?:ing)?[ \t]+date|date[ \t]+(?:from|to)|from|to|sap[ \t]+modules?|modules?|type|education|skills?)[ \t]*(?::|$)/i.test(
+      normalized,
+    )
+      ? ""
+      : normalized;
+  };
   const nextLabelLine = (block: string, labels: string) =>
-    clean(
+    projectFieldValue(
       block.match(
         new RegExp(
           `(?:^|\\n)[ \\t]*(?:${labels})[ \\t]*\\n(?:[ \\t]*\\n){0,2}[ \\t]*([^\\n]{2,160})`,
@@ -176,7 +184,7 @@ function explicitProjectRecords(rawText: string) {
       )?.[1],
     );
   const labelledLineValue = (block: string, labels: string) =>
-    clean(
+    projectFieldValue(
       block.match(
         new RegExp(
           `(?:^|\\n)[ \\t]*(?:${labels})[ \\t]*:[ \\t]*([^\\n]{2,120})`,
@@ -229,12 +237,12 @@ function explicitProjectRecords(rawText: string) {
       );
     const end = clientsWithinCard[1] ?? nextProject;
     const block = boundedProjectBlock(normalized.slice(start, end));
-    const name = clean(
+    const name = projectFieldValue(
       block.match(
         /(?:^|\n)\s*(?:project\s+(?:name|title)|project)\s*:\s*([^\n]{2,160})/im,
       )?.[1],
     );
-    const client = clean(
+    const client = projectFieldValue(
       block.match(
         /(?:^|\n)\s*(?:client|customer)\s*:\s*([^\n]{2,160})/im,
       )?.[1] || nextLabelLine(block, "client|customer"),
@@ -243,13 +251,13 @@ function explicitProjectRecords(rawText: string) {
       block,
       "project[ \\t]+role|role|position|designation",
     );
-    const colonRole = clean(
+    const colonRole = projectFieldValue(
       block.match(
         /(?:^|\n)\s*(?:project\s+role|role|position|designation)\s*:\s*([^\n]{2,160})/im,
       )?.[1],
     );
     const role = colonRole || multilineRole;
-    const duration = nextLabelLine(
+    const duration = labelledLineValue(
       block,
       "duration|period|project[ \\t]+dates?",
     );
@@ -309,12 +317,12 @@ function explicitProjectRecords(rawText: string) {
         boundaries.find((index) => index > start) ??
         Math.min(normalized.length, start + 1200);
       const block = boundedProjectBlock(normalized.slice(start, end));
-      const client = clean(
+      const client = projectFieldValue(
         block.match(
           /(?:^|\n)[ \t]*(?:client|customer)[ \t]*:[ \t]*([^\n]{2,160})/im,
         )?.[1] || nextLabelLine(block, "client|customer"),
       );
-      const role = clean(
+      const role = projectFieldValue(
         block.match(
           /(?:^|\n)[ \t]*(?:project[ \t]+role|role|position|designation)[ \t]*:[ \t]*([^\n]{2,160})/im,
         )?.[1] ||
