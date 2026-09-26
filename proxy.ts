@@ -22,9 +22,8 @@ export async function proxy(request: NextRequest) {
     process.env.VERCEL_ENV === "production" &&
     process.env.PRODUCTION_AUTH_ENABLED === "true" &&
     !productionAuthConfigured() &&
-    (shouldProtectPortal(request.nextUrl.pathname) ||
-      recruiterApiNamespace ||
-      Boolean(apiPolicy))
+    request.nextUrl.pathname !== "/" &&
+    request.nextUrl.pathname !== "/auth/login"
   ) {
     return new NextResponse("Production authentication is not configured.", {
       status: 503,
@@ -81,11 +80,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    "/admin/:path*",
-    "/recruiter/:path*",
-    "/client/:path*",
-    "/candidate/:path*",
-    "/api/:path*",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
