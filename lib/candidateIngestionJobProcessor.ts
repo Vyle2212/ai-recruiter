@@ -12,6 +12,7 @@ export type ClaimedIngestionJob = {
   content_sha256: string;
   parser_revision: string;
   byte_size: number;
+  attempts: number;
   lease_token: string;
 };
 
@@ -71,6 +72,8 @@ export async function processClaimedIngestionJob(
   if (!reference || !reference.startsWith(`${ORIGINAL_CV_BUCKET}/`))
     throw new Error("INGESTION_JOB_REFERENCE_INVALID");
   if (!job.lease_token) throw new Error("INGESTION_JOB_LEASE_MISSING");
+  if (!Number.isInteger(job.attempts) || job.attempts < 1 || job.attempts > 5)
+    throw new Error("INGESTION_JOB_ATTEMPTS_INVALID");
 
   let leaseLost = false;
   let renewal: Promise<void> | undefined;
@@ -194,6 +197,10 @@ export async function processClaimedIngestionJob(
       if (error.message === "INGESTION_SOURCE_CANDIDATE_MISSING")
         return await review(["source_candidate_missing"], "source_review");
     }
+    // The final attempt must leave a private, actionable review record rather
+    // than reporting queued while the SQL ledger silently marks it failed.
+    if (job.attempts >= 5)
+      return await review(["processing_retry_exhausted"], "processing_failure");
     // If review or ACK failed, do not mark a terminal failure: on retry the
     // source readback recognizes any committed candidate.
     await finish({ status: "queued", outcomeCode: "processing_failure" });

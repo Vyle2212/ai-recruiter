@@ -19,6 +19,7 @@ const job: ClaimedIngestionJob = {
   content_sha256: createHash("sha256").update(bytes).digest("hex"),
   parser_revision: "cv-ingestion-v178",
   byte_size: bytes.length,
+  attempts: 1,
   lease_token: "00000000-0000-4000-8000-000000000004",
 };
 
@@ -134,6 +135,24 @@ async function main() {
     "queued",
   );
   assert(ambiguousSave.events.includes("finish:queued"));
+
+  const finalAttempt = fixture({
+    save: async () => {
+      throw new Error("ambiguous response");
+    },
+    review: async (_job, codes) => {
+      assert.deepEqual(codes, ["processing_retry_exhausted"]);
+    },
+  });
+  assert.deepEqual(
+    await processClaimedIngestionJob(
+      { ...job, attempts: 5 },
+      finalAttempt.deps,
+    ),
+    { status: "review", outcomeCode: "processing_failure" },
+  );
+  assert(finalAttempt.events.includes("finish:review"));
+  assert(!finalAttempt.events.includes("finish:queued"));
 
   const badReadback = fixture({
     save: async () => ({ id: "candidate-id", source_file: "wrong-reference" }),
