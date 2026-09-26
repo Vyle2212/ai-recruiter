@@ -4,6 +4,8 @@ import { projectDateIsCurrent, projectDateRange } from "./projectDateEvidence";
 const PROJECT_CLIENT_LABEL = "(?:End\\s+)?(?:Client|Customer)(?:\\s+Name)?";
 const PROJECT_FIELD_LABELS = `Project(?:\\s+(?:Name|Title))?|${PROJECT_CLIENT_LABEL}|Role|Position|Designation|Project\\s+Duration|Duration|Period|From\\s*\\/\\s*To|Roles?\\s*(?:&|and)\\s*Responsibilities|Responsibilities|Scope|Activities|Environment|System|Platform`;
 const PROJECT_INLINE_SEPARATOR = "[|;•·]";
+const SAP_DELIVERY_ACTIVITY =
+  /\b(?:support|implement(?:ation|ed|ing)?|rollout|migration|upgrade|enhancement|integration|configur(?:e|ed|ation|ing)|testing|cutover|go-live|deployment)\b/i;
 function cleanProjectCardValue(value: string) {
   const cleaned = value
     .split(
@@ -138,9 +140,7 @@ export function nativeProjectCards(source: string) {
         !role ||
         !dates ||
         !/\bSAP\b/i.test(deliveryText) ||
-        !/\b(?:support|implement|rollout|migration|upgrade|enhancement|integration|configuration|testing|cutover|go-live|deployment)\b/i.test(
-          deliveryText,
-        )
+        !SAP_DELIVERY_ACTIVITY.test(deliveryText)
       )
         return;
       const from = careerMonthIndex(dates[1]);
@@ -204,9 +204,7 @@ export function nativeProjectCards(source: string) {
         !role ||
         !dates ||
         !/\bSAP\b/i.test(deliveryText) ||
-        !/\b(?:support|implement|rollout|migration|upgrade|enhancement|integration|configuration|testing|cutover|go-live|deployment)\b/i.test(
-          deliveryText,
-        )
+        !SAP_DELIVERY_ACTIVITY.test(deliveryText)
       )
         return;
       const from = careerMonthIndex(dates[1]);

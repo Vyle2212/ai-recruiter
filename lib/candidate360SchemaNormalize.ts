@@ -3328,7 +3328,7 @@ function enrichNamedClientProjectFields(
     };
   });
   return projects.map((project) => {
-    const match = named.find(
+    const matches = named.filter(
       (entry) =>
         (!project.name ||
           normalizedAssignmentAnchor(project.name) ===
@@ -3337,18 +3337,27 @@ function enrichNamedClientProjectFields(
         (!project.client ||
           assignmentTokenOverlap(project.client, entry.client) >= 0.65),
     );
+    const match = matches[0];
     if (!match) return project;
+    // A structured project's own range takes precedence over a similarly
+    // named narrative card. Repeated names also cannot select one dated card
+    // for an otherwise undated project without a unique assignment identity.
+    const datedMatch =
+      !project.start && !project.end && matches.length === 1 &&
+      match.start && match.end
+        ? match
+        : null;
     return {
       ...project,
       name: project.name || match.name,
       client: project.client || match.client,
       employer: project.employer || match.employer,
       role: project.role || match.role,
-      start: match.start || project.start,
-      end: match.end || project.end,
+      start: project.start || datedMatch?.start || "",
+      end: project.end || datedMatch?.end || "",
       duration:
-        match.start && match.end
-          ? projectDuration(match.start, match.end)
+        datedMatch
+          ? projectDuration(datedMatch.start, datedMatch.end)
           : project.duration,
       fieldEvidence: {
         ...project.fieldEvidence,
@@ -3385,12 +3394,12 @@ function enrichNamedClientProjectFields(
               match.excerpt,
             ),
         dates:
-          match.start && match.end
+          datedMatch
             ? directProjectField(
-                [match.start, match.end],
-                `${match.sourceRef}.dates`,
+                [datedMatch.start, datedMatch.end],
+                `${datedMatch.sourceRef}.dates`,
                 "parsed_resume",
-                match.excerpt,
+                datedMatch.excerpt,
               )
             : project.fieldEvidence.dates,
       },
