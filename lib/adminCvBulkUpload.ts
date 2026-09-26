@@ -1,5 +1,7 @@
+import { MAX_ORIGINAL_BYTES } from "./cvUploadLimits";
+
 export const ADMIN_CV_CHECKPOINT_VERSION = 1 as const;
-export const MAX_ADMIN_CV_BYTES = 10 * 1024 * 1024;
+export const MAX_ADMIN_CV_BYTES = MAX_ORIGINAL_BYTES;
 
 export type AdminCvUploadOutcome =
   | "created"

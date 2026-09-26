@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
   buildAdminCvUploadPlan,
+  MAX_ADMIN_CV_BYTES,
   classifyAdminCvUploadResult,
   parseAdminCvCheckpoint,
   readyAdminCvUploadItems,
@@ -25,7 +26,7 @@ type PreparedItem = AdminCvPlanItem & {
 };
 
 const CHECKPOINT_KEY = "ai-recruiter:admin-cv-upload:v1";
-const MAX_CV_BYTES = 10 * 1024 * 1024;
+const MAX_CV_BYTES = MAX_ADMIN_CV_BYTES;
 const FATAL_UPLOAD_ERROR =
   /Authentication|Access is not permitted|not configured|Private CV storage is unavailable/i;
 

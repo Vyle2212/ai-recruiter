@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import {
   buildAdminCvUploadPlan,
+  MAX_ADMIN_CV_BYTES,
   classifyAdminCvUploadResult,
   parseAdminCvCheckpoint,
   readyAdminCvUploadItems,
@@ -80,6 +81,30 @@ assert.equal(
   )[0]?.disposition,
   "ready",
   "the shared bulk uploader sends RTF to the same parser",
+);
+assert.equal(
+  buildAdminCvUploadPlan([
+    {
+      digest: digest("f"),
+      name: "large.docx",
+      size: 14_855_900,
+      lastModified: 1,
+      selectionIndex: 0,
+    },
+  ])[0]?.disposition,
+  "ready",
+);
+assert.equal(
+  buildAdminCvUploadPlan([
+    {
+      digest: digest("f"),
+      name: "too-large.docx",
+      size: MAX_ADMIN_CV_BYTES + 1,
+      lastModified: 1,
+      selectionIndex: 0,
+    },
+  ])[0]?.reason,
+  "file_too_large",
 );
 
 let checkpoint = updateAdminCvCheckpoint({

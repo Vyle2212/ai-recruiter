@@ -3,6 +3,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { useCallback, useEffect, useState } from "react";
 import { finalizePossiblyCompletedSignedCvUpload } from "@/lib/signedCvUploadFinalization";
+import { MAX_ORIGINAL_BYTES } from "@/lib/cvUploadLimits";
 
 type PortalResponse = {
   profile: any;
@@ -316,9 +317,9 @@ export default function CandidatePortalClient() {
     try {
       if (
         !/\.(pdf|docx|doc|rtf|txt)$/i.test(file.name) ||
-        file.size > 10 * 1024 * 1024
+        file.size > MAX_ORIGINAL_BYTES
       )
-        throw new Error("Use one PDF, DOCX, DOC, RTF, or TXT CV up to 10 MB.");
+        throw new Error("Use one PDF, DOCX, DOC, RTF, or TXT CV up to 20 MB.");
       const contentDigest = await cvContentDigest(file);
       const signed = await json(
         await fetch("/api/candidate/profile/cv/sign", {

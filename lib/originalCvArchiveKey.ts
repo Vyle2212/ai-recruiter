@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { MAX_ORIGINAL_BYTES } from "./cvUploadLimits";
 
 export const ORIGINAL_CV_BUCKET = "candidate-original-cvs";
-export const MAX_ORIGINAL_BYTES = 10 * 1024 * 1024;
+export { MAX_ORIGINAL_BYTES } from "./cvUploadLimits";
 const TYPES: Record<string, string> = {
   pdf: "application/pdf",
   doc: "application/msword",
