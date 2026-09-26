@@ -159,38 +159,79 @@ Role: SAP FI Consultant
 Duration: Feb 2022 - Aug 2025
 Responsibilities: Led SAP rollout`;
 const distinctCards = nativeProjectCards(multipleSapProjects);
-assert.deepEqual(distinctCards.map(({client, start, end}) => [client, start, end]), [
-  ["Buyer One", "Jan 2020", "Dec 2021"],
-  ["Buyer Two", "Feb 2022", "Aug 2025"],
-]);
-const multiProfile = normalizeActualCandidateSchema({raw_text: multipleSapProjects}).enterpriseProfile;
-assert.deepEqual(multiProfile.projects.map(({client, start, end}) => [client, start, end]).sort(), [
-  ["Buyer One", "Jan 2020", "Dec 2021"],
-  ["Buyer Two", "Feb 2022", "Aug 2025"],
-]);
+assert.deepEqual(
+  distinctCards.map(({ client, start, end }) => [client, start, end]),
+  [
+    ["Buyer One", "Jan 2020", "Dec 2021"],
+    ["Buyer Two", "Feb 2022", "Aug 2025"],
+  ],
+);
+const multiProfile = normalizeActualCandidateSchema({
+  raw_text: multipleSapProjects,
+}).enterpriseProfile;
+assert.deepEqual(
+  multiProfile.projects
+    .map(({ client, start, end }) => [client, start, end])
+    .sort(),
+  [
+    ["Buyer One", "Jan 2020", "Dec 2021"],
+    ["Buyer Two", "Feb 2022", "Aug 2025"],
+  ],
+);
 assert.equal(multiProfile.employmentTimeline.length, 1);
 assert.deepEqual(
-  [multiProfile.employmentTimeline[0].company, multiProfile.employmentTimeline[0].title,
-    multiProfile.employmentTimeline[0].start, multiProfile.employmentTimeline[0].end],
+  [
+    multiProfile.employmentTimeline[0].company,
+    multiProfile.employmentTimeline[0].title,
+    multiProfile.employmentTimeline[0].start,
+    multiProfile.employmentTimeline[0].end,
+  ],
   ["Example Systems Ltd", "SAP Consultant", "Jan 2020", "Current"],
   "project end dates never replace the current employer's end",
 );
 assert.equal(multiProfile.employmentTimeline[0].current, true);
-assert.deepEqual(multiProfile.projects.map(p => p.responsibilities[0]).sort(), [
-  "Configured FI implementation", "Led SAP rollout",
-]);
+assert.deepEqual(
+  multiProfile.projects.map((p) => p.responsibilities[0]).sort(),
+  ["Configured FI implementation", "Led SAP rollout"],
+);
 const directProjectDates = normalizeActualCandidateSchema({
-  raw_text: "SAP Consultant — Example Systems Ltd (Jan 2020 – Current) Client: Project Renewal | Buyer One (Jan 2020 – Dec 2021) Led SAP rollout.",
-  projects: [{project_name: "Project Renewal", client: "Buyer One", employer: "Example Systems Ltd",
-    role: "SAP Consultant", start_date: "Feb 2022", end_date: "Aug 2025",
-    responsibilities: ["Led SAP enhancement"]}],
+  raw_text:
+    "SAP Consultant — Example Systems Ltd (Jan 2020 – Current) Client: Project Renewal | Buyer One (Jan 2020 – Dec 2021) Led SAP rollout.",
+  projects: [
+    {
+      project_name: "Project Renewal",
+      client: "Buyer One",
+      employer: "Example Systems Ltd",
+      role: "SAP Consultant",
+      start_date: "Feb 2022",
+      end_date: "Aug 2025",
+      responsibilities: ["Led SAP enhancement"],
+    },
+  ],
 }).enterpriseProfile.projects[0];
-assert.deepEqual([directProjectDates.start, directProjectDates.end], ["Feb 2022", "Aug 2025"]);
-assert.deepEqual(directProjectDates.fieldEvidence.dates?.value, ["Feb 2022", "Aug 2025"]);
+assert.deepEqual(
+  [directProjectDates.start, directProjectDates.end],
+  ["Feb 2022", "Aug 2025"],
+);
+assert.deepEqual(directProjectDates.fieldEvidence.dates?.value, [
+  "Feb 2022",
+  "Aug 2025",
+]);
 const repeatedProject = normalizeActualCandidateSchema({
-  raw_text: "SAP Consultant — Example Systems Ltd (Jan 2020 – Current) Client: Project Renewal | Buyer One (Jan 2020 – Dec 2021) Led SAP rollout. Client: Project Renewal | Buyer One (Feb 2022 – Aug 2025) Led SAP enhancement.",
-  projects: [{project_name: "Project Renewal", client: "Buyer One", employer: "Example Systems Ltd", role: "SAP Consultant"}],
+  raw_text:
+    "SAP Consultant — Example Systems Ltd (Jan 2020 – Current) Client: Project Renewal | Buyer One (Jan 2020 – Dec 2021) Led SAP rollout. Client: Project Renewal | Buyer One (Feb 2022 – Aug 2025) Led SAP enhancement.",
+  projects: [
+    {
+      project_name: "Project Renewal",
+      client: "Buyer One",
+      employer: "Example Systems Ltd",
+      role: "SAP Consultant",
+    },
+  ],
 }).enterpriseProfile.projects[0];
-assert.deepEqual([repeatedProject.start, repeatedProject.end], ["", ""],
-  "a repeated project name cannot borrow an arbitrary date range");
+assert.deepEqual(
+  [repeatedProject.start, repeatedProject.end],
+  ["", ""],
+  "a repeated project name cannot borrow an arbitrary date range",
+);
 console.log("Native project card ownership and section boundaries: PASS");
