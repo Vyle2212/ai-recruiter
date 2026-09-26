@@ -168,6 +168,7 @@ jobs:
 
       - name: CV source layout and complete-document OCR regressions
         run: |
+          node --import tsx scripts/cvParserNameBoundary.test.ts
           node --import tsx scripts/candidateSourcePreservation.test.ts
           node --import tsx scripts/pdfTextLayout.test.ts
           node --import tsx scripts/docxTextLayout.test.ts
