@@ -552,7 +552,7 @@ export default function CandidateDetailsDrawer({
                   href={shortlistHref}
                   className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-100"
                 >
-                  Shortlist
+                  Shortlist board
                 </a>
               ) : null}
               {candidate.talentPool === "linkedin_talent_pool" ? (
@@ -1524,7 +1524,7 @@ export default function CandidateDetailsDrawer({
               href={shortlistHref}
               className="rounded-lg bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950"
             >
-              Shortlist
+              Shortlist board
             </a>
             <RequestOriginalCvButton candidateId={candidate.candidateId} />
             <a

@@ -797,7 +797,7 @@ export function CompactCandidateCard({
         ) === index,
     )
     .join(" \u00B7 ");
-  const shortlistHref = `/recruiter/shortlist?candidateId=${encodeURIComponent(result.candidateId)}&from=search-v2`;
+  const shortlistHref = "/recruiter/smart-shortlist";
   const matchLabel = diagnostic.matchLevel;
   const rankingScore = displayedRankingScore(result);
   const externalNeedsVerification =
@@ -1254,7 +1254,7 @@ export function CompactCandidateCard({
             href={shortlistHref}
             className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:bg-slate-900"
           >
-            Shortlist
+            Shortlist board
           </a>
           <button
             type="button"
@@ -1470,14 +1470,8 @@ export function CompactCandidateCard({
               href={shortlistHref}
               className="inline-flex min-h-9 items-center rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-200"
             >
-              Shortlist
+              Shortlist board
             </a>
-            <button
-              type="button"
-              className="inline-flex min-h-9 items-center rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-200"
-            >
-              Compare
-            </button>
             <button
               type="button"
               onClick={onToggle}
@@ -1570,6 +1564,8 @@ export default function CandidateSearchV2Client({
   const [reviewedExternalCandidateIds, setReviewedExternalCandidateIds] =
     useState<Set<string>>(() => new Set());
   const [externalWorkflowMessage, setExternalWorkflowMessage] = useState("");
+  const [comparePackOpen, setComparePackOpen] = useState(false);
+  const [comparePackSize, setComparePackSize] = useState<5 | 10 | 20>(5);
 
   const [matchQuality, setMatchQuality] = useState<
     "any" | "relevant" | "strong"
@@ -3822,23 +3818,10 @@ export default function CandidateSearchV2Client({
               <span className="text-slate-400">
                 {selectedExternalCandidateIds.size} selected
               </span>
-              <a
-                href={
-                  selectedExternalCandidateIds.size
-                    ? `/recruiter/shortlist?candidateIds=${encodeURIComponent(
-                        [...selectedExternalCandidateIds].join(","),
-                      )}&from=search-v2`
-                    : "#"
-                }
-                aria-disabled={!selectedExternalCandidateIds.size}
-                onClick={(event) => {
-                  if (!selectedExternalCandidateIds.size)
-                    event.preventDefault();
-                }}
-                className="rounded-lg border border-slate-700 px-3 py-2 font-semibold text-slate-200 aria-disabled:cursor-not-allowed aria-disabled:opacity-45"
-              >
-                Bulk Shortlist
-              </a>
+              <span className="text-xs text-slate-500">
+                Selection is for verification only; it is not saved to a
+                shortlist.
+              </span>
               <button
                 type="button"
                 disabled={
@@ -3870,6 +3853,209 @@ export default function CandidateSearchV2Client({
                 </span>
               ) : null}
             </div>
+          ) : null}
+
+          {results.length ? (
+            <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+              <a
+                href="/recruiter/smart-shortlist"
+                className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 hover:border-slate-500"
+              >
+                Shortlist board
+              </a>
+              <button
+                type="button"
+                aria-expanded={comparePackOpen}
+                aria-controls="search-v2-compare-pack"
+                onClick={() => {
+                  if (response.summary.page !== 1) {
+                    void runSearch(1, true).then(() =>
+                      setComparePackOpen(true),
+                    );
+                  } else {
+                    setComparePackOpen((current) => !current);
+                  }
+                }}
+                disabled={loading}
+                className="rounded-lg border border-cyan-500/50 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-500/20 disabled:opacity-50"
+              >
+                Compare Pack
+              </button>
+              <span className="text-xs text-slate-400">
+                Compare the ranked Top 5, 10 or 20 from this search.
+              </span>
+            </div>
+          ) : null}
+
+          {comparePackOpen &&
+          !loading &&
+          results.length &&
+          response.summary.page === 1 ? (
+            <section
+              id="search-v2-compare-pack"
+              aria-label="Compare Pack"
+              className="mt-3 rounded-xl border border-cyan-500/30 bg-[#0B1118] p-4"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">
+                    Compare Pack
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Ranked results from the committed search. Employer tenure
+                    and client project periods are shown separately; missing
+                    evidence is left blank.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setComparePackOpen(false)}
+                  className="text-sm text-slate-300 hover:text-white"
+                >
+                  Close
+                </button>
+              </div>
+              <div
+                className="mt-4 flex flex-wrap gap-2"
+                role="group"
+                aria-label="Compare pack size"
+              >
+                {([5, 10, 20] as const).map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    aria-pressed={comparePackSize === size}
+                    onClick={() => setComparePackSize(size)}
+                    className={
+                      comparePackSize === size
+                        ? "rounded-lg bg-cyan-300 px-3 py-2 text-sm font-semibold text-slate-950"
+                        : "rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200"
+                    }
+                  >
+                    Top {size}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-3 text-xs text-slate-400">
+                Showing {Math.min(comparePackSize, results.length)} of{" "}
+                {Math.min(comparePackSize, response.summary.totalMatched)}{" "}
+                available ranked profiles.
+                {response.evaluationMode === "identity_only"
+                  ? " Identity lookup does not provide a fit ranking."
+                  : ""}
+              </p>
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[1020px] border-collapse text-left text-sm">
+                  <thead className="text-xs text-slate-400">
+                    <tr className="border-b border-slate-700">
+                      <th scope="col" className="p-3">
+                        Rank / profile
+                      </th>
+                      <th scope="col" className="p-3">
+                        Match
+                      </th>
+                      <th scope="col" className="p-3">
+                        Employer / tenure
+                      </th>
+                      <th scope="col" className="p-3">
+                        Client project / period
+                      </th>
+                      <th scope="col" className="p-3">
+                        SAP modules
+                      </th>
+                      <th scope="col" className="p-3">
+                        Experience
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {results
+                      .slice(0, comparePackSize)
+                      .map((candidate, index) => {
+                        const employment =
+                          candidate.profilePreview?.currentEmployment ||
+                          candidate.profilePreview?.latestEmployment;
+                        const project = candidate.profilePreview?.projects[0];
+                        const diagnostic = diagnosticsByCandidate.get(
+                          candidate.candidateId,
+                        );
+                        return (
+                          <tr
+                            key={candidate.candidateId}
+                            className="border-b border-slate-800 align-top text-slate-200"
+                          >
+                            <td className="p-3">
+                              <span className="block text-xs text-cyan-300">
+                                #{index + 1}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDrawerInitialTab("Overview");
+                                  setExpandedCandidateId(candidate.candidateId);
+                                }}
+                                className="mt-1 font-semibold text-white underline decoration-slate-600 underline-offset-2 hover:decoration-cyan-300"
+                              >
+                                {cleanCandidateName(candidate)}
+                              </button>
+                              <span className="mt-1 block text-xs text-slate-400">
+                                {candidate.currentTitle ||
+                                  candidate.profileTitle ||
+                                  "Title unavailable"}
+                              </span>
+                            </td>
+                            <td className="p-3">
+                              {response.evaluationMode === "identity_only"
+                                ? "Not evaluated"
+                                : diagnostic?.matchLevel || "Not evaluated"}
+                            </td>
+                            <td className="p-3">
+                              <span className="block">
+                                {employment?.employer ||
+                                  candidate.currentEmployer ||
+                                  "Not provided"}
+                              </span>
+                              <span className="mt-1 block text-xs text-slate-400">
+                                {employment &&
+                                (employment.start || employment.end)
+                                  ? formatCandidateProfilePeriod(
+                                      employment.start,
+                                      employment.end,
+                                      employment.current,
+                                    )
+                                  : "Employment period not provided"}
+                              </span>
+                            </td>
+                            <td className="p-3">
+                              <span className="block">
+                                {project?.client || "Client not provided"}
+                              </span>
+                              <span className="mt-1 block text-xs text-slate-400">
+                                {project?.name || "Project not provided"}
+                                {project && (project.start || project.end)
+                                  ? ` · ${formatCandidateProfilePeriod(project.start, project.end)}`
+                                  : " · Project period not provided"}
+                              </span>
+                            </td>
+                            <td className="p-3">
+                              {candidate.verifiedSapModules
+                                .slice(0, 5)
+                                .join(", ") || "Not verified"}
+                            </td>
+                            <td className="p-3">
+                              {candidate.totalYearsExperience === null
+                                ? "Not established"
+                                : formatTotalCareerExperience(
+                                    candidate.totalYearsExperience,
+                                  )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           ) : null}
 
           <div
@@ -4027,11 +4213,7 @@ export default function CandidateSearchV2Client({
             }
             visibleCandidates={results as CandidateDrawerResult[]}
             searchContextLabel={committedSnapshot?.query || query}
-            shortlistHref={
-              "/recruiter/shortlist?candidateId=" +
-              encodeURIComponent(selectedDrawerCandidate.candidateId) +
-              "&from=search-v2"
-            }
+            shortlistHref="/recruiter/smart-shortlist"
             onClose={closeCandidateDrawer}
             onSelect={(candidateId) => {
               setDrawerInitialTab("Overview");
