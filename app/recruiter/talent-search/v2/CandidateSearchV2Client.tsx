@@ -1767,8 +1767,7 @@ export default function CandidateSearchV2Client({
   async function toggleShortlist(candidateId: string) {
     if (
       shortlistPendingIds.has(candidateId) ||
-      shortlistLoading ||
-      shortlistError
+      shortlistLoading
     )
       return;
     const wasSaved = shortlistedIds.has(candidateId);
@@ -1784,7 +1783,13 @@ export default function CandidateSearchV2Client({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ candidateId, jobId: shortlistJobId }),
       });
-      if (!reply.ok) throw new Error("Shortlist could not be updated.");
+      if (!reply.ok) {
+        if (reply.status === 409) {
+          const payload = await reply.json().catch(() => null);
+          throw new Error(payload?.error || "This candidate cannot be shortlisted.");
+        }
+        throw new Error("Shortlist could not be updated. Please retry.");
+      }
       setShortlistError("");
       setShortlistedIds((current) => {
         const next = new Set(current);
@@ -1795,8 +1800,10 @@ export default function CandidateSearchV2Client({
       setShortlistCount((current) =>
         Math.max(0, current + (wasSaved ? -1 : 1)),
       );
-    } catch {
-      setShortlistError("Shortlist could not be updated. Please retry.");
+    } catch (error) {
+      setShortlistError(
+        error instanceof Error ? error.message : "Shortlist could not be updated. Please retry.",
+      );
     } finally {
       setShortlistPendingIds((current) => {
         const next = new Set(current);
@@ -4278,8 +4285,7 @@ export default function CandidateSearchV2Client({
                 shortlistPending={shortlistPendingIds.has(result.candidateId)}
                 onShortlistToggle={
                   !shortlistContextReady ||
-                  shortlistLoading ||
-                  Boolean(shortlistError)
+                  shortlistLoading
                     ? undefined
                     : () => void toggleShortlist(result.candidateId)
                 }
