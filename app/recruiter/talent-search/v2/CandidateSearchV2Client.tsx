@@ -728,6 +728,9 @@ export function CompactCandidateCard({
   expanded,
   diagnostic,
   onToggle,
+  shortlisted = false,
+  shortlistPending = false,
+  onShortlistToggle,
   onOpenTab,
   identityLookup = false,
   selected = false,
@@ -744,6 +747,9 @@ export function CompactCandidateCard({
   expanded: boolean;
   diagnostic: CandidateDrawerDiagnostic;
   onToggle: () => void;
+  shortlisted?: boolean;
+  shortlistPending?: boolean;
+  onShortlistToggle?: () => void;
   onOpenTab?: (tab: "Experience" | "Projects" | "Education" | "Skills") => void;
   identityLookup?: boolean;
   selected?: boolean;
@@ -797,7 +803,6 @@ export function CompactCandidateCard({
         ) === index,
     )
     .join(" \u00B7 ");
-  const shortlistHref = "/recruiter/smart-shortlist";
   const matchLabel = diagnostic.matchLevel;
   const rankingScore = displayedRankingScore(result);
   const externalNeedsVerification =
@@ -1250,12 +1255,21 @@ export function CompactCandidateCard({
               </span>
             </a>
           ) : null}
-          <a
-            href={shortlistHref}
-            className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:bg-slate-900"
-          >
-            Shortlist board
-          </a>
+          {result.talentPool !== "linkedin_talent_pool" ? (
+            <button
+              type="button"
+              aria-pressed={shortlisted}
+              disabled={!onShortlistToggle || shortlistPending}
+              onClick={onShortlistToggle}
+              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:bg-slate-900"
+            >
+              {shortlistPending
+                ? "Saving..."
+                : shortlisted
+                  ? "✓ Shortlisted"
+                  : "+ Shortlist"}
+            </button>
+          ) : null}
           <button
             type="button"
             data-candidate-details-trigger={result.candidateId}
@@ -1466,12 +1480,21 @@ export function CompactCandidateCard({
             </details>
           ) : null}
           <div className="mt-4 flex flex-wrap gap-2">
-            <a
-              href={shortlistHref}
-              className="inline-flex min-h-9 items-center rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-200"
-            >
-              Shortlist board
-            </a>
+            {result.talentPool !== "linkedin_talent_pool" ? (
+              <button
+                type="button"
+                aria-pressed={shortlisted}
+                disabled={!onShortlistToggle || shortlistPending}
+                onClick={onShortlistToggle}
+                className="inline-flex min-h-9 items-center rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-200"
+              >
+                {shortlistPending
+                  ? "Saving..."
+                  : shortlisted
+                    ? "✓ Shortlisted"
+                    : "+ Shortlist"}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={onToggle}
@@ -1566,6 +1589,21 @@ export default function CandidateSearchV2Client({
   const [externalWorkflowMessage, setExternalWorkflowMessage] = useState("");
   const [comparePackOpen, setComparePackOpen] = useState(false);
   const [comparePackSize, setComparePackSize] = useState<5 | 10 | 20>(5);
+  const [comparePackScope, setComparePackScope] = useState<
+    "matches" | "shortlisted"
+  >("matches");
+  const [shortlistJobId, setShortlistJobId] = useState<string | null>(null);
+  const [shortlistContextReady, setShortlistContextReady] = useState(false);
+  const [shortlistedIds, setShortlistedIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [shortlistCount, setShortlistCount] = useState(0);
+  const [shortlistPendingIds, setShortlistPendingIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [shortlistError, setShortlistError] = useState("");
+  const [shortlistLoading, setShortlistLoading] = useState(true);
+  const [shortlistRevision, setShortlistRevision] = useState(0);
 
   const [matchQuality, setMatchQuality] = useState<
     "any" | "relevant" | "strong"
@@ -1672,6 +1710,95 @@ export default function CandidateSearchV2Client({
   );
 
   const results = response?.results || [];
+  const shortlistResultIds = results
+    .filter((item) => item.talentPool !== "linkedin_talent_pool")
+    .map((item) => item.candidateId)
+    .join(",");
+  useEffect(() => {
+    const jobId = new URLSearchParams(window.location.search).get("jobId");
+    setShortlistJobId(jobId);
+    setShortlistContextReady(true);
+  }, []);
+  useEffect(() => {
+    if (!shortlistContextReady || !shortlistResultIds) return;
+    const controller = new AbortController();
+    const params = new URLSearchParams({ candidateIds: shortlistResultIds });
+    if (shortlistJobId) params.set("jobId", shortlistJobId);
+    setShortlistError("");
+    setShortlistLoading(true);
+    fetch(`/api/recruiter/search-v2/shortlist?${params}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (reply) => {
+        if (!reply.ok) throw new Error("Shortlist is unavailable.");
+        return reply.json();
+      })
+      .then((payload) => {
+        if (controller.signal.aborted) return;
+        setShortlistedIds(new Set(payload.candidateIds || []));
+        setShortlistCount(Number(payload.count) || 0);
+        setShortlistLoading(false);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setShortlistLoading(false);
+          setShortlistError("Shortlist is unavailable. Please retry later.");
+        }
+      });
+    return () => controller.abort();
+  }, [
+    shortlistContextReady,
+    shortlistJobId,
+    shortlistResultIds,
+    shortlistRevision,
+  ]);
+
+  async function toggleShortlist(candidateId: string) {
+    if (
+      shortlistPendingIds.has(candidateId) ||
+      shortlistLoading ||
+      shortlistError
+    )
+      return;
+    const wasSaved = shortlistedIds.has(candidateId);
+    if (
+      wasSaved &&
+      !window.confirm("Remove this candidate from your shortlist?")
+    )
+      return;
+    setShortlistPendingIds((current) => new Set(current).add(candidateId));
+    try {
+      const reply = await fetch("/api/recruiter/search-v2/shortlist", {
+        method: wasSaved ? "DELETE" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidateId, jobId: shortlistJobId }),
+      });
+      if (!reply.ok) throw new Error("Shortlist could not be updated.");
+      setShortlistError("");
+      setShortlistedIds((current) => {
+        const next = new Set(current);
+        if (wasSaved) next.delete(candidateId);
+        else next.add(candidateId);
+        return next;
+      });
+      setShortlistCount((current) =>
+        Math.max(0, current + (wasSaved ? -1 : 1)),
+      );
+    } catch {
+      setShortlistError("Shortlist could not be updated. Please retry.");
+    } finally {
+      setShortlistPendingIds((current) => {
+        const next = new Set(current);
+        next.delete(candidateId);
+        return next;
+      });
+    }
+  }
+  const compareCandidates =
+    comparePackScope === "shortlisted"
+      ? results.filter((candidate) => shortlistedIds.has(candidate.candidateId))
+      : results;
   const externalAggregation = response?.aggregation;
   const externalRejectionPresentation = response?.rejectionSummary
     ? externalRejectionSummaryPresentation(response.rejectionSummary)
@@ -3858,10 +3985,10 @@ export default function CandidateSearchV2Client({
           {results.length ? (
             <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/50 p-3">
               <a
-                href="/recruiter/smart-shortlist"
+                href={`/recruiter/shortlist${shortlistJobId ? `?jobId=${encodeURIComponent(shortlistJobId)}` : ""}`}
                 className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 hover:border-slate-500"
               >
-                Shortlist board
+                Shortlist ({shortlistCount})
               </a>
               <button
                 type="button"
@@ -3884,6 +4011,18 @@ export default function CandidateSearchV2Client({
               <span className="text-xs text-slate-400">
                 Compare the ranked Top 5, 10 or 20 from this search.
               </span>
+              {shortlistError ? (
+                <span role="alert" className="text-xs text-amber-200">
+                  {shortlistError}{" "}
+                  <button
+                    type="button"
+                    onClick={() => setShortlistRevision((value) => value + 1)}
+                    className="underline"
+                  >
+                    Retry
+                  </button>
+                </span>
+              ) : null}
             </div>
           ) : null}
 
@@ -3920,6 +4059,31 @@ export default function CandidateSearchV2Client({
                 role="group"
                 aria-label="Compare pack size"
               >
+                <button
+                  type="button"
+                  aria-pressed={comparePackScope === "matches"}
+                  onClick={() => setComparePackScope("matches")}
+                  className={
+                    comparePackScope === "matches"
+                      ? "rounded-lg bg-slate-200 px-3 py-2 text-sm font-semibold text-slate-950"
+                      : "rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200"
+                  }
+                >
+                  All matching results
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={comparePackScope === "shortlisted"}
+                  disabled={shortlistLoading || Boolean(shortlistError)}
+                  onClick={() => setComparePackScope("shortlisted")}
+                  className={
+                    comparePackScope === "shortlisted"
+                      ? "rounded-lg bg-slate-200 px-3 py-2 text-sm font-semibold text-slate-950"
+                      : "rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 disabled:opacity-50"
+                  }
+                >
+                  Shortlisted in this search
+                </button>
                 {([5, 10, 20] as const).map((size) => (
                   <button
                     key={size}
@@ -3937,9 +4101,18 @@ export default function CandidateSearchV2Client({
                 ))}
               </div>
               <p className="mt-3 text-xs text-slate-400">
-                Showing {Math.min(comparePackSize, results.length)} of{" "}
-                {Math.min(comparePackSize, response.summary.totalMatched)}{" "}
-                available ranked profiles.
+                Showing {Math.min(comparePackSize, compareCandidates.length)} of{" "}
+                {comparePackScope === "shortlisted"
+                  ? compareCandidates.length
+                  : Math.min(
+                      comparePackSize,
+                      response.summary.totalMatched,
+                    )}{" "}
+                available ranked profiles
+                {comparePackScope === "shortlisted"
+                  ? " shortlisted within the first 20 matches"
+                  : ""}
+                .
                 {response.evaluationMode === "identity_only"
                   ? " Identity lookup does not provide a fit ranking."
                   : ""}
@@ -3969,7 +4142,7 @@ export default function CandidateSearchV2Client({
                     </tr>
                   </thead>
                   <tbody>
-                    {results
+                    {compareCandidates
                       .slice(0, comparePackSize)
                       .map((candidate, index) => {
                         const employment =
@@ -4073,6 +4246,15 @@ export default function CandidateSearchV2Client({
                   1
                 }
                 intent={committedIntent}
+                shortlisted={shortlistedIds.has(result.candidateId)}
+                shortlistPending={shortlistPendingIds.has(result.candidateId)}
+                onShortlistToggle={
+                  !shortlistContextReady ||
+                  shortlistLoading ||
+                  Boolean(shortlistError)
+                    ? undefined
+                    : () => void toggleShortlist(result.candidateId)
+                }
                 expanded={expandedCandidateId === result.candidateId}
                 diagnostic={diagnosticsByCandidate.get(result.candidateId)!}
                 onToggle={() =>
@@ -4213,7 +4395,20 @@ export default function CandidateSearchV2Client({
             }
             visibleCandidates={results as CandidateDrawerResult[]}
             searchContextLabel={committedSnapshot?.query || query}
-            shortlistHref="/recruiter/smart-shortlist"
+            shortlisted={shortlistedIds.has(
+              selectedDrawerCandidate.candidateId,
+            )}
+            shortlistPending={shortlistPendingIds.has(
+              selectedDrawerCandidate.candidateId,
+            )}
+            onShortlistToggle={
+              !shortlistContextReady ||
+              shortlistLoading ||
+              Boolean(shortlistError)
+                ? undefined
+                : () =>
+                    void toggleShortlist(selectedDrawerCandidate.candidateId)
+            }
             onClose={closeCandidateDrawer}
             onSelect={(candidateId) => {
               setDrawerInitialTab("Overview");

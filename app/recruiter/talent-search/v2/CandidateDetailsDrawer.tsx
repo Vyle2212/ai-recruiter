@@ -254,7 +254,9 @@ export default function CandidateDetailsDrawer({
   diagnostic,
   visibleCandidates,
   searchContextLabel,
-  shortlistHref,
+  shortlisted,
+  shortlistPending,
+  onShortlistToggle,
   onClose,
   onSelect,
   identityLookup = false,
@@ -264,7 +266,9 @@ export default function CandidateDetailsDrawer({
   diagnostic: CandidateDrawerDiagnostic;
   visibleCandidates: CandidateDrawerResult[];
   searchContextLabel: string;
-  shortlistHref: string;
+  shortlisted: boolean;
+  shortlistPending: boolean;
+  onShortlistToggle?: () => void;
   onClose: () => void;
   onSelect: (candidateId: string) => void;
   identityLookup?: boolean;
@@ -548,12 +552,19 @@ export default function CandidateDetailsDrawer({
                 </a>
               ) : null}
               {candidate.talentPool !== "linkedin_talent_pool" ? (
-                <a
-                  href={shortlistHref}
+                <button
+                  type="button"
+                  aria-pressed={shortlisted}
+                  disabled={!onShortlistToggle || shortlistPending}
+                  onClick={onShortlistToggle}
                   className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-100"
                 >
-                  Shortlist board
-                </a>
+                  {shortlistPending
+                    ? "Saving..."
+                    : shortlisted
+                      ? "✓ Shortlisted"
+                      : "+ Shortlist"}
+                </button>
               ) : null}
               {candidate.talentPool === "linkedin_talent_pool" ? (
                 <button
@@ -1520,12 +1531,19 @@ export default function CandidateDetailsDrawer({
 
         {candidate.talentPool !== "linkedin_talent_pool" ? (
           <footer className="flex shrink-0 flex-wrap gap-2 border-t border-slate-800 bg-slate-950 px-6 py-4">
-            <a
-              href={shortlistHref}
+            <button
+              type="button"
+              aria-pressed={shortlisted}
+              disabled={!onShortlistToggle || shortlistPending}
+              onClick={onShortlistToggle}
               className="rounded-lg bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950"
             >
-              Shortlist board
-            </a>
+              {shortlistPending
+                ? "Saving..."
+                : shortlisted
+                  ? "✓ Shortlisted"
+                  : "+ Shortlist"}
+            </button>
             <RequestOriginalCvButton candidateId={candidate.candidateId} />
             <a
               href={`/api/candidate360/${encodeURIComponent(candidate.candidateId)}/resume?mode=inline`}

@@ -120,8 +120,8 @@ const legacyServiceFiles = auditedFiles.filter(
 );
 assert.equal(
   recruiterFiles.length,
-  79,
-  "Expected the audited 79 recruiter route files",
+  80,
+  "Expected the audited 80 recruiter route files",
 );
 assert.equal(
   legacyServiceFiles.length,

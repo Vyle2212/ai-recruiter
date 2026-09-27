@@ -1063,6 +1063,22 @@ export const RECRUITER_API_ROUTE_POLICIES = [
     "shortlist",
   ),
   p(
+    "search-v2-shortlist-read",
+    "/api/recruiter/search-v2/shortlist",
+    ["GET"],
+    "recruiter.shortlist.manage",
+    "shortlist",
+    { serviceRoleAccess: true },
+  ),
+  p(
+    "search-v2-shortlist-write",
+    "/api/recruiter/search-v2/shortlist",
+    ["POST", "DELETE"],
+    "recruiter.shortlist.manage",
+    "shortlist",
+    { persistentMutation: true, serviceRoleAccess: true },
+  ),
+  p(
     "submission-generator",
     "/api/recruiter/submission-generator",
     ["POST"],
