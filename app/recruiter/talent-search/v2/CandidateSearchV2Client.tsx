@@ -1292,7 +1292,7 @@ export function CompactCandidateCard({
             }}
             className="inline-flex min-h-9 items-center justify-center rounded-lg bg-cyan-300 px-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200"
           >
-            View Profile
+            Quick View
           </button>
         </div>
       </div>
@@ -1511,7 +1511,7 @@ export function CompactCandidateCard({
               onClick={onToggle}
               className="inline-flex min-h-9 items-center rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-950"
             >
-              {expanded ? "Close profile" : "Open profile"}
+              {expanded ? "Close Quick View" : "Quick View"}
             </button>
           </div>
         </section>
@@ -4066,7 +4066,7 @@ export default function CandidateSearchV2Client({
                 Compare
               </button>
               <span className="text-xs text-slate-400">
-                Compare the ranked Top 5, 10 or 20 from this search.
+                Compare matching or shortlisted candidates in this search.
               </span>
               {shortlistPreviewJob ? (
                 <span className="text-xs text-amber-200">
@@ -4094,12 +4094,14 @@ export default function CandidateSearchV2Client({
           response.summary.page === 1 ? (
             <section
               id="search-v2-compare-pack"
-              aria-label="Candidate comparison"
+              aria-label="Candidate Comparison"
               className="mt-3 rounded-xl border border-cyan-500/30 bg-[#0B1118] p-4"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-lg font-semibold text-white">Compare</h3>
+                  <h3 className="text-lg font-semibold text-white">
+                    Candidate Comparison
+                  </h3>
                   <p className="mt-1 text-xs text-slate-400">
                     Ranked results from the committed search. Employer tenure
                     and client project periods are shown separately; missing

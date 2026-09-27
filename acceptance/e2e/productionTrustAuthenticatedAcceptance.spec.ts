@@ -648,7 +648,7 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       .fill(acceptanceRequired("ACCEPTANCE_INTERNAL_SEARCH_QUERY"));
     await page.getByRole("button", { name: "Understand & review" }).click();
     await page.getByRole("button", { name: "Commit Search" }).click();
-    const open = page.getByRole("button", { name: "Open profile" });
+    const open = page.getByRole("button", { name: "Quick View" });
     await expect(open.first()).toBeVisible();
     await open.first().click();
     await expect(page.getByRole("dialog")).toBeVisible();
@@ -680,7 +680,7 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     });
   });
 
-  test("Search V2 shows Compare Pack beside Shortlist with separate employer and client periods", async ({
+  test("Search V2 shows Comparison beside Shortlist with separate employer and client periods", async ({
     page,
   }) => {
     await installAuthenticatedBrowserState(page.context(), "recruiter");
@@ -693,15 +693,15 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     await page.getByRole("button", { name: "Understand & review" }).click();
     await page.getByRole("button", { name: "Commit Search" }).click();
     await expect(
-      page.getByRole("button", { name: "Compare Pack", exact: true }),
+      page.getByRole("button", { name: "Compare", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("link", { name: /^Shortlist \(/ }),
     ).toBeVisible();
     await page
-      .getByRole("button", { name: "Compare Pack", exact: true })
+      .getByRole("button", { name: "Compare", exact: true })
       .click();
-    const pack = page.getByRole("region", { name: "Compare Pack" });
+    const pack = page.getByRole("region", { name: "Candidate Comparison" });
     await expect(pack).toBeVisible();
     for (const size of [5, 10, 20]) {
       await pack.getByRole("button", { name: `Top ${size}` }).click();

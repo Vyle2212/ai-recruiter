@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 const featureLabels: Record<string, string> = {
   unlimited_search: "Search V2",
   unlimited_job_posts: "Job posting",
-  candidate_comparison: "Compare Pack",
+  candidate_comparison: "Candidate Comparison",
   recruiter_support: "Recruiter support",
   candidate_chat: "Candidate chat",
   ats: "ATS",
@@ -117,7 +117,7 @@ export default async function ClientPortalPage({ searchParams }: { searchParams:
       </section>
       {process.env.CLIENT_CANDIDATE_LOOKUP_ENABLED === "true" && available && features.some(item => item.feature === "unlimited_search") &&
         <section className={card}><h2 className="text-xl font-semibold">Find assigned candidates</h2><p className="mt-2 text-slate-400">Search the candidates currently granted to your client account by name, title or company.</p><Link href="/client/candidate-search" className="mt-4 inline-block rounded-lg bg-cyan-700 px-5 py-3 font-medium">Open candidate lookup</Link></section>}
-      <section className={card}><h2 className="text-xl font-semibold">Your workspace</h2><p className="mt-3 text-slate-400">{available && (candidates.count || 0) === 0 && (jobs.count || 0) === 0 ? "No candidates or jobs have been assigned to your account yet." : "Only candidates and jobs explicitly assigned to your client account can appear here."}</p><p className="mt-3 text-sm text-slate-500">Search, Shortlist, Compare Pack, feedback and recruiter sharing will appear here as each authenticated flow passes acceptance testing.</p></section>
+      <section className={card}><h2 className="text-xl font-semibold">Your workspace</h2><p className="mt-3 text-slate-400">{available && (candidates.count || 0) === 0 && (jobs.count || 0) === 0 ? "No candidates or jobs have been assigned to your account yet." : "Only candidates and jobs explicitly assigned to your client account can appear here."}</p><p className="mt-3 text-sm text-slate-500">Search, Shortlist, Candidate Comparison, feedback and recruiter sharing will appear here as each authenticated flow passes acceptance testing.</p></section>
       {recruiterSupport && <section className={card}><h2 className="text-xl font-semibold">Work with your assigned recruiter</h2><p className="mt-2 text-sm text-slate-400">Share candidates visible to your account and jobs owned by your client account. Opening an original CV requires separate admin approval.</p><div className="mt-5">{sharing}</div></section>}
     </div>
   </main>;

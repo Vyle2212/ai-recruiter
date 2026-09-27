@@ -44,7 +44,7 @@ const requiredTests = new Set([
   "synthetic client job share requires assigned support and can be revoked",
   "original CV read denies recruiter without admin approval",
   "synthetic candidate drawer remains private and preserves Experience/Projects semantics",
-  "Search V2 shows Compare Pack beside Shortlist with separate employer and client periods",
+  "Search V2 shows Comparison beside Shortlist with separate employer and client periods",
   "candidate-detail caches are isolated by authenticated actor scope",
   "external continuation tokens fail closed across actor scope and after logout",
   "Search V2 UI pagination reuses loaded data and expansion is one action",

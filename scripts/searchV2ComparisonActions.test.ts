@@ -50,7 +50,7 @@ assert.match(
   search,
   /Comparing from \{cleanCandidateName\(compareAnchorCandidate\)\}/,
 );
-assert.match(search, />\s*View Profile\s*</);
+assert.match(search, />\s*Quick View\s*</);
 assert.doesNotMatch(search, />\s*Compare Pack\s*</);
 assert.equal((drawer.match(/aria-pressed=\{shortlisted\}/g) || []).length, 1);
 assert.match(drawer, /aria-label="Compare this candidate"/);

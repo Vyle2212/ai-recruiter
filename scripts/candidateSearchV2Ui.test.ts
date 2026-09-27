@@ -33,7 +33,7 @@ assert.match(client, /Potential Match/);
 assert.match(client, /Name unavailable/);
 assert.match(client, /candidateShortId/);
 assert.match(client, /Shortlist/);
-assert.match(client, /View Profile/);
+assert.match(client, /Quick View/);
 assert.match(client, /Previous page/);
 assert.match(client, /Next page/);
 assert.match(client, /advancedFilterIntentKey/);
@@ -48,7 +48,7 @@ assert.match(client, /runSearch\(response\.summary\.page \+ 1, true\)/);
 assert.match(client, /paginationNavigation/);
 assert.match(client, /<CandidateDetailsDrawer/);
 assert.match(client, /data-candidate-details-trigger=\{result\.candidateId\}/);
-assert.match(client, /onClick=\{onToggle\}[\s\S]*View Profile/);
+assert.match(client, /onClick=\{onToggle\}[\s\S]*Quick View/);
 assert.doesNotMatch(client, /candidate360SearchHref|Open full profile/);
 for (const tab of ["Overview", "Experience", "Projects", "Education", "Skills"])
   assert.ok(drawer.includes(`"${tab}"`), `missing ${tab} tab`);
