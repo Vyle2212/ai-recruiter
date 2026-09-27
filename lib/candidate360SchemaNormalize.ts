@@ -1184,7 +1184,7 @@ function assignmentOrganizationAliases(value: string) {
   return aliases;
 }
 
-function projectsDescribeSameAssignment(
+export function projectsDescribeSameAssignment(
   left: EnterpriseProject,
   right: EnterpriseProject,
 ) {
@@ -1193,8 +1193,15 @@ function projectsDescribeSameAssignment(
     new Set((value.toLowerCase().match(/\b(?:consultant|developer|analyst|architect|engineer|lead|manager|specialist|tester|administrator)\b/g) || []));
   const leftKinds = roleKinds(left.role);
   const rightKinds = roleKinds(right.role);
+  const leftResponsibilities = normalizedAssignmentAnchor(left.responsibilities.join(" "));
+  const rightResponsibilities = normalizedAssignmentAnchor(right.responsibilities.join(" "));
+  const sameResponsibilities = Boolean(
+    leftResponsibilities && rightResponsibilities &&
+    leftResponsibilities === rightResponsibilities
+  );
   if (leftKinds.size && rightKinds.size &&
-      ![...leftKinds].some((kind) => rightKinds.has(kind))) return false;
+      ![...leftKinds].some((kind) => rightKinds.has(kind)) &&
+      !sameResponsibilities) return false;
   const leftClient = inferredProjectClient(left);
   const rightClient = inferredProjectClient(right);
   const leftName = normalizedAssignmentAnchor(left.name);

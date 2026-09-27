@@ -166,6 +166,7 @@ jobs:
       - name: Canonical evidence and immutable golden regressions
         run: |
           npm run test:production-trust:canonical
+          node --import tsx scripts/projectRoleProvenanceDeduplication.test.ts
           node --import tsx scripts/currentEmploymentInference.test.ts
 
       - name: CV source layout and complete-document OCR regressions
