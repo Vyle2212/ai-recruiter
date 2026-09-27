@@ -109,6 +109,29 @@ assert.equal(
   ).length,
   3,
 );
+const undatedCv = `EMPLOYMENT HISTORY
+Example Delivery – SAP Functional Consultant
+Jan 2022 – Present
+PROJECT EXPERIENCE
+Buyer Manufacturing Ltd
+Position: SAP FICO Consultant
+Project Description: SAP implementation project for finance processes.
+Responsibilities:
+• Configured FI/CO and supported UAT.
+Environment: SAP S/4HANA.
+EDUCATION
+Bachelor of Information Systems`;
+const undatedCards = sectionedProjectExperienceCards(undatedCv);
+assert.equal(undatedCards.length, 1);
+assert.deepEqual(
+  [undatedCards[0].client, undatedCards[0].start, undatedCards[0].end],
+  ["Buyer Manufacturing Ltd", "", ""],
+  "the employer's date range must not be copied into an undated client project",
+);
+const undatedProfile = normalizeActualCandidateSchema({raw_text: undatedCv}).enterpriseProfile;
+assert.ok(undatedProfile.projects.some((project) =>
+  project.client === "Buyer Manufacturing Ltd" && !project.start && !project.end && !project.employer,
+));
 console.log(
   "Sectioned project cards keep clients and project dates separate from employment: PASS",
 );
