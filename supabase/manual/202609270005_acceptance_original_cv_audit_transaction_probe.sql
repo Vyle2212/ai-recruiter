@@ -1,5 +1,7 @@
 -- ACCEPTANCE ONLY. Synthetic data lives only inside this transaction.
 -- This verifies the trigger, then rolls back every candidate/grant/audit row.
+-- The synthetic grant bypasses the request/approval route; this probe does not
+-- validate admin authentication, Storage download, or browser API behavior.
 begin;
 
 do $probe$
