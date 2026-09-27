@@ -272,6 +272,15 @@ assert.doesNotMatch(
   accessAuditReadback,
   /^\s*(?:alter|create|delete|drop|grant|insert|revoke|truncate|update)\b/im,
 );
+const acceptanceAuditProbe = readFileSync(
+  "supabase/manual/202609270005_acceptance_original_cv_audit_transaction_probe.sql",
+  "utf8",
+);
+assert.match(acceptanceAuditProbe, /^-- ACCEPTANCE ONLY/m);
+assert.match(acceptanceAuditProbe, /hidden_candidate_audit_was_not_denied/);
+assert.match(acceptanceAuditProbe, /revoked_client_support_audit_was_not_denied/);
+assert.match(acceptanceAuditProbe, /where candidate_id = v_support_candidate/);
+assert.match(acceptanceAuditProbe, /\nrollback;\s*$/);
 const approvalPolicy = recruiterApiPolicyForRequest(
   "/api/admin/original-cv-grants",
   "POST",
