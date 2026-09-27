@@ -8,9 +8,9 @@ export function labelledProjectCards(source: string) {
   const lines = source.normalize("NFKC").replace(/\r/g, "").split("\n");
   const result: Array<{name:string;client:string;role:string;start:string;end:string;excerpt:string}> = [];
   for (let index=0; index<lines.length; index++) {
-    const project = lines[index].trim().match(/^Project\s*:\s*(\S.{3,159})$/i);
+    const project = lines[index].trim().match(/^Project(?:\s+(?:Name|Title))?\s*:\s*(\S.{3,159})$/i);
     if (!project) continue;
-    const next = lines.findIndex((line, offset) => offset>index && /^\s*(?:Project\s*:|(?:EMPLOYMENT|WORK EXPERIENCE|EDUCATION|CERTIFICATIONS?|REFERENCES)\s*$)/i.test(line));
+    const next = lines.findIndex((line, offset) => offset>index && /^\s*(?:Project(?:\s+(?:Name|Title))?\s*:|(?:EMPLOYMENT|WORK EXPERIENCE|EDUCATION|CERTIFICATIONS?|REFERENCES)\s*$)/i.test(line));
     const block = lines.slice(index+1, Math.min(next<0?lines.length:next,index+11));
     // The established dated-card parser owns this shape and its exact date
     // notation. Do not produce a second, differently normalized assignment.
