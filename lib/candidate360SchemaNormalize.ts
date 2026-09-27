@@ -10,6 +10,7 @@ import { estimateEmploymentFromProjects, ownedProjectRangesFromResume, supported
 import { ownedProjectCareerLedger } from "./ownedProjectCareerLedger";
 import { customerObjectiveCareerCards } from "./customerObjectiveCareerCards";
 import { sectionedProjectExperienceCards } from "./sectionedProjectExperienceCards";
+import { explicitProjectListCards } from "./explicitProjectListCards";
 import { calculateTotalCareerYears } from "./candidateCareerExperience";
 import {
   CANDIDATE_EMPLOYMENT_TIMELINE_VERSION,
@@ -3288,6 +3289,14 @@ function normalizeProjects(
   output.push(...narrativeProjects(sourceScopes));
   const nativeSource = firstValue(sourceScopes, ["resume_text", "raw_text", "cv_text", "raw_cv"]);
   if (typeof unwrap(nativeSource) === "string") {
+    output.push(...explicitProjectListCards(String(unwrap(nativeSource))).map((card, index) => withProjectEvidence({
+      id: `explicit-project-list-${index + 1}`,
+      name: card.name, client: "", employer: "", industry: "", country: "",
+      role: card.role, modules: stringList(`${card.role} ${card.name}`.match(/\b(?:FICO|FI|CO|MM|SD|PP|PS|BW|BI|HCM|ABAP)\b/gi) || []),
+      projectType: labelledAssignmentType(card.name), implementationType: labelledAssignmentType(card.name),
+      start: card.start, end: card.end, duration: projectDuration(card.start, card.end),
+      responsibilities: [], teamSize: null, environment: "",
+    }, "parsed_resume", `resume.explicitProjectList.${index + 1}`, false, card.excerpt)));
     output.push(
       ...sectionedProjectExperienceCards(String(unwrap(nativeSource))).map(
         (card, index) =>
