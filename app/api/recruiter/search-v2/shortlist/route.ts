@@ -183,6 +183,22 @@ async function mutate(request: Request, method: "POST" | "DELETE") {
         },
       );
       if (error) throw error;
+      // The unique constraint predates organization scope. A reassigned owner
+      // can conflict with an old organization's row; ignoreDuplicates alone
+      // would otherwise report success while the new shortlist stays empty.
+      const { data: saved, error: savedError } = await ownedQuery(
+        auth.scope.profileId,
+        auth.scope.organizationId,
+        selection.key,
+      )
+        .eq("candidate_id", candidateId)
+        .maybeSingle();
+      if (savedError) throw savedError;
+      if (!saved)
+        return json(
+          { error: "This candidate is already saved under a previous organization. Contact an admin to resolve ownership." },
+          409,
+        );
       return json({ candidateId, shortlisted: true });
     }
     let deletion = database
