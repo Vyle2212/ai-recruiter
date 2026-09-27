@@ -31,4 +31,19 @@ assert.deepEqual(labelledProjectCards(aliases).map(card => [card.name, card.clie
 const aliasProfile = normalizeActualCandidateSchema({raw_text: aliases}).enterpriseProfile;
 assert.ok(aliasProfile.projects.some(project => project.client === "Buyer One Ltd" && !project.employer && !project.start));
 assert.ok(aliasProfile.employmentTimeline.every(job => !job.company.startsWith("Buyer")));
+const adjacentClients = `PROJECT EXPERIENCE
+Project Name: Finance deployment
+Client: Buyer One Ltd
+Role: SAP FICO Consultant
+Client: Buyer Two Ltd
+Role: SAP MM Consultant
+Duration: Jan 2023 - Dec 2023`;
+assert.deepEqual(labelledProjectCards(adjacentClients).map(card => [card.client, card.start, card.end]),
+  [["Buyer One Ltd", "", ""]], "a later client's dates cannot be borrowed by the first project");
+const partialDates = `PROJECT EXPERIENCE
+Project Title: Finance deployment
+Client: Buyer One Ltd
+Role: SAP FICO Consultant
+Start Date: Jan 2023`;
+assert.deepEqual(labelledProjectCards(partialDates), [], "a partial explicit date card stays under review");
 console.log("Explicit project cards preserve source boundaries: PASS");
