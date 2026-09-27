@@ -506,7 +506,9 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
         `${target}?candidateIds=${encodeURIComponent(internalCandidateId)}`,
       );
       expect(after.status()).toBe(200);
-      expect((await after.json()).candidateIds).not.toContain(internalCandidateId);
+      expect((await after.json()).candidateIds).not.toContain(
+        internalCandidateId,
+      );
       await denied.dispose();
       await recruiter.dispose();
     }
@@ -556,7 +558,9 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     });
   });
 
-  test("Search V2 shows Compare Pack beside Shortlist with separate employer and client periods", async ({ page }) => {
+  test("Search V2 shows Compare Pack beside Shortlist with separate employer and client periods", async ({
+    page,
+  }) => {
     await installAuthenticatedBrowserState(page.context(), "recruiter");
     await page.goto(searchPage);
     await page
@@ -566,19 +570,35 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       .fill(acceptanceRequired("ACCEPTANCE_INTERNAL_SEARCH_QUERY"));
     await page.getByRole("button", { name: "Understand & review" }).click();
     await page.getByRole("button", { name: "Commit Search" }).click();
-    await expect(page.getByRole("button", { name: "Compare Pack", exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: /^Shortlist \(/ })).toBeVisible();
-    await page.getByRole("button", { name: "Compare Pack", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Compare Pack", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /^Shortlist \(/ }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Compare Pack", exact: true })
+      .click();
     const pack = page.getByRole("region", { name: "Compare Pack" });
     await expect(pack).toBeVisible();
     for (const size of [5, 10, 20]) {
       await pack.getByRole("button", { name: `Top ${size}` }).click();
-      await expect(pack.getByRole("button", { name: `Top ${size}` })).toHaveAttribute("aria-pressed", "true");
+      await expect(
+        pack.getByRole("button", { name: `Top ${size}` }),
+      ).toHaveAttribute("aria-pressed", "true");
     }
-    await expect(pack.getByRole("columnheader", { name: "Employer / tenure" })).toBeVisible();
-    await expect(pack.getByRole("columnheader", { name: "Client project / period" })).toBeVisible();
-    await expect(pack.getByText("PTF Synthetic Consulting Ltd").first()).toBeVisible();
-    await expect(pack.getByText("PTF Synthetic Manufacturing Client").first()).toBeVisible();
+    await expect(
+      pack.getByRole("columnheader", { name: "Employer / tenure" }),
+    ).toBeVisible();
+    await expect(
+      pack.getByRole("columnheader", { name: "Client project / period" }),
+    ).toBeVisible();
+    await expect(
+      pack.getByText("PTF Synthetic Consulting Ltd").first(),
+    ).toBeVisible();
+    await expect(
+      pack.getByText("PTF Synthetic Manufacturing Client").first(),
+    ).toBeVisible();
   });
 
   test("candidate-detail caches are isolated by authenticated actor scope", async ({}, testInfo) => {
