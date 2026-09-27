@@ -76,7 +76,7 @@ export async function POST(request: Request) {
     return reject("invalid_share_request", 400);
 
   const db = createLazySupabaseServiceClient();
-  const [membership, assignment, entitlement, ownership] = await Promise.all([
+  const [membership, assignment, recruiter, entitlement, ownership] = await Promise.all([
     db
       .from("client_memberships")
       .select("id")
@@ -91,6 +91,9 @@ export async function POST(request: Request) {
       .eq("recruiter_profile_id", recruiterProfileId)
       .eq("status", "active")
       .limit(1),
+    db.from("user_profiles").select("id")
+      .eq("id", recruiterProfileId).eq("role", "recruiter")
+      .eq("status", "active").limit(1),
     db
       .from("client_feature_entitlements")
       .select("status,valid_from,valid_until")
@@ -112,6 +115,7 @@ export async function POST(request: Request) {
   if (
     membership.error ||
     assignment.error ||
+    recruiter.error ||
     entitlement.error ||
     ownership.error
   )
@@ -122,6 +126,7 @@ export async function POST(request: Request) {
     !membership.data?.length ||
     (action === "share" &&
       (!assignment.data?.length ||
+        !recruiter.data?.length ||
         !ownership.data?.length ||
         feature?.status !== "active" ||
         !Number.isFinite(Date.parse(String(feature.valid_from))) ||
