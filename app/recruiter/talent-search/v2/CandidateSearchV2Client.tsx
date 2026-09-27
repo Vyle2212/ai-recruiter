@@ -13,7 +13,6 @@ import {
   CANDIDATE360_SEARCH_CONTEXT_KEY,
   candidate360MatchedByCandidate,
   candidate360SearchContextId,
-  candidate360SearchHref,
 } from "@/lib/candidate360SearchContext";
 import {
   parseRecruiterSearchIntent,
@@ -290,7 +289,8 @@ type SearchResult = {
   matchLabel?: "Strong Match" | "Good Match" | "Potential Match" | null;
   profileCompletenessPercent?: number;
   externalEligibilityState?:
-    "evidence_supported" | "potential_needs_verification";
+    | "evidence_supported"
+    | "potential_needs_verification";
   unresolvedRequirementCount?: number;
   confirmedContradictionCount?: number;
   linkedInProfileUrl?: string | null;
@@ -340,7 +340,9 @@ type SearchResponse = NormalizedSearchV2Response<SearchResult> & {
   };
   aggregation?: import("@/lib/externalTalentTypes").ExternalTalentAggregation;
   evaluationMode?:
-    "identity_only" | "named_candidate_evaluation" | "requirements_ranking";
+    | "identity_only"
+    | "named_candidate_evaluation"
+    | "requirements_ranking";
 };
 type SearchUiState =
   | "not_committed"
@@ -722,13 +724,11 @@ function Tag({ children }: { children: React.ReactNode }) {
 export function CompactCandidateCard({
   result,
   rank,
-  searchContextId,
   intent,
   expanded,
   diagnostic,
   onToggle,
   onOpenTab,
-  jobId,
   identityLookup = false,
   selected = false,
   reviewed = false,
@@ -738,13 +738,13 @@ export function CompactCandidateCard({
 }: {
   result: SearchResult;
   rank: number;
-  searchContextId: string;
+  searchContextId?: string;
+  jobId?: string;
   intent: RecruiterSearchIntent;
   expanded: boolean;
   diagnostic: CandidateDrawerDiagnostic;
   onToggle: () => void;
   onOpenTab?: (tab: "Experience" | "Projects" | "Education" | "Skills") => void;
-  jobId?: string;
   identityLookup?: boolean;
   selected?: boolean;
   reviewed?: boolean;
@@ -797,11 +797,6 @@ export function CompactCandidateCard({
         ) === index,
     )
     .join(" \u00B7 ");
-  const candidateHref = candidate360SearchHref(
-    result.candidateId,
-    searchContextId,
-    jobId,
-  );
   const shortlistHref = `/recruiter/shortlist?candidateId=${encodeURIComponent(result.candidateId)}&from=search-v2`;
   const matchLabel = diagnostic.matchLevel;
   const rankingScore = displayedRankingScore(result);
@@ -1305,7 +1300,7 @@ export function CompactCandidateCard({
                     <p className="truncate">
                       {[
                         item.employer,
-                        (item.start || item.end)
+                        item.start || item.end
                           ? formatCandidateProfilePeriod(
                               item.start,
                               item.end,
@@ -1338,7 +1333,7 @@ export function CompactCandidateCard({
                         item.role ? `Role: ${item.role}` : null,
                         ...item.lifecycle,
                         ...item.modules,
-                        (item.start || item.end)
+                        item.start || item.end
                           ? formatCandidateProfilePeriod(item.start, item.end)
                           : null,
                       ]
@@ -1483,12 +1478,13 @@ export function CompactCandidateCard({
             >
               Compare
             </button>
-            <a
-              href={candidateHref}
+            <button
+              type="button"
+              onClick={onToggle}
               className="inline-flex min-h-9 items-center rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-950"
             >
-              Open full profile
-            </a>
+              {expanded ? "Close profile" : "Open profile"}
+            </button>
           </div>
         </section>
       ) : null}
@@ -1839,9 +1835,9 @@ export default function CandidateSearchV2Client({
     null;
   const showingPreviousResults = Boolean(
     committedSnapshot &&
-    (searchEditorOpen ||
-      normalizePreparedSearchQuery(committedSnapshot.query) !==
-        normalizePreparedSearchQuery(query)),
+      (searchEditorOpen ||
+        normalizePreparedSearchQuery(committedSnapshot.query) !==
+          normalizePreparedSearchQuery(query)),
   );
   const closeCandidateDrawer = useCallback(() => {
     const candidateId = expandedCandidateId;
@@ -2554,8 +2550,8 @@ export default function CandidateSearchV2Client({
     });
     const changingPage = Boolean(
       paginationNavigation &&
-      committedSnapshot &&
-      committedSnapshot.response.summary.page !== pageNumber,
+        committedSnapshot &&
+        committedSnapshot.response.summary.page !== pageNumber,
     );
     const pendingKey = `${semanticSearchKey}:page:${pageNumber}${externalBatchCursor ? ":external-batch:" + externalBatchCursor : ""}`;
     if (pendingSearchKeyRef.current === pendingKey) return;
@@ -2718,13 +2714,13 @@ export default function CandidateSearchV2Client({
       if (!fetchResponse.ok)
         throw new Error(
           payload &&
-            typeof payload === "object" &&
-            "error" in payload &&
-            (typeof payload.error === "string" ||
-              (payload.error &&
-                typeof payload.error === "object" &&
-                "message" in payload.error &&
-                typeof payload.error.message === "string"))
+          typeof payload === "object" &&
+          "error" in payload &&
+          (typeof payload.error === "string" ||
+            (payload.error &&
+              typeof payload.error === "object" &&
+              "message" in payload.error &&
+              typeof payload.error.message === "string"))
             ? typeof payload.error === "string"
               ? payload.error
               : String(payload.error.message)
@@ -3113,7 +3109,8 @@ export default function CandidateSearchV2Client({
                   value={talentPool}
                   onChange={(event) => {
                     const nextTalentPool = event.target.value as
-                      "internal_profiles" | "linkedin_talent_pool";
+                      | "internal_profiles"
+                      | "linkedin_talent_pool";
                     selectedTalentPoolRef.current = nextTalentPool;
                     sourceReadinessRevisionRef.current += 1;
                     latestRequestIdRef.current += 1;
@@ -3889,7 +3886,6 @@ export default function CandidateSearchV2Client({
                   index +
                   1
                 }
-                searchContextId={searchContextId}
                 intent={committedIntent}
                 expanded={expandedCandidateId === result.candidateId}
                 diagnostic={diagnosticsByCandidate.get(result.candidateId)!}
@@ -3905,7 +3901,6 @@ export default function CandidateSearchV2Client({
                   setDrawerInitialTab(tab);
                   setExpandedCandidateId(result.candidateId);
                 }}
-                jobId={committedSnapshot?.provenance?.jobId}
                 identityLookup={[
                   "candidate_name_lookup",
                   "identity_token_lookup",
@@ -4027,16 +4022,11 @@ export default function CandidateSearchV2Client({
         {selectedDrawerCandidate ? (
           <CandidateDetailsDrawer
             candidate={selectedDrawerCandidate as CandidateDrawerResult}
-            diagnostic={diagnosticsByCandidate.get(
-              selectedDrawerCandidate.candidateId,
-            )!}
+            diagnostic={
+              diagnosticsByCandidate.get(selectedDrawerCandidate.candidateId)!
+            }
             visibleCandidates={results as CandidateDrawerResult[]}
             searchContextLabel={committedSnapshot?.query || query}
-            fullProfileHref={candidate360SearchHref(
-              selectedDrawerCandidate.candidateId,
-              searchContextId,
-              committedSnapshot?.provenance?.jobId,
-            )}
             shortlistHref={
               "/recruiter/shortlist?candidateId=" +
               encodeURIComponent(selectedDrawerCandidate.candidateId) +

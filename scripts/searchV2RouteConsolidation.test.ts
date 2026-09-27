@@ -8,11 +8,15 @@ for (const route of [
   "app/matches/[jobId]/page.tsx",
   "app/recruiter/talent-search/page.tsx",
   "app/recruiter/talent-search/results/page.tsx",
+  "app/recruiter/candidate360-v2/[candidateId]/page.tsx",
 ]) {
   const source = fs.readFileSync(route, "utf8");
   assert.match(source, /redirect\(/, `${route} must redirect`);
   assert.ok(source.includes(canonical), `${route} must use Search V2`);
-  assert.doesNotMatch(source, /api\/search-candidates|api\/matches|CandidateCard/i);
+  assert.doesNotMatch(
+    source,
+    /api\/search-candidates|api\/matches|CandidateCard/i,
+  );
 }
 
 const nav = fs.readFileSync("app/recruiter/layout.tsx", "utf8");
@@ -33,11 +37,24 @@ for (const route of [
   "app/recruiter/saved-searches/page.tsx",
 ]) {
   const source = fs.readFileSync(route, "utf8");
-  assert.doesNotMatch(source, /href="\/recruiter\/talent-search"|href="\/search"/);
+  assert.doesNotMatch(
+    source,
+    /href="\/recruiter\/talent-search"|href="\/search"/,
+  );
 }
-assert.doesNotMatch(fs.readFileSync("app/jobs/[id]/page.tsx", "utf8"), /\/matches/);
-assert.ok(fs.readFileSync("app/submission/page.tsx", "utf8").includes("/recruiter/submission-generator"));
-const compare = fs.readFileSync("components/candidate-compare-workspace.tsx", "utf8");
+assert.doesNotMatch(
+  fs.readFileSync("app/jobs/[id]/page.tsx", "utf8"),
+  /\/matches/,
+);
+assert.ok(
+  fs
+    .readFileSync("app/submission/page.tsx", "utf8")
+    .includes("/recruiter/submission-generator"),
+);
+const compare = fs.readFileSync(
+  "components/candidate-compare-workspace.tsx",
+  "utf8",
+);
 assert.match(compare, /params\.set\("sapModules", module/);
 assert.match(compare, /params\.set\("q", keyword/);
 assert.doesNotMatch(compare, /"\/search(?:\?|"|\b)/);

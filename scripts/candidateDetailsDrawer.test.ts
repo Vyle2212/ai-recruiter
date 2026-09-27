@@ -90,7 +90,9 @@ assert.doesNotMatch(drawer, /return normalized\.slice\(0, max\)/);
 assert.doesNotMatch(drawer, /Notes remain read-only/);
 assert.match(drawer, /diagnostic\.requirements\.map/);
 assert.doesNotMatch(drawer, /historical search/);
-assert.match(drawer, /Open full profile/);
+assert.match(drawer, /RequestOriginalCvButton/);
+assert.match(drawer, /Open original CV/);
+assert.doesNotMatch(drawer, /Open full profile/);
 assert.doesNotMatch(drawer, />Decision</);
 assert.doesNotMatch(drawer, />Candidate ?360</i);
 

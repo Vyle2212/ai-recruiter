@@ -25,6 +25,7 @@ import {
   type CandidateProfileTab,
 } from "@/lib/candidateProfilePresentation";
 import { canonicalCandidateSkillCollection } from "@/lib/candidateProfileSkills";
+import { RequestOriginalCvButton } from "@/components/RequestOriginalCvButton";
 import type { ExternalTalentProfilePresentation } from "@/lib/externalTalentProfile";
 
 export type CandidateDrawerResult = {
@@ -253,7 +254,6 @@ export default function CandidateDetailsDrawer({
   diagnostic,
   visibleCandidates,
   searchContextLabel,
-  fullProfileHref,
   shortlistHref,
   onClose,
   onSelect,
@@ -264,7 +264,6 @@ export default function CandidateDetailsDrawer({
   diagnostic: CandidateDrawerDiagnostic;
   visibleCandidates: CandidateDrawerResult[];
   searchContextLabel: string;
-  fullProfileHref: string;
   shortlistHref: string;
   onClose: () => void;
   onSelect: (candidateId: string) => void;
@@ -878,7 +877,11 @@ export default function CandidateDetailsDrawer({
                           ? ` · ${formatEmploymentTenure(item.start, item.end, item.current)}`
                           : ""}
                       </p>
-                      {item.estimatedTenure ? <p className="mt-1 text-xs text-amber-200">{formatProjectTenureEstimate(item.estimatedTenure)}</p> : null}
+                      {item.estimatedTenure ? (
+                        <p className="mt-1 text-xs text-amber-200">
+                          {formatProjectTenureEstimate(item.estimatedTenure)}
+                        </p>
+                      ) : null}
                       {item.location ? (
                         <p className="mt-1 text-sm text-slate-400">
                           {item.location}
@@ -1523,11 +1526,14 @@ export default function CandidateDetailsDrawer({
             >
               Shortlist
             </a>
+            <RequestOriginalCvButton candidateId={candidate.candidateId} />
             <a
-              href={fullProfileHref}
+              href={`/api/candidate360/${encodeURIComponent(candidate.candidateId)}/resume?mode=inline`}
+              target="_blank"
+              rel="noreferrer"
               className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200"
             >
-              Open full profile
+              Open original CV
             </a>
           </footer>
         ) : null}
