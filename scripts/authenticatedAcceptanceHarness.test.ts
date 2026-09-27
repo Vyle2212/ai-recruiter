@@ -99,6 +99,7 @@ async function main() {
       (match) => match[1],
     );
     assert.equal(names.length, 18);
+    assert.equal(new Set(names).size, names.length);
     const specs = names.map((title) => ({
       title,
       tests: [
@@ -152,6 +153,14 @@ async function main() {
     writeFileSync(input, JSON.stringify({ suites: [{ suites: [{ specs }] }] }));
     assert.equal(execute().status, 1);
     assert.equal(JSON.parse(readFileSync(output, "utf8")).testCount, 18);
+    specs[0].tests[0].results[0].status = "passed";
+    specs[0].title = "unrelated replacement test";
+    writeFileSync(input, JSON.stringify({ suites: [{ suites: [{ specs }] }] }));
+    assert.equal(
+      execute().status,
+      1,
+      "Replacing a required test must block acceptance even at the same count",
+    );
     writeFileSync(input, "{}");
     assert.equal(
       execute().status,
