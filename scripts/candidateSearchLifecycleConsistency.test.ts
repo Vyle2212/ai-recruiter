@@ -7,6 +7,7 @@ import {
   CANDIDATE_SEARCH_REVIEW_EXTRACTION_STATUSES,
   candidateSearchLifecycleDecision,
   missingOptionalLifecycleColumn,
+  selectCandidateLifecycleCompatible,
 } from "../lib/candidateSearchLifecycle";
 import { buildSearchIndexAudit } from "../lib/searchIndexAudit";
 import { candidateSearchMutationEligibility } from "../lib/candidateSearchMutationGate";
@@ -71,6 +72,58 @@ assert.equal(
   }),
   null,
 );
+void (async () => {
+  const legacySelections: string[] = [];
+  const legacySelection = await selectCandidateLifecycleCompatible<
+    { id: string }[]
+  >(
+    "id,status,extraction_coverage_status,profile_confirmation_status",
+    async (columns) => {
+      legacySelections.push(columns);
+      if (columns.includes("extraction_coverage_status"))
+        return {
+          data: null,
+          error: {
+            code: "42703",
+            message:
+              "column candidates.extraction_coverage_status does not exist",
+          },
+        };
+      if (columns.includes("profile_confirmation_status"))
+        return {
+          data: null,
+          error: {
+            code: "42703",
+            message:
+              "column candidates.profile_confirmation_status does not exist",
+          },
+        };
+      return { data: [{ id: "active" }], error: null };
+    },
+  );
+  assert.deepEqual(legacySelection.data, [{ id: "active" }]);
+  assert.deepEqual(legacySelections, [
+    "id,status,extraction_coverage_status,profile_confirmation_status",
+    "id,status,profile_confirmation_status",
+    "id,status",
+  ]);
+  let unauthorizedCalls = 0;
+  const unauthorizedSelection = await selectCandidateLifecycleCompatible(
+    "id,status,profile_confirmation_status",
+    async () => {
+      unauthorizedCalls++;
+      return {
+        data: null,
+        error: { code: "42501", message: "permission denied" },
+      };
+    },
+  );
+  assert.equal(unauthorizedCalls, 1);
+  assert.equal(unauthorizedSelection.error?.code, "42501");
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
 assert.equal(
   missingOptionalLifecycleColumn({
     code: "42703",

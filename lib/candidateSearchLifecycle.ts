@@ -48,6 +48,31 @@ export function missingOptionalLifecycleColumn(
   );
 }
 
+/** Retry only absent migration-owned lifecycle fields; preserve all other errors. */
+export async function selectCandidateLifecycleCompatible<T>(
+  columns: string,
+  run: (
+    columns: string,
+  ) => PromiseLike<{
+    data: T | null;
+    error: { code?: string; message?: string } | null;
+  }>,
+) {
+  let selection = columns;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const result = await run(selection);
+    const missing = missingOptionalLifecycleColumn(result.error);
+    if (!missing || !new RegExp(`\\b${missing}\\b`, "i").test(selection))
+      return result;
+    selection = selection
+      .replace(new RegExp(`\\b${missing}\\s*,?\\s*`, "gi"), "")
+      .replace(/,\s*,/g, ",")
+      .replace(/,\s*([)])/g, "$1")
+      .replace(/,\s*$/, "");
+  }
+  throw new Error("Candidate lifecycle compatibility retry exhausted.");
+}
+
 export function normalizedCandidateLifecycleStatus(value: unknown) {
   return String(value ?? "")
     .normalize("NFKC")

@@ -1,9 +1,15 @@
-import { recruiterSearchAuthorizationDenied, requireRecruiterSearchAuthorization } from "@/lib/recruiterSearchAuthorization";
+import {
+  recruiterSearchAuthorizationDenied,
+  requireRecruiterSearchAuthorization,
+} from "@/lib/recruiterSearchAuthorization";
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { createEmbedding } from "@/lib/embedding";
 import { modulesForKeyword } from "@/lib/candidateSearchIndex";
-import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
+import {
+  candidateSearchLifecycleDecision,
+  selectCandidateLifecycleCompatible,
+} from "@/lib/candidateSearchLifecycle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,9 +73,8 @@ export async function POST(req: NextRequest) {
     if (!ids.length)
       return NextResponse.json({ success: true, count: 0, results: [] });
 
-    const { data: candidates, error } = await supabase
-      .from("candidates")
-      .select(
+    const { data: candidates, error } =
+      await selectCandidateLifecycleCompatible<any[]>(
         `
         id,
         status,
@@ -104,8 +109,8 @@ export async function POST(req: NextRequest) {
         s4_implementation_count,
         s4_greenfield_count
       `,
-      )
-      .in("id", ids);
+        (columns) => supabase.from("candidates").select(columns).in("id", ids),
+      );
 
     if (error)
       return NextResponse.json({ error: error.message }, { status: 500 });
