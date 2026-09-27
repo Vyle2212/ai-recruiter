@@ -1012,10 +1012,10 @@ function talentSearchHref(snapshot: SearchSnapshot) {
   const module = String(filters.module || filters.primaryModule || snapshot.primaryModule || "").trim();
   if (keyword) {
     params.set("q", keyword);
-    params.set("keyword", keyword);
   }
-  if (module) params.set("module", module.startsWith("SAP ") ? module : "SAP " + module);
-  return params.toString() ? "/search?" + params.toString() : "/search";
+  if (module) params.set("sapModules", module.startsWith("SAP ") ? module : "SAP " + module);
+  const route = "/recruiter/talent-search/v2";
+  return params.toString() ? `${route}?${params.toString()}` : route;
 }
 function architectureScore(candidate: CandidateCompareSignal) {
   const role = architectureRole(candidate).toLowerCase();
@@ -4313,7 +4313,7 @@ export function CandidateCompareWorkspace() {
   const [currentSearchIds, setCurrentSearchIds] = useState<string[]>([]);
   const [searchSessionId, setSearchSessionId] = useState("");
   const [sessionMissing, setSessionMissing] = useState(false);
-  const [returnToTalentSearch, setReturnToTalentSearch] = useState("/search");
+  const [returnToTalentSearch, setReturnToTalentSearch] = useState("/recruiter/talent-search/v2");
   const [comparePreset, setComparePreset] = useState<ComparePreset>(5);
   const [compareFocus, setCompareFocus] = useState<CompareFocusMode>("All");
   const [exportOpen, setExportOpen] = useState(false);
@@ -4707,7 +4707,6 @@ export function CandidateCompareWorkspace() {
     </main>
   );
 }
-
 
 
 

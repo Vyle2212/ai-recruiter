@@ -37,4 +37,8 @@ for (const route of [
 }
 assert.doesNotMatch(fs.readFileSync("app/jobs/[id]/page.tsx", "utf8"), /\/matches/);
 assert.ok(fs.readFileSync("app/submission/page.tsx", "utf8").includes("/recruiter/submission-generator"));
+const compare = fs.readFileSync("components/candidate-compare-workspace.tsx", "utf8");
+assert.match(compare, /params\.set\("sapModules", module/);
+assert.match(compare, /params\.set\("q", keyword/);
+assert.doesNotMatch(compare, /"\/search(?:\?|"|\b)/);
 console.log("searchV2RouteConsolidation.test.ts passed");
