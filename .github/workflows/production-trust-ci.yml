@@ -159,7 +159,9 @@ jobs:
           node --import tsx scripts/candidateResponsePrivacy.test.ts
 
       - name: Internal and external Search V2 regressions
-        run: npm run test:production-trust:search-regression
+        run: |
+          npm run test:production-trust:search-regression
+          node --import tsx scripts/searchV2ComparisonActions.test.ts
 
       - name: Canonical evidence and immutable golden regressions
         run: |

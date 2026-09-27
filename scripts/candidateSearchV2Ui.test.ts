@@ -33,7 +33,7 @@ assert.match(client, /Potential Match/);
 assert.match(client, /Name unavailable/);
 assert.match(client, /candidateShortId/);
 assert.match(client, /Shortlist/);
-assert.match(client, /Open [Pp]rofile/);
+assert.match(client, /View Profile/);
 assert.match(client, /Previous page/);
 assert.match(client, /Next page/);
 assert.match(client, /advancedFilterIntentKey/);
@@ -48,12 +48,13 @@ assert.match(client, /runSearch\(response\.summary\.page \+ 1, true\)/);
 assert.match(client, /paginationNavigation/);
 assert.match(client, /<CandidateDetailsDrawer/);
 assert.match(client, /data-candidate-details-trigger=\{result\.candidateId\}/);
-assert.match(client, /onClick=\{onToggle\}[\s\S]*Open profile/);
+assert.match(client, /onClick=\{onToggle\}[\s\S]*View Profile/);
 assert.doesNotMatch(client, /candidate360SearchHref|Open full profile/);
 for (const tab of ["Overview", "Experience", "Projects", "Education", "Skills"])
   assert.ok(drawer.includes(`"${tab}"`), `missing ${tab} tab`);
 assert.match(drawer, /RequestOriginalCvButton/);
 assert.match(drawer, /Open original CV/);
+assert.match(drawer, /aria-label="Compare this candidate"/);
 assert.doesNotMatch(drawer, /Open full profile|fullProfileHref/);
 
 for (const removed of [

@@ -257,6 +257,7 @@ export default function CandidateDetailsDrawer({
   shortlisted,
   shortlistPending,
   onShortlistToggle,
+  onCompare,
   onClose,
   onSelect,
   identityLookup = false,
@@ -269,6 +270,7 @@ export default function CandidateDetailsDrawer({
   shortlisted: boolean;
   shortlistPending: boolean;
   onShortlistToggle?: () => void;
+  onCompare?: () => void;
   onClose: () => void;
   onSelect: (candidateId: string) => void;
   identityLookup?: boolean;
@@ -550,21 +552,6 @@ export default function CandidateDetailsDrawer({
                     (opens external profile in a new tab)
                   </span>
                 </a>
-              ) : null}
-              {candidate.talentPool !== "linkedin_talent_pool" ? (
-                <button
-                  type="button"
-                  aria-pressed={shortlisted}
-                  disabled={!onShortlistToggle || shortlistPending}
-                  onClick={onShortlistToggle}
-                  className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-100"
-                >
-                  {shortlistPending
-                    ? "Saving..."
-                    : shortlisted
-                      ? "✓ Shortlisted"
-                      : "+ Shortlist"}
-                </button>
               ) : null}
               {candidate.talentPool === "linkedin_talent_pool" ? (
                 <button
@@ -1543,6 +1530,15 @@ export default function CandidateDetailsDrawer({
                 : shortlisted
                   ? "✓ Shortlisted"
                   : "+ Shortlist"}
+            </button>
+            <button
+              type="button"
+              aria-label="Compare this candidate"
+              disabled={!onCompare}
+              onClick={onCompare}
+              className="rounded-lg border border-cyan-500/50 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Compare
             </button>
             <RequestOriginalCvButton candidateId={candidate.candidateId} />
             <a

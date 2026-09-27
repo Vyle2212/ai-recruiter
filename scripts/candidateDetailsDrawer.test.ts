@@ -92,6 +92,8 @@ assert.match(drawer, /diagnostic\.requirements\.map/);
 assert.doesNotMatch(drawer, /historical search/);
 assert.match(drawer, /RequestOriginalCvButton/);
 assert.match(drawer, /Open original CV/);
+assert.match(drawer, /aria-label="Compare this candidate"/);
+assert.equal((drawer.match(/aria-pressed=\{shortlisted\}/g) || []).length, 1);
 assert.doesNotMatch(drawer, /Open full profile/);
 assert.doesNotMatch(drawer, />Decision</);
 assert.doesNotMatch(drawer, />Candidate ?360</i);
@@ -105,6 +107,11 @@ assert.match(search, /trigger\?\.focus\(\)/);
 assert.match(search, /onSelect=\{\(candidateId\) => \{/);
 assert.match(search, /setDrawerInitialTab\("Overview"\)/);
 assert.match(search, /setExpandedCandidateId\(candidateId\)/);
+assert.match(search, /setCompareAnchorCandidateId\(/);
+assert.match(
+  search,
+  /Comparing from \{cleanCandidateName\(compareAnchorCandidate\)\}/,
+);
 
 assert.match(route, /requireRecruiterSearchAuthorization/);
 assert.match(route, /loadSearchV2CandidateDetail/);

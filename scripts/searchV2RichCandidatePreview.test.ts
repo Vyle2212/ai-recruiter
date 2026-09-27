@@ -285,7 +285,7 @@ for (const expected of [
   "Education",
   "View all experience",
   "View all projects",
-  "Open profile",
+  "View Profile",
 ])
   assert.match(markup, new RegExp(expected));
 assert.doesNotMatch(markup, /Company not provided|Evidence confidence/);
