@@ -603,6 +603,7 @@ async function ensureSearchReadiness(
   if (
     !response.ok &&
     payload.error?.code !== "SEARCH_INDEX_WARMING" &&
+    payload.error?.code !== "SEARCH_INDEX_EMPTY" &&
     payload.status !== "failed"
   )
     throw new Error("SAP Talent Hub readiness could not be checked.");
