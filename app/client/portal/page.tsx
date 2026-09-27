@@ -15,9 +15,12 @@ const featureLabels: Record<string, string> = {
 };
 const card = "rounded-2xl border border-slate-800 bg-[#0B0F16] p-5";
 
-export default async function ClientPortalPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
-  const requestedPage = (await searchParams).page || "1";
+export default async function ClientPortalPage({ searchParams }: { searchParams: Promise<{ page?: string; jobsPage?: string }> }) {
+  const params = await searchParams;
+  const requestedPage = params.page || "1";
   const page = /^[1-9]\d{0,5}$/.test(requestedPage) ? Math.min(Number(requestedPage), 100000) : 1;
+  const requestedJobsPage = params.jobsPage || "1";
+  const jobsPage = /^[1-9]\d{0,5}$/.test(requestedJobsPage) ? Math.min(Number(requestedJobsPage), 100000) : 1;
   const auth = await createClient();
   const { data: user, error: authError } = await auth.auth.getUser();
   if (authError || !user.user) redirect("/auth/login?next=%2Fclient%2Fportal");
@@ -54,33 +57,47 @@ export default async function ClientPortalPage({ searchParams }: { searchParams:
   const recruiterSupport = features.some(item => item.feature === "recruiter_support");
   let sharing: React.ReactNode = null;
   if (available && recruiterSupport) {
-    const [access, assignments] = await Promise.all([
+    const [access, ownedJobs, assignments] = await Promise.all([
       db.from("client_candidate_access").select("candidate_id")
         .eq("client_id", profile.client_id).eq("status", "active")
         .order("created_at", { ascending: false }).order("candidate_id", { ascending: true })
         .range((page - 1) * 20, page * 20 - 1),
+      db.from("client_job_ownership").select("job_id")
+        .eq("client_id", profile.client_id).eq("status", "active")
+        .order("created_at", { ascending: false }).order("job_id", { ascending: true })
+        .range((jobsPage - 1) * 20, jobsPage * 20 - 1),
       db.from("client_recruiter_assignments").select("recruiter_profile_id")
         .eq("client_id", profile.client_id).eq("status", "active").limit(50),
     ]);
-    if (access.error || assignments.error) {
+    if (access.error || ownedJobs.error || assignments.error) {
       sharing = <p className="text-amber-200">Recruiter sharing is temporarily unavailable.</p>;
     } else {
       const candidateIds = (access.data || []).map(row => row.candidate_id);
+      const jobIds = (ownedJobs.data || []).map(row => row.job_id);
       const recruiterIds = (assignments.data || []).map(row => row.recruiter_profile_id);
-      const [candidateRows, recruiterRows, shareRows] = await Promise.all([
+      const [candidateRows, jobRows, recruiterRows, shareRows, jobShareRows] = await Promise.all([
         candidateIds.length ? db.from("candidates").select("id,name,current_title").in("id", candidateIds) : Promise.resolve({ data: [], error: null }),
+        jobIds.length ? db.from("jobs").select("id,title,company").in("id", jobIds) : Promise.resolve({ data: [], error: null }),
         recruiterIds.length ? db.from("user_profiles").select("id,full_name,email,role,status").in("id", recruiterIds).eq("role", "recruiter").eq("status", "active") : Promise.resolve({ data: [], error: null }),
         candidateIds.length ? db.from("client_candidate_shares").select("candidate_id,recruiter_profile_id,status")
           .eq("client_id", profile.client_id).in("candidate_id", candidateIds) : Promise.resolve({ data: [], error: null }),
+        jobIds.length ? db.from("client_job_shares").select("job_id,recruiter_profile_id,status")
+          .eq("client_id", profile.client_id).in("job_id", jobIds) : Promise.resolve({ data: [], error: null }),
       ]);
-      sharing = candidateRows.error || recruiterRows.error || shareRows.error
+      sharing = candidateRows.error || jobRows.error || recruiterRows.error || shareRows.error || jobShareRows.error
         ? <p className="text-amber-200">Recruiter sharing is temporarily unavailable.</p>
         : <ClientRecruiterSharing
             candidates={(candidateRows.data || []).map(row => ({ id: row.id, name: row.name || "Candidate", title: row.current_title || "" }))}
+            jobs={(jobRows.data || []).map(row => ({ id: row.id, name: row.title || "Job", title: row.company || "" }))}
             recruiters={(recruiterRows.data || []).map(row => ({ id: row.id, name: row.full_name || row.email || "Recruiter" }))}
-            shares={(shareRows.data || []).filter(row => row.status === "active").map(row => ({ candidateId: row.candidate_id, recruiterId: row.recruiter_profile_id }))}
+            shares={[
+              ...(shareRows.data || []).filter(row => row.status === "active").map(row => ({ kind: "candidate" as const, resourceId: row.candidate_id, recruiterId: row.recruiter_profile_id })),
+              ...(jobShareRows.data || []).filter(row => row.status === "active").map(row => ({ kind: "job" as const, resourceId: row.job_id, recruiterId: row.recruiter_profile_id })),
+            ]}
             totalCandidates={candidates.count || 0}
+            totalJobs={jobs.count || 0}
             page={page}
+            jobsPage={jobsPage}
           />;
     }
   }
@@ -98,7 +115,7 @@ export default async function ClientPortalPage({ searchParams }: { searchParams:
         <p className="mt-4 text-sm text-slate-500">A listed entitlement does not grant access to a feature until its workspace is released.</p>
       </section>
       <section className={card}><h2 className="text-xl font-semibold">Your workspace</h2><p className="mt-3 text-slate-400">{available && (candidates.count || 0) === 0 && (jobs.count || 0) === 0 ? "No candidates or jobs have been assigned to your account yet." : "Only candidates and jobs explicitly assigned to your client account can appear here."}</p><p className="mt-3 text-sm text-slate-500">Search, Shortlist, Compare Pack, feedback and recruiter sharing will appear here as each authenticated flow passes acceptance testing.</p></section>
-      {recruiterSupport && <section className={card}><h2 className="text-xl font-semibold">Share candidates with your recruiter</h2><p className="mt-2 text-sm text-slate-400">Only candidates visible to your account can be shared with an assigned recruiter. Opening an original CV requires separate admin approval.</p><div className="mt-5">{sharing}</div></section>}
+      {recruiterSupport && <section className={card}><h2 className="text-xl font-semibold">Work with your assigned recruiter</h2><p className="mt-2 text-sm text-slate-400">Share candidates visible to your account and jobs owned by your client account. Opening an original CV requires separate admin approval.</p><div className="mt-5">{sharing}</div></section>}
     </div>
   </main>;
 }
