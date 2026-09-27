@@ -29,6 +29,10 @@ assert.match(patch, /revoke all on schema private from public;/);
 assert.match(patch, /grant usage on schema private to authenticated;/);
 assert.match(
   patch,
+  /alter default privileges for role postgres\s+revoke execute on functions from public;/,
+);
+assert.match(
+  patch,
   /alter default privileges for role postgres in schema private\s+revoke execute on functions from public, anon, authenticated, service_role;/,
 );
 
@@ -57,6 +61,7 @@ assert.match(
   patch,
   /staging_private_helpers_default_privilege_postcondition_failed/,
 );
+assert.match(patch, /v_global_public_default_execute <> 0/);
 assert.ok(
   patch.indexOf("do $postcondition$") < patch.lastIndexOf("commit;"),
   "postconditions must pass before the migration commits",
@@ -93,6 +98,7 @@ assert.match(
   readback,
   /staging_private_helpers_default_privilege_readback_failed/,
 );
+assert.match(readback, /v_global_public_default_execute <> 0/);
 assert.match(
   readback,
   /pg_get_functiondef\('public\.guard_user_profile_protected_columns\(\)'::regprocedure\)/,

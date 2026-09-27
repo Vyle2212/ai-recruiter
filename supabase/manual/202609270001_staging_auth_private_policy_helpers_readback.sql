@@ -13,6 +13,7 @@ declare
   v_private_using_refs integer;
   v_private_check_refs integer;
   v_private_default_execute integer;
+  v_global_public_default_execute integer;
   v_guard_definition text;
 begin
   select count(*) into v_private_helpers
@@ -68,13 +69,23 @@ begin
       'service_role'::regrole
     );
 
+  select count(*) into v_global_public_default_execute
+  from pg_default_acl d
+  cross join lateral aclexplode(d.defaclacl) acl
+  where d.defaclrole = 'postgres'::regrole
+    and d.defaclnamespace = 0
+    and d.defaclobjtype = 'f'
+    and acl.privilege_type = 'EXECUTE'
+    and acl.grantee = 0;
+
   if not exists (
        select 1
        from pg_default_acl d
        where d.defaclrole = 'postgres'::regrole
-         and d.defaclnamespace = 'private'::regnamespace
+         and d.defaclnamespace = 0
          and d.defaclobjtype = 'f'
      )
+     or v_global_public_default_execute <> 0
      or v_private_default_execute <> 0 then
     raise exception using errcode = 'P0001', message = 'staging_private_helpers_default_privilege_readback_failed';
   end if;

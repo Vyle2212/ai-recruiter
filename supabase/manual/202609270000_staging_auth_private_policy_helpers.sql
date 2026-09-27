@@ -60,6 +60,10 @@ revoke all on schema private from authenticated;
 revoke all on schema private from service_role;
 grant usage on schema private to authenticated;
 
+-- PostgreSQL's built-in PUBLIC EXECUTE default is global. A schema-scoped
+-- REVOKE alone cannot subtract it from future functions.
+alter default privileges for role postgres
+revoke execute on functions from public;
 alter default privileges for role postgres in schema private
 revoke execute on functions from public, anon, authenticated, service_role;
 
@@ -354,6 +358,7 @@ declare
   v_private_using_refs integer;
   v_private_check_refs integer;
   v_private_default_execute integer;
+  v_global_public_default_execute integer;
   v_guard_definition text;
 begin
   select count(*) into v_private_helpers
@@ -409,13 +414,23 @@ begin
       'service_role'::regrole
     );
 
+  select count(*) into v_global_public_default_execute
+  from pg_default_acl d
+  cross join lateral aclexplode(d.defaclacl) acl
+  where d.defaclrole = 'postgres'::regrole
+    and d.defaclnamespace = 0
+    and d.defaclobjtype = 'f'
+    and acl.privilege_type = 'EXECUTE'
+    and acl.grantee = 0;
+
   if not exists (
        select 1
        from pg_default_acl d
        where d.defaclrole = 'postgres'::regrole
-         and d.defaclnamespace = 'private'::regnamespace
+         and d.defaclnamespace = 0
          and d.defaclobjtype = 'f'
      )
+     or v_global_public_default_execute <> 0
      or v_private_default_execute <> 0 then
     raise exception using errcode = 'P0001', message = 'staging_private_helpers_default_privilege_postcondition_failed';
   end if;
