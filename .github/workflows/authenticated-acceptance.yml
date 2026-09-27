@@ -78,6 +78,7 @@ jobs:
           node --import tsx scripts/authenticatedAcceptanceSyntheticPreflight.test.ts
           node --import tsx scripts/authenticatedAcceptanceFixtureLease.test.ts
           node --import tsx scripts/authenticatedAcceptanceHarness.test.ts
+          node --import tsx scripts/candidateUploadLifecycleAcceptance.test.ts
           node --import tsx scripts/searchV2CandidateDetailCachePrivacy.test.ts
       - name: Create run-owned acceptance metadata
         shell: bash

@@ -214,6 +214,7 @@ jobs:
           node --import tsx scripts/productionAuthFoundation.test.ts
           node --import tsx scripts/candidateProfileLifecycleBatch.test.ts
           node --import tsx scripts/candidateCvIngestionParity.test.ts
+          node --import tsx scripts/candidateUploadLifecycleAcceptance.test.ts
           node --import tsx scripts/offlineCvParserAudit.test.ts
           node --import tsx scripts/legacyCvUploadBoundary.test.ts
           node --import tsx scripts/candidateOwnedCvUpdate.test.ts
