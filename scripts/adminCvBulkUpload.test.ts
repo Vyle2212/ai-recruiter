@@ -230,6 +230,17 @@ assert.equal(
 );
 assert.equal(
   classifyAdminCvUploadResult({
+    ok: true,
+    ingestionAction: "create_new",
+    extractionCoverage: { status: "complete_for_validation" },
+    reviewRequired: true,
+    recordType: "SAP_CV_INCOMPLETE_REVIEW",
+  }),
+  "incomplete_review",
+  "parser-quality and OCR review must not be displayed as a clean creation",
+);
+assert.equal(
+  classifyAdminCvUploadResult({
     ingestionAction: "hold_for_identity_review",
   }),
   "identity_review",
