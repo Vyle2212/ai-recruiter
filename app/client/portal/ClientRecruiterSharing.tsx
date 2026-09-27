@@ -7,11 +7,12 @@ type Candidate = { id: string; name: string; title: string };
 type Recruiter = { id: string; name: string };
 type Share = { candidateId: string; recruiterId: string };
 
-export default function ClientRecruiterSharing({ candidates, recruiters, shares, totalCandidates }: {
+export default function ClientRecruiterSharing({ candidates, recruiters, shares, totalCandidates, page }: {
   candidates: Candidate[];
   recruiters: Recruiter[];
   shares: Share[];
   totalCandidates: number;
+  page: number;
 }) {
   const router = useRouter();
   const [recruiterId, setRecruiterId] = useState(recruiters[0]?.id || "");
@@ -60,6 +61,10 @@ export default function ClientRecruiterSharing({ candidates, recruiters, shares,
         </button>
       </div>;
     })}
-    {totalCandidates > 20 && <p className="text-sm text-slate-400">Showing the 20 most recently assigned candidates. More candidates require pagination.</p>}
+    {totalCandidates > 20 && <nav aria-label="Candidate pages" className="flex items-center gap-4 text-sm">
+      {page > 1 && <a className="text-cyan-200 underline" href={`/client/portal?page=${page - 1}`}>Previous</a>}
+      <span className="text-slate-400">Page {page} of {Math.ceil(totalCandidates / 20)}</span>
+      {page * 20 < totalCandidates && <a className="text-cyan-200 underline" href={`/client/portal?page=${page + 1}`}>Next</a>}
+    </nav>}
   </div>;
 }
