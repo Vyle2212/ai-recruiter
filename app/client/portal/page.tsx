@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
+import ClientRecruiterSharing from "./ClientRecruiterSharing";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,37 @@ export default async function ClientPortalPage() {
     (!item.valid_until || (Number.isFinite(Date.parse(String(item.valid_until))) && Date.parse(String(item.valid_until)) > now))
   ) : [];
   const plan = features[0]?.plan_code || "No active plan";
+  const recruiterSupport = features.some(item => item.feature === "recruiter_support");
+  let sharing: React.ReactNode = null;
+  if (available && recruiterSupport) {
+    const [access, assignments] = await Promise.all([
+      db.from("client_candidate_access").select("candidate_id")
+        .eq("client_id", profile.client_id).eq("status", "active")
+        .order("created_at", { ascending: false }).limit(20),
+      db.from("client_recruiter_assignments").select("recruiter_profile_id")
+        .eq("client_id", profile.client_id).eq("status", "active").limit(50),
+    ]);
+    if (access.error || assignments.error) {
+      sharing = <p className="text-amber-200">Recruiter sharing is temporarily unavailable.</p>;
+    } else {
+      const candidateIds = (access.data || []).map(row => row.candidate_id);
+      const recruiterIds = (assignments.data || []).map(row => row.recruiter_profile_id);
+      const [candidateRows, recruiterRows, shareRows] = await Promise.all([
+        candidateIds.length ? db.from("candidates").select("id,name,current_title").in("id", candidateIds) : Promise.resolve({ data: [], error: null }),
+        recruiterIds.length ? db.from("user_profiles").select("id,full_name,email,role,status").in("id", recruiterIds).eq("role", "recruiter").eq("status", "active") : Promise.resolve({ data: [], error: null }),
+        candidateIds.length ? db.from("client_candidate_shares").select("candidate_id,recruiter_profile_id,status")
+          .eq("client_id", profile.client_id).in("candidate_id", candidateIds) : Promise.resolve({ data: [], error: null }),
+      ]);
+      sharing = candidateRows.error || recruiterRows.error || shareRows.error
+        ? <p className="text-amber-200">Recruiter sharing is temporarily unavailable.</p>
+        : <ClientRecruiterSharing
+            candidates={(candidateRows.data || []).map(row => ({ id: row.id, name: row.name || "Candidate", title: row.current_title || "" }))}
+            recruiters={(recruiterRows.data || []).map(row => ({ id: row.id, name: row.full_name || row.email || "Recruiter" }))}
+            shares={(shareRows.data || []).filter(row => row.status === "active").map(row => ({ candidateId: row.candidate_id, recruiterId: row.recruiter_profile_id }))}
+            totalCandidates={candidates.count || 0}
+          />;
+    }
+  }
 
   return <main className="min-h-screen bg-[#05070A] text-slate-100">
     <header className="border-b border-slate-800 bg-[#070A0F] px-6 py-10"><div className="mx-auto max-w-7xl"><p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">Client workspace</p><h1 className="mt-3 text-4xl font-semibold">Client Portal</h1><p className="mt-2 text-slate-400">Your jobs, candidate access and subscription features.</p></div></header>
@@ -62,6 +94,7 @@ export default async function ClientPortalPage() {
         <p className="mt-4 text-sm text-slate-500">A listed entitlement does not grant access to a feature until its workspace is released.</p>
       </section>
       <section className={card}><h2 className="text-xl font-semibold">Your workspace</h2><p className="mt-3 text-slate-400">{available && (candidates.count || 0) === 0 && (jobs.count || 0) === 0 ? "No candidates or jobs have been assigned to your account yet." : "Only candidates and jobs explicitly assigned to your client account can appear here."}</p><p className="mt-3 text-sm text-slate-500">Search, Shortlist, Compare Pack, feedback and recruiter sharing will appear here as each authenticated flow passes acceptance testing.</p></section>
+      {recruiterSupport && <section className={card}><h2 className="text-xl font-semibold">Share candidates with your recruiter</h2><p className="mt-2 text-sm text-slate-400">Only candidates visible to your account can be shared with an assigned recruiter. Opening an original CV requires separate admin approval.</p><div className="mt-5">{sharing}</div></section>}
     </div>
   </main>;
 }
