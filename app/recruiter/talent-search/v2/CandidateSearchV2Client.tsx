@@ -1966,6 +1966,19 @@ export default function CandidateSearchV2Client({
   const selectedDrawerCandidate =
     results.find((result) => result.candidateId === expandedCandidateId) ||
     null;
+  useEffect(() => {
+    if (!committedSnapshot || loading) return;
+    const params = new URLSearchParams(window.location.search);
+    const target = params.get("focusCandidateId");
+    if (!target) return;
+    // A name search can return several people; never open a different profile.
+    if (results.some((result) => result.candidateId === target)) {
+      setDrawerInitialTab("Overview");
+      setExpandedCandidateId(target);
+      params.delete("focusCandidateId");
+      window.history.replaceState(null, "", `${window.location.pathname}${params.size ? `?${params}` : ""}${window.location.hash}`);
+    }
+  }, [committedSnapshot, loading, results]);
   const showingPreviousResults = Boolean(
     committedSnapshot &&
       (searchEditorOpen ||
