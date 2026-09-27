@@ -85,6 +85,43 @@ async function main() {
     admin.candidatePayload.project_history[0].role,
     "SAP MM Consultant",
   );
+  const repeatedProjectIdentity = enrichCandidateUpload(
+    {
+      name: "Jane Doe",
+      projects: [
+        {
+          name: "Synthetic rollout",
+          client: "Synthetic Manufacturing",
+          role: "SAP MM Consultant",
+          start_date: "",
+          end_date: "",
+        },
+      ],
+    },
+    `SAP MM Consultant
+PROJECT EXPERIENCE
+Project: Synthetic rollout
+Client: Synthetic Manufacturing
+Role: SAP MM Consultant
+Project: Synthetic rollout
+Client: Synthetic Manufacturing
+Role: SAP MM Consultant
+Duration: Jan 2022 - Dec 2023`,
+  );
+  const repeatedProjects =
+    repeatedProjectIdentity.project_history.filter(isValidProjectEntry);
+  assert.equal(
+    repeatedProjects.length,
+    2,
+    "same labels on separate project cards cannot lend dates to an undated assignment",
+  );
+  assert.ok(
+    repeatedProjects.some(
+      (project: Record<string, unknown>) =>
+        !project.start_date && !project.end_date,
+    ),
+    "the separate undated source assertion must remain review evidence",
+  );
   const undatedProjectSource = source.replace(
     /PROJECT EXPERIENCE[\s\S]*?EDUCATION/,
     `PROJECT EXPERIENCE

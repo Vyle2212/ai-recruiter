@@ -6,6 +6,7 @@ import {
   PROJECT_CURRENT_TOKEN_PATTERN,
   PROJECT_DATE_TOKEN_PATTERN,
   projectDateIsCurrent,
+  projectDateRange,
 } from "./projectDateEvidence";
 
 const clean = (value: unknown) =>
@@ -16,9 +17,102 @@ const clean = (value: unknown) =>
 const unique = (values: unknown[]) =>
   Array.from(new Set(values.map(clean).filter(Boolean)));
 
+const projectKey = (value: unknown) =>
+  clean(value)
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+
+/** A dated reader may refine an undated row only when the source has one
+ * matching named card and that same bounded card owns the client, role and
+ * dates. Repeated assignments with the same labels remain separate review
+ * evidence instead of borrowing dates across cards. */
+function uniqueBoundedProjectDateEvidence(
+  rawText: string,
+  row: Record<string, unknown>,
+) {
+  const name = projectKey(row.name);
+  const client = projectKey(row.client);
+  const role = projectKey(row.role);
+  const start = careerMonthIndex(row.start_date);
+  const end = careerMonthIndex(
+    row.end_date,
+    projectDateIsCurrent(row.end_date),
+  );
+  if (!name || !role || start === null || end === null) return false;
+  const lines = rawText
+    .normalize("NFKC")
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.trim());
+  const anchors = lines.flatMap((line, index) => {
+    const match = line.match(/^Project(?:\s+(?:Name|Title))?\s*:\s*(\S.*)$/i);
+    if (!match) return [];
+    const inlineDates = projectDateRange(match[1]);
+    const labelledName =
+      inlineDates && (inlineDates.index ?? -1) >= 5
+        ? match[1]
+            .slice(0, inlineDates.index)
+            .replace(/[,;\s-]+$/, "")
+            .trim()
+        : match[1];
+    return projectKey(labelledName) === name ? [index] : [];
+  });
+  if (anchors.length !== 1) return false;
+  const anchor = anchors[0];
+  let endIndex = Math.min(lines.length, anchor + 40);
+  let clientLabels = 0;
+  let characters = 0;
+  for (let index = anchor + 1; index < endIndex; index++) {
+    characters += lines[index].length + 1;
+    if (characters > 2400) {
+      endIndex = index;
+      break;
+    }
+    if (
+      /^Project(?:\s+(?:Name|Title))?\s*:/i.test(lines[index]) ||
+      /^(?:EMPLOYMENT|WORK EXPERIENCE|EDUCATION|CERTIFICATIONS?|REFERENCES)\s*$/i.test(
+        lines[index],
+      )
+    ) {
+      endIndex = index;
+      break;
+    }
+    if (/^(?:Client|Customer)\s*:\s*\S/i.test(lines[index])) {
+      clientLabels++;
+      if (clientLabels > 1) {
+        endIndex = index;
+        break;
+      }
+    }
+  }
+  const block = lines.slice(anchor, endIndex);
+  const ownsRole = block.some((line) => {
+    const match = line.match(/^(?:Project\s+)?Role\s*:\s*(\S.*)$/i);
+    return Boolean(match && projectKey(match[1]) === role);
+  });
+  const ownsClient =
+    !client ||
+    block.some((line) => {
+      const match = line.match(/^(?:Client|Customer)\s*:\s*(\S.*)$/i);
+      return Boolean(match && projectKey(match[1]) === client);
+    });
+  const ownsDates = block.some((line) => {
+    const range = projectDateRange(line);
+    return Boolean(
+      range &&
+        careerMonthIndex(range[1]) === start &&
+        careerMonthIndex(range[2], projectDateIsCurrent(range[2])) === end,
+    );
+  });
+  return ownsRole && ownsClient && ownsDates;
+}
+
 function mergeGroundedProjects(
   canonical: Array<Record<string, unknown>>,
   explicit: Array<Record<string, unknown>>,
+  rawText: string,
 ) {
   const exactUnique = (rows: Array<Record<string, unknown>>) => {
     const seen = new Set<string>();
@@ -32,12 +126,7 @@ function mergeGroundedProjects(
   const validCanonical = canonical.filter(isValidProjectEntry);
   if (!validCanonical.length) return exactUnique(explicit);
   const projects = [...canonical];
-  const key = (value: unknown) =>
-    clean(value)
-      .normalize("NFKC")
-      .toLowerCase()
-      .replace(/[^\p{L}\p{N}]+/gu, " ")
-      .trim();
+  const key = projectKey;
   const projectEndIsCurrent = (value: Record<string, unknown>) =>
     value.current === true || projectDateIsCurrent(value.end_date);
   const identity = (value: Record<string, unknown>) =>
@@ -47,22 +136,36 @@ function mergeGroundedProjects(
     careerMonthIndex(value.end_date, projectEndIsCurrent(value)) !== null;
   for (const row of explicit.filter(isValidProjectEntry)) {
     const sameIdentity = identity(row);
-    const matchingUndated = projects.filter((existing) =>
-      isValidProjectEntry(existing) &&
-      !clean(existing.start_date) && !clean(existing.end_date) &&
-      key(existing.name) && key(existing.client) && key(existing.role) &&
-      identity(existing) === sameIdentity,
+    const matchingUndated = projects.filter(
+      (existing) =>
+        isValidProjectEntry(existing) &&
+        !clean(existing.start_date) &&
+        !clean(existing.end_date) &&
+        key(existing.name) &&
+        key(existing.client) &&
+        key(existing.role) &&
+        identity(existing) === sameIdentity,
     );
-    const competingDated = projects.some((existing) =>
-      isValidProjectEntry(existing) && isDated(existing) &&
-      identity(existing) === sameIdentity,
+    const competingDated = projects.some(
+      (existing) =>
+        isValidProjectEntry(existing) &&
+        isDated(existing) &&
+        identity(existing) === sameIdentity,
     );
-    const competingExplicit = explicit.filter((other) =>
-      isValidProjectEntry(other) && isDated(other) &&
-      identity(other) === sameIdentity,
-    ).length > 1;
-    if (isDated(row) && matchingUndated.length === 1 &&
-        !competingDated && !competingExplicit) {
+    const competingExplicit =
+      explicit.filter(
+        (other) =>
+          isValidProjectEntry(other) &&
+          isDated(other) &&
+          identity(other) === sameIdentity,
+      ).length > 1;
+    if (
+      isDated(row) &&
+      matchingUndated.length === 1 &&
+      !competingDated &&
+      !competingExplicit &&
+      uniqueBoundedProjectDateEvidence(rawText, row)
+    ) {
       matchingUndated[0].start_date = row.start_date;
       matchingUndated[0].end_date = row.end_date;
       continue;
@@ -673,7 +776,11 @@ export function enrichCandidateUpload(
   // alone must not discard a distinct explicit project or a canonical one.
   // Match role, project/client and either the same period or both undated
   // records before deduplicating. Never copy employment dates to a project.
-  const projects = mergeGroundedProjects(canonicalProjects, explicitProjects);
+  const projects = mergeGroundedProjects(
+    canonicalProjects,
+    explicitProjects,
+    rawText,
+  );
   const education = explicitEducation.length
     ? explicitEducation
     : canonical.education || [];
