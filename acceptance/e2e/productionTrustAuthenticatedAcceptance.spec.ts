@@ -1,5 +1,5 @@
 import type { RecruiterCopilotAnswer } from "../../lib/recruiterCopilotAnswerEngine";
-import { test, expect } from "@playwright/test";
+import { test, expect, type APIResponse } from "@playwright/test";
 
 import {
   acceptanceRequired,
@@ -600,6 +600,39 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       await anonymous.dispose();
       await wrongRole.dispose();
       await client.dispose();
+    }
+  });
+
+  test("original CV read denies recruiter without admin approval", async ({}, testInfo) => {
+    const target = `/api/candidate360/${internalCandidateId}/resume`;
+    const deny = async (response: APIResponse, status: number) => {
+      expect(response.status()).toBe(status);
+      expect(response.headers()["cache-control"]).toContain("private");
+      expect(response.headers()["cache-control"]).toContain("no-store");
+      const body = await response.json();
+      expect(Object.keys(body)).toEqual(["error"]);
+      expect(body.error).toBeTruthy();
+    };
+    const anonymous = await anonymousAcceptanceApi();
+    const recruiter = await authenticatedApi("recruiter");
+    const client = await authenticatedApi("client");
+    const candidate = await authenticatedApi("candidate");
+    try {
+      await deny(await anonymous.get(target), 401);
+      await deny(await recruiter.get(target), 403);
+      await deny(await client.get(target), 403);
+      await deny(await candidate.get(target), 403);
+      await attachSanitized(testInfo, "original-cv-approval-boundary", {
+        anonymous: 401,
+        recruiterWithoutGrant: 403,
+        client: 403,
+        candidate: 403,
+      });
+    } finally {
+      await anonymous.dispose();
+      await recruiter.dispose();
+      await client.dispose();
+      await candidate.dispose();
     }
   });
 
