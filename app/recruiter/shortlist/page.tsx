@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { canonicalTalentSearchIdentity } from "@/lib/talentSearchDisplay";
 
 type Item = {
   candidateId: string;
@@ -144,14 +145,12 @@ export default function SearchShortlistPage() {
                 </p>
               </div>
               <div className="flex gap-3 text-sm">
-                {item.profile?.name ? (
-                  <Link
-                    href={`/recruiter/talent-search/v2?q=${encodeURIComponent(item.profile.name)}&focusCandidateId=${encodeURIComponent(item.candidateId)}${jobId ? `&jobId=${encodeURIComponent(jobId)}` : ""}`}
-                    className="rounded-lg border border-cyan-700 px-3 py-2 text-cyan-100"
-                  >
-                    Find in Search V2
-                  </Link>
-                ) : null}
+                <Link
+                  href={`/recruiter/talent-search/v2?q=${encodeURIComponent(canonicalTalentSearchIdentity(item.candidateId).identityToken)}&focusCandidateId=${encodeURIComponent(item.candidateId)}${jobId ? `&jobId=${encodeURIComponent(jobId)}` : ""}`}
+                  className="rounded-lg border border-cyan-700 px-3 py-2 text-cyan-100"
+                >
+                  Find in Search V2
+                </Link>
                 <button
                   type="button"
                   disabled={removing === item.candidateId}
