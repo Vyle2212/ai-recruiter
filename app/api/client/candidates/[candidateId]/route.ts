@@ -16,16 +16,13 @@ export async function GET(_request: Request, context: { params: Promise<{ candid
   if (authorization.denial || !authorization.clientId)
     return authorization.denial || reply({ error: "profile_not_available" }, 404);
   const db = createLazySupabaseServiceClient();
-  const { data: access, error: accessError } = await db.from("client_candidate_access")
-    .select("candidate_id").eq("client_id", authorization.clientId)
-    .eq("candidate_id", candidateId).eq("status", "active").limit(1);
-  if (accessError) return reply({ error: "profile_unavailable" }, 503);
-  if (!access?.length) return reply({ error: "profile_not_available" }, 404);
-
-  const { data, error } = await db.from("candidates")
-    .select("*").eq("id", candidateId).maybeSingle();
+  const { data: rows, error } = await db.rpc("client_candidate_detail", {
+    p_client_id: authorization.clientId,
+    p_candidate_id: candidateId,
+  });
   if (error) return reply({ error: "profile_unavailable" }, 503);
-  if (!data) return reply({ error: "candidate_not_found" }, 404);
+  const data = rows?.[0];
+  if (!data) return reply({ error: "profile_not_available" }, 404);
   try {
     const profile = normalizeActualCandidateSchema(data).enterpriseProfile;
     return reply({
