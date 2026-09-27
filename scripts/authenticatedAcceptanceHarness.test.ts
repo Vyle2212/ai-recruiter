@@ -98,7 +98,7 @@ async function main() {
     const names = [...source.matchAll(/test\("([^"\n]+)"/g)].map(
       (match) => match[1],
     );
-    assert.equal(names.length, 16);
+    assert.equal(names.length, 18);
     const specs = names.map((title) => ({
       title,
       tests: [
@@ -151,7 +151,7 @@ async function main() {
     specs[0].tests[0].results[0].status = "failed";
     writeFileSync(input, JSON.stringify({ suites: [{ suites: [{ specs }] }] }));
     assert.equal(execute().status, 1);
-    assert.equal(JSON.parse(readFileSync(output, "utf8")).testCount, 16);
+    assert.equal(JSON.parse(readFileSync(output, "utf8")).testCount, 18);
     writeFileSync(input, "{}");
     assert.equal(
       execute().status,

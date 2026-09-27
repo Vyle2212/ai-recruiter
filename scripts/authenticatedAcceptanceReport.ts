@@ -64,8 +64,8 @@ async function main() {
     passedNames.has(name),
   );
   const testsPassed =
-    tests.length === 16 &&
-    new Set(tests.map((test) => test.test)).size === 16 &&
+    tests.length === 18 &&
+    new Set(tests.map((test) => test.test)).size === 18 &&
     tests.every(
       (test) =>
         test.status === "passed" ||
