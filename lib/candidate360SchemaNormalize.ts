@@ -1189,6 +1189,12 @@ function projectsDescribeSameAssignment(
   right: EnterpriseProject,
 ) {
   if (left.id === right.id) return true;
+  const roleKinds = (value: string) =>
+    new Set((value.toLowerCase().match(/\b(?:consultant|developer|analyst|architect|engineer|lead|manager|specialist|tester|administrator)\b/g) || []));
+  const leftKinds = roleKinds(left.role);
+  const rightKinds = roleKinds(right.role);
+  if (leftKinds.size && rightKinds.size &&
+      ![...leftKinds].some((kind) => rightKinds.has(kind))) return false;
   const leftClient = inferredProjectClient(left);
   const rightClient = inferredProjectClient(right);
   const leftName = normalizedAssignmentAnchor(left.name);
