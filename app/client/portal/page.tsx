@@ -15,7 +15,9 @@ const featureLabels: Record<string, string> = {
 };
 const card = "rounded-2xl border border-slate-800 bg-[#0B0F16] p-5";
 
-export default async function ClientPortalPage() {
+export default async function ClientPortalPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+  const requestedPage = (await searchParams).page || "1";
+  const page = /^[1-9]\d{0,5}$/.test(requestedPage) ? Math.min(Number(requestedPage), 100000) : 1;
   const auth = await createClient();
   const { data: user, error: authError } = await auth.auth.getUser();
   if (authError || !user.user) redirect("/auth/login?next=%2Fclient%2Fportal");
@@ -55,7 +57,8 @@ export default async function ClientPortalPage() {
     const [access, assignments] = await Promise.all([
       db.from("client_candidate_access").select("candidate_id")
         .eq("client_id", profile.client_id).eq("status", "active")
-        .order("created_at", { ascending: false }).limit(20),
+        .order("created_at", { ascending: false }).order("candidate_id", { ascending: true })
+        .range((page - 1) * 20, page * 20 - 1),
       db.from("client_recruiter_assignments").select("recruiter_profile_id")
         .eq("client_id", profile.client_id).eq("status", "active").limit(50),
     ]);
@@ -77,6 +80,7 @@ export default async function ClientPortalPage() {
             recruiters={(recruiterRows.data || []).map(row => ({ id: row.id, name: row.full_name || row.email || "Recruiter" }))}
             shares={(shareRows.data || []).filter(row => row.status === "active").map(row => ({ candidateId: row.candidate_id, recruiterId: row.recruiter_profile_id }))}
             totalCandidates={candidates.count || 0}
+            page={page}
           />;
     }
   }
