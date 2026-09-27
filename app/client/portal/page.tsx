@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/utils/supabase/server";
 import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
 import ClientRecruiterSharing from "./ClientRecruiterSharing";
@@ -114,6 +115,8 @@ export default async function ClientPortalPage({ searchParams }: { searchParams:
         {features.length ? <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{features.map(item => <li className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-4 text-cyan-100" key={item.feature}>{featureLabels[item.feature] || item.feature}</li>)}</ul> : <p className="mt-3 text-slate-400">No active feature entitlement is available for this workspace.</p>}
         <p className="mt-4 text-sm text-slate-500">A listed entitlement does not grant access to a feature until its workspace is released.</p>
       </section>
+      {process.env.CLIENT_CANDIDATE_LOOKUP_ENABLED === "true" && available && features.some(item => item.feature === "unlimited_search") &&
+        <section className={card}><h2 className="text-xl font-semibold">Find assigned candidates</h2><p className="mt-2 text-slate-400">Search the candidates currently granted to your client account by name, title or company.</p><Link href="/client/candidate-search" className="mt-4 inline-block rounded-lg bg-cyan-700 px-5 py-3 font-medium">Open candidate lookup</Link></section>}
       <section className={card}><h2 className="text-xl font-semibold">Your workspace</h2><p className="mt-3 text-slate-400">{available && (candidates.count || 0) === 0 && (jobs.count || 0) === 0 ? "No candidates or jobs have been assigned to your account yet." : "Only candidates and jobs explicitly assigned to your client account can appear here."}</p><p className="mt-3 text-sm text-slate-500">Search, Shortlist, Compare Pack, feedback and recruiter sharing will appear here as each authenticated flow passes acceptance testing.</p></section>
       {recruiterSupport && <section className={card}><h2 className="text-xl font-semibold">Work with your assigned recruiter</h2><p className="mt-2 text-sm text-slate-400">Share candidates visible to your account and jobs owned by your client account. Opening an original CV requires separate admin approval.</p><div className="mt-5">{sharing}</div></section>}
     </div>
