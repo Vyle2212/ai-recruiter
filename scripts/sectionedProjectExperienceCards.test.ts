@@ -128,10 +128,18 @@ assert.deepEqual(
   ["Buyer Manufacturing Ltd", "", ""],
   "the employer's date range must not be copied into an undated client project",
 );
-const undatedProfile = normalizeActualCandidateSchema({raw_text: undatedCv}).enterpriseProfile;
-assert.ok(undatedProfile.projects.some((project) =>
-  project.client === "Buyer Manufacturing Ltd" && !project.start && !project.end && !project.employer,
-));
+const undatedProfile = normalizeActualCandidateSchema({
+  raw_text: undatedCv,
+}).enterpriseProfile;
+assert.ok(
+  undatedProfile.projects.some(
+    (project) =>
+      project.client === "Buyer Manufacturing Ltd" &&
+      !project.start &&
+      !project.end &&
+      !project.employer,
+  ),
+);
 console.log(
   "Sectioned project cards keep clients and project dates separate from employment: PASS",
 );

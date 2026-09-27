@@ -122,39 +122,77 @@ export function sectionedProjectExperienceCards(source: string) {
     if (!/^Position\s*:\s*\S/i.test(line.trim())) return [];
     const client = section[index - 1]?.trim() || "";
     if (
-      client.length < 5 || client.length > 120 ||
+      client.length < 5 ||
+      client.length > 120 ||
       /[.:;]$/.test(client) ||
-      /^(?:Position|Project Description|Responsibilities|Environment|System|Platform)\s*:/i.test(client) ||
+      /^(?:Position|Project Description|Responsibilities|Environment|System|Platform)\s*:/i.test(
+        client,
+      ) ||
       /^[•●▪*-]/.test(client) ||
       projectDateRange(client)
-    ) return [];
+    )
+      return [];
     const block = section.slice(index).map((item) => item.trim());
-    const description = block.findIndex((item) => /^Project Description\s*:\s*\S/i.test(item));
-    const duties = block.findIndex((item) => /^Responsibilities\s*:\s*$/i.test(item));
-    const environment = block.findIndex((item) => /^Environment\s*:\s*\S/i.test(item));
-    if (description < 1 || description > 3 || duties <= description || duties > description + 5 || environment <= duties || environment > duties + 18) return [];
-    const role = block[0].replace(/^Position\s*:\s*/i, "").trim();
-    const name = [block[description].replace(/^Project Description\s*:\s*/i, ""), ...block.slice(description + 1, duties).filter(Boolean)].join(" ");
+    const description = block.findIndex((item) =>
+      /^Project Description\s*:\s*\S/i.test(item),
+    );
+    const duties = block.findIndex((item) =>
+      /^Responsibilities\s*:\s*$/i.test(item),
+    );
+    const environment = block.findIndex((item) =>
+      /^Environment\s*:\s*\S/i.test(item),
+    );
     if (
-      role.length > 100 || name.length < 12 || name.length > 350 ||
-      !/\b(?:consultant|developer|analyst|architect|engineer|lead|manager|specialist|tester)\b/i.test(role) ||
-      !/\b(?:project|implementation|rollout|roll-out|upgrade|support|ams|migration|testing)\b/i.test(name) ||
+      description < 1 ||
+      description > 3 ||
+      duties <= description ||
+      duties > description + 5 ||
+      environment <= duties ||
+      environment > duties + 18
+    )
+      return [];
+    const role = block[0].replace(/^Position\s*:\s*/i, "").trim();
+    const name = [
+      block[description].replace(/^Project Description\s*:\s*/i, ""),
+      ...block.slice(description + 1, duties).filter(Boolean),
+    ].join(" ");
+    if (
+      role.length > 100 ||
+      name.length < 12 ||
+      name.length > 350 ||
+      !/\b(?:consultant|developer|analyst|architect|engineer|lead|manager|specialist|tester)\b/i.test(
+        role,
+      ) ||
+      !/\b(?:project|implementation|rollout|roll-out|upgrade|support|ams|migration|testing)\b/i.test(
+        name,
+      ) ||
       block.slice(0, environment + 1).some((item) => {
         const dates = projectDateRange(item);
-        return dates && dates.index === 0 && dates[0].trim().length === item.length;
+        return (
+          dates && dates.index === 0 && dates[0].trim().length === item.length
+        );
       })
-    ) return [];
+    )
+      return [];
     const responsibilities: string[] = [];
     for (const item of block.slice(duties + 1, environment)) {
-      if (/^[•●▪*-]\s*\S/.test(item)) responsibilities.push(item.replace(/^[•●▪*-]\s*/, ""));
-      else if (item && responsibilities.length) responsibilities[responsibilities.length - 1] += ` ${item}`;
+      if (/^[•●▪*-]\s*\S/.test(item))
+        responsibilities.push(item.replace(/^[•●▪*-]\s*/, ""));
+      else if (item && responsibilities.length)
+        responsibilities[responsibilities.length - 1] += ` ${item}`;
     }
-    return [{
-      name, client, role, start: "", end: "",
-      environment: block[environment].replace(/^Environment\s*:\s*/i, ""),
-      responsibilities: responsibilities.slice(0, 8),
-      excerpt: [client, ...block.slice(0, environment + 1)].join(" "),
-    }];
+    return [
+      {
+        name,
+        client,
+        role,
+        start: "",
+        end: "",
+        environment: block[environment].replace(/^Environment\s*:\s*/i, ""),
+        responsibilities: responsibilities.slice(0, 8),
+        excerpt: [client, ...block.slice(0, environment + 1)].join(" "),
+      },
+    ];
   });
   return [...dated, ...undated];
 }
