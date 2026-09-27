@@ -45,6 +45,7 @@ export type AdminCvCheckpoint = {
 export type AdminCvUploadResultLike = {
   ok?: unknown;
   rejected?: unknown;
+  reviewRequired?: unknown;
   recordType?: unknown;
   errorCode?: unknown;
   ingestionAction?: unknown;
@@ -143,7 +144,12 @@ export function classifyAdminCvUploadResult(
 
   if (action === "already_processed") return "already_processed";
   if (action === "hold_for_identity_review") return "identity_review";
-  if (result.ok === true && coverage === "incomplete_needs_review")
+  if (
+    result.ok === true &&
+    (coverage === "incomplete_needs_review" ||
+      result.reviewRequired === true ||
+      recordType === "SAP_CV_INCOMPLETE_REVIEW")
+  )
     return "incomplete_review";
   if (result.ok === true && action === "update_existing") return "updated";
   if (result.ok === true && action === "create_new") return "created";
