@@ -51,9 +51,7 @@ export function missingOptionalLifecycleColumn(
 /** Retry only absent migration-owned lifecycle fields; preserve all other errors. */
 export async function selectCandidateLifecycleCompatible<T>(
   columns: string,
-  run: (
-    columns: string,
-  ) => PromiseLike<{
+  run: (columns: string) => PromiseLike<{
     data: T | null;
     error: { code?: string; message?: string } | null;
   }>,
