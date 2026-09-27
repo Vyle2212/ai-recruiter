@@ -107,7 +107,7 @@ export default function AdminTaxonomyPage() {
             Maintain SAP modules, submodules, aliases, consulting firms, local partners, and end-client company references without hardcoding search UI.
           </p>
         </div>
-        <a href="/search" className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-bold text-sky-100 hover:border-cyan-500">
+        <a href="/recruiter/talent-search/v2" className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-bold text-sky-100 hover:border-cyan-500">
           Back to Search
         </a>
       </div>

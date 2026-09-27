@@ -62,9 +62,9 @@ export default function JobDetailsPage() {
         </p>
       </div>
 
-      <a href={`/matches/${jobId}`}>
+      <a href="/recruiter/talent-search/v2">
         <button className="bg-blue-500 px-5 py-3 rounded-xl">
-          View AI Matches
+          Search Candidates
         </button>
       </a>
     </main>

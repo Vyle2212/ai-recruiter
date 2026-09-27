@@ -629,7 +629,7 @@ export default function AiExtractionReviewPage() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <span className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-amber-100">Dry-run only</span>
-            <Link href="/search" className="rounded-md border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-200 hover:border-cyan-500 hover:text-cyan-100">Talent Search</Link>
+            <Link href="/recruiter/talent-search/v2" className="rounded-md border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-200 hover:border-cyan-500 hover:text-cyan-100">Talent Search</Link>
             <Link href="/validation-queue" className="rounded-md border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-200 hover:border-cyan-500 hover:text-cyan-100">Validation Queue</Link>
           </div>
         </div>

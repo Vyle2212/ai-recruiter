@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { StagingRuntimeSignOutButton } from "../auth/staging/runtime/StagingRuntimeSignOutButton";
 
-const PRIMARY_RECRUITER_NAV=[["Dashboard","/recruiter/dashboard"],["Jobs","/recruiter/jobs"],["Search","/recruiter/talent-search"],["Shortlist","/recruiter/smart-shortlist"],["Compare","/recruiter/compare"],["Submissions","/recruiter/submission-generator"],["Reports","/recruiter/client-report"]] as const;
+const PRIMARY_RECRUITER_NAV=[["Dashboard","/recruiter/dashboard"],["Jobs","/recruiter/jobs"],["Search","/recruiter/talent-search/v2"],["Shortlist","/recruiter/smart-shortlist"],["Compare","/recruiter/compare"],["Submissions","/recruiter/submission-generator"],["Reports","/recruiter/client-report"]] as const;
 const ADMIN_DATA_NAV=[["Data Import","/recruiter/import-staging"],["Merge Review","/recruiter/import-merge"],["Data Workflow","/recruiter/workflow"],["Product Health","/recruiter/dashboard#product-health"]] as const;
 
 export default function RecruiterLayout({children}:{children:React.ReactNode}){

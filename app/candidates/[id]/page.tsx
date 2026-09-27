@@ -24,7 +24,7 @@ function safeParam(value: string | string[] | undefined, fallback = "") {
   return value || fallback;
 }
 
-function safeInternalHref(value: string, fallback = "/search") {
+function safeInternalHref(value: string, fallback = "/recruiter/talent-search/v2") {
   const text = String(value || "").trim();
   if (!text) return fallback;
   if (/^https?:\/\//i.test(text)) {
@@ -814,8 +814,8 @@ export default async function Candidate360Page({
   const { id } = await params;
   const sp = searchParams ? await searchParams : {};
   const decodedId = decodeURIComponent(id);
-  const returnTo = safeInternalHref(safeParam(sp.returnTo, ""), "/search");
-  const backLabel = returnTo.startsWith("/compare") ? "Back to Compare" : returnTo.startsWith("/shortlist") ? "Back to Shortlist" : returnTo.startsWith("/matches") ? "Back to Matches" : "Return to Talent Search";
+  const returnTo = safeInternalHref(safeParam(sp.returnTo, ""), "/recruiter/talent-search/v2");
+  const backLabel = returnTo.startsWith("/compare") ? "Back to Compare" : returnTo.startsWith("/shortlist") ? "Back to Shortlist" : "Return to Talent Search";
   const searchId = safeParam(sp.searchId, safeParam(sp.searchSessionId, ""));
   const authorization = await requireRecruiterSearchAuthorization({
     permission: "candidate-detail:read",

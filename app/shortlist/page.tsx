@@ -68,7 +68,7 @@ function validCompareHref(value: string | undefined) {
 }
 
 function compareFallback(item?: ShortlistWorkflowItem) {
-  if (!item) return "/search";
+  if (!item) return "/recruiter/talent-search/v2";
   const params = new URLSearchParams();
   if (item.candidateId) params.set("ids", item.candidateId);
   if (item.sourceSearchId && item.sourceSearchId !== "current-search") {
@@ -77,7 +77,7 @@ function compareFallback(item?: ShortlistWorkflowItem) {
   }
   if (item.module) params.set("module", item.module.startsWith("SAP ") ? item.module : `SAP ${item.module}`);
   const query = params.toString();
-  return query ? `/compare?${query}` : "/search";
+  return query ? `/compare?${query}` : "/recruiter/talent-search/v2";
 }
 
 function resolveCompareHref(items: ShortlistWorkflowItem[]) {
@@ -91,7 +91,7 @@ function resolveCompareHref(items: ShortlistWorkflowItem[]) {
 export default function ShortlistPage() {
   const [items, setItems] = useState<ShortlistWorkflowItem[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [backToCompareHref, setBackToCompareHref] = useState("/search");
+  const [backToCompareHref, setBackToCompareHref] = useState("/recruiter/talent-search/v2");
 
   useEffect(() => {
     const shortlist = readShortlist();
