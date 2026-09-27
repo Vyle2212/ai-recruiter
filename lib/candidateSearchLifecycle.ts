@@ -33,6 +33,21 @@ const reviewConfirmation = new Set<string>(
   CANDIDATE_SEARCH_REVIEW_CONFIRMATION_STATUSES,
 );
 
+/** Only a known missing optional lifecycle column permits a legacy retry. */
+export function missingOptionalLifecycleColumn(
+  error: {
+    code?: string;
+    message?: string;
+  } | null,
+) {
+  if (error?.code !== "42703") return null;
+  return (
+    /\b(extraction_coverage_status|profile_confirmation_status)\b/i
+      .exec(error.message || "")?.[1]
+      ?.toLowerCase() || null
+  );
+}
+
 export function normalizedCandidateLifecycleStatus(value: unknown) {
   return String(value ?? "")
     .normalize("NFKC")

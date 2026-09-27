@@ -6,6 +6,7 @@ import {
   CANDIDATE_SEARCH_REVIEW_CONFIRMATION_STATUSES,
   CANDIDATE_SEARCH_REVIEW_EXTRACTION_STATUSES,
   candidateSearchLifecycleDecision,
+  missingOptionalLifecycleColumn,
 } from "../lib/candidateSearchLifecycle";
 import { buildSearchIndexAudit } from "../lib/searchIndexAudit";
 import { candidateSearchMutationEligibility } from "../lib/candidateSearchMutationGate";
@@ -49,6 +50,34 @@ for (const status of ["deleted", "non_sap", "rejected_noise"]) {
   );
 }
 assert.deepEqual([...CANDIDATE_SEARCH_BLOCKED_STATUSES].sort(), blocked.sort());
+assert.equal(
+  missingOptionalLifecycleColumn({
+    code: "42703",
+    message: "column candidates.extraction_coverage_status does not exist",
+  }),
+  "extraction_coverage_status",
+);
+assert.equal(
+  missingOptionalLifecycleColumn({
+    code: "42703",
+    message: "column candidates.profile_confirmation_status does not exist",
+  }),
+  "profile_confirmation_status",
+);
+assert.equal(
+  missingOptionalLifecycleColumn({
+    code: "42501",
+    message: "permission denied for extraction_coverage_status",
+  }),
+  null,
+);
+assert.equal(
+  missingOptionalLifecycleColumn({
+    code: "42703",
+    message: "column status missing",
+  }),
+  null,
+);
 for (const extraction_coverage_status of CANDIDATE_SEARCH_REVIEW_EXTRACTION_STATUSES) {
   assert.equal(
     candidateSearchLifecycleDecision({
@@ -200,6 +229,16 @@ assert.match(lifecycleAdapter, /\.from\("candidates"\)/);
 assert.match(lifecycleAdapter, /extraction_coverage_status/);
 assert.match(lifecycleAdapter, /profile_confirmation_status/);
 assert.match(lifecycleAdapter, /\.or\(/);
+assert.match(lifecycleAdapter, /missingOptionalLifecycleColumn/);
+assert.match(
+  lifecycleAdapter,
+  /missingOptionalLifecycleColumn\(response\.error\)/,
+);
+assert.match(lifecycleAdapter, /optionalColumns\.delete\(missing\)/);
+assert.match(
+  lifecycleAdapter,
+  /\.select\(\["id", "status", \.\.\.optionalColumns\]\.join\(","\)\)/,
+);
 assert.match(lifecycleAdapter, /CANDIDATE_SEARCH_BLOCKED_STATUSES/);
 assert.match(lifecycleAdapter, /documents\.filter\(/);
 assert.match(lifecycleAdapter, /setCurrentBlockedCandidatesResolverForTests/);

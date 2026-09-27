@@ -4,7 +4,10 @@ import { createHash } from "node:crypto";
 
 import type { CandidateSearchV2Document } from "./candidateSearchV2Types";
 import { createCandidateSupabaseAdminClient } from "./candidateSupabase";
-import { CANDIDATE_SEARCH_BLOCKED_STATUSES } from "./candidateSearchLifecycle";
+import {
+  CANDIDATE_SEARCH_BLOCKED_STATUSES,
+  missingOptionalLifecycleColumn,
+} from "./candidateSearchLifecycle";
 
 const PAGE_SIZE = 500;
 
@@ -25,23 +28,41 @@ async function currentBlockedCandidates(signal?: AbortSignal) {
   const supabase = createCandidateSupabaseAdminClient();
   const rows: BlockedCandidateRow[] = [];
   for (let from = 0; ; from += PAGE_SIZE) {
-    let query = supabase
-      .from("candidates")
-      .select(
-        "id,status,extraction_coverage_status,profile_confirmation_status",
-      )
-      .or(
-        `status.in.(${CANDIDATE_SEARCH_BLOCKED_STATUSES.join(",")}),extraction_coverage_status.eq.incomplete_needs_review,profile_confirmation_status.in.(claimed_incomplete,recruiter_review_required)`,
-      )
-      .order("id", { ascending: true })
-      .range(from, from + PAGE_SIZE - 1);
-    if (signal) query = query.abortSignal(signal);
-    const response = await query;
-    if (response.error)
-      throw new Error(
-        "Candidate search lifecycle query failed: " + response.error.message,
-      );
-    const page = (response.data || []) as BlockedCandidateRow[];
+    const optionalColumns = new Set([
+      "extraction_coverage_status",
+      "profile_confirmation_status",
+    ]);
+    let page: BlockedCandidateRow[] = [];
+    // Some legacy projects have neither optional column, and partial cutovers
+    // can have just one. Keep every available gate, retrying only 42703 for
+    // the named optional column. All other failures remain fail-closed.
+    for (;;) {
+      const filters = [
+        `status.in.(${CANDIDATE_SEARCH_BLOCKED_STATUSES.join(",")})`,
+      ];
+      if (optionalColumns.has("extraction_coverage_status"))
+        filters.push("extraction_coverage_status.eq.incomplete_needs_review");
+      if (optionalColumns.has("profile_confirmation_status"))
+        filters.push(
+          "profile_confirmation_status.in.(claimed_incomplete,recruiter_review_required)",
+        );
+      let query = supabase
+        .from("candidates")
+        .select(["id", "status", ...optionalColumns].join(","))
+        .or(filters.join(","))
+        .order("id", { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
+      if (signal) query = query.abortSignal(signal);
+      const response = await query;
+      const missing = missingOptionalLifecycleColumn(response.error);
+      if (missing && optionalColumns.delete(missing)) continue;
+      if (response.error)
+        throw new Error(
+          "Candidate search lifecycle query failed: " + response.error.message,
+        );
+      page = (response.data || []) as unknown as BlockedCandidateRow[];
+      break;
+    }
     rows.push(...page);
     if (page.length < PAGE_SIZE) break;
   }
