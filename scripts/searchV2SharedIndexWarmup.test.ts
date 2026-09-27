@@ -76,6 +76,13 @@ async function main() {
   assert.equal(readyHttp.status, 200);
   assert.equal(readyHttp.body.ready, true);
   assert.equal("error" in readyHttp.body, false);
+  const emptyHttp = searchV2ReadinessHttpContract(
+    searchV2ProjectionReadiness(),
+    0,
+  );
+  assert.equal(emptyHttp.status, 503);
+  assert.equal(emptyHttp.body.error?.code, "SEARCH_INDEX_EMPTY");
+  assert.equal(emptyHttp.body.error?.retryable, false);
 
   let retryCount = 0;
   configureSearchV2ProjectionLifecycleForTest({
