@@ -476,6 +476,42 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     await api.dispose();
   });
 
+  test("synthetic Search V2 shortlist persists for its owner and can be removed", async ({}, testInfo) => {
+    const target = "/api/recruiter/search-v2/shortlist";
+    const recruiter = await authenticatedApi("recruiter");
+    const denied = await authenticatedApi("client");
+    const selection = { candidateId: internalCandidateId, jobId: null };
+    try {
+      await expectPrivateErrorOnly(
+        await denied.post(target, { data: selection }),
+        403,
+      );
+      const saved = await recruiter.post(target, { data: selection });
+      expect(saved.status()).toBe(200);
+      expect((await saved.json()).shortlisted).toBe(true);
+      const scoped = await recruiter.get(
+        `${target}?candidateIds=${encodeURIComponent(internalCandidateId)}`,
+      );
+      expect(scoped.status()).toBe(200);
+      expect((await scoped.json()).candidateIds).toContain(internalCandidateId);
+      await attachSanitized(testInfo, "search-v2-shortlist", {
+        deniedRole: 403,
+        ownerSave: 200,
+        ownerReadback: true,
+      });
+    } finally {
+      const removed = await recruiter.delete(target, { data: selection });
+      expect(removed.status()).toBe(200);
+      const after = await recruiter.get(
+        `${target}?candidateIds=${encodeURIComponent(internalCandidateId)}`,
+      );
+      expect(after.status()).toBe(200);
+      expect((await after.json()).candidateIds).not.toContain(internalCandidateId);
+      await denied.dispose();
+      await recruiter.dispose();
+    }
+  });
+
   test("synthetic candidate drawer remains private and preserves Experience/Projects semantics", async ({
     page,
   }) => {
@@ -518,6 +554,31 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       path: "artifacts/acceptance-evidence/private-candidate-drawer.png",
       fullPage: false,
     });
+  });
+
+  test("Search V2 shows Compare Pack beside Shortlist with separate employer and client periods", async ({ page }) => {
+    await installAuthenticatedBrowserState(page.context(), "recruiter");
+    await page.goto(searchPage);
+    await page
+      .getByPlaceholder(
+        "Senior SAP FICO consultant in Malaysia with implementation experience",
+      )
+      .fill(acceptanceRequired("ACCEPTANCE_INTERNAL_SEARCH_QUERY"));
+    await page.getByRole("button", { name: "Understand & review" }).click();
+    await page.getByRole("button", { name: "Commit Search" }).click();
+    await expect(page.getByRole("button", { name: "Compare Pack", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Shortlist \(/ })).toBeVisible();
+    await page.getByRole("button", { name: "Compare Pack", exact: true }).click();
+    const pack = page.getByRole("region", { name: "Compare Pack" });
+    await expect(pack).toBeVisible();
+    for (const size of [5, 10, 20]) {
+      await pack.getByRole("button", { name: `Top ${size}` }).click();
+      await expect(pack.getByRole("button", { name: `Top ${size}` })).toHaveAttribute("aria-pressed", "true");
+    }
+    await expect(pack.getByRole("columnheader", { name: "Employer / tenure" })).toBeVisible();
+    await expect(pack.getByRole("columnheader", { name: "Client project / period" })).toBeVisible();
+    await expect(pack.getByText("PTF Synthetic Consulting Ltd").first()).toBeVisible();
+    await expect(pack.getByText("PTF Synthetic Manufacturing Client").first()).toBeVisible();
   });
 
   test("candidate-detail caches are isolated by authenticated actor scope", async ({}, testInfo) => {
