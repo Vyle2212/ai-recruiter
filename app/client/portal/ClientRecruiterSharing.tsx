@@ -5,14 +5,17 @@ import { useState } from "react";
 
 type Candidate = { id: string; name: string; title: string };
 type Recruiter = { id: string; name: string };
-type Share = { candidateId: string; recruiterId: string };
+type Share = { kind: "candidate" | "job"; resourceId: string; recruiterId: string };
 
-export default function ClientRecruiterSharing({ candidates, recruiters, shares, totalCandidates, page }: {
+export default function ClientRecruiterSharing({ candidates, jobs, recruiters, shares, totalCandidates, totalJobs, page, jobsPage }: {
   candidates: Candidate[];
+  jobs: Candidate[];
   recruiters: Recruiter[];
   shares: Share[];
   totalCandidates: number;
+  totalJobs: number;
   page: number;
+  jobsPage: number;
 }) {
   const router = useRouter();
   const [recruiterId, setRecruiterId] = useState(recruiters[0]?.id || "");
@@ -20,20 +23,20 @@ export default function ClientRecruiterSharing({ candidates, recruiters, shares,
   const [error, setError] = useState("");
   const [workingShares, setWorkingShares] = useState(shares);
 
-  async function changeShare(candidateId: string, action: "share" | "revoke") {
+  async function changeShare(kind: "candidate" | "job", resourceId: string, action: "share" | "revoke") {
     if (!recruiterId || pendingId) return;
-    setPendingId(candidateId);
+    setPendingId(`${kind}:${resourceId}`);
     setError("");
     try {
       const response = await fetch("/api/client/recruiter-shares", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Recruiter-Action": "client.recruiter-shares.write" },
-        body: JSON.stringify({ kind: "candidate", resourceId: candidateId, recruiterProfileId: recruiterId, action }),
+        body: JSON.stringify({ kind, resourceId, recruiterProfileId: recruiterId, action }),
       });
-      if (!response.ok) throw new Error(`Could not ${action} candidate (${response.status}). Please refresh and try again.`);
+      if (!response.ok) throw new Error(`Could not ${action} ${kind} (${response.status}). Please refresh and try again.`);
       setWorkingShares(current => action === "share"
-        ? [...current.filter(item => item.candidateId !== candidateId || item.recruiterId !== recruiterId), { candidateId, recruiterId }]
-        : current.filter(item => item.candidateId !== candidateId || item.recruiterId !== recruiterId));
+        ? [...current.filter(item => item.kind !== kind || item.resourceId !== resourceId || item.recruiterId !== recruiterId), { kind, resourceId, recruiterId }]
+        : current.filter(item => item.kind !== kind || item.resourceId !== resourceId || item.recruiterId !== recruiterId));
       router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Sharing could not be updated.");
@@ -50,21 +53,39 @@ export default function ClientRecruiterSharing({ candidates, recruiters, shares,
       </select>
     </label>
     {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
-    {!candidates.length && <p className="text-slate-400">No candidate is currently available to share.</p>}
+    <h3 className="pt-2 text-lg font-medium">Candidates</h3>
+    {!candidates.length && <p className="text-slate-400">No candidate is available on this page.</p>}
     {candidates.map(candidate => {
-      const shared = workingShares.some(item => item.candidateId === candidate.id && item.recruiterId === recruiterId);
+      const shared = workingShares.some(item => item.kind === "candidate" && item.resourceId === candidate.id && item.recruiterId === recruiterId);
       return <div key={candidate.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 p-4">
         <div><p className="font-medium">{candidate.name}</p><p className="text-sm text-slate-400">{candidate.title}</p></div>
-        <button type="button" disabled={!!pendingId} onClick={() => changeShare(candidate.id, shared ? "revoke" : "share")}
+        <button type="button" disabled={!!pendingId} onClick={() => changeShare("candidate", candidate.id, shared ? "revoke" : "share")}
           className="rounded-lg border border-cyan-500/50 px-4 py-2 text-sm text-cyan-200 disabled:opacity-50">
-          {pendingId === candidate.id ? "Saving…" : shared ? "Revoke share" : "Share with recruiter"}
+          {pendingId === `candidate:${candidate.id}` ? "Saving…" : shared ? "Revoke share" : "Share with recruiter"}
         </button>
       </div>;
     })}
     {totalCandidates > 20 && <nav aria-label="Candidate pages" className="flex items-center gap-4 text-sm">
-      {page > 1 && <a className="text-cyan-200 underline" href={`/client/portal?page=${page - 1}`}>Previous</a>}
+      {page > 1 && <a className="text-cyan-200 underline" href={`/client/portal?page=${page - 1}&jobsPage=${jobsPage}`}>Previous</a>}
       <span className="text-slate-400">Page {page} of {Math.ceil(totalCandidates / 20)}</span>
-      {page * 20 < totalCandidates && <a className="text-cyan-200 underline" href={`/client/portal?page=${page + 1}`}>Next</a>}
+      {page * 20 < totalCandidates && <a className="text-cyan-200 underline" href={`/client/portal?page=${page + 1}&jobsPage=${jobsPage}`}>Next</a>}
+    </nav>}
+    <h3 className="pt-5 text-lg font-medium">Jobs</h3>
+    {!jobs.length && <p className="text-slate-400">No owned job is currently available to share.</p>}
+    {jobs.map(job => {
+      const shared = workingShares.some(item => item.kind === "job" && item.resourceId === job.id && item.recruiterId === recruiterId);
+      return <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 p-4">
+        <div><p className="font-medium">{job.name}</p><p className="text-sm text-slate-400">{job.title}</p></div>
+        <button type="button" disabled={!!pendingId} onClick={() => changeShare("job", job.id, shared ? "revoke" : "share")}
+          className="rounded-lg border border-cyan-500/50 px-4 py-2 text-sm text-cyan-200 disabled:opacity-50">
+          {pendingId === `job:${job.id}` ? "Saving…" : shared ? "Revoke share" : "Share with recruiter"}
+        </button>
+      </div>;
+    })}
+    {totalJobs > 20 && <nav aria-label="Job pages" className="flex items-center gap-4 text-sm">
+      {jobsPage > 1 && <a className="text-cyan-200 underline" href={`/client/portal?page=${page}&jobsPage=${jobsPage - 1}`}>Previous</a>}
+      <span className="text-slate-400">Page {jobsPage} of {Math.ceil(totalJobs / 20)}</span>
+      {jobsPage * 20 < totalJobs && <a className="text-cyan-200 underline" href={`/client/portal?page=${page}&jobsPage=${jobsPage + 1}`}>Next</a>}
     </nav>}
   </div>;
 }
