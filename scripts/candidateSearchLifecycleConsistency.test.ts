@@ -107,6 +107,44 @@ void (async () => {
     "id,status,profile_confirmation_status",
     "id,status",
   ]);
+  const nestedSelections: string[] = [];
+  const partialSelection = await selectCandidateLifecycleCompatible<
+    { candidates: { status: string; extraction_coverage_status: string } }[]
+  >(
+    "id,candidates (id,status,extraction_coverage_status,profile_confirmation_status),jobs (id)",
+    async (columns) => {
+      nestedSelections.push(columns);
+      if (columns.includes("profile_confirmation_status"))
+        return {
+          data: null,
+          error: {
+            code: "42703",
+            message:
+              "column candidates.profile_confirmation_status does not exist",
+          },
+        };
+      return {
+        data: [
+          {
+            candidates: {
+              status: "active",
+              extraction_coverage_status: "incomplete_needs_review",
+            },
+          },
+        ],
+        error: null,
+      };
+    },
+  );
+  assert.equal(nestedSelections.length, 2);
+  assert.match(nestedSelections[1], /extraction_coverage_status/);
+  assert.doesNotMatch(nestedSelections[1], /profile_confirmation_status/);
+  assert.doesNotMatch(nestedSelections[1], /,\s*\)/);
+  assert.equal(
+    candidateSearchLifecycleDecision(partialSelection.data?.[0].candidates)
+      .visible,
+    false,
+  );
   let unauthorizedCalls = 0;
   const unauthorizedSelection = await selectCandidateLifecycleCompatible(
     "id,status,profile_confirmation_status",
