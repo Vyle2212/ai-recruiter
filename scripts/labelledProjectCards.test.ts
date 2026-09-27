@@ -24,4 +24,11 @@ assert.ok(profile.projects.some(project=>project.client==="Buyer One Ltd"&&!proj
 assert.ok(profile.employmentTimeline.every(job=>!job.company.startsWith("Buyer")));
 assert.deepEqual(labelledProjectCards(source.replace("Role: SAP FICO Consultant","Responsibilities: SAP FICO Consultant").replace("Role: SAP MM Consultant","Role: unsupported")),[]);
 assert.deepEqual(labelledProjectCards(source.replace("Project Duration: Jan 2023 – Dec 2023","Project Duration: Jan 2023 – unknown")).map(card=>card.client),["Buyer One Ltd"]);
+const aliases = source.replace("Project: SAP finance implementation", "Project Name: SAP finance implementation")
+  .replace("Project: SAP support rollout", "Project Title: SAP support rollout");
+assert.deepEqual(labelledProjectCards(aliases).map(card => [card.name, card.client, card.start, card.end]),
+  [["SAP finance implementation", "Buyer One Ltd", "", ""]]);
+const aliasProfile = normalizeActualCandidateSchema({raw_text: aliases}).enterpriseProfile;
+assert.ok(aliasProfile.projects.some(project => project.client === "Buyer One Ltd" && !project.employer && !project.start));
+assert.ok(aliasProfile.employmentTimeline.every(job => !job.company.startsWith("Buyer")));
 console.log("Explicit project cards preserve source boundaries: PASS");
