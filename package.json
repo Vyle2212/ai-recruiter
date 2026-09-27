@@ -9,7 +9,7 @@
         "dev": "next dev --webpack",
         "test:search:rich-preview": "tsx scripts/searchV2RichCandidatePreview.test.ts",
         "test:search:external-enrichment": "tsx scripts/searchV2ExternalProfileEnrichment.test.ts",
-        "build": "next build",
+        "build": "next build --webpack",
         "build:webpack": "next build --webpack",
         "start": "next start",
         "typecheck": "tsc --noEmit",
