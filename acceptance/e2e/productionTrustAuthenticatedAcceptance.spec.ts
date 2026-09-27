@@ -17,6 +17,7 @@ import {
 } from "./acceptanceHelpers";
 import { ACCEPTANCE_SYNTHETIC_CANDIDATE_ID } from "../../lib/acceptanceSyntheticCandidateFixture";
 import { parseAcceptanceExternalMode } from "../../lib/acceptanceFixtureLease";
+import { pseudonymousAcceptanceIdentifier } from "../../lib/acceptanceEnvironmentSafety";
 
 const searchPath = "/api/recruiter/search-v2";
 const searchPage = "/recruiter/talent-search/v2";
@@ -511,6 +512,94 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       );
       await denied.dispose();
       await recruiter.dispose();
+    }
+  });
+
+  test("synthetic client job share requires assigned support and can be revoked", async ({}, testInfo) => {
+    const db = acceptanceAdminClient();
+    const runHash = pseudonymousAcceptanceIdentifier(
+      acceptanceRequired("ACCEPTANCE_RUN_ID"),
+    );
+    const { data: job, error: jobError } = await db
+      .from("jobs")
+      .select("id")
+      .eq("title", `PTF synthetic job ${runHash}`)
+      .single();
+    const { data: recruiter, error: recruiterError } = await db
+      .from("user_profiles")
+      .select("id")
+      .eq(
+        "auth_user_id",
+        (await credentialBundle()).identities.recruiter.authUserId,
+      )
+      .single();
+    expect(jobError).toBeNull();
+    expect(recruiterError).toBeNull();
+    expect(job?.id).toBeTruthy();
+    expect(recruiter?.id).toBeTruthy();
+    const payload = {
+      kind: "job",
+      resourceId: job!.id,
+      recruiterProfileId: recruiter!.id,
+      action: "share",
+    };
+    const anonymous = await anonymousAcceptanceApi();
+    const wrongRole = await authenticatedApi("recruiter");
+    const client = await authenticatedApi("client");
+    try {
+      await expectPrivateErrorOnly(
+        await anonymous.post("/api/client/recruiter-shares", { data: payload }),
+        401,
+      );
+      await expectPrivateErrorOnly(
+        await wrongRole.post("/api/client/recruiter-shares", { data: payload }),
+        403,
+      );
+      await expectPrivateErrorOnly(
+        await client.post("/api/client/recruiter-shares", {
+          data: {
+            ...payload,
+            resourceId: "00000000-0000-4000-8000-000000000000",
+          },
+        }),
+        403,
+      );
+      const shared = await client.post("/api/client/recruiter-shares", {
+        data: payload,
+      });
+      expect(shared.status()).toBe(200);
+      expect((await shared.json()).shared).toBe(true);
+      const { data: active, error: activeError } = await db
+        .from("client_job_shares")
+        .select("status")
+        .eq("job_id", job!.id)
+        .eq("recruiter_profile_id", recruiter!.id)
+        .single();
+      expect(activeError).toBeNull();
+      expect(active?.status).toBe("active");
+      const revoked = await client.post("/api/client/recruiter-shares", {
+        data: { ...payload, action: "revoke" },
+      });
+      expect(revoked.status()).toBe(200);
+      const { data: ended, error: endedError } = await db
+        .from("client_job_shares")
+        .select("status")
+        .eq("job_id", job!.id)
+        .eq("recruiter_profile_id", recruiter!.id)
+        .single();
+      expect(endedError).toBeNull();
+      expect(ended?.status).toBe("revoked");
+      await attachSanitized(testInfo, "synthetic-job-share", {
+        anonymous: 401,
+        recruiter: 403,
+        unowned: 403,
+        shared: true,
+        revoked: true,
+      });
+    } finally {
+      await anonymous.dispose();
+      await wrongRole.dispose();
+      await client.dispose();
     }
   });
 

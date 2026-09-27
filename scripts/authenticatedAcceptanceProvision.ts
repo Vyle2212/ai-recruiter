@@ -185,6 +185,8 @@ async function provision(config: SafeConfig, client: SupabaseClient) {
   });
 
   const identities = {} as AcceptanceCredentialBundle["identities"];
+  let syntheticClient: { profileId: string; clientId: string } | null = null;
+  let syntheticRecruiterProfileId: string | null = null;
   for (const definition of ACCEPTANCE_IDENTITY_CASES) {
     const auth = await createAuthUser(client, config, definition.key);
     if (definition.profile) {
@@ -210,6 +212,13 @@ async function provision(config: SafeConfig, client: SupabaseClient) {
         entity_type: "user_profile",
         entity_id: String(profile.id),
       });
+      if (definition.key === "client")
+        syntheticClient = {
+          profileId: String(profile.id),
+          clientId: String(profileShape.client_id),
+        };
+      if (definition.key === "recruiter")
+        syntheticRecruiterProfileId = String(profile.id);
     }
     identities[definition.key as AcceptanceIdentityKey] = {
       ...auth,
@@ -242,6 +251,52 @@ async function provision(config: SafeConfig, client: SupabaseClient) {
     .eq("run_id", config.runId)
     .eq("entity_type", "auth_user")
     .eq("entity_id", unknown.authUserId);
+
+  if (!syntheticClient || !syntheticRecruiterProfileId)
+    throw new Error("acceptance_job_fixture_identity_missing");
+  const clientScope: { profileId: string; clientId: string } = syntheticClient;
+  const recruiterProfileId: string = syntheticRecruiterProfileId;
+  const runHash = pseudonymousAcceptanceIdentifier(config.runId);
+  const job = await client
+    .from("jobs")
+    .insert({
+      title: `PTF synthetic job ${runHash}`,
+      company: `PTF synthetic organization ${runHash}`,
+      status: "active",
+      description: "Synthetic SAP role for controlled acceptance only.",
+    })
+    .select("id")
+    .single();
+  if (job.error || !job.data?.id)
+    throw new Error("acceptance_job_fixture_create_failed");
+  const relations = [
+    client.from("client_memberships").insert({
+      user_profile_id: clientScope.profileId,
+      organization_id: organization.id,
+      client_id: clientScope.clientId,
+      status: "active",
+    }),
+    client.from("client_recruiter_assignments").insert({
+      client_id: clientScope.clientId,
+      recruiter_profile_id: recruiterProfileId,
+      assigned_by_profile_id: clientScope.profileId,
+      status: "active",
+    }),
+    client.from("client_feature_entitlements").insert({
+      client_id: clientScope.clientId,
+      plan_code: "acceptance_synthetic",
+      feature: "recruiter_support",
+      status: "active",
+    }),
+    client.from("client_job_ownership").insert({
+      client_id: clientScope.clientId,
+      job_id: job.data.id,
+      status: "active",
+    }),
+  ];
+  const relationResults = await Promise.all(relations);
+  if (relationResults.some((result) => result.error))
+    throw new Error("acceptance_job_fixture_relations_failed");
 
   const bundle: AcceptanceCredentialBundle = {
     schemaVersion: AUTHENTICATED_ACCEPTANCE_HARNESS_VERSION,
@@ -319,6 +374,56 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
   );
   const plan = acceptanceCleanupPlan(entities);
   const profileIds = plan.profileIds;
+  const { data: syntheticJobs, error: jobsDiscoveryError } = await client
+    .from("jobs")
+    .select("id")
+    .eq("title", `PTF synthetic job ${runHash}`);
+  if (jobsDiscoveryError) throw new Error("acceptance_job_discovery_failed");
+  const jobIds = (syntheticJobs || []).map((job) => job.id);
+  const { data: syntheticClients, error: clientDiscoveryError } = await client
+    .from("user_profiles")
+    .select("client_id")
+    .like("email", `%${syntheticEmailSuffix}`)
+    .eq("role", "client");
+  if (clientDiscoveryError)
+    throw new Error("acceptance_client_discovery_failed");
+  const clientIds = [
+    ...new Set(
+      (syntheticClients || []).map((item) => item.client_id).filter(Boolean),
+    ),
+  ];
+  // Dependent rows use RESTRICT foreign keys. Remove only this run's job and
+  // client scope before deleting its profiles and organization.
+  for (const [table, key, ids] of [
+    ["client_job_shares", "job_id", jobIds],
+    ["client_job_ownership", "job_id", jobIds],
+    ["client_feature_entitlements", "client_id", clientIds],
+    ["client_recruiter_assignments", "client_id", clientIds],
+    ["client_memberships", "client_id", clientIds],
+    ["jobs", "id", jobIds],
+  ] as const) {
+    if (!ids.length) continue;
+    const { error: deleteError } = await client
+      .from(table)
+      .delete()
+      .in(key, ids);
+    if (deleteError) throw new Error("acceptance_job_fixture_cleanup_failed");
+  }
+  for (const [table, key, ids] of [
+    ["client_job_shares", "job_id", jobIds],
+    ["client_job_ownership", "job_id", jobIds],
+    ["client_feature_entitlements", "client_id", clientIds],
+    ["client_recruiter_assignments", "client_id", clientIds],
+    ["client_memberships", "client_id", clientIds],
+  ] as const) {
+    if (!ids.length) continue;
+    const { count, error: residueError } = await client
+      .from(table)
+      .select("*", { count: "exact", head: true })
+      .in(key, ids);
+    if (residueError || count !== 0)
+      throw new Error("acceptance_job_fixture_residue_detected");
+  }
   if (profileIds.length) {
     const { error: deleteError } = await client
       .from("user_profiles")
@@ -371,6 +476,12 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
     )
   )
     throw new Error("acceptance_identity_table_residue_detected");
+  const { count: jobResidue, error: jobResidueError } = await client
+    .from("jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("title", `PTF synthetic job ${runHash}`);
+  if (jobResidueError || jobResidue !== 0)
+    throw new Error("acceptance_job_fixture_residue_detected");
   const { error: ledgerDeleteError } = await client
     .from("acceptance_test_entities")
     .delete()

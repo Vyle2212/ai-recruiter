@@ -41,6 +41,7 @@ const requiredTests = new Set([
   "server-side session revocation invalidates subsequent API access",
   "internal Search V2 uses only the synthetic acceptance dataset",
   "synthetic Search V2 shortlist persists for its owner and can be removed",
+  "synthetic client job share requires assigned support and can be revoked",
   "synthetic candidate drawer remains private and preserves Experience/Projects semantics",
   "Search V2 shows Compare Pack beside Shortlist with separate employer and client periods",
   "candidate-detail caches are isolated by authenticated actor scope",
