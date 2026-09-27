@@ -1121,9 +1121,9 @@ export default function WorkflowAutomationOperationsPage() {
         </section>
 
         <div className="mt-6 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-xs leading-6 text-slate-400">
-          Operations dashboard only Ã‚Â· Candidate DB writes: 0 Ã‚Â· Workflow writes: 0 Ã‚Â· Audit writes: 0 Ã‚Â· Email sends: 0 Ã‚Â· Releases performed: 0 Ã‚Â· Execution enabled: false
+          Operations dashboard only · Candidate DB writes: 0 · Workflow writes: 0 · Audit writes: 0 · Email sends: 0 · Releases performed: 0 · Execution enabled: false
           {loadedAt
-            ? ` Ã‚Â· Refreshed at: ${loadedAt}`
+            ? ` · Refreshed at: ${loadedAt}`
             : ""}
         </div>
       </div>

@@ -336,15 +336,15 @@ export default function WorkflowNotificationsPage() {
 
             <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5 text-sm text-slate-300">
               Automatic actions: {data.safety.automaticActions}
-              {" Â· "}
+              {" · "}
               Candidate DB writes: {data.safety.candidateDbWrites}
-              {" Â· "}
+              {" · "}
               Workflow writes: {data.safety.workflowWrites}
-              {" Â· "}
+              {" · "}
               Email sends: {data.safety.emailSends}
-              {" Â· "}
+              {" · "}
               Push sends: {data.safety.pushSends}
-              {" Â· "}
+              {" · "}
               OpenAI calls: {data.safety.openAiCalls}
             </section>
           </>

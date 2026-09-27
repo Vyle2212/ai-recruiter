@@ -97,10 +97,10 @@ export default function Page({
                   {String(profile.headline.value) ||
                     String(profile.currentTitle.value) ||
                     "Headline not provided"}{" "}
-                  Ã¯Â¿Â½{" "}
+                  ·{" "}
                   {String(profile.currentCompany.value) ||
                     "Company not provided"}{" "}
-                  Ã¯Â¿Â½{" "}
+                  ·{" "}
                   {String(profile.location.value) || "Location not provided"}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -220,7 +220,7 @@ export default function Page({
                   ["Recruiter approved", trust.recruiterApproved],
                   ["Candidate confirmed", trust.candidateConfirmed],
                   [
-                    "Candidate edited Ã¯Â¿Â½ review",
+                    "Candidate edited — review required",
                     trust.candidateEditedNeedsReview,
                   ],
                   ["Missing", trust.missing],
@@ -273,7 +273,7 @@ export default function Page({
                         {String(item.company.value) || "Company to confirm"}
                       </div>
                       <div className="text-xs text-slate-500">
-                        {String(item.startDate.value) || "Start unknown"} Ã¯Â¿Â½{" "}
+                        {String(item.startDate.value) || "Start unknown"} ·{" "}
                         {String(item.endDate.value) || "Present / unknown"}
                       </div>
                       <p className="mt-2 text-sm text-slate-400">
@@ -347,7 +347,7 @@ export default function Page({
                 </div>
                 <ul className="mt-4 space-y-2 text-sm text-slate-300">
                   {profile.recommendedCandidateActions.map((item) => (
-                    <li key={item}>Ã¯Â¿Â½ {item}</li>
+                    <li key={item}>• {item}</li>
                   ))}
                 </ul>
               </div>

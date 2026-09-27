@@ -63,7 +63,7 @@ export default function AuthLayout({
           </details>
 
           <span className="ml-auto text-xs text-emerald-200">
-            Staging auth active Â· production blocked
+            Staging auth active · production blocked
           </span>
         </div>
       </nav>
