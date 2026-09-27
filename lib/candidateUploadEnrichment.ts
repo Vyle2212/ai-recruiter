@@ -20,8 +20,17 @@ function mergeGroundedProjects(
   canonical: Array<Record<string, unknown>>,
   explicit: Array<Record<string, unknown>>,
 ) {
+  const exactUnique = (rows: Array<Record<string, unknown>>) => {
+    const seen = new Set<string>();
+    return rows.filter((row) => {
+      const signature = JSON.stringify(row);
+      if (seen.has(signature)) return false;
+      seen.add(signature);
+      return true;
+    });
+  };
   const validCanonical = canonical.filter(isValidProjectEntry);
-  if (!validCanonical.length) return explicit;
+  if (!validCanonical.length) return exactUnique(explicit);
   const projects = [...canonical];
   const key = (value: unknown) =>
     clean(value)
@@ -31,7 +40,33 @@ function mergeGroundedProjects(
       .trim();
   const projectEndIsCurrent = (value: Record<string, unknown>) =>
     value.current === true || projectDateIsCurrent(value.end_date);
+  const identity = (value: Record<string, unknown>) =>
+    [key(value.name), key(value.client), key(value.role)].join("|");
+  const isDated = (value: Record<string, unknown>) =>
+    careerMonthIndex(value.start_date) !== null &&
+    careerMonthIndex(value.end_date, projectEndIsCurrent(value)) !== null;
   for (const row of explicit.filter(isValidProjectEntry)) {
+    const sameIdentity = identity(row);
+    const matchingUndated = projects.filter((existing) =>
+      isValidProjectEntry(existing) &&
+      !clean(existing.start_date) && !clean(existing.end_date) &&
+      key(existing.name) && key(existing.client) && key(existing.role) &&
+      identity(existing) === sameIdentity,
+    );
+    const competingDated = projects.some((existing) =>
+      isValidProjectEntry(existing) && isDated(existing) &&
+      identity(existing) === sameIdentity,
+    );
+    const competingExplicit = explicit.filter((other) =>
+      isValidProjectEntry(other) && isDated(other) &&
+      identity(other) === sameIdentity,
+    ).length > 1;
+    if (isDated(row) && matchingUndated.length === 1 &&
+        !competingDated && !competingExplicit) {
+      matchingUndated[0].start_date = row.start_date;
+      matchingUndated[0].end_date = row.end_date;
+      continue;
+    }
     const matching = projects.find((existing) => {
       if (!isValidProjectEntry(existing)) return false;
       const start = careerMonthIndex(existing.start_date);
@@ -100,7 +135,7 @@ function mergeGroundedProjects(
         matching.modules = row.modules;
     } else projects.push(row);
   }
-  return projects;
+  return exactUnique(projects);
 }
 
 const SECTION_HEADINGS =
