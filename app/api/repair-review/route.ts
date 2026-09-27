@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
 import { buildCandidateRepairReview, parseRepairReviewQuery } from "@/lib/candidateRepairReview";
 
 export const runtime = "nodejs";
@@ -23,9 +23,8 @@ function loadEnvFile() {
 async function fetchCandidates() {
   loadEnvFile();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseKey) throw new Error("Repair review failed: missing Supabase URL/key.");
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  if (!supabaseUrl) throw new Error("Repair review failed: missing Supabase URL.");
+  const supabase = createLazySupabaseServiceClient();
   const candidates: AnyRecord[] = [];
   const pageSize = 1000;
   for (let from = 0; ; from += pageSize) {
