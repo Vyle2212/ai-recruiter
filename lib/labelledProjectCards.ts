@@ -11,7 +11,18 @@ export function labelledProjectCards(source: string) {
     const project = lines[index].trim().match(/^Project(?:\s+(?:Name|Title))?\s*:\s*(\S.{3,159})$/i);
     if (!project) continue;
     const next = lines.findIndex((line, offset) => offset>index && /^\s*(?:Project(?:\s+(?:Name|Title))?\s*:|(?:EMPLOYMENT|WORK EXPERIENCE|EDUCATION|CERTIFICATIONS?|REFERENCES)\s*$)/i.test(line));
-    const block = lines.slice(index+1, Math.min(next<0?lines.length:next,index+11));
+    const blockEnd = Math.min(next<0?lines.length:next,index+11);
+    const initialBlock = lines.slice(index+1, blockEnd);
+    const clientPositions = initialBlock.flatMap((line, offset) => /^\s*(?:Client|Customer)\s*:\s*\S/i.test(line) ? [offset] : []);
+    const block = clientPositions.length>1 ? initialBlock.slice(0, clientPositions[1]) : initialBlock;
+    if (block.some(line => /^\s*(?:Start Date|End Date|From|To)\s*:?\s*$/i.test(line) || /^\s*(?:Start Date|End Date|From|To)\s*:\s*\S/i.test(line))) continue;
+    if (block.some(line => {
+      const range = projectDateRange(line);
+      if (!range) return false;
+      const start = careerMonthIndex(range[1]);
+      const end = careerMonthIndex(range[2], projectDateIsCurrent(range[2]));
+      return start !== null && end !== null && start > end;
+    })) continue;
     // The established dated-card parser owns this shape and its exact date
     // notation. Do not produce a second, differently normalized assignment.
     if (block.some(line=>/^\s*(?:Project\s+)?Duration\s*:/i.test(line))) continue;
