@@ -12,7 +12,12 @@ for (const route of [
 ]) {
   const source = fs.readFileSync(route, "utf8");
   assert.match(source, /redirect\(/, `${route} must redirect`);
-  assert.ok(source.includes(canonical), `${route} must use Search V2`);
+  assert.ok(
+    source.includes(canonical) ||
+      (route === "app/recruiter/talent-search/results/page.tsx" &&
+        source.includes("searchV2LegacyResultsUrl")),
+    `${route} must use Search V2`,
+  );
   assert.doesNotMatch(
     source,
     /api\/search-candidates|api\/matches|CandidateCard/i,

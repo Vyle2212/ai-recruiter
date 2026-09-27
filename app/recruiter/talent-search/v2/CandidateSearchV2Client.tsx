@@ -1593,6 +1593,7 @@ export default function CandidateSearchV2Client({
     "matches" | "shortlisted"
   >("matches");
   const [shortlistJobId, setShortlistJobId] = useState<string | null>(null);
+  const [shortlistPreviewJob, setShortlistPreviewJob] = useState(false);
   const [shortlistContextReady, setShortlistContextReady] = useState(false);
   const [shortlistedIds, setShortlistedIds] = useState<Set<string>>(
     () => new Set(),
@@ -1715,8 +1716,17 @@ export default function CandidateSearchV2Client({
     .map((item) => item.candidateId)
     .join(",");
   useEffect(() => {
-    const jobId = new URLSearchParams(window.location.search).get("jobId");
-    setShortlistJobId(jobId);
+    const params = new URLSearchParams(window.location.search);
+    const jobId = params.get("jobId");
+    const validJobId =
+      jobId &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        jobId,
+      );
+    setShortlistJobId(validJobId ? jobId : null);
+    setShortlistPreviewJob(
+      params.get("previewJob") === "1" || Boolean(jobId && !validJobId),
+    );
     setShortlistContextReady(true);
   }, []);
   useEffect(() => {
@@ -4011,6 +4021,11 @@ export default function CandidateSearchV2Client({
               <span className="text-xs text-slate-400">
                 Compare the ranked Top 5, 10 or 20 from this search.
               </span>
+              {shortlistPreviewJob ? (
+                <span className="text-xs text-amber-200">
+                  This job is a preview; Shortlist saves to your general list.
+                </span>
+              ) : null}
               {shortlistError ? (
                 <span role="alert" className="text-xs text-amber-200">
                   {shortlistError}{" "}
