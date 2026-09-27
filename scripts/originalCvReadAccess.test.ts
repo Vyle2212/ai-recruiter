@@ -233,6 +233,7 @@ assert.match(accessAuditSchema, /client_candidate_shares/);
 assert.match(accessAuditSchema, /client_candidate_access/);
 assert.match(accessAuditSchema, /client_feature_entitlements/);
 assert.match(accessAuditSchema, /from public\.candidates c/);
+assert.match(accessAuditSchema, /Current candidate required for original CV access/);
 assert.match(accessAuditSchema, /for share of c/);
 for (const status of [
   "deleted",
@@ -262,6 +263,10 @@ assert.match(accessAuditReadback, /original_cv_access_audit_readback_passed/);
 assert.match(
   accessAuditReadback,
   /original_cv_access_audit_candidate_lifecycle_readback_failed/,
+);
+assert.match(
+  accessAuditReadback,
+  /original_cv_access_audit_admin_candidate_readback_failed/,
 );
 assert.doesNotMatch(
   accessAuditReadback,

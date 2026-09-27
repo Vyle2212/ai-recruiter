@@ -61,6 +61,13 @@ begin
     ) then
       raise exception 'Active admin required for original CV access';
     end if;
+    if not exists (
+      select 1 from public.candidates c
+      where c.id = new.candidate_id
+      for share of c
+    ) then
+      raise exception 'Current candidate required for original CV access';
+    end if;
     return new;
   end if;
 

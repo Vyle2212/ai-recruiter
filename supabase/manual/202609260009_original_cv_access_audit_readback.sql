@@ -87,6 +87,13 @@ begin
     raise exception 'original_cv_access_audit_candidate_lifecycle_readback_failed';
   end if;
 
+  if position(
+       'Current candidate required for original CV access'
+       in pg_get_functiondef(to_regprocedure('public.validate_recruiter_original_cv_access_event()'))
+     ) = 0 then
+    raise exception 'original_cv_access_audit_admin_candidate_readback_failed';
+  end if;
+
   raise notice 'original_cv_access_audit_readback_passed';
 end
 $readback$;
