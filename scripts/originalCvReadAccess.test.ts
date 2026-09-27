@@ -221,6 +221,12 @@ const accessAuditSchema = readFileSync(
   "utf8",
 );
 assert.match(accessAuditSchema, /recruiter_original_cv_access_events/);
+assert.match(accessAuditSchema, /original_cv_access_audit_dependencies_missing/);
+assert.match(accessAuditSchema, /original_cv_access_audit_already_installed/);
+assert.ok(
+  accessAuditSchema.indexOf("do $preflight$") <
+    accessAuditSchema.indexOf("create table public.recruiter_original_cv_access_events"),
+);
 assert.match(accessAuditSchema, /validate_recruiter_original_cv_access_event/);
 assert.match(accessAuditSchema, /client_recruiter_assignments/);
 assert.match(accessAuditSchema, /client_candidate_shares/);

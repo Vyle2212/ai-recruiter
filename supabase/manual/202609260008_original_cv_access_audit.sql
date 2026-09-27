@@ -2,6 +2,26 @@
 -- without storing a filename, object key, CV content, contact detail or token.
 begin;
 
+-- The trigger below validates the candidate at read time. Do not install an
+-- audit table that cannot enforce that contract on an incomplete staging DB.
+do $preflight$
+begin
+  if to_regclass('public.candidates') is null
+     or to_regclass('public.user_profiles') is null
+     or to_regclass('public.recruiter_original_cv_grants') is null
+     or to_regclass('public.client_recruiter_assignments') is null
+     or to_regclass('public.client_candidate_shares') is null
+     or to_regclass('public.client_candidate_access') is null
+     or to_regclass('public.client_feature_entitlements') is null then
+    raise exception 'original_cv_access_audit_dependencies_missing';
+  end if;
+
+  if to_regclass('public.recruiter_original_cv_access_events') is not null then
+    raise exception 'original_cv_access_audit_already_installed';
+  end if;
+end
+$preflight$;
+
 create table public.recruiter_original_cv_access_events (
   id uuid primary key default gen_random_uuid(),
   candidate_id uuid not null,
