@@ -146,7 +146,7 @@ export default function SearchShortlistPage() {
               <div className="flex gap-3 text-sm">
                 {item.profile?.name ? (
                   <Link
-                    href={`/recruiter/talent-search/v2?q=${encodeURIComponent(item.profile.name)}${jobId ? `&jobId=${encodeURIComponent(jobId)}` : ""}`}
+                    href={`/recruiter/talent-search/v2?q=${encodeURIComponent(item.profile.name)}&focusCandidateId=${encodeURIComponent(item.candidateId)}${jobId ? `&jobId=${encodeURIComponent(jobId)}` : ""}`}
                     className="rounded-lg border border-cyan-700 px-3 py-2 text-cyan-100"
                   >
                     Find in Search V2
