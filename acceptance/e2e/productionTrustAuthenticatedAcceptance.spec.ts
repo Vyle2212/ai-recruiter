@@ -698,9 +698,7 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     await expect(
       page.getByRole("link", { name: /^Shortlist \(/ }),
     ).toBeVisible();
-    await page
-      .getByRole("button", { name: "Compare", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Compare", exact: true }).click();
     const pack = page.getByRole("region", { name: "Candidate Comparison" });
     await expect(pack).toBeVisible();
     for (const size of [5, 10, 20]) {
