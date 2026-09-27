@@ -357,8 +357,10 @@ export default function SearchPreparationReview({
               {sourceReadiness.message}
             </span>
             {!isExternal &&
-            sourceReadiness.status === "failed" &&
-            onRetryReadiness ? (
+    sourceReadiness.status === "failed" &&
+    sourceReadiness.message !==
+      "No candidate profiles have been loaded into this environment yet." &&
+    onRetryReadiness ? (
               <button
                 type="button"
                 onClick={onRetryReadiness}
