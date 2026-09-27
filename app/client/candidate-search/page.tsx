@@ -50,7 +50,7 @@ export default function ClientCandidateSearch() {
     {error && <p role="alert" className="mt-5 text-amber-200">{error}</p>}
     {loading && <p className="mt-5 text-slate-400">Loading…</p>}
     <div className="mt-6 space-y-3">{rows.map(row => <article key={row.id} className="rounded-xl border border-slate-800 bg-[#0B0F16] p-5">
-      <h2 className="font-semibold">{row.name || "Candidate"}</h2>
+      <h2 className="font-semibold"><Link className="text-cyan-100 underline" href={`/client/candidate-search/${encodeURIComponent(row.id)}`}>{row.name || "Candidate"}</Link></h2>
       <p className="mt-1 text-sm text-slate-400">{[row.current_title, row.current_company].filter(Boolean).join(" · ") || "Profile details unavailable"}</p>
     </article>)}</div>
     {!loading && !error && !rows.length && <p className="mt-6 text-slate-400">No assigned candidates found.</p>}
