@@ -39,4 +39,26 @@ revoke all on function public.client_candidate_lookup(uuid, text, uuid, integer)
 grant execute on function public.client_candidate_lookup(uuid, text, uuid, integer)
   to service_role;
 
+-- Atomic client-scoped detail read: no gap between an access check and the
+-- candidate read when an administrator revokes access concurrently.
+create or replace function public.client_candidate_detail(
+  p_client_id uuid, p_candidate_id uuid
+)
+returns setof public.candidates
+language sql stable
+set search_path = ''
+as $function$
+  select c.*
+  from public.client_candidate_access a
+  join public.candidates c on c.id = a.candidate_id
+  where a.client_id = p_client_id and a.status = 'active'
+    and a.candidate_id = p_candidate_id
+  limit 1
+$function$;
+
+revoke all on function public.client_candidate_detail(uuid, uuid)
+  from public, anon, authenticated;
+grant execute on function public.client_candidate_detail(uuid, uuid)
+  to service_role;
+
 commit;
