@@ -27,6 +27,10 @@ assert.match(patch, /to_regnamespace\('private'\) is not null/);
 assert.match(patch, /create schema private;/);
 assert.match(patch, /revoke all on schema private from public;/);
 assert.match(patch, /grant usage on schema private to authenticated;/);
+assert.match(
+  patch,
+  /alter default privileges for role postgres in schema private\s+revoke execute on functions from public, anon, authenticated, service_role;/,
+);
 
 for (const helper of helperNames) {
   assert.match(
@@ -48,6 +52,15 @@ for (const helper of helperNames) {
 }
 
 assert.equal((patch.match(/^alter policy /gm) || []).length, 31);
+assert.match(patch, /do \$postcondition\$/);
+assert.match(
+  patch,
+  /staging_private_helpers_default_privilege_postcondition_failed/,
+);
+assert.ok(
+  patch.indexOf("do $postcondition$") < patch.lastIndexOf("commit;"),
+  "postconditions must pass before the migration commits",
+);
 assert.match(
   patch,
   /alter policy candidate_security_fixture_candidate_reads_own_record/,
@@ -76,6 +89,10 @@ assert.match(
 assert.match(readback, /v_private_policy_refs <> 31/);
 assert.match(readback, /v_private_using_refs <> 26/);
 assert.match(readback, /v_private_check_refs <> 14/);
+assert.match(
+  readback,
+  /staging_private_helpers_default_privilege_readback_failed/,
+);
 assert.match(
   readback,
   /pg_get_functiondef\('public\.guard_user_profile_protected_columns\(\)'::regprocedure\)/,

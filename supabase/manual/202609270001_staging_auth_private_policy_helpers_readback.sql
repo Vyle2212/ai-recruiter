@@ -12,6 +12,7 @@ declare
   v_private_policy_refs integer;
   v_private_using_refs integer;
   v_private_check_refs integer;
+  v_private_default_execute integer;
   v_guard_definition text;
 begin
   select count(*) into v_private_helpers
@@ -49,6 +50,33 @@ begin
      or has_schema_privilege('service_role', 'private', 'USAGE')
      or not has_schema_privilege('authenticated', 'private', 'USAGE') then
     raise exception using errcode = 'P0001', message = 'staging_private_helpers_schema_grant_readback_failed';
+  end if;
+
+  select count(*) into v_private_default_execute
+  from pg_default_acl d
+  cross join lateral aclexplode(
+    coalesce(d.defaclacl, acldefault('f', d.defaclrole))
+  ) acl
+  where d.defaclrole = 'postgres'::regrole
+    and d.defaclnamespace = 'private'::regnamespace
+    and d.defaclobjtype = 'f'
+    and acl.privilege_type = 'EXECUTE'
+    and acl.grantee in (
+      0,
+      'anon'::regrole,
+      'authenticated'::regrole,
+      'service_role'::regrole
+    );
+
+  if not exists (
+       select 1
+       from pg_default_acl d
+       where d.defaclrole = 'postgres'::regrole
+         and d.defaclnamespace = 'private'::regnamespace
+         and d.defaclobjtype = 'f'
+     )
+     or v_private_default_execute <> 0 then
+    raise exception using errcode = 'P0001', message = 'staging_private_helpers_default_privilege_readback_failed';
   end if;
 
   select
