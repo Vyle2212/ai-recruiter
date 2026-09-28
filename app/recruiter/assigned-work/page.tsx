@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
 import { createClient } from "@/utils/supabase/server";
+import RecruiterAdminChat from "./RecruiterAdminChat";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ export default async function RecruiterAssignedWork({ searchParams }: {
   const { data: identity, error: authError } = await auth.auth.getUser();
   if (authError || !identity.user) redirect("/auth/login?next=%2Frecruiter%2Fassigned-work");
   const { data: profile, error: profileError } = await auth.from("user_profiles")
-    .select("id,role,status").eq("auth_user_id", identity.user.id).maybeSingle();
+    .select("id,role,status,organization_id").eq("auth_user_id", identity.user.id).maybeSingle();
   if (profileError || !profile || profile.role !== "recruiter" || profile.status !== "active") redirect("/portal");
 
   const params = await searchParams;
@@ -34,7 +35,7 @@ export default async function RecruiterAssignedWork({ searchParams }: {
   if (!enabled) return <main className="min-h-screen bg-[#05070A] p-8 text-slate-100"><div className="mx-auto max-w-5xl"><h1 className="text-3xl font-semibold">Assigned Work</h1><p className="mt-4 text-slate-400">Client sharing is not available in this environment yet.</p></div></main>;
 
   const db = createLazySupabaseServiceClient();
-  const [candidateResult, jobResult] = await Promise.all([
+  const [candidateResult, jobResult, adminResult] = await Promise.all([
     db.rpc("recruiter_shared_candidates", {
       p_recruiter_profile_id: profile.id, p_before: candidateCursor.date,
       p_before_id: candidateCursor.id, p_limit: 21,
@@ -43,6 +44,11 @@ export default async function RecruiterAssignedWork({ searchParams }: {
       p_recruiter_profile_id: profile.id, p_before: jobCursor.date,
       p_before_id: jobCursor.id, p_limit: 21,
     }),
+    process.env.CHAT_ENABLED === "true" && profile.organization_id
+      ? db.from("user_profiles").select("id,full_name")
+        .eq("organization_id", profile.organization_id).eq("role", "admin")
+        .eq("status", "active").order("id", { ascending: true }).limit(20)
+      : Promise.resolve({ data: [], error: null }),
   ]);
   const unavailable = !!candidateResult.error || !!jobResult.error;
   const candidateRows: SharedCandidate[] = unavailable ? [] : (candidateResult.data || []).slice(0, 20);
@@ -66,6 +72,8 @@ export default async function RecruiterAssignedWork({ searchParams }: {
 
   return <main className="min-h-screen bg-[#05070A] px-6 py-10 text-slate-100"><div className="mx-auto max-w-5xl space-y-8">
     <header><h1 className="text-3xl font-semibold">Assigned Work</h1><p className="mt-2 text-slate-400">Active jobs and candidates shared by clients you support.</p></header>
+    {process.env.CHAT_ENABLED === "true" && !adminResult.error && !!adminResult.data?.length &&
+      <RecruiterAdminChat admins={adminResult.data.map(admin => ({ id: admin.id, name: admin.full_name || "Admin" }))} />}
     {unavailable && <p role="alert" className="rounded-xl border border-amber-500/30 p-5 text-amber-200">Assigned work is unavailable. No client access is assumed.</p>}
     {!unavailable && <>
       <section><h2 className="mb-4 text-xl font-semibold">Shared candidates</h2><div className="space-y-3">{candidateRows.map(row => <article key={row.share_id} className={card}><h3 className="font-medium">{row.candidate_name || "Candidate"}</h3><p className="mt-1 text-sm text-slate-400">{row.current_title || "Title not provided"}</p></article>)}{!candidateRows.length && <p className="text-slate-400">No active candidate shares.</p>}</div>{next("candidate") && <Link className="mt-4 inline-block text-cyan-200 underline" href={next("candidate")!}>More candidates</Link>}</section>
