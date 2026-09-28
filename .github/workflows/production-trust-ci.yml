@@ -146,6 +146,7 @@ jobs:
         run: |
           npm run test:production-trust:authorization
           node --import tsx scripts/productionAuthConfiguration.test.ts
+          node --import tsx scripts/chatAuthorizationCore.test.ts
 
       - name: Authenticated acceptance harness safety contracts
         env:
