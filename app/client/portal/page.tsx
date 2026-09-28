@@ -88,6 +88,7 @@ export default async function ClientPortalPage({ searchParams }: { searchParams:
       sharing = candidateRows.error || jobRows.error || recruiterRows.error || shareRows.error || jobShareRows.error
         ? <p className="text-amber-200">Recruiter sharing is temporarily unavailable.</p>
         : <ClientRecruiterSharing
+            chatEnabled={process.env.CHAT_ENABLED === "true"}
             candidates={(candidateRows.data || []).map(row => ({ id: row.id, name: row.name || "Candidate", title: row.current_title || "" }))}
             jobs={(jobRows.data || []).map(row => ({ id: row.id, name: row.title || "Job", title: row.company || "" }))}
             recruiters={(recruiterRows.data || []).map(row => ({ id: row.id, name: row.full_name || row.email || "Recruiter" }))}

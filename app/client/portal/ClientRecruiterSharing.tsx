@@ -7,7 +7,7 @@ type Candidate = { id: string; name: string; title: string };
 type Recruiter = { id: string; name: string };
 type Share = { kind: "candidate" | "job"; resourceId: string; recruiterId: string };
 
-export default function ClientRecruiterSharing({ candidates, jobs, recruiters, shares, totalCandidates, totalJobs, page, jobsPage }: {
+export default function ClientRecruiterSharing({ candidates, jobs, recruiters, shares, totalCandidates, totalJobs, page, jobsPage, chatEnabled }: {
   candidates: Candidate[];
   jobs: Candidate[];
   recruiters: Recruiter[];
@@ -16,12 +16,41 @@ export default function ClientRecruiterSharing({ candidates, jobs, recruiters, s
   totalJobs: number;
   page: number;
   jobsPage: number;
+  chatEnabled: boolean;
 }) {
   const router = useRouter();
   const [recruiterId, setRecruiterId] = useState(recruiters[0]?.id || "");
   const [pendingId, setPendingId] = useState("");
   const [error, setError] = useState("");
   const [workingShares, setWorkingShares] = useState(shares);
+  const [openingChat, setOpeningChat] = useState(false);
+
+  async function openRecruiterChat() {
+    if (!recruiterId || openingChat) return;
+    setOpeningChat(true);
+    setError("");
+    try {
+      const response = await fetch("/api/chat/client-recruiter-conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recruiterProfileId: recruiterId }),
+      });
+      if (!response.ok) {
+        if ([401, 403, 404].includes(response.status))
+          throw new Error("Chat is unavailable for this recruiter assignment or subscription.");
+        throw new Error("Chat is temporarily unavailable. Please try again.");
+      }
+      const result = await response.json();
+      if (typeof result.conversationId !== "string" ||
+          !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(result.conversationId))
+        throw new Error("Chat is temporarily unavailable. Please try again.");
+      router.push(`/chat/${encodeURIComponent(result.conversationId)}`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Chat is unavailable.");
+    } finally {
+      setOpeningChat(false);
+    }
+  }
 
   async function changeShare(kind: "candidate" | "job", resourceId: string, action: "share" | "revoke") {
     if (!recruiterId || pendingId) return;
@@ -52,6 +81,10 @@ export default function ClientRecruiterSharing({ candidates, jobs, recruiters, s
         {recruiters.map(recruiter => <option key={recruiter.id} value={recruiter.id}>{recruiter.name}</option>)}
       </select>
     </label>
+    {chatEnabled && <button type="button" disabled={!recruiterId || openingChat} onClick={() => void openRecruiterChat()}
+      className="rounded-lg border border-cyan-500/50 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-500/20 disabled:opacity-50">
+      {openingChat ? "Opening chat…" : "Chat with assigned recruiter"}
+    </button>}
     {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
     <h3 className="pt-2 text-lg font-medium">Candidates</h3>
     {!candidates.length && <p className="text-slate-400">No candidate is available on this page.</p>}
