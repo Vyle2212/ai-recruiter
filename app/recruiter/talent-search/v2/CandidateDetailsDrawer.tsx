@@ -286,6 +286,7 @@ export default function CandidateDetailsDrawer({
   const [aiAnalysis, setAiAnalysis] = useState("");
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
   const drawerRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
   const contentScrollRef = useRef<HTMLDivElement | null>(null);
   const selectedIndex = visibleCandidates.findIndex(
     (item) => item.candidateId === candidate.candidateId,
@@ -334,13 +335,17 @@ export default function CandidateDetailsDrawer({
   }, [tab, educationFocus, candidate.candidateId, profile]);
 
   useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     drawerRef.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab" || !drawerRef.current) return;
@@ -365,7 +370,7 @@ export default function CandidateDetailsDrawer({
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [onClose]);
+  }, []);
 
   const enterprise = profile?.enterpriseProfile;
   const employment = enterprise?.employmentTimeline || [];
