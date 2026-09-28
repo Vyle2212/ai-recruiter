@@ -509,12 +509,12 @@ export default function CandidateDetailsDrawer({
         aria-modal="true"
         aria-label={`Candidate details for ${name}`}
         tabIndex={-1}
-        className="absolute inset-y-0 right-0 flex h-[100dvh] w-full flex-col border-l border-slate-700 bg-slate-950 shadow-2xl sm:w-[min(48vw,880px)]"
+        className="absolute inset-y-0 right-0 flex h-[100dvh] w-full flex-col border-l border-cyan-500/20 bg-[#0b1420] shadow-[-24px_0_80px_-32px_rgba(0,0,0,.85)] sm:w-[min(48vw,880px)]"
       >
-        <header className="shrink-0 border-b border-slate-800 px-5 py-4">
+        <header className="shrink-0 border-b border-slate-700/60 bg-gradient-to-br from-[#12253a] via-[#0e1b2b] to-[#0b1420] px-5 py-5">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <h2 className="truncate text-xl font-semibold text-white">
+              <h2 className="truncate text-2xl font-semibold tracking-tight text-white">
                 {name}
               </h2>
               {!nameAvailable ? (
@@ -665,7 +665,7 @@ export default function CandidateDetailsDrawer({
           <nav
             aria-label="Candidate detail sections"
             role="tablist"
-            className="mt-4 flex gap-1 overflow-x-auto"
+            className="mt-5 flex gap-1 overflow-x-auto border-b border-slate-700/50"
           >
             {tabState.map(
               ({ tab: item, count, hasRecords, unavailableReason }) => (
@@ -1522,13 +1522,13 @@ export default function CandidateDetailsDrawer({
         </div>
 
         {candidate.talentPool !== "linkedin_talent_pool" ? (
-          <footer className="flex shrink-0 flex-wrap gap-2 border-t border-slate-800 bg-slate-950 px-6 py-4">
+          <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-slate-700/70 bg-[#101d2d] px-5 py-4 shadow-[0_-16px_32px_-24px_rgba(0,0,0,.9)]">
             <button
               type="button"
               aria-pressed={shortlisted}
               disabled={!onShortlistToggle || shortlistPending}
               onClick={onShortlistToggle}
-              className="rounded-lg bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950"
+              className="min-h-10 rounded-lg bg-cyan-300 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-cyan-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50"
             >
               {shortlistPending
                 ? "Saving..."
@@ -1541,7 +1541,7 @@ export default function CandidateDetailsDrawer({
               aria-label="Compare this candidate"
               disabled={!onCompare}
               onClick={onCompare}
-              className="rounded-lg border border-cyan-500/50 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-10 rounded-lg border border-cyan-400/60 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Compare
             </button>

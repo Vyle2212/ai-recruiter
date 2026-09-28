@@ -717,7 +717,7 @@ function uniqueLocationParts(result: SearchResult) {
 
 function Tag({ children }: { children: React.ReactNode }) {
   return (
-    <span className="rounded-full border border-cyan-900 bg-cyan-950/40 px-2.5 py-1 text-xs text-cyan-200">
+    <span className="rounded-full border border-cyan-700/40 bg-cyan-400/10 px-2.5 py-1 text-xs font-medium text-cyan-100">
       {children}
     </span>
   );
@@ -830,13 +830,13 @@ export function CompactCandidateCard({
     result.queryRelevantSkills || [],
   );
   const displayedSkills = identityLookup ? allProfileSkills : matchedSkills;
-  const strongestSkills = displayedSkills.slice(0, 8);
+  const strongestSkills = displayedSkills.slice(0, 5);
   const matchSummary = identityLookup
     ? []
     : buildCandidateMatchPreview(
         integrity?.requirements || [],
         diagnostic.criteria,
-        5,
+        4,
       );
   const currentEmploymentConfirmed = Boolean(currentEmployment);
   const primarySpecialization = strongestSkills.length
@@ -916,8 +916,8 @@ export function CompactCandidateCard({
         : "Not found in profile";
 
   return (
-    <article className="rounded-xl border border-slate-800/90 bg-slate-950/55 px-4 py-3 transition hover:border-slate-700 hover:bg-slate-900/35">
-      <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,.68fr)_auto] xl:items-start">
+    <article className="rounded-2xl border border-slate-700/60 bg-gradient-to-br from-slate-900 via-[#101c2a] to-slate-950 p-5 shadow-[0_12px_32px_-24px_rgba(0,0,0,.9)] transition duration-200 hover:border-cyan-500/45 hover:shadow-[0_18px_40px_-28px_rgba(34,211,238,.5)] focus-within:border-cyan-400/60">
+      <div className="grid min-w-0 gap-5 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(19rem,.82fr)_auto] xl:items-start">
         <div className="min-w-0 xl:col-start-1 xl:row-start-1">
           <div className="flex items-center gap-2">
             {result.talentPool === "linkedin_talent_pool" &&
@@ -932,10 +932,10 @@ export function CompactCandidateCard({
                 className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-300"
               />
             ) : null}
-            <span className="text-[11px] font-medium tabular-nums text-slate-600">
+            <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full border border-slate-600/70 bg-slate-800/80 px-1 text-[11px] font-bold tabular-nums text-slate-300">
               #{rank}
             </span>
-            <h2 className="min-w-0 break-words text-lg font-semibold leading-6 text-white">
+            <h2 className="min-w-0 break-words text-xl font-semibold leading-7 tracking-tight text-white">
               {identityHeading}
             </h2>
             {anonymousCandidate ? (
@@ -945,7 +945,7 @@ export function CompactCandidateCard({
             ) : null}
           </div>
           {displayedRole ? (
-            <p className="mt-1 text-sm font-medium leading-5 text-slate-300">
+            <p className="mt-2 text-sm font-semibold leading-5 text-cyan-100">
               <span className="mr-1 text-xs text-slate-500">{roleLabel}:</span>
               {displayedRole}
             </p>
@@ -1045,7 +1045,7 @@ export function CompactCandidateCard({
             </div>
           ) : null}
         </div>
-        <div className="min-w-0 xl:col-start-2 xl:row-span-2 xl:row-start-1">
+        <div className="min-w-0 rounded-xl border border-slate-700/45 bg-slate-950/45 p-3.5 xl:col-start-2 xl:row-span-2 xl:row-start-1">
           <div className="flex flex-wrap items-center gap-2">
             <span
               className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${fitClasses}`}
@@ -1096,8 +1096,8 @@ export function CompactCandidateCard({
           result.talentPool !== "linkedin_talent_pool" &&
           matchSummary.length ? (
             <>
-              <p className="mt-2 text-xs font-semibold text-slate-300">
-                Match summary
+              <p className="mt-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-300">
+                Why this profile matches
               </p>
               <ul className="mt-1.5 space-y-1">
                 {queryStatements.supported.map((item) => (
@@ -1218,7 +1218,7 @@ export function CompactCandidateCard({
             </p>
           ) : null}
         </div>
-        <div className="flex flex-wrap gap-2 md:justify-end xl:col-start-3 xl:row-start-1">
+        <div className="flex flex-wrap items-start gap-2 border-t border-slate-700/50 pt-3 md:justify-end md:border-t-0 md:pt-0 xl:col-start-3 xl:row-start-1">
           {result.talentPool === "linkedin_talent_pool" && onReviewedChange ? (
             <button
               type="button"
@@ -1265,7 +1265,7 @@ export function CompactCandidateCard({
               aria-pressed={shortlisted}
               disabled={!onShortlistToggle || shortlistPending}
               onClick={onShortlistToggle}
-              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:bg-slate-900"
+              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-600 bg-slate-800/70 px-3 text-sm font-semibold text-slate-100 transition hover:border-cyan-400/60 hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
             >
               {shortlistPending
                 ? "Saving..."
@@ -1279,8 +1279,8 @@ export function CompactCandidateCard({
               type="button"
               onClick={onCompare}
               disabled={!onCompare}
-              aria-label={`Compare ${candidateName} with candidates in this search`}
-              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-cyan-500/50 px-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/10 disabled:opacity-50"
+              aria-label={`Compare ${identityHeading} with candidates in this search`}
+              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-cyan-400/60 bg-cyan-400/10 px-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 disabled:opacity-50"
             >
               Compare
             </button>
@@ -1303,7 +1303,7 @@ export function CompactCandidateCard({
                 result.talentPool,
               ).catch(() => {});
             }}
-            className="inline-flex min-h-9 items-center justify-center rounded-lg bg-cyan-300 px-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200"
+            className="inline-flex min-h-10 items-center justify-center rounded-lg bg-cyan-300 px-4 text-sm font-bold text-slate-950 transition hover:bg-cyan-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
             Quick View
           </button>
@@ -1314,14 +1314,14 @@ export function CompactCandidateCard({
       (preview.employment.length ||
         preview.projects.length ||
         preview.education) ? (
-        <div className="mt-3 max-w-3xl border-t border-slate-800 pt-3">
+        <div className="mt-4 max-w-3xl border-t border-slate-700/50 pt-4">
           {preview.employment.length ? (
             <section className="min-w-0" aria-label="Recent experience">
               <h3 className="text-xs font-semibold text-slate-300">
                 Recent experience ({preview.employmentCount})
               </h3>
               <ol className="mt-2 space-y-1.5">
-                {preview.employment.slice(0, 3).map((item) => (
+                {preview.employment.slice(0, 2).map((item) => (
                   <li key={item.id} className="text-sm text-slate-400">
                     <p className="truncate font-medium text-slate-200">
                       {item.title || "Role not provided"}
@@ -1343,7 +1343,7 @@ export function CompactCandidateCard({
                   </li>
                 ))}
               </ol>
-              {preview.employmentCount > 3 ? (
+              {preview.employmentCount > 2 ? (
                 <button
                   type="button"
                   onClick={() => onOpenTab?.("Experience")}
@@ -1360,7 +1360,7 @@ export function CompactCandidateCard({
                 Relevant projects ({preview.projectCount})
               </h3>
               <ol className="mt-2 space-y-1.5">
-                {preview.projects.slice(0, 2).map((item) => (
+                {preview.projects.slice(0, 1).map((item) => (
                   <li key={item.id} className="text-xs text-slate-400">
                     <p className="truncate font-medium text-slate-200">
                       {item.name || "Project name not provided in source"}
@@ -1381,7 +1381,7 @@ export function CompactCandidateCard({
                   </li>
                 ))}
               </ol>
-              {preview.projectCount > 2 ? (
+              {preview.projectCount > 1 ? (
                 <button
                   type="button"
                   onClick={() => onOpenTab?.("Projects")}

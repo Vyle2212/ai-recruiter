@@ -53,7 +53,8 @@ assert.doesNotMatch(client, /candidate360SearchHref|Open full profile/);
 for (const tab of ["Overview", "Experience", "Projects", "Education", "Skills"])
   assert.ok(drawer.includes(`"${tab}"`), `missing ${tab} tab`);
 assert.match(drawer, /RequestOriginalCvButton/);
-assert.match(drawer, /Open original CV/);
+assert.match(drawer, /RequestOriginalCvButton/);
+assert.doesNotMatch(drawer, /Open original CV/);
 assert.match(drawer, /aria-label="Compare this candidate"/);
 assert.doesNotMatch(drawer, /Open full profile|fullProfileHref/);
 

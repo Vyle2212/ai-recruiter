@@ -277,7 +277,7 @@ const markup = renderToStaticMarkup(
 for (const expected of [
   "Latest known role",
   "88% Strong Match",
-  "Match summary",
+  "Why this profile matches",
   "Met: SAP FICO",
   "SAP FICO",
   "Recent experience",
