@@ -184,6 +184,23 @@ async function provision(config: SafeConfig, client: SupabaseClient) {
     entity_type: "organization",
     entity_id: String(organization.id),
   });
+  const runHash = pseudonymousAcceptanceIdentifier(config.runId);
+  const { data: clientOrganization, error: clientOrganizationError } =
+    await client
+      .from("organizations")
+      .insert({
+        name: `PTF synthetic client organization ${runHash}`,
+        organization_type: "client",
+        status: "active",
+      })
+      .select("id")
+      .single();
+  if (clientOrganizationError || !clientOrganization?.id)
+    throw new Error("acceptance_client_organization_create_failed");
+  await recordEntity(client, config.runId, {
+    entity_type: "organization",
+    entity_id: String(clientOrganization.id),
+  });
 
   const identities = {} as AcceptanceCredentialBundle["identities"];
   let syntheticClient: { profileId: string; clientId: string } | null = null;
@@ -198,7 +215,11 @@ async function provision(config: SafeConfig, client: SupabaseClient) {
         role: definition.role,
         status: definition.status,
         organization_id:
-          definition.role === "candidate" ? null : String(organization.id),
+          definition.role === "candidate"
+            ? null
+            : definition.role === "client"
+              ? String(clientOrganization.id)
+              : String(organization.id),
         client_id: definition.role === "client" ? randomUUID() : null,
         candidate_id:
           definition.role === "candidate"
@@ -271,7 +292,6 @@ async function provision(config: SafeConfig, client: SupabaseClient) {
     throw new Error("acceptance_job_fixture_identity_missing");
   const clientScope: { profileId: string; clientId: string } = syntheticClient;
   const recruiterProfileId: string = syntheticRecruiterProfileId;
-  const runHash = pseudonymousAcceptanceIdentifier(config.runId);
   const job = await client
     .from("jobs")
     .insert({
@@ -287,7 +307,7 @@ async function provision(config: SafeConfig, client: SupabaseClient) {
   const relations = [
     client.from("client_memberships").insert({
       user_profile_id: clientScope.profileId,
-      organization_id: organization.id,
+      organization_id: clientOrganization.id,
       client_id: clientScope.clientId,
       status: "active",
     }),
@@ -306,6 +326,18 @@ async function provision(config: SafeConfig, client: SupabaseClient) {
     client.from("client_job_ownership").insert({
       client_id: clientScope.clientId,
       job_id: job.data.id,
+      status: "active",
+    }),
+    client.from("client_candidate_access").insert({
+      client_id: clientScope.clientId,
+      candidate_id: ACCEPTANCE_SYNTHETIC_CANDIDATE_ID,
+      status: "active",
+    }),
+    client.from("client_candidate_shares").insert({
+      client_id: clientScope.clientId,
+      recruiter_profile_id: recruiterProfileId,
+      candidate_id: ACCEPTANCE_SYNTHETIC_CANDIDATE_ID,
+      shared_by_profile_id: clientScope.profileId,
       status: "active",
     }),
   ];
@@ -344,6 +376,7 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
   const runHash = pseudonymousAcceptanceIdentifier(config.runId);
   const syntheticEmailSuffix = `+${runHash}@acceptance.invalid`;
   const syntheticOrganizationName = `PTF synthetic organization ${runHash}`;
+  const syntheticClientOrganizationName = `PTF synthetic client organization ${runHash}`;
   const { data: discoveredProfiles, error: profileDiscoveryError } =
     await client
       .from("user_profiles")
@@ -353,7 +386,7 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
     await client
       .from("organizations")
       .select("id")
-      .eq("name", syntheticOrganizationName);
+      .in("name", [syntheticOrganizationName, syntheticClientOrganizationName]);
   const { data: authPage, error: authDiscoveryError } =
     await client.auth.admin.listUsers({ page: 1, perPage: 1000 });
   if (profileDiscoveryError || organizationDiscoveryError || authDiscoveryError)
@@ -412,6 +445,8 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
   for (const [table, key, ids] of [
     ["client_job_shares", "job_id", jobIds],
     ["client_job_ownership", "job_id", jobIds],
+    ["client_candidate_shares", "client_id", clientIds],
+    ["client_candidate_access", "client_id", clientIds],
     ["client_feature_entitlements", "client_id", clientIds],
     ["client_recruiter_assignments", "client_id", clientIds],
     ["client_memberships", "client_id", clientIds],
@@ -427,6 +462,8 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
   for (const [table, key, ids] of [
     ["client_job_shares", "job_id", jobIds],
     ["client_job_ownership", "job_id", jobIds],
+    ["client_candidate_shares", "client_id", clientIds],
+    ["client_candidate_access", "client_id", clientIds],
     ["client_feature_entitlements", "client_id", clientIds],
     ["client_recruiter_assignments", "client_id", clientIds],
     ["client_memberships", "client_id", clientIds],
@@ -491,7 +528,7 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
     await client
       .from("organizations")
       .select("id", { count: "exact", head: true })
-      .eq("name", syntheticOrganizationName);
+      .in("name", [syntheticOrganizationName, syntheticClientOrganizationName]);
   const { data: remainingAuth, error: authResidueError } =
     await client.auth.admin.listUsers({ page: 1, perPage: 1000 });
   if (
