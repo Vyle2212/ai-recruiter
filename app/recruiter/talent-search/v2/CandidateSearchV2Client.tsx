@@ -733,6 +733,7 @@ export function CompactCandidateCard({
   shortlisted = false,
   shortlistPending = false,
   onShortlistToggle,
+  onCompare,
   onOpenTab,
   identityLookup = false,
   selected = false,
@@ -752,6 +753,7 @@ export function CompactCandidateCard({
   shortlisted?: boolean;
   shortlistPending?: boolean;
   onShortlistToggle?: () => void;
+  onCompare?: () => void;
   onOpenTab?: (tab: "Experience" | "Projects" | "Education" | "Skills") => void;
   identityLookup?: boolean;
   selected?: boolean;
@@ -1272,6 +1274,17 @@ export function CompactCandidateCard({
                   : "+ Shortlist"}
             </button>
           ) : null}
+          {result.talentPool !== "linkedin_talent_pool" ? (
+            <button
+              type="button"
+              onClick={onCompare}
+              disabled={!onCompare}
+              aria-label={`Compare ${candidateName} with candidates in this search`}
+              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-cyan-500/50 px-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/10 disabled:opacity-50"
+            >
+              Compare
+            </button>
+          ) : null}
           <button
             type="button"
             data-candidate-details-trigger={result.candidateId}
@@ -1604,6 +1617,7 @@ export default function CandidateSearchV2Client({
     "matches" | "shortlisted"
   >("matches");
   const [compareAnchorCandidateId, setCompareAnchorCandidateId] = useState("");
+  const [compareAnchorResult, setCompareAnchorResult] = useState<SearchResult | null>(null);
   const [shortlistJobId, setShortlistJobId] = useState<string | null>(null);
   const [shortlistPreviewJob, setShortlistPreviewJob] = useState(false);
   const [shortlistContextReady, setShortlistContextReady] = useState(false);
@@ -1683,6 +1697,7 @@ export default function CandidateSearchV2Client({
       setExpandedCandidateId("");
       setComparePackOpen(false);
       setCompareAnchorCandidateId("");
+      setCompareAnchorResult(null);
       setGuidedIntegrityPlan(null);
       setGuidedProvenance(null);
       setGuidedSearchIdentity(null);
@@ -1828,9 +1843,12 @@ export default function CandidateSearchV2Client({
   }
   const compareAnchorCandidate = results.find(
     (candidate) => candidate.candidateId === compareAnchorCandidateId,
-  );
+  ) || (compareAnchorResult?.candidateId === compareAnchorCandidateId ? compareAnchorResult : null);
+  const comparisonResults = compareAnchorCandidate && !results.some(
+    (candidate) => candidate.candidateId === compareAnchorCandidate.candidateId,
+  ) ? [compareAnchorCandidate, ...results] : results;
   const compareCandidates = searchV2ComparisonCandidates(
-    results,
+    comparisonResults,
     shortlistedIds,
     comparePackScope,
     compareAnchorCandidateId,
@@ -4052,6 +4070,7 @@ export default function CandidateSearchV2Client({
                 aria-controls="search-v2-compare-pack"
                 onClick={() => {
                   setCompareAnchorCandidateId("");
+                  setCompareAnchorResult(null);
                   if (response.summary.page !== 1) {
                     void runSearch(1, true).then(() =>
                       setComparePackOpen(true),
@@ -4088,10 +4107,7 @@ export default function CandidateSearchV2Client({
             </div>
           ) : null}
 
-          {comparePackOpen &&
-          !loading &&
-          results.length &&
-          response.summary.page === 1 ? (
+          {comparePackOpen && !loading && results.length && response.summary.page === 1 ? (
             <section
               id="search-v2-compare-pack"
               aria-label="Candidate Comparison"
@@ -4324,6 +4340,23 @@ export default function CandidateSearchV2Client({
                     ? undefined
                     : () => void toggleShortlist(result.candidateId)
                 }
+                onCompare={() => {
+                  setCompareAnchorCandidateId(result.candidateId);
+                  setCompareAnchorResult(result);
+                  setComparePackScope("matches");
+                  setComparePackOpen(true);
+                  const scrollToComparison = () =>
+                    window.requestAnimationFrame(() =>
+                      document
+                        .getElementById("search-v2-compare-pack")
+                        ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                    );
+                  if (response.summary.page !== 1) {
+                    void runSearch(1, true).then(scrollToComparison);
+                  } else {
+                    scrollToComparison();
+                  }
+                }}
                 expanded={expandedCandidateId === result.candidateId}
                 diagnostic={diagnosticsByCandidate.get(result.candidateId)!}
                 onToggle={() =>
@@ -4480,14 +4513,20 @@ export default function CandidateSearchV2Client({
             }
             onCompare={() => {
               setCompareAnchorCandidateId(selectedDrawerCandidate.candidateId);
+              setCompareAnchorResult(selectedDrawerCandidate);
               setComparePackScope("matches");
               setComparePackOpen(true);
               setExpandedCandidateId("");
-              window.requestAnimationFrame(() =>
+              const scrollToComparison = () => window.requestAnimationFrame(() =>
                 document
                   .getElementById("search-v2-compare-pack")
                   ?.scrollIntoView({ behavior: "smooth", block: "start" }),
               );
+              if (response.summary.page !== 1) {
+                void runSearch(1, true).then(scrollToComparison);
+              } else {
+                scrollToComparison();
+              }
             }}
             onClose={closeCandidateDrawer}
             onSelect={(candidateId) => {
