@@ -161,7 +161,9 @@ jobs:
       - name: Authenticated acceptance harness safety contracts
         env:
           NODE_OPTIONS: --conditions=react-server
-        run: npm run test:acceptance:harness
+        run: |
+          npm run test:acceptance:harness
+          node --import tsx scripts/searchV2AcceptanceLatencyContract.test.ts
 
       - name: Search authorization, cache scope, and candidate privacy
         run: |
@@ -173,6 +175,7 @@ jobs:
         run: |
           npm run test:production-trust:search-regression
           node --import tsx scripts/searchV2ComparisonActions.test.ts
+          node --import tsx scripts/searchV2PerformanceUx.test.ts
 
       - name: Canonical evidence and immutable golden regressions
         run: |
@@ -268,6 +271,7 @@ jobs:
       - name: Scoped formatting check
         run: |
           npm run check:production-trust:format
+          npx prettier --check acceptance/e2e/productionTrustAuthenticatedAcceptance.spec.ts scripts/searchV2AcceptanceLatency.mjs scripts/searchV2AcceptanceLatencyContract.test.ts
           npx prettier --check scripts/chatRecruiterAdminEntryBoundary.test.ts
           npx prettier --check app/candidate/portal/CandidateChatConsent.tsx app/api/candidate/chat-consent/route.ts scripts/candidateChatConsentBoundary.test.ts
           npx prettier --check docs/precision-v172-blank-project-anchor-20260926.md

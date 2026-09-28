@@ -21,6 +21,7 @@ import { pseudonymousAcceptanceIdentifier } from "../../lib/acceptanceEnvironmen
 
 const searchPath = "/api/recruiter/search-v2";
 const searchPage = "/recruiter/talent-search/v2";
+const SEARCH_V2_ACCEPTANCE_BUDGET_MS = 3_000;
 const runToken = String(process.env.ACCEPTANCE_RUN_ID || "ptf1c2-missing");
 const externalMode = parseAcceptanceExternalMode(
   process.env.ACCEPTANCE_EXTERNAL_MODE,
@@ -440,9 +441,11 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     const api = await authenticatedApi("recruiter");
     const query = acceptanceRequired("ACCEPTANCE_INTERNAL_SEARCH_QUERY");
     const marker = acceptanceRequired("ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER");
+    const firstStartedAt = performance.now();
     const response = await api.post(searchPath, {
       data: { query, talentPool: "internal_profiles" },
     });
+    const firstSearchMs = Math.ceil(performance.now() - firstStartedAt);
     expect(response.status()).toBe(200);
     const body = await response.json();
     expect(body.results?.length).toBe(1);
@@ -454,9 +457,15 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       String(body.results[0].candidateId || body.results[0].id || ""),
     ).toBe(internalCandidateId);
     expect(internalCandidateId).toBeTruthy();
+    expect(
+      firstSearchMs,
+      `first Search V2 response exceeded ${SEARCH_V2_ACCEPTANCE_BUDGET_MS}ms`,
+    ).toBeLessThanOrEqual(SEARCH_V2_ACCEPTANCE_BUDGET_MS);
+    const warmStartedAt = performance.now();
     const repeated = await api.post(searchPath, {
       data: { query, talentPool: "internal_profiles" },
     });
+    const warmSearchMs = Math.ceil(performance.now() - warmStartedAt);
     expect(repeated.status()).toBe(200);
     const repeatedBody = await repeated.json();
     expect(
@@ -470,9 +479,16 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
         item.overallMatchScore,
       ]),
     );
+    expect(
+      warmSearchMs,
+      `warm Search V2 response exceeded ${SEARCH_V2_ACCEPTANCE_BUDGET_MS}ms`,
+    ).toBeLessThanOrEqual(SEARCH_V2_ACCEPTANCE_BUDGET_MS);
     await attachSanitized(testInfo, "internal-search", {
       resultCount: body.results.length,
       allResultsSynthetic: true,
+      latencyBudgetMs: SEARCH_V2_ACCEPTANCE_BUDGET_MS,
+      firstSearchMs,
+      warmSearchMs,
     });
     await api.dispose();
   });

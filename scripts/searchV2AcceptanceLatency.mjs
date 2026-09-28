@@ -7,6 +7,7 @@ import { performance } from "node:perf_hooks";
 const baseUrl = process.env.SEARCH_V2_ACCEPTANCE_URL?.replace(/\/$/, "");
 const expectedSha = process.env.SEARCH_V2_ACCEPTANCE_SHA;
 const cookie = process.env.SEARCH_V2_ACCEPTANCE_COOKIE;
+const SEARCH_V2_ACCEPTANCE_BUDGET_MS = 3_000;
 assert(
   baseUrl && /^https:\/\//.test(baseUrl),
   "Set HTTPS SEARCH_V2_ACCEPTANCE_URL",
@@ -68,17 +69,25 @@ const warm = timings
   .slice(1)
   .map((item) => item.wallMs)
   .sort((a, b) => a - b);
-console.log(
-  JSON.stringify(
-    {
-      commitSha: expectedSha,
-      classification: release.classification,
-      firstMs: timings[0].wallMs,
-      warmMedianMs: warm[Math.floor(warm.length / 2)],
-      warmMaxMs: warm.at(-1),
-      timings,
-    },
-    null,
-    2,
-  ),
+const result = {
+  commitSha: expectedSha,
+  classification: release.classification,
+  latencyBudgetMs: SEARCH_V2_ACCEPTANCE_BUDGET_MS,
+  firstMs: timings[0].wallMs,
+  warmMedianMs: warm[Math.floor(warm.length / 2)],
+  warmMaxMs: warm.at(-1),
+  timings,
+};
+console.log(JSON.stringify(result, null, 2));
+assert(
+  result.firstMs <= SEARCH_V2_ACCEPTANCE_BUDGET_MS,
+  `First Search V2 response exceeded ${SEARCH_V2_ACCEPTANCE_BUDGET_MS}ms`,
+);
+assert(
+  result.warmMedianMs <= SEARCH_V2_ACCEPTANCE_BUDGET_MS,
+  `Warm Search V2 median exceeded ${SEARCH_V2_ACCEPTANCE_BUDGET_MS}ms`,
+);
+assert(
+  result.warmMaxMs <= SEARCH_V2_ACCEPTANCE_BUDGET_MS,
+  `Warm Search V2 maximum exceeded ${SEARCH_V2_ACCEPTANCE_BUDGET_MS}ms`,
 );
