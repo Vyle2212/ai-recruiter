@@ -6,6 +6,7 @@ do $preflight$
 begin
   if to_regclass('public.user_profiles') is null
      or to_regclass('public.candidates') is null
+     or to_regclass('public.candidate_accounts') is null
      or to_regclass('public.candidate_chat_contact_consents') is null
      or to_regclass('public.client_feature_entitlements') is null
      or to_regclass('public.client_recruiter_assignments') is null
@@ -60,11 +61,12 @@ create index chat_conversations_job_idx
 create index chat_conversations_organization_idx
   on public.chat_conversations(organization_id, updated_at desc)
   where organization_id is not null;
-create unique index chat_client_candidate_active_scope_key
-  on public.chat_conversations
-  (created_by_profile_id, candidate_id,
-   coalesce(job_id, '00000000-0000-0000-0000-000000000000'::uuid))
-  where channel_kind = 'client_candidate' and status = 'active';
+create unique index chat_client_candidate_active_without_job_key
+  on public.chat_conversations(created_by_profile_id, candidate_id)
+  where channel_kind = 'client_candidate' and status = 'active' and job_id is null;
+create unique index chat_client_candidate_active_with_job_key
+  on public.chat_conversations(created_by_profile_id, candidate_id, job_id)
+  where channel_kind = 'client_candidate' and status = 'active' and job_id is not null;
 
 create table public.chat_conversation_participants (
   conversation_id uuid not null references public.chat_conversations(id) on delete restrict,
@@ -215,22 +217,39 @@ begin
     join public.user_profiles candidate
       on candidate.candidate_id = c.candidate_id
      and candidate.role = 'candidate' and candidate.status = 'active'
+    join public.chat_conversation_participants client_participant
+      on client_participant.conversation_id = c.id
+     and client_participant.user_profile_id = client.id
+     and client_participant.role_snapshot = 'client'
+     and client_participant.status = 'active'
+    join public.chat_conversation_participants candidate_participant
+      on candidate_participant.conversation_id = c.id
+     and candidate_participant.user_profile_id = candidate.id
+     and candidate_participant.role_snapshot = 'candidate'
+     and candidate_participant.status = 'active'
     join public.candidate_accounts account
       on account.user_profile_id = candidate.id
      and account.candidate_id = c.candidate_id and account.status = 'active'
     join public.candidate_chat_contact_consents consent
       on consent.user_profile_id = candidate.id
      and consent.candidate_id = c.candidate_id and consent.consent = true
+    join auth.users candidate_auth
+      on candidate_auth.id = candidate.auth_user_id
+     and candidate_auth.email_confirmed_at is not null
     join public.client_memberships membership
       on membership.user_profile_id = client.id
+     and membership.organization_id = c.organization_id
      and membership.client_id = c.client_id and membership.status = 'active'
     join public.client_candidate_access access
       on access.client_id = c.client_id
      and access.candidate_id = c.candidate_id and access.status = 'active'
     where c.id = new.conversation_id
+      and (select count(*) from public.chat_conversation_participants participant
+           where participant.conversation_id = c.id) = 2
       and exists (
         select 1 from public.client_feature_entitlements entitlement
         where entitlement.client_id = c.client_id
+          and entitlement.feature = 'candidate_chat'
           and entitlement.status = 'active'
           and btrim(entitlement.plan_code) <> ''
           and entitlement.valid_from <= now()
@@ -324,7 +343,8 @@ before update on public.chat_conversations
 for each row execute function public.protect_chat_conversation_scope();
 
 -- The invoker is service_role only. One RPC call atomically creates the
--- conversation and both participants, with mutable permissions rechecked.
+-- conversation and both participants. Every mutable permission is rechecked
+-- inside this transaction immediately before the write.
 create function public.create_client_candidate_chat_conversation(
   p_client_profile_id uuid, p_candidate_id uuid, p_job_id uuid default null
 ) returns uuid language plpgsql security invoker set search_path = '' as $$
@@ -334,6 +354,10 @@ declare
   v_candidate_profile_id uuid;
   v_conversation_id uuid;
 begin
+  if p_client_profile_id is null or p_candidate_id is null then
+    raise exception using errcode = 'P0001', message = 'chat_scope_not_available';
+  end if;
+
   select client.client_id, client.organization_id, candidate.id
     into v_client_id, v_organization_id, v_candidate_profile_id
   from public.user_profiles client
@@ -346,14 +370,18 @@ begin
   join public.candidate_chat_contact_consents consent
     on consent.user_profile_id = candidate.id
    and consent.candidate_id = p_candidate_id and consent.consent = true
+  join auth.users auth_user
+    on auth_user.id = candidate.auth_user_id
+   and auth_user.email_confirmed_at is not null
   where client.id = p_client_profile_id
     and client.role = 'client' and client.status = 'active';
   if v_client_id is null or v_organization_id is null or v_candidate_profile_id is null then
-    raise exception 'Client candidate chat scope unavailable';
+    raise exception using errcode = 'P0001', message = 'chat_scope_not_available';
   end if;
   if not exists (
     select 1 from public.client_memberships m
     where m.user_profile_id = p_client_profile_id
+      and m.organization_id = v_organization_id
       and m.client_id = v_client_id and m.status = 'active'
   ) or not exists (
     select 1 from public.client_candidate_access access
@@ -362,6 +390,7 @@ begin
   ) or not exists (
     select 1 from public.client_feature_entitlements entitlement
     where entitlement.client_id = v_client_id
+      and entitlement.feature = 'candidate_chat'
       and entitlement.status = 'active' and btrim(entitlement.plan_code) <> ''
       and entitlement.valid_from <= now()
       and (entitlement.valid_until is null or entitlement.valid_until > now())
@@ -370,7 +399,7 @@ begin
     where ownership.client_id = v_client_id
       and ownership.job_id = p_job_id and ownership.status = 'active'
   )) then
-    raise exception 'Client candidate chat permission unavailable';
+    raise exception using errcode = 'P0001', message = 'chat_scope_not_available';
   end if;
 
   insert into public.chat_conversations
@@ -386,10 +415,10 @@ begin
       and candidate_id = p_candidate_id
       and job_id is not distinct from p_job_id;
     if v_conversation_id is null then
-      raise exception 'Client candidate conversation conflict';
+      raise exception using errcode = 'P0001', message = 'chat_conversation_inconsistent';
     end if;
     if (select count(*) from public.chat_conversation_participants
-        where conversation_id = v_conversation_id and status = 'active') <> 2
+        where conversation_id = v_conversation_id) <> 2
        or not exists (
          select 1 from public.chat_conversation_participants
          where conversation_id = v_conversation_id
@@ -401,7 +430,7 @@ begin
            and user_profile_id = v_candidate_profile_id
            and role_snapshot = 'candidate' and status = 'active'
        ) then
-      raise exception 'Client candidate conversation participants invalid';
+      raise exception using errcode = 'P0001', message = 'chat_conversation_inconsistent';
     end if;
   else
     insert into public.chat_conversation_participants

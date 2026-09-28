@@ -43,6 +43,8 @@ async function main() {
   assert.match(source, /candidate_chat_contact_consents/);
   assert.match(source, /auth\.admin\.getUserById/);
   assert.match(source, /client_feature_entitlements/);
+  assert.match(source, /\.eq\("feature", "candidate_chat"\)/);
+  assert.match(source, /\.eq\("organization_id", client\.organization_id\)/);
   assert.match(source, /client_candidate_access/);
   assert.match(source, /client_job_ownership/);
   assert.match(source, /authorizeChatConversation\(/);

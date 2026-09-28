@@ -70,10 +70,11 @@ export async function authorizeClientCandidateMessage(
 
   const [membership, subscriptions, access, jobOwnership, account, consent, candidateAuth] = await Promise.all([
     db.from("client_memberships").select("id").eq("user_profile_id", client.id)
+      .eq("organization_id", client.organization_id)
       .eq("client_id", client.client_id).eq("status", "active").limit(1),
     db.from("client_feature_entitlements")
       .select("status,plan_code,valid_from,valid_until")
-      .eq("client_id", client.client_id),
+      .eq("client_id", client.client_id).eq("feature", "candidate_chat"),
     db.from("client_candidate_access").select("status")
       .eq("client_id", client.client_id).eq("candidate_id", candidate.candidate_id)
       .eq("status", "active").limit(1),

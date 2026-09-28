@@ -52,13 +52,42 @@ assert.match(sql, /chat_receipt_read_audit/);
 assert.match(sql, /insert into public\.chat_message_receipts[\s\S]*p\.user_profile_id <> new\.sender_profile_id/);
 assert.match(sql, /foreign key \(message_id, conversation_id, user_profile_id\)/);
 assert.match(sql, /chat_conversation_scope_immutable/);
-assert.match(sql, /unique index chat_client_candidate_active_scope_key/);
-assert.match(sql, /create function public\.create_client_candidate_chat_conversation\(/);
-assert.match(sql, /on conflict do nothing returning id into v_conversation_id/);
-assert.match(sql, /insert into public\.chat_conversation_participants/);
-assert.match(sql, /candidate_chat_contact_consents consent[\s\S]*consent\.consent = true/);
-assert.match(sql, /client_feature_entitlements entitlement[\s\S]*entitlement\.valid_until > now\(\)/);
-assert.match(sql, /grant execute on function public\.create_client_candidate_chat_conversation\(uuid, uuid, uuid\)[\s\S]*to service_role/);
+assert.match(sql, /create unique index chat_client_candidate_active_without_job_key/);
+assert.match(sql, /create unique index chat_client_candidate_active_with_job_key/);
+assert.match(
+  sql,
+  /create function public\.create_client_candidate_chat_conversation\([\s\S]*security invoker[\s\S]*set search_path = ''/,
+);
+for (const requirement of [
+  "client_memberships",
+  "client_feature_entitlements",
+  "client_candidate_access",
+  "client_job_ownership",
+  "candidate_accounts",
+  "candidate_chat_contact_consents",
+  "auth.users",
+]) assert.match(sql, new RegExp(requirement.replace(".", "\\.")));
+assert.match(sql, /entitlement\.feature = 'candidate_chat'/);
+assert.match(sql, /auth_user\.email_confirmed_at is not null/);
+assert.match(sql, /candidate_auth\.email_confirmed_at is not null/);
+assert.match(sql, /membership\.organization_id = c\.organization_id/);
+assert.match(sql, /client_participant\.role_snapshot = 'client'/);
+assert.match(sql, /candidate_participant\.role_snapshot = 'candidate'/);
+assert.match(sql, /on conflict do nothing/);
+assert.match(
+  sql,
+  /insert into public\.chat_conversations[\s\S]*insert into public\.chat_conversation_participants/,
+  "conversation and both participants must be inserted in the same RPC transaction",
+);
+assert.match(
+  sql,
+  /raise exception using errcode = 'P0001', message = 'chat_conversation_inconsistent'/,
+  "an existing partial conversation must fail closed instead of being repaired implicitly",
+);
+assert.match(
+  sql,
+  /grant execute on function public\.create_client_candidate_chat_conversation\(uuid, uuid, uuid\)[\s\S]*to service_role/,
+);
 assert.match(sql, /from public, anon, authenticated/);
 assert.doesNotMatch(sql, /grant .* to (?:anon|authenticated)/i);
 assert.doesNotMatch(sql, /security definer/i);

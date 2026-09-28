@@ -33,7 +33,7 @@ const auditedFiles = files.filter((file) => {
     recruiterApiPolicyForRequest(route, method),
   );
   const hasLocalBoundary =
-    /requireRecruiter(?:ApiRoute|Search)Authorization|requireClientShareAuthorization|authorizeClientCandidateLookup/.test(
+    /requireRecruiter(?:ApiRoute|Search)Authorization|requireClientShareAuthorization|authorizeClientCandidateLookup|authorizeClientCandidateMessage|createClientCandidateConversation/.test(
       source,
     );
   const hasCandidateBoundary = /authorizeCandidateCvUpload/.test(source);
@@ -88,7 +88,7 @@ const uncoveredRouteMethods = allRouteMethods.filter(
   ({ route, method, source }) => {
     if (explicitPublicMethods.has(`${method} ${route}`)) return false;
     if (
-      /requireRecruiter(?:ApiRoute|Search)Authorization|requireClientShareAuthorization|authorizeClientCandidateLookup|authorizeCandidateCvUpload/.test(
+      /requireRecruiter(?:ApiRoute|Search)Authorization|requireClientShareAuthorization|authorizeClientCandidateLookup|authorizeCandidateCvUpload|authorizeClientCandidateMessage|createClientCandidateConversation/.test(
         source,
       )
     )
@@ -207,6 +207,7 @@ for (const item of previousHighRiskRoutes) {
 const proxySource = readFileSync(path.join(process.cwd(), "proxy.ts"), "utf8");
 assert.match(proxySource, /recruiterApiPolicyForRequest/);
 assert.match(proxySource, /updateClientShareApiSession/);
+assert.match(proxySource, /updateChatApiSession/);
 assert.ok(
   proxySource.includes('"/((?!_next/static|_next/image|favicon.ico).*)"'),
   "Proxy must cover API and public routes during the production cutover",
