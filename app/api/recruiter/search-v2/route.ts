@@ -128,54 +128,6 @@ function canonicalDatasetProjection(
   });
   return { projection, cacheHit: false };
 }
-const engineReadinessByAuthorizationScope = new Map<string, Promise<void>>();
-function ensureSearchV2EngineReady(authorizationScope: string) {
-  const existing = engineReadinessByAuthorizationScope.get(authorizationScope);
-  if (existing) return existing;
-  const readiness = fetchCandidateSource()
-    .then((dataset) => {
-      const canonical = canonicalDatasetProjection(
-        dataset.documents,
-        dataset.revision,
-        authorizationScope,
-      ).projection.documents;
-      rankCandidatesV2(
-        canonical,
-        {
-          query:
-            "Senior SAP FICO Consultant in Malaysia with Mandarin and at least 8 years of experience",
-          mode: "hybrid",
-          talentPool: "internal_profiles",
-          filters: { deliveryExperience: ["Implementation"] },
-          criteria: [
-            {
-              id: "prewarm-delivery",
-              label: "Demonstrated SAP FICO implementation depth",
-              conceptId: "FICO",
-              importance: "most_important",
-              source: "ai_suggestion",
-            },
-            {
-              id: "prewarm-leadership",
-              label: "Delivery ownership and stakeholder leadership",
-              importance: "important",
-              source: "ai_suggestion",
-            },
-          ],
-          page: 1,
-          pageSize: 1,
-        },
-        undefined,
-        true,
-      );
-    })
-    .catch((error) => {
-      engineReadinessByAuthorizationScope.delete(authorizationScope);
-      throw error;
-    });
-  engineReadinessByAuthorizationScope.set(authorizationScope, readiness);
-  return readiness;
-}
 type RankedSearchCacheEntry = {
   createdAt: number;
   generatedAt: string;
@@ -318,14 +270,9 @@ export async function GET(request: NextRequest) {
     void prewarmCandidateSearchV2Dataset().catch(() => undefined);
     readiness = searchV2ProjectionReadiness();
   }
-  if (readiness.status === "ready") {
-    // Recruiter-visible readiness follows the valid dataset. Ranking prewarm is
-    // intentionally detached so an exact identity request cannot queue behind
-    // a synchronous full-population scoring pass in this request.
-    void ensureSearchV2EngineReady(authorization.scope.cacheKey).catch(
-      () => undefined,
-    );
-  }
+  // Readiness must stay cheap: full-population scoring in this GET runs on the
+  // same Node event loop as the next POST and can stall the first search.
+  // Ranking is performed for the user's actual requirements in POST.
   const readyDataset =
     readiness.status === "ready"
       ? await fetchCandidateSource().catch(() => null)
