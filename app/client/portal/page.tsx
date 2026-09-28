@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/server";
 import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
+import { anyActiveSubscription } from "@/lib/chatSubscriptionState";
 import ClientRecruiterSharing from "./ClientRecruiterSharing";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +55,7 @@ export default async function ClientPortalPage({ searchParams }: { searchParams:
     Date.parse(String(item.valid_from)) <= now &&
     (!item.valid_until || (Number.isFinite(Date.parse(String(item.valid_until))) && Date.parse(String(item.valid_until)) > now))
   ) : [];
+  const candidateChatIncluded = available && anyActiveSubscription(entitlements.data || [], now);
   const plan = features[0]?.plan_code || "No active plan";
   const recruiterSupport = features.some(item => item.feature === "recruiter_support");
   let sharing: React.ReactNode = null;
@@ -113,7 +115,7 @@ export default async function ClientPortalPage({ searchParams }: { searchParams:
           <article className={card} key={String(label)}><h2 className="text-sm text-slate-400">{label}</h2><p className="mt-3 text-2xl font-semibold">{available ? value ?? 0 : "Unavailable"}</p></article>)}
       </section>
       <section className={card}><h2 className="text-xl font-semibold">Features in your plan</h2>
-        {features.length ? <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{features.map(item => <li className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-4 text-cyan-100" key={item.feature}>{featureLabels[item.feature] || item.feature}</li>)}</ul> : <p className="mt-3 text-slate-400">No active feature entitlement is available for this workspace.</p>}
+        {features.length ? <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{features.filter(item => item.feature !== "candidate_chat").map(item => <li className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-4 text-cyan-100" key={item.feature}>{featureLabels[item.feature] || item.feature}</li>)}{candidateChatIncluded && <li className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-4 text-cyan-100" key="candidate_chat">Candidate chat <span className="block text-xs text-cyan-200/75">Included with any active subscription; candidate account and contact consent required.</span></li>}</ul> : <p className="mt-3 text-slate-400">No active feature entitlement is available for this workspace.</p>}
         <p className="mt-4 text-sm text-slate-500">A listed entitlement does not grant access to a feature until its workspace is released.</p>
       </section>
       {process.env.CLIENT_CANDIDATE_LOOKUP_ENABLED === "true" && available && features.some(item => item.feature === "unlimited_search") &&
