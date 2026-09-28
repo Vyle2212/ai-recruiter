@@ -225,9 +225,12 @@ for (const state of [
   "cancelled",
 ])
   assert(client.includes(state));
-assert.match(client, /Searching candidates/);
+assert.match(client, /Finding candidates for your search/);
 assert.match(client, /previous results remain visible/i);
-assert.match(client, /Search took longer than 15 seconds/);
+assert.match(
+  client,
+  /Candidate search could not be prepared\. Please try again\./,
+);
 assert.match(client, /pendingSearchKeyRef\.current ===/);
 assert.match(client, /eligibilityDiagnostic\?\.funnel/);
 assert.match(filters, /Project and delivery experience/);

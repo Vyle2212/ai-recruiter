@@ -763,8 +763,16 @@ export async function POST(request: NextRequest) {
       [],
       request.signal,
     ).then(
-      (value) => ({ ok: true as const, value }),
-      (error: unknown) => ({ ok: false as const, error }),
+      (value) => ({
+        ok: true as const,
+        value,
+        durationMs: performance.now() - lifecycleStartedAt,
+      }),
+      (error: unknown) => ({
+        ok: false as const,
+        error,
+        durationMs: performance.now() - lifecycleStartedAt,
+      }),
     );
     if (lightweightIdentityLookup) {
       const retrievalStartedAt = performance.now();
@@ -807,7 +815,10 @@ export async function POST(request: NextRequest) {
     const lifecycleOutcome = await lifecyclePromise;
     if (!lifecycleOutcome.ok) throw lifecycleOutcome.error;
     const lifecycle = lifecycleOutcome.value;
-    const lifecycleMs = performance.now() - lifecycleStartedAt;
+    // Record the lifecycle query itself, not the longer wall-clock interval
+    // until source hydration also finishes. The two operations intentionally
+    // overlap, so measuring here would double-count retrieval in diagnostics.
+    const lifecycleMs = lifecycleOutcome.durationMs;
     const blockedIds = lifecycle.blockedIds;
     documents = documents.filter(
       (document) => !blockedIds.has(String(document.candidateId || "")),

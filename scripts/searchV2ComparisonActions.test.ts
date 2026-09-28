@@ -54,8 +54,15 @@ assert.match(search, />\s*Quick View\s*</);
 assert.doesNotMatch(search, />\s*Compare Pack\s*</);
 assert.equal((drawer.match(/aria-pressed=\{shortlisted\}/g) || []).length, 1);
 assert.match(drawer, /aria-label="Compare this candidate"/);
-assert.match(search, /aria-label=\{`Compare \$\{candidateName\} with candidates in this search`\}/);
+assert.match(
+  search,
+  /aria-label=\{`Compare \$\{identityHeading\} with candidates in this search`\}/,
+  "the compare action must use the rendered identity fallback in its accessible label",
+);
 assert.match(search, /setCompareAnchorResult\(result\)/);
-assert.match(search, /compareAnchorResult\?\.candidateId === compareAnchorCandidateId/);
+assert.match(
+  search,
+  /compareAnchorResult\?\.candidateId === compareAnchorCandidateId/,
+);
 
 console.log("Search V2 comparison actions tests passed.");

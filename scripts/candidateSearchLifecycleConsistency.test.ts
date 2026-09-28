@@ -307,10 +307,37 @@ const ownedUpdate = read(
 );
 
 assert.match(searchV2, /applyCurrentCandidateSearchLifecycle\(/);
+const lifecycleLookupStart = searchV2.indexOf(
+  "applyCurrentCandidateSearchLifecycle(",
+);
 assert.ok(
-  searchV2.indexOf("applyCurrentCandidateSearchLifecycle(") <
-    searchV2.indexOf("searchCacheKey(profile)"),
+  lifecycleLookupStart <
+    searchV2.indexOf("fetchCandidateSource()", lifecycleLookupStart),
+  "current lifecycle lookup must start before source hydration so the reads overlap",
+);
+assert.ok(
+  lifecycleLookupStart < searchV2.indexOf("searchCacheKey(profile)"),
   "current lifecycle state must contribute to the revision before ranked-cache lookup",
+);
+assert.match(
+  searchV2,
+  /durationMs: performance\.now\(\) - lifecycleStartedAt/,
+  "lifecycle duration must be captured when the independent lookup settles",
+);
+assert.match(
+  searchV2,
+  /const lifecycleMs = lifecycleOutcome\.durationMs/,
+  "overlapped source hydration must not be counted as lifecycle query time",
+);
+assert.doesNotMatch(
+  searchV2,
+  /const lifecycleMs = performance\.now\(\) - lifecycleStartedAt/,
+);
+assert.match(searchV2, /const blockedIds = lifecycle\.blockedIds/);
+assert.match(
+  searchV2,
+  /documents = documents\.filter\([\s\S]*?!blockedIds\.has/,
+  "fresh blocked candidate ids must still filter the hydrated source documents",
 );
 assert.match(
   searchV2,
