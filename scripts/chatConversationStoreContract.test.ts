@@ -47,6 +47,13 @@ assert.match(
 assert.match(sql, /chat_messages_immutable/);
 assert.match(sql, /chat_message_events_immutable/);
 assert.match(sql, /chat_conversation_scope_immutable/);
+assert.match(sql, /unique index chat_client_candidate_active_scope_key/);
+assert.match(sql, /create function public\.create_client_candidate_chat_conversation\(/);
+assert.match(sql, /on conflict do nothing returning id into v_conversation_id/);
+assert.match(sql, /insert into public\.chat_conversation_participants/);
+assert.match(sql, /candidate_chat_contact_consents consent[\s\S]*consent\.consent = true/);
+assert.match(sql, /client_feature_entitlements entitlement[\s\S]*entitlement\.valid_until > now\(\)/);
+assert.match(sql, /grant execute on function public\.create_client_candidate_chat_conversation\(uuid, uuid, uuid\)[\s\S]*to service_role/);
 assert.match(sql, /from public, anon, authenticated/);
 assert.doesNotMatch(sql, /grant .* to (?:anon|authenticated)/i);
 assert.doesNotMatch(sql, /security definer/i);

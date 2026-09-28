@@ -8,7 +8,10 @@ begin
      or to_regclass('public.candidates') is null
      or to_regclass('public.candidate_chat_contact_consents') is null
      or to_regclass('public.client_feature_entitlements') is null
-     or to_regclass('public.client_recruiter_assignments') is null then
+     or to_regclass('public.client_recruiter_assignments') is null
+     or to_regclass('public.client_memberships') is null
+     or to_regclass('public.client_candidate_access') is null
+     or to_regclass('public.client_job_ownership') is null then
     raise exception 'chat_store_dependencies_missing';
   end if;
   if to_regclass('public.chat_conversations') is not null
@@ -56,6 +59,11 @@ create index chat_conversations_job_idx
 create index chat_conversations_organization_idx
   on public.chat_conversations(organization_id, updated_at desc)
   where organization_id is not null;
+create unique index chat_client_candidate_active_scope_key
+  on public.chat_conversations
+  (created_by_profile_id, candidate_id,
+   coalesce(job_id, '00000000-0000-0000-0000-000000000000'::uuid))
+  where channel_kind = 'client_candidate' and status = 'active';
 
 create table public.chat_conversation_participants (
   conversation_id uuid not null references public.chat_conversations(id) on delete restrict,
@@ -139,6 +147,48 @@ begin
   ) then
     raise exception 'Chat conversation or sender membership is inactive';
   end if;
+  if exists (
+    select 1 from public.chat_conversations c
+    where c.id = new.conversation_id and c.channel_kind = 'client_candidate'
+  ) and not exists (
+    select 1 from public.chat_conversations c
+    join public.user_profiles client
+      on client.id = c.created_by_profile_id
+     and client.role = 'client' and client.status = 'active'
+     and client.client_id = c.client_id
+     and client.organization_id = c.organization_id
+    join public.user_profiles candidate
+      on candidate.candidate_id = c.candidate_id
+     and candidate.role = 'candidate' and candidate.status = 'active'
+    join public.candidate_accounts account
+      on account.user_profile_id = candidate.id
+     and account.candidate_id = c.candidate_id and account.status = 'active'
+    join public.candidate_chat_contact_consents consent
+      on consent.user_profile_id = candidate.id
+     and consent.candidate_id = c.candidate_id and consent.consent = true
+    join public.client_memberships membership
+      on membership.user_profile_id = client.id
+     and membership.client_id = c.client_id and membership.status = 'active'
+    join public.client_candidate_access access
+      on access.client_id = c.client_id
+     and access.candidate_id = c.candidate_id and access.status = 'active'
+    where c.id = new.conversation_id
+      and exists (
+        select 1 from public.client_feature_entitlements entitlement
+        where entitlement.client_id = c.client_id
+          and entitlement.status = 'active'
+          and btrim(entitlement.plan_code) <> ''
+          and entitlement.valid_from <= now()
+          and (entitlement.valid_until is null or entitlement.valid_until > now())
+      )
+      and (c.job_id is null or exists (
+        select 1 from public.client_job_ownership ownership
+        where ownership.client_id = c.client_id
+          and ownership.job_id = c.job_id and ownership.status = 'active'
+      ))
+  ) then
+    raise exception 'Client candidate chat permission changed';
+  end if;
   return new;
 end
 $$;
@@ -211,6 +261,100 @@ revoke all on function public.protect_chat_conversation_scope()
 create trigger chat_conversation_scope_immutable
 before update on public.chat_conversations
 for each row execute function public.protect_chat_conversation_scope();
+
+-- The invoker is service_role only. One RPC call atomically creates the
+-- conversation and both participants, with mutable permissions rechecked.
+create function public.create_client_candidate_chat_conversation(
+  p_client_profile_id uuid, p_candidate_id uuid, p_job_id uuid default null
+) returns uuid language plpgsql security invoker set search_path = '' as $$
+declare
+  v_client_id uuid;
+  v_organization_id uuid;
+  v_candidate_profile_id uuid;
+  v_conversation_id uuid;
+begin
+  select client.client_id, client.organization_id, candidate.id
+    into v_client_id, v_organization_id, v_candidate_profile_id
+  from public.user_profiles client
+  join public.user_profiles candidate
+    on candidate.candidate_id = p_candidate_id
+   and candidate.role = 'candidate' and candidate.status = 'active'
+  join public.candidate_accounts account
+    on account.user_profile_id = candidate.id
+   and account.candidate_id = p_candidate_id and account.status = 'active'
+  join public.candidate_chat_contact_consents consent
+    on consent.user_profile_id = candidate.id
+   and consent.candidate_id = p_candidate_id and consent.consent = true
+  where client.id = p_client_profile_id
+    and client.role = 'client' and client.status = 'active';
+  if v_client_id is null or v_organization_id is null or v_candidate_profile_id is null then
+    raise exception 'Client candidate chat scope unavailable';
+  end if;
+  if not exists (
+    select 1 from public.client_memberships m
+    where m.user_profile_id = p_client_profile_id
+      and m.client_id = v_client_id and m.status = 'active'
+  ) or not exists (
+    select 1 from public.client_candidate_access access
+    where access.client_id = v_client_id
+      and access.candidate_id = p_candidate_id and access.status = 'active'
+  ) or not exists (
+    select 1 from public.client_feature_entitlements entitlement
+    where entitlement.client_id = v_client_id
+      and entitlement.status = 'active' and btrim(entitlement.plan_code) <> ''
+      and entitlement.valid_from <= now()
+      and (entitlement.valid_until is null or entitlement.valid_until > now())
+  ) or (p_job_id is not null and not exists (
+    select 1 from public.client_job_ownership ownership
+    where ownership.client_id = v_client_id
+      and ownership.job_id = p_job_id and ownership.status = 'active'
+  )) then
+    raise exception 'Client candidate chat permission unavailable';
+  end if;
+
+  insert into public.chat_conversations
+    (channel_kind, organization_id, client_id, job_id, candidate_id,
+     created_by_profile_id)
+  values ('client_candidate', v_organization_id, v_client_id, p_job_id,
+          p_candidate_id, p_client_profile_id)
+  on conflict do nothing returning id into v_conversation_id;
+  if v_conversation_id is null then
+    select id into v_conversation_id from public.chat_conversations
+    where channel_kind = 'client_candidate' and status = 'active'
+      and created_by_profile_id = p_client_profile_id
+      and candidate_id = p_candidate_id
+      and job_id is not distinct from p_job_id;
+    if v_conversation_id is null then
+      raise exception 'Client candidate conversation conflict';
+    end if;
+    if (select count(*) from public.chat_conversation_participants
+        where conversation_id = v_conversation_id and status = 'active') <> 2
+       or not exists (
+         select 1 from public.chat_conversation_participants
+         where conversation_id = v_conversation_id
+           and user_profile_id = p_client_profile_id
+           and role_snapshot = 'client' and status = 'active'
+       ) or not exists (
+         select 1 from public.chat_conversation_participants
+         where conversation_id = v_conversation_id
+           and user_profile_id = v_candidate_profile_id
+           and role_snapshot = 'candidate' and status = 'active'
+       ) then
+      raise exception 'Client candidate conversation participants invalid';
+    end if;
+  else
+    insert into public.chat_conversation_participants
+      (conversation_id, user_profile_id, role_snapshot)
+    values (v_conversation_id, p_client_profile_id, 'client'),
+           (v_conversation_id, v_candidate_profile_id, 'candidate');
+  end if;
+  return v_conversation_id;
+end
+$$;
+revoke all on function public.create_client_candidate_chat_conversation(uuid, uuid, uuid)
+  from public, anon, authenticated;
+grant execute on function public.create_client_candidate_chat_conversation(uuid, uuid, uuid)
+  to service_role;
 
 alter table public.chat_conversations enable row level security;
 alter table public.chat_conversations force row level security;
