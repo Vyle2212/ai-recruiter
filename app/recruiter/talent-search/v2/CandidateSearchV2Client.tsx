@@ -4233,10 +4233,7 @@ export default function CandidateSearchV2Client({
                 Showing {Math.min(comparePackSize, compareCandidates.length)} of{" "}
                 {comparePackScope === "shortlisted"
                   ? compareCandidates.length
-                  : Math.min(
-                      comparePackSize,
-                      response.summary.totalMatched,
-                    )}{" "}
+                  : response.summary.visibleTotal}{" "}
                 available ranked profiles
                 {comparePackScope === "shortlisted"
                   ? " shortlisted within the first 20 matches"
