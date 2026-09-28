@@ -10,6 +10,16 @@ import React, {
   useState,
 } from "react";
 import {
+  BookmarkCheck,
+  BookmarkPlus,
+  BriefcaseBusiness,
+  Eye,
+  GitCompareArrows,
+  MapPin,
+  Search,
+  SlidersHorizontal,
+} from "lucide-react";
+import {
   CANDIDATE360_SEARCH_CONTEXT_KEY,
   candidate360MatchedByCandidate,
   candidate360SearchContextId,
@@ -951,13 +961,22 @@ export function CompactCandidateCard({
             </p>
           ) : null}
           {employer && companyLabel ? (
-            <p className="mt-0.5 text-sm text-slate-400">
+            <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-400">
+              <BriefcaseBusiness
+                aria-hidden="true"
+                className="h-3.5 w-3.5 shrink-0 text-slate-500"
+              />
               {companyLabel}: {employer}
             </p>
           ) : null}
           {location ? (
-            <p className="mt-1 text-sm text-slate-400">
-              <span className="text-slate-500">Location:</span> {location}
+            <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-400">
+              <MapPin
+                aria-hidden="true"
+                className="h-3.5 w-3.5 shrink-0 text-slate-500"
+              />
+              <span className="sr-only">Location: </span>
+              {location}
             </p>
           ) : null}
           {result.totalYearsExperience != null ? (
@@ -1267,6 +1286,11 @@ export function CompactCandidateCard({
               onClick={onShortlistToggle}
               className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-600 bg-slate-800/70 px-3 text-sm font-semibold text-slate-100 transition hover:border-cyan-400/60 hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
             >
+              {shortlisted ? (
+                <BookmarkCheck aria-hidden="true" className="mr-1.5 h-4 w-4" />
+              ) : (
+                <BookmarkPlus aria-hidden="true" className="mr-1.5 h-4 w-4" />
+              )}
               {shortlistPending
                 ? "Saving..."
                 : shortlisted
@@ -1282,6 +1306,7 @@ export function CompactCandidateCard({
               aria-label={`Compare ${identityHeading} with candidates in this search`}
               className="inline-flex min-h-10 items-center justify-center rounded-lg border border-cyan-400/60 bg-cyan-400/10 px-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 disabled:opacity-50"
             >
+              <GitCompareArrows aria-hidden="true" className="mr-1.5 h-4 w-4" />
               Compare
             </button>
           ) : null}
@@ -1305,6 +1330,7 @@ export function CompactCandidateCard({
             }}
             className="inline-flex min-h-10 items-center justify-center rounded-lg bg-cyan-300 px-4 text-sm font-bold text-slate-950 transition hover:bg-cyan-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
+            <Eye aria-hidden="true" className="mr-1.5 h-4 w-4" />
             Quick View
           </button>
         </div>
@@ -1617,7 +1643,8 @@ export default function CandidateSearchV2Client({
     "matches" | "shortlisted"
   >("matches");
   const [compareAnchorCandidateId, setCompareAnchorCandidateId] = useState("");
-  const [compareAnchorResult, setCompareAnchorResult] = useState<SearchResult | null>(null);
+  const [compareAnchorResult, setCompareAnchorResult] =
+    useState<SearchResult | null>(null);
   const [shortlistJobId, setShortlistJobId] = useState<string | null>(null);
   const [shortlistPreviewJob, setShortlistPreviewJob] = useState(false);
   const [shortlistContextReady, setShortlistContextReady] = useState(false);
@@ -1841,12 +1868,21 @@ export default function CandidateSearchV2Client({
       });
     }
   }
-  const compareAnchorCandidate = results.find(
-    (candidate) => candidate.candidateId === compareAnchorCandidateId,
-  ) || (compareAnchorResult?.candidateId === compareAnchorCandidateId ? compareAnchorResult : null);
-  const comparisonResults = compareAnchorCandidate && !results.some(
-    (candidate) => candidate.candidateId === compareAnchorCandidate.candidateId,
-  ) ? [compareAnchorCandidate, ...results] : results;
+  const compareAnchorCandidate =
+    results.find(
+      (candidate) => candidate.candidateId === compareAnchorCandidateId,
+    ) ||
+    (compareAnchorResult?.candidateId === compareAnchorCandidateId
+      ? compareAnchorResult
+      : null);
+  const comparisonResults =
+    compareAnchorCandidate &&
+    !results.some(
+      (candidate) =>
+        candidate.candidateId === compareAnchorCandidate.candidateId,
+    )
+      ? [compareAnchorCandidate, ...results]
+      : results;
   const compareCandidates = searchV2ComparisonCandidates(
     comparisonResults,
     shortlistedIds,
@@ -3044,23 +3080,27 @@ export default function CandidateSearchV2Client({
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <section className="border-b border-slate-800 bg-slate-950/95">
+    <main className="min-h-screen bg-[#08111e] text-slate-100">
+      <section className="border-b border-cyan-500/15 bg-gradient-to-br from-[#122943] via-[#0b1b2e] to-[#08111e]">
         <div className="mx-auto max-w-7xl px-5 py-8">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-white">
+              <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">
+                SAP Talent Hub · Search V2
+              </p>
+              <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
                 Search candidates
               </h1>
 
-              <p className="mt-2 max-w-3xl text-sm text-slate-400">
-                Find and triage relevant talent quickly.
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
+                Find SAP talent, inspect grounded match evidence and shortlist
+                with confidence.
               </p>
             </div>
 
             <a
               href="/recruiter/dashboard"
-              className="text-sm font-semibold text-cyan-300 hover:text-cyan-200"
+              className="rounded-lg border border-cyan-500/25 bg-cyan-400/5 px-4 py-2 text-sm font-semibold text-cyan-200 transition hover:border-cyan-400/60 hover:bg-cyan-400/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
             >
               Back to Dashboard
             </a>
@@ -3160,14 +3200,14 @@ export default function CandidateSearchV2Client({
           className={
             guidedWorkspace === "review" || showCompactSearchSummary
               ? "hidden"
-              : "rounded-2xl border border-slate-800 bg-slate-900/40 p-5"
+              : "rounded-2xl border border-slate-700/60 bg-gradient-to-br from-[#132238] to-[#0d1726] p-5 shadow-[0_20px_50px_-36px_rgba(0,0,0,.9)]"
           }
         >
           <div data-testid="search-v2-form-layout" className="space-y-4">
             <div className="grid gap-4 xl:grid-cols-[minmax(28rem,1fr)_12rem_15rem] xl:items-end">
               <div ref={historyRootRef} className="relative min-w-0">
                 <label>
-                  <span className="text-sm font-semibold text-slate-200">
+                  <span className="text-sm font-semibold text-white">
                     Describe who you&apos;re looking for
                   </span>
                   <textarea
@@ -3208,7 +3248,7 @@ export default function CandidateSearchV2Client({
                     rows={2}
                     title={query}
                     placeholder="Senior SAP FICO consultant in Malaysia with implementation experience"
-                    className="mt-2 min-h-16 w-full min-w-0 resize-none overflow-hidden rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-base leading-6 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500"
+                    className="mt-2 min-h-16 w-full min-w-0 resize-none overflow-hidden rounded-xl border border-slate-600 bg-[#091421] px-4 py-3 text-base leading-6 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
                   />
                 </label>
                 {historyOpen && historySuggestions.length ? (
@@ -3374,15 +3414,17 @@ export default function CandidateSearchV2Client({
                 aria-expanded={filtersOpen}
                 aria-controls="search-filter-panel"
                 onClick={() => setFiltersOpen((value) => !value)}
-                className="min-h-12 rounded-xl border border-slate-700 px-4 text-sm font-semibold text-slate-200 hover:border-slate-500"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-600 bg-slate-800/60 px-4 text-sm font-semibold text-slate-100 transition hover:border-cyan-400/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
               >
+                <SlidersHorizontal aria-hidden="true" className="h-4 w-4" />
                 Filters ({activeFilterCount})
               </button>
               <button
                 type="submit"
                 disabled={!query.trim()}
-                className="min-h-12 rounded-xl bg-cyan-400 px-6 text-sm font-bold text-slate-950 outline-none transition hover:bg-cyan-300 focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-cyan-300 px-6 text-sm font-bold text-slate-950 outline-none transition hover:bg-cyan-200 focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
               >
+                <Search aria-hidden="true" className="h-4 w-4" />
                 Understand & review
               </button>
             </div>
@@ -3704,9 +3746,9 @@ export default function CandidateSearchV2Client({
               : "mt-7 scroll-mt-4"
           }
         >
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 border-b border-slate-700/50 pb-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-white">
+              <h2 className="text-2xl font-semibold tracking-tight text-white">
                 {showingPreviousResults ||
                 searchUiState === "refreshing_existing_results"
                   ? `Results from previous search — ${committedSnapshot?.query}`
@@ -4107,7 +4149,10 @@ export default function CandidateSearchV2Client({
             </div>
           ) : null}
 
-          {comparePackOpen && !loading && results.length && response.summary.page === 1 ? (
+          {comparePackOpen &&
+          !loading &&
+          results.length &&
+          response.summary.page === 1 ? (
             <section
               id="search-v2-compare-pack"
               aria-label="Candidate Comparison"
@@ -4349,7 +4394,10 @@ export default function CandidateSearchV2Client({
                     window.requestAnimationFrame(() =>
                       document
                         .getElementById("search-v2-compare-pack")
-                        ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                        ?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        }),
                     );
                   if (response.summary.page !== 1) {
                     void runSearch(1, true).then(scrollToComparison);
@@ -4517,11 +4565,12 @@ export default function CandidateSearchV2Client({
               setComparePackScope("matches");
               setComparePackOpen(true);
               setExpandedCandidateId("");
-              const scrollToComparison = () => window.requestAnimationFrame(() =>
-                document
-                  .getElementById("search-v2-compare-pack")
-                  ?.scrollIntoView({ behavior: "smooth", block: "start" }),
-              );
+              const scrollToComparison = () =>
+                window.requestAnimationFrame(() =>
+                  document
+                    .getElementById("search-v2-compare-pack")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                );
               if (response.summary.page !== 1) {
                 void runSearch(1, true).then(scrollToComparison);
               } else {
