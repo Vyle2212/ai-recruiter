@@ -68,7 +68,9 @@ export async function authorizeClientCandidateMessage(
       client.organization_id !== conversation.organization_id)
     return denied("conversation_not_available", 404);
 
-  const [membership, subscriptions, access, jobOwnership, account, consent, candidateAuth] = await Promise.all([
+  const [organization, membership, subscriptions, access, jobOwnership, account, consent, candidateAuth] = await Promise.all([
+    db.from("organizations").select("organization_type,status")
+      .eq("id", client.organization_id).maybeSingle(),
     db.from("client_memberships").select("id").eq("user_profile_id", client.id)
       .eq("organization_id", client.organization_id)
       .eq("client_id", client.client_id).eq("status", "active").limit(1),
@@ -91,7 +93,7 @@ export async function authorizeClientCandidateMessage(
       .limit(1),
     db.auth.admin.getUserById(candidate.auth_user_id),
   ]);
-  if (membership.error || subscriptions.error || access.error || jobOwnership.error || account.error ||
+  if (organization.error || membership.error || subscriptions.error || access.error || jobOwnership.error || account.error ||
       consent.error || candidateAuth.error)
     return denied("chat_authorization_unavailable", 503);
   if (!jobOwnership.data?.length) return denied("conversation_not_available", 404);
@@ -108,6 +110,8 @@ export async function authorizeClientCandidateMessage(
       contactConsent: consent.data?.[0]?.consent === true,
     },
     client: {
+      organizationActive: organization.data?.organization_type === "client" &&
+        organization.data.status === "active",
       membershipActive: Boolean(membership.data?.length),
       anySubscriptionActive: anyActiveSubscription(subscriptions.data || [], Date.now()),
       candidateAccessActive: Boolean(access.data?.length),

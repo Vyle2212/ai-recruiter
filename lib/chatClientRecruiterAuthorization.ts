@@ -64,7 +64,9 @@ export async function authorizeClientRecruiterMessage(
       client.organization_id !== conversation.organization_id)
     return deny("conversation_not_available", 404);
 
-  const [membership, subscriptions, assignment, jobOwnership] = await Promise.all([
+  const [organization, membership, subscriptions, assignment, jobOwnership] = await Promise.all([
+    db.from("organizations").select("organization_type,status")
+      .eq("id", client.organization_id).maybeSingle(),
     db.from("client_memberships").select("id").eq("user_profile_id", client.id)
       .eq("organization_id", client.organization_id).eq("client_id", client.client_id)
       .eq("status", "active").limit(1),
@@ -79,7 +81,7 @@ export async function authorizeClientRecruiterMessage(
           .eq("status", "active").limit(1)
       : Promise.resolve({ data: [{ status: "active" }], error: null }),
   ]);
-  if (membership.error || subscriptions.error || assignment.error || jobOwnership.error)
+  if (organization.error || membership.error || subscriptions.error || assignment.error || jobOwnership.error)
     return deny("chat_authorization_unavailable", 503);
   if (!jobOwnership.data?.length) return deny("conversation_not_available", 404);
   const decision = authorizeChatConversation({
@@ -87,6 +89,8 @@ export async function authorizeClientRecruiterMessage(
     channelKind: "client_recruiter",
     scope: { organizationId: conversation.organization_id, jobId: conversation.job_id },
     client: {
+      organizationActive: organization.data?.organization_type === "client" &&
+        organization.data.status === "active",
       membershipActive: Boolean(membership.data?.length),
       anySubscriptionActive: anyActiveSubscription(subscriptions.data || [], Date.now()),
       recruiterAssignmentActive: Boolean(assignment.data?.length),

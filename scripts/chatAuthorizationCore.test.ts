@@ -38,6 +38,7 @@ const eligibleCandidate = {
   contactConsent: true,
 };
 const activeClient = {
+  organizationActive: true,
   membershipActive: true,
   anySubscriptionActive: true,
   candidateAccessActive: true,
@@ -53,6 +54,14 @@ const clientCandidate: ChatAuthorizationContext = {
   client: activeClient,
 };
 assert.equal(authorizeChatConversation(clientCandidate).allowed, true);
+assert.deepEqual(
+  authorizeChatConversation({
+    ...clientCandidate,
+    client: { ...activeClient, organizationActive: false },
+  }),
+  { allowed: false, code: "active_client_organization_required" },
+  "client chat is revoked when the owning organization is inactive",
+);
 assert.deepEqual(
   authorizeChatConversation({
     ...clientCandidate,

@@ -221,6 +221,9 @@ begin
     where c.id = new.conversation_id and c.channel_kind = 'client_candidate'
   ) and not exists (
     select 1 from public.chat_conversations c
+    join public.organizations org
+      on org.id = c.organization_id
+     and org.organization_type = 'client' and org.status = 'active'
     join public.user_profiles client
       on client.id = c.created_by_profile_id
      and client.role = 'client' and client.status = 'active'
@@ -279,6 +282,9 @@ begin
     where c.id = new.conversation_id and c.channel_kind = 'client_recruiter'
   ) and not exists (
     select 1 from public.chat_conversations c
+    join public.organizations org
+      on org.id = c.organization_id
+     and org.organization_type = 'client' and org.status = 'active'
     join public.user_profiles client
       on client.id = c.created_by_profile_id
      and client.role = 'client' and client.status = 'active'
@@ -459,6 +465,9 @@ begin
   select client.client_id, client.organization_id, candidate.id
     into v_client_id, v_organization_id, v_candidate_profile_id
   from public.user_profiles client
+  join public.organizations org
+    on org.id = client.organization_id
+   and org.organization_type = 'client' and org.status = 'active'
   join public.user_profiles candidate
     on candidate.candidate_id = p_candidate_id
    and candidate.role = 'candidate' and candidate.status = 'active'
@@ -557,6 +566,9 @@ begin
   select client.client_id, client.organization_id, recruiter.role
     into v_client_id, v_organization_id, v_recruiter_role
   from public.user_profiles client
+  join public.organizations org
+    on org.id = client.organization_id
+   and org.organization_type = 'client' and org.status = 'active'
   join public.user_profiles recruiter
     on recruiter.id = p_recruiter_profile_id
    and recruiter.role in ('recruiter', 'recruiter_manager')

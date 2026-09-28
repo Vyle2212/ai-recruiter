@@ -31,6 +31,7 @@ export type ChatAuthorizationContext = {
     contactConsent: boolean;
   };
   client?: {
+    organizationActive: boolean;
     membershipActive: boolean;
     anySubscriptionActive: boolean;
     candidateAccessActive?: boolean;
@@ -50,6 +51,7 @@ export type ChatAuthorizationDenial =
   | "candidate_account_required"
   | "candidate_verification_required"
   | "candidate_contact_consent_required"
+  | "active_client_organization_required"
   | "active_client_membership_required"
   | "active_subscription_required"
   | "candidate_access_required"
@@ -139,6 +141,8 @@ export function authorizeChatConversation(
 
   const client = clientParticipant(input);
   if (client) {
+    if (!input.client?.organizationActive)
+      return { allowed: false, code: "active_client_organization_required" };
     if (!client.clientId || !input.client?.membershipActive)
       return { allowed: false, code: "active_client_membership_required" };
     if (!input.client.anySubscriptionActive)

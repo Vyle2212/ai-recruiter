@@ -35,11 +35,14 @@ async function main() {
   assert.match(route, /same_origin_required/);
   assert.match(route, /create_client_recruiter_chat_conversation/);
   assert.match(auth, /client_recruiter_assignments/);
+  assert.match(auth, /from\("organizations"\)/);
+  assert.match(auth, /organizationActive:/);
   assert.match(auth, /anyActiveSubscription/);
   assert.match(auth, /client_job_ownership/);
   assert.match(dispatch, /authorizeClientRecruiterMessage\(conversationId\)/);
   assert.match(sql, /create function public\.create_client_recruiter_chat_conversation\([\s\S]*security invoker/);
   assert.match(sql, /Client recruiter chat permission changed/);
+  assert.match(sql, /join public\.organizations org[\s\S]*org\.organization_type = 'client'[\s\S]*org\.status = 'active'/);
   assert.match(sql, /grant execute on function public\.create_client_recruiter_chat_conversation\(uuid, uuid, uuid\)[\s\S]*to service_role/);
   assert.doesNotMatch(sql, /create_client_recruiter_chat_conversation[\s\S]*security definer/);
   console.log("Client recruiter chat boundary passed.");
