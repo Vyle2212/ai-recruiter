@@ -699,42 +699,80 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
   test("Search V2 shows Comparison beside Shortlist with separate employer and client periods", async ({
     page,
   }) => {
-    await installAuthenticatedBrowserState(page.context(), "recruiter");
-    await page.goto(searchPage);
-    await page
-      .getByPlaceholder(
-        "Senior SAP FICO consultant in Malaysia with implementation experience",
-      )
-      .fill(acceptanceRequired("ACCEPTANCE_INTERNAL_SEARCH_QUERY"));
-    await page.getByRole("button", { name: "Understand & review" }).click();
-    await page.getByRole("button", { name: "Commit Search" }).click();
-    await expect(
-      page.getByRole("button", { name: "Compare", exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: /^Shortlist \(/ }),
-    ).toBeVisible();
-    await page.getByRole("button", { name: "Compare", exact: true }).click();
-    const pack = page.getByRole("region", { name: "Candidate Comparison" });
-    await expect(pack).toBeVisible();
-    for (const size of [5, 10, 20]) {
-      await pack.getByRole("button", { name: `Top ${size}` }).click();
+    const shortlist = await authenticatedApi("recruiter");
+    const selection = { candidateId: internalCandidateId, jobId: null };
+    try {
+      const saved = await shortlist.post("/api/recruiter/search-v2/shortlist", {
+        data: selection,
+      });
+      expect(saved.status()).toBe(200);
+      await installAuthenticatedBrowserState(page.context(), "recruiter");
+      await page.goto(searchPage);
+      await page
+        .getByPlaceholder(
+          "Senior SAP FICO consultant in Malaysia with implementation experience",
+        )
+        .fill(acceptanceRequired("ACCEPTANCE_INTERNAL_SEARCH_QUERY"));
+      await page.getByRole("button", { name: "Understand & review" }).click();
+      await page.getByRole("button", { name: "Commit Search" }).click();
       await expect(
-        pack.getByRole("button", { name: `Top ${size}` }),
-      ).toHaveAttribute("aria-pressed", "true");
+        page.getByRole("button", { name: "Compare", exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("link", { name: /^Shortlist \(/ }),
+      ).toBeVisible();
+      await page.getByRole("button", { name: "Compare", exact: true }).click();
+      const pack = page.getByRole("region", { name: "Candidate Comparison" });
+      await expect(pack).toBeVisible();
+      const shortlistedScope = pack.getByRole("button", {
+        name: "Shortlisted in this search",
+      });
+      await expect(shortlistedScope).toBeEnabled();
+      await shortlistedScope.click();
+      await expect(shortlistedScope).toHaveAttribute("aria-pressed", "true");
+      await expect(
+        pack.getByText("PTF Synthetic Consulting Ltd").first(),
+      ).toBeVisible();
+      const matchingScope = pack.getByRole("button", {
+        name: "All matching results",
+      });
+      await matchingScope.click();
+      await expect(matchingScope).toHaveAttribute("aria-pressed", "true");
+      for (const size of [5, 10, 20]) {
+        await pack.getByRole("button", { name: `Top ${size}` }).click();
+        await expect(
+          pack.getByRole("button", { name: `Top ${size}` }),
+        ).toHaveAttribute("aria-pressed", "true");
+      }
+      await expect(
+        pack.getByRole("columnheader", { name: "Employer / tenure" }),
+      ).toBeVisible();
+      await expect(
+        pack.getByRole("columnheader", { name: "Client project / period" }),
+      ).toBeVisible();
+      await expect(
+        pack.getByText("PTF Synthetic Consulting Ltd").first(),
+      ).toBeVisible();
+      await expect(
+        pack.getByText("PTF Synthetic Manufacturing Client").first(),
+      ).toBeVisible();
+    } finally {
+      const removed = await shortlist.delete(
+        "/api/recruiter/search-v2/shortlist",
+        {
+          data: selection,
+        },
+      );
+      expect(removed.status()).toBe(200);
+      const after = await shortlist.get(
+        `/api/recruiter/search-v2/shortlist?candidateIds=${encodeURIComponent(internalCandidateId)}`,
+      );
+      expect(after.status()).toBe(200);
+      expect((await after.json()).candidateIds).not.toContain(
+        internalCandidateId,
+      );
+      await shortlist.dispose();
     }
-    await expect(
-      pack.getByRole("columnheader", { name: "Employer / tenure" }),
-    ).toBeVisible();
-    await expect(
-      pack.getByRole("columnheader", { name: "Client project / period" }),
-    ).toBeVisible();
-    await expect(
-      pack.getByText("PTF Synthetic Consulting Ltd").first(),
-    ).toBeVisible();
-    await expect(
-      pack.getByText("PTF Synthetic Manufacturing Client").first(),
-    ).toBeVisible();
   });
 
   test("candidate-detail caches are isolated by authenticated actor scope", async ({}, testInfo) => {
