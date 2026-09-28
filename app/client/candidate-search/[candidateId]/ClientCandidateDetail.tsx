@@ -16,6 +16,7 @@ type Profile = {
 
 const card = "rounded-2xl border border-slate-800 bg-[#0B0F16] p-5";
 const dateRange = (start: string, end: string) => [start, end].filter(Boolean).join(" – ") || "Dates not specified";
+const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 
 export default function ClientCandidateDetail({ chatEnabled }: { chatEnabled: boolean }) {
   const { candidateId } = useParams<{ candidateId: string }>();
@@ -47,11 +48,11 @@ export default function ClientCandidateDetail({ chatEnabled }: { chatEnabled: bo
       });
       if (!response.ok) {
         if ([401, 403, 404].includes(response.status))
-          throw new Error("Chat is available only when your subscription is active and this candidate has a verified account and agreed to contact.");
+          throw new Error("Chat is not currently available for this candidate.");
         throw new Error("Chat is temporarily unavailable. Please retry later.");
       }
       const result = await response.json();
-      if (typeof result.conversationId !== "string" || !/^[0-9a-f-]{36}$/i.test(result.conversationId))
+      if (typeof result.conversationId !== "string" || !uuid.test(result.conversationId))
         throw new Error("Chat is temporarily unavailable. Please retry later.");
       router.push(`/chat/${encodeURIComponent(result.conversationId)}`);
     } catch (cause) {
