@@ -17,14 +17,23 @@ async function main() {
   delete process.env.CHAT_ENABLED;
   try {
     const get = await GET();
-    assert.equal(get.status, 404, "chat consent is unavailable while chat is off");
+    assert.equal(
+      get.status,
+      404,
+      "chat consent is unavailable while chat is off",
+    );
     const request = new Request("http://localhost/api/candidate/chat-consent", {
       method: "POST",
-      headers: { "content-type": "application/json", origin: "http://localhost" },
+      headers: {
+        "content-type": "application/json",
+        origin: "http://localhost",
+      },
       body: JSON.stringify({ consent: true }),
     });
     Object.defineProperty(request, "text", {
-      value: () => { throw new Error("disabled chat must not parse or write data"); },
+      value: () => {
+        throw new Error("disabled chat must not parse or write data");
+      },
     });
     assert.equal((await POST(request)).status, 404);
   } finally {
@@ -38,8 +47,14 @@ async function main() {
   );
   assert.match(sql, /foreign key \(user_profile_id, candidate_id\)/);
   assert.match(sql, /candidate_chat_contact_consent_events_immutable/);
-  assert.match(sql, /alter table public\.candidate_chat_contact_consents force row level security/);
-  assert.match(sql, /alter table public\.candidate_chat_contact_consent_events force row level security/);
+  assert.match(
+    sql,
+    /alter table public\.candidate_chat_contact_consents force row level security/,
+  );
+  assert.match(
+    sql,
+    /alter table public\.candidate_chat_contact_consent_events force row level security/,
+  );
   assert.match(sql, /from public, anon, authenticated/);
   assert.doesNotMatch(sql, /grant .* to (?:anon|authenticated)/i);
   console.log("Candidate chat contact consent boundary passed.");

@@ -1,4 +1,7 @@
-import { authorizeCandidateCvUpload, validateCandidateCvWriteRequest } from "@/lib/candidateCvAuthorization";
+import {
+  authorizeCandidateCvUpload,
+  validateCandidateCvWriteRequest,
+} from "@/lib/candidateCvAuthorization";
 import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
 
 export const runtime = "nodejs";
@@ -28,7 +31,10 @@ export async function GET() {
     .eq("user_profile_id", authorization.scope.userProfileId)
     .maybeSingle();
   if (error) return reply({ error: "chat_consent_unavailable" }, 503);
-  return reply({ consent: data?.consent === true, updatedAt: data?.updated_at || null });
+  return reply({
+    consent: data?.consent === true,
+    updatedAt: data?.updated_at || null,
+  });
 }
 
 export async function POST(request: Request) {
