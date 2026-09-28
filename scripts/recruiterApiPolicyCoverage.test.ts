@@ -33,7 +33,7 @@ const auditedFiles = files.filter((file) => {
     recruiterApiPolicyForRequest(route, method),
   );
   const hasLocalBoundary =
-    /requireRecruiter(?:ApiRoute|Search)Authorization|requireClientShareAuthorization|authorizeClientCandidateLookup|authorizeClientCandidateMessage|createClientCandidateConversation/.test(
+    /requireRecruiter(?:ApiRoute|Search)Authorization|requireClientShareAuthorization|authorizeClientCandidateLookup|authorizeClientCandidateMessage|authorizeChatRequest|authorizeChatConversation|createClientCandidateConversation/.test(
       source,
     );
   const hasCandidateBoundary = /authorizeCandidateCvUpload/.test(source);
@@ -88,7 +88,7 @@ const uncoveredRouteMethods = allRouteMethods.filter(
   ({ route, method, source }) => {
     if (explicitPublicMethods.has(`${method} ${route}`)) return false;
     if (
-      /requireRecruiter(?:ApiRoute|Search)Authorization|requireClientShareAuthorization|authorizeClientCandidateLookup|authorizeCandidateCvUpload|authorizeClientCandidateMessage|createClientCandidateConversation/.test(
+      /requireRecruiter(?:ApiRoute|Search)Authorization|requireClientShareAuthorization|authorizeClientCandidateLookup|authorizeCandidateCvUpload|authorizeClientCandidateMessage|authorizeChatRequest|authorizeChatConversation|createClientCandidateConversation/.test(
         source,
       )
     )
