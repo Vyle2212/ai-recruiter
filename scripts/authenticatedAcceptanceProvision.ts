@@ -422,6 +422,22 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
   );
   const plan = acceptanceCleanupPlan(entities);
   const profileIds = plan.profileIds;
+  const chatProbe = await client
+    .from("chat_conversations")
+    .select("id", { count: "exact", head: true })
+    .limit(0);
+  if (!chatProbe.error) {
+    const { error: chatCleanupError } = await client.rpc(
+      "cleanup_acceptance_chat_run",
+      { p_run_id: config.runId },
+    );
+    if (chatCleanupError)
+      throw new Error("acceptance_chat_fixture_cleanup_failed");
+  } else if (
+    !(["42P01", "PGRST205"] as string[]).includes(chatProbe.error.code)
+  ) {
+    throw new Error("acceptance_chat_fixture_discovery_failed");
+  }
   const { data: syntheticJobs, error: jobsDiscoveryError } = await client
     .from("jobs")
     .select("id")
