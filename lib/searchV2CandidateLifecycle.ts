@@ -108,6 +108,7 @@ export async function applyCurrentCandidateSearchLifecycle(
     documents: documents.filter(
       (document) => !blockedIds.has(String(document.candidateId || "")),
     ),
+    blockedIds,
     blockedCount: blockedIds.size,
     visibilityRevision,
   };

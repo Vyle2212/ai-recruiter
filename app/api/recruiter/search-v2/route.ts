@@ -752,6 +752,20 @@ export async function POST(request: NextRequest) {
       lifecycleBlockedCount = 0,
       datasetCache: "hit" | "miss" | "request" = "request";
     let documents: CandidateSearchV2Document[];
+    // The lifecycle gate must be fresh for every request, but it is independent
+    // of source hydration. Start it now so its database round trip overlaps
+    // the (potentially cold) index read; still await it before any result or
+    // cached ranking can be returned.
+    const lifecycleStartedAt = performance.now();
+    const lifecyclePromise = applyCurrentCandidateSearchLifecycle(
+      // The fetched documents are passed after hydration below. Fetch the
+      // mutable gate independently here so it cannot queue behind hydration.
+      [],
+      request.signal,
+    ).then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
     if (lightweightIdentityLookup) {
       const retrievalStartedAt = performance.now();
       const dataset = await fetchCandidateSourceByIdentityToken(
@@ -790,11 +804,14 @@ export async function POST(request: NextRequest) {
             .join("|"),
         ).slice(0, 12);
     }
-    const lifecycle = await applyCurrentCandidateSearchLifecycle(
-      documents,
-      request.signal,
+    const lifecycleOutcome = await lifecyclePromise;
+    if (!lifecycleOutcome.ok) throw lifecycleOutcome.error;
+    const lifecycle = lifecycleOutcome.value;
+    const lifecycleMs = performance.now() - lifecycleStartedAt;
+    const blockedIds = lifecycle.blockedIds;
+    documents = documents.filter(
+      (document) => !blockedIds.has(String(document.candidateId || "")),
     );
-    documents = lifecycle.documents;
     lifecycleBlockedCount = lifecycle.blockedCount;
     datasetRevision = `${datasetRevision}:lifecycle-${lifecycle.visibilityRevision}`;
     unifiedIntent = confirmSearchV2IdentityIntent(
@@ -858,6 +875,7 @@ export async function POST(request: NextRequest) {
       const phases = {
         parse: queryParsingMs,
         retrieval: retrievalMs,
+        lifecycle: lifecycleMs,
         evidence: sourceEvidenceLoadingMs,
         projection: evidenceProjectionMs,
         retrievalFilter: 0,
@@ -969,6 +987,7 @@ export async function POST(request: NextRequest) {
       const phases = {
         parse: queryParsingMs,
         retrieval: retrievalMs,
+        lifecycle: lifecycleMs,
         evidence: sourceEvidenceLoadingMs,
         projection: evidenceProjectionMs,
         retrievalFilter: 0,
@@ -1080,6 +1099,7 @@ export async function POST(request: NextRequest) {
       const phases = {
         parse: queryParsingMs,
         retrieval: retrievalMs,
+        lifecycle: lifecycleMs,
         evidence: sourceEvidenceLoadingMs,
         projection: evidenceProjectionMs,
         retrievalFilter: 0,
@@ -1196,6 +1216,7 @@ export async function POST(request: NextRequest) {
     const phases = {
       parse: queryParsingMs + (engineTimings.queryParsingMs || 0),
       retrieval: retrievalMs,
+      lifecycle: lifecycleMs,
       evidence: sourceEvidenceLoadingMs,
       projection: evidenceProjectionMs,
       retrievalFilter: engineTimings.retrievalFilteringMs || 0,
