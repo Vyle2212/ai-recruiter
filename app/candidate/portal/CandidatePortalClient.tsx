@@ -248,7 +248,11 @@ async function json(response: Response) {
   return body;
 }
 
-export default function CandidatePortalClient({ chatEnabled }: { chatEnabled: boolean }) {
+export default function CandidatePortalClient({
+  chatEnabled,
+}: {
+  chatEnabled: boolean;
+}) {
   const [data, setData] = useState<PortalResponse | null>(null);
   const [fields, setFields] = useState<Record<string, any>>({});
   const [file, setFile] = useState<File | null>(null);
