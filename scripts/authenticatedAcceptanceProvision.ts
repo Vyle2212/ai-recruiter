@@ -22,6 +22,7 @@ import {
   type AcceptanceIdentityKey,
 } from "../lib/acceptanceSyntheticIdentityContract";
 import { acceptanceCleanupPlan } from "../lib/acceptanceCleanupPlan";
+import { ACCEPTANCE_SYNTHETIC_CANDIDATE_ID } from "../lib/acceptanceSyntheticCandidateFixture";
 
 type SafeConfig = Extract<
   ReturnType<typeof evaluateAcceptanceEnvironment>,
@@ -199,7 +200,10 @@ async function provision(config: SafeConfig, client: SupabaseClient) {
         organization_id:
           definition.role === "candidate" ? null : String(organization.id),
         client_id: definition.role === "client" ? randomUUID() : null,
-        candidate_id: definition.role === "candidate" ? randomUUID() : null,
+        candidate_id:
+          definition.role === "candidate"
+            ? ACCEPTANCE_SYNTHETIC_CANDIDATE_ID
+            : null,
       };
       const { data: profile, error: profileError } = await client
         .from("user_profiles")
@@ -212,6 +216,17 @@ async function provision(config: SafeConfig, client: SupabaseClient) {
         entity_type: "user_profile",
         entity_id: String(profile.id),
       });
+      if (definition.role === "candidate") {
+        const { error: accountError } = await client
+          .from("candidate_accounts")
+          .insert({
+            user_profile_id: String(profile.id),
+            candidate_id: ACCEPTANCE_SYNTHETIC_CANDIDATE_ID,
+            status: "active",
+          });
+        if (accountError)
+          throw new Error("acceptance_candidate_account_create_failed");
+      }
       if (definition.key === "client")
         syntheticClient = {
           profileId: String(profile.id),
@@ -423,6 +438,22 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
       .in(key, ids);
     if (residueError || count !== 0)
       throw new Error("acceptance_job_fixture_residue_detected");
+  }
+  if (profileIds.length) {
+    const { error: accountDeleteError } = await client
+      .from("candidate_accounts")
+      .delete()
+      .eq("candidate_id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID)
+      .in("user_profile_id", profileIds);
+    if (accountDeleteError)
+      throw new Error("acceptance_candidate_account_cleanup_failed");
+    const { count: accountResidue, error: accountResidueError } = await client
+      .from("candidate_accounts")
+      .select("id", { count: "exact", head: true })
+      .eq("candidate_id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID)
+      .in("user_profile_id", profileIds);
+    if (accountResidueError || accountResidue !== 0)
+      throw new Error("acceptance_candidate_account_residue_detected");
   }
   if (profileIds.length) {
     const { error: deleteError } = await client
