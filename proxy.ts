@@ -24,8 +24,10 @@ export async function proxy(request: NextRequest) {
     request.nextUrl.pathname === "/api/client/recruiter-shares";
   const chatApi = request.nextUrl.pathname.startsWith("/api/chat/");
   if (chatApi && process.env.CHAT_ENABLED !== "true")
-    return NextResponse.json({ error: "not_found" }, { status: 404,
-      headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json(
+      { error: "not_found" },
+      { status: 404, headers: { "Cache-Control": "private, no-store" } },
+    );
   if (
     process.env.VERCEL_ENV === "production" &&
     process.env.PRODUCTION_AUTH_ENABLED === "true" &&
