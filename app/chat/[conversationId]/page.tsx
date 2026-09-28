@@ -13,5 +13,5 @@ export default async function ChatPage({
   const { conversationId } = await params;
   if (process.env.CHAT_ENABLED !== "true" || !uuid.test(conversationId))
     notFound();
-  return <ChatConversation conversationId={conversationId} />;
+  return <ChatConversation conversationId={conversationId} suggestionsEnabled={process.env.CHAT_SUGGESTIONS_ENABLED === "true"} />;
 }

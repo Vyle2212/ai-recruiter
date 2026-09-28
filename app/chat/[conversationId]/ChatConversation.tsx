@@ -9,12 +9,13 @@ type Message = {
   created_at: string;
 };
 
-export default function ChatConversation({ conversationId }: { conversationId: string }) {
+export default function ChatConversation({ conversationId, suggestionsEnabled }: { conversationId: string; suggestionsEnabled: boolean }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [viewerId, setViewerId] = useState("");
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState<"loading" | "ready" | "denied" | "error">("loading");
   const [sending, setSending] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
   const [error, setError] = useState("");
   const endpoint = `/api/chat/conversations/${encodeURIComponent(conversationId)}/messages`;
 
@@ -45,6 +46,28 @@ export default function ChatConversation({ conversationId }: { conversationId: s
     void refresh(controller.signal);
     return () => controller.abort();
   }, [refresh]);
+
+  async function suggestDraft() {
+    if (suggesting || status !== "ready") return;
+    setSuggesting(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/chat/conversations/${encodeURIComponent(conversationId)}/suggestion`, { method: "POST" });
+      if ([401, 403, 404].includes(response.status)) {
+        setStatus("denied");
+        return;
+      }
+      if (!response.ok) throw new Error("A suggestion is not available right now.");
+      const result = await response.json();
+      if (typeof result.suggestion !== "string" || !result.suggestion.trim())
+        throw new Error("A suggestion is not available right now.");
+      setDraft(current => current.trim() ? current : result.suggestion);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "A suggestion is not available right now.");
+    } finally {
+      setSuggesting(false);
+    }
+  }
 
   async function send(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -96,7 +119,11 @@ export default function ChatConversation({ conversationId }: { conversationId: s
         {status === "ready" && <form onSubmit={send} className="border-t border-slate-700/70 p-4">
           <label htmlFor="chat-draft" className="mb-2 block text-sm font-medium">Message</label>
           <textarea id="chat-draft" value={draft} onChange={event => setDraft(event.target.value)} maxLength={8000} rows={3} className="w-full resize-y rounded-lg border border-slate-600 bg-slate-950 p-3 text-sm focus-visible:outline-2 focus-visible:outline-cyan-300" placeholder="Write a message for the other participant" />
-          <div className="mt-3 flex justify-end"><button type="submit" disabled={sending || !draft.trim()} className="rounded-lg bg-cyan-300 px-5 py-2 font-semibold text-slate-950 disabled:opacity-50">{sending ? "Sending…" : "Send message"}</button></div>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            {suggestionsEnabled ? <button type="button" disabled={suggesting || !!draft.trim()} onClick={() => void suggestDraft()} className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-cyan-200 disabled:opacity-50">{suggesting ? "Suggesting…" : "Suggest a draft"}</button> : <span />}
+            <button type="submit" disabled={sending || !draft.trim()} className="rounded-lg bg-cyan-300 px-5 py-2 font-semibold text-slate-950 disabled:opacity-50">{sending ? "Sending…" : "Send message"}</button>
+          </div>
+          {suggestionsEnabled && <p className="mt-2 text-xs text-slate-400">Suggestions are drafts. Review and edit before sending.</p>}
         </form>}
       </section>
     </main>
