@@ -36,6 +36,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ con
   if (!kinds.has(kind || "") || !roles.has(role || "") || actor.data?.status !== "active")
     return reply({ error: "conversation_not_available" }, 404);
 
+  const quota = await db.rpc("claim_chat_ai_suggestion", {
+    p_conversation_id: permission.conversationId,
+    p_actor_profile_id: permission.profileId,
+  });
+  if (quota.error) return reply({ error: "suggestion_quota_unavailable" }, 503);
+  if (quota.data !== true) return reply({ error: "suggestion_rate_limited" }, 429);
+
   try {
     const completion = await createLazyOpenAiClient().chat.completions.create({
       model: process.env.CHAT_SUGGESTION_MODEL || "gpt-4o-mini",

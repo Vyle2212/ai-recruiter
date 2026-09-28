@@ -57,6 +57,8 @@ export default function ChatConversation({ conversationId, suggestionsEnabled }:
         setStatus("denied");
         return;
       }
+      if (response.status === 429)
+        throw new Error("Please wait a minute before requesting another draft.");
       if (!response.ok) throw new Error("A suggestion is not available right now.");
       const result = await response.json();
       if (typeof result.suggestion !== "string" || !result.suggestion.trim())
