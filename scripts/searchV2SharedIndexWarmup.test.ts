@@ -245,6 +245,11 @@ async function main() {
       route.indexOf("void prewarmCandidateSearchV2Dataset"),
   );
   assert.match(route, /searchV2ReadinessHttpContract/);
+  assert.doesNotMatch(
+    route,
+    /ensureSearchV2EngineReady|prewarm-delivery/,
+    "readiness GET must not score the entire population before user search",
+  );
   assert.match(client, /startSearchV2ReadinessPolling/);
   assert.match(client, /return \(\) => polling\.stop\(\)/);
   assert.match(client, /setInternalSearchReady\(true\)/);
