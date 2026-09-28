@@ -18,14 +18,20 @@ work, not the evidence required for a full release.
   rejected by auto-review. Do not repeat that action or infer a pass from the
   existing `PASS_INTERNAL_ONLY` report type. A separately scoped internal test
   path needs its own review before dispatch.
+- The single acceptance workflow now exposes the explicit scopes
+  `internal_only` and `full_scope`, defaults to `internal_only`, and names
+  the run and job accordingly. `internal_only` maps fail-closed to external
+  provider mode `disabled`; `full_scope` maps to `required`. This avoids a
+  duplicate workflow while making the approved launch scope visible before
+  environment review. Preparing this path does not authorize dispatch.
 
 ## Work order and release gates
 
 1. Keep improving code and local synthetic tests for parser extraction,
    candidate confirmation, search and shortlist, private original CV access,
    jobs/share and role boundaries. A local pass is code evidence only.
-2. Prepare an explicitly named internal acceptance run with exact deployed SHA,
-   acceptance-only fixtures and verified cleanup. Its report must say
+2. Review and dispatch the explicitly named `internal_only` acceptance path
+   with exact deployed SHA, acceptance-only fixtures and verified cleanup. Its report must say
    `internal_only`; the external suite must remain untested and the full release
    decision `NO_GO`.
 3. After an authorized internal run passes, assess remaining runtime gaps and

@@ -41,7 +41,24 @@ async function main() {
   assert.doesNotMatch(workflow, /ACCEPTANCE_SYNTHETIC_FIXTURE_OWNER_RUN_ID/);
   assert.match(
     workflow,
-    /external_mode:[\s\S]*options: \[required, disabled\]/,
+    /acceptance_scope:[\s\S]*default: internal_only[\s\S]*options: \[internal_only, full_scope\]/,
+  );
+  assert.doesNotMatch(workflow, /^\s+external_mode:/m);
+  assert.match(
+    workflow,
+    /Internal Talent Hub acceptance[^\n]*inputs\.tested_sha/,
+  );
+  assert.match(
+    workflow,
+    /ACCEPTANCE_EXTERNAL_MODE:.*inputs\.acceptance_scope == 'full_scope'.*'required'.*'disabled'/,
+  );
+  assert.match(
+    workflow,
+    /internal_only\) test "\$ACCEPTANCE_EXTERNAL_MODE" = "disabled"/,
+  );
+  assert.match(
+    workflow,
+    /full_scope\) test "\$ACCEPTANCE_EXTERNAL_MODE" = "required"/,
   );
   assert.match(workflow, /ACCEPTANCE_FIXTURE_CLEANUP_ARMED == 'true'/);
   assert.match(workflow, /ACCEPTANCE_DEPLOYMENT_BYPASS_SECRET:.*secrets\./);

@@ -1,4 +1,8 @@
 name: Production Trust Authenticated Acceptance
+run-name: >-
+  ${{ inputs.acceptance_scope == 'internal_only'
+      && format('Internal Talent Hub acceptance · {0}', inputs.tested_sha)
+      || format('Full-scope acceptance · {0}', inputs.tested_sha) }}
 
 on:
   workflow_dispatch:
@@ -7,11 +11,12 @@ on:
         description: Exact deployed commit SHA to verify
         required: true
         type: string
-      external_mode:
-        description: Acceptance launch scope
+      acceptance_scope:
+        description: Explicit acceptance scope
         required: true
         type: choice
-        options: [required, disabled]
+        default: internal_only
+        options: [internal_only, full_scope]
 
 permissions:
   contents: read
@@ -23,7 +28,7 @@ concurrency:
 jobs:
   authenticated-acceptance:
     if: startsWith(github.ref_name, 'codex/authenticated-acceptance-')
-    name: Exact-build authenticated acceptance
+    name: ${{ inputs.acceptance_scope == 'internal_only' && 'Exact-build internal Talent Hub acceptance' || 'Exact-build full-scope acceptance' }}
     runs-on: ubuntu-latest
     timeout-minutes: 55
     environment: acceptance
@@ -33,7 +38,7 @@ jobs:
       ACCEPTANCE_TEST_MODE: "true"
       APP_ENV: acceptance
       ACCEPTANCE_DEPLOYMENT_PROTECTION_REQUIRED: "true"
-      ACCEPTANCE_EXTERNAL_MODE: ${{ inputs.external_mode }}
+      ACCEPTANCE_EXTERNAL_MODE: ${{ inputs.acceptance_scope == 'full_scope' && 'required' || 'disabled' }}
       ACCEPTANCE_BASE_URL: ${{ secrets.ACCEPTANCE_BASE_URL }}
       ACCEPTANCE_DEPLOYMENT_BYPASS_SECRET: ${{ secrets.ACCEPTANCE_DEPLOYMENT_BYPASS_SECRET }}
       ACCEPTANCE_EXPECTED_SHA: ${{ inputs.tested_sha }}
@@ -60,6 +65,11 @@ jobs:
           set -euo pipefail
           test "${{ inputs.tested_sha }}" = "${{ github.sha }}"
           test "$(git rev-parse HEAD)" = "$ACCEPTANCE_EXPECTED_SHA"
+          case "${{ inputs.acceptance_scope }}" in
+            internal_only) test "$ACCEPTANCE_EXTERNAL_MODE" = "disabled" ;;
+            full_scope) test "$ACCEPTANCE_EXTERNAL_MODE" = "required" ;;
+            *) exit 1 ;;
+          esac
           case "$ACCEPTANCE_BASE_URL" in https://*) ;; *) exit 1 ;; esac
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
