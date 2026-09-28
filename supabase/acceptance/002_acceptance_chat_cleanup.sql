@@ -190,6 +190,43 @@ begin
         and not (participant.user_profile_id = any(v_profile_ids))
     );
 
+  -- Fail before deleting anything if a synthetic identity is referenced by
+  -- chat or consent data outside conversations owned entirely by this run.
+  -- Otherwise later profile cleanup can fail after this RPC has committed.
+  if exists (
+    select 1 from public.chat_conversations conversation
+    where (conversation.created_by_profile_id = any(v_profile_ids)
+       or conversation.recipient_profile_id = any(v_profile_ids)
+       or conversation.candidate_id = any(v_candidate_ids))
+      and not (conversation.id = any(coalesce(v_conversation_ids, '{}'::uuid[])))
+  ) or exists (
+    select 1 from public.chat_conversation_participants participant
+    where participant.user_profile_id = any(v_profile_ids)
+      and not (participant.conversation_id = any(coalesce(v_conversation_ids, '{}'::uuid[])))
+  ) or exists (
+    select 1 from public.chat_messages message
+    where message.sender_profile_id = any(v_profile_ids)
+      and not (message.conversation_id = any(coalesce(v_conversation_ids, '{}'::uuid[])))
+  ) or exists (
+    select 1 from public.chat_message_events event
+    where event.actor_profile_id = any(v_profile_ids)
+      and not (event.conversation_id = any(coalesce(v_conversation_ids, '{}'::uuid[])))
+  ) or exists (
+    select 1 from public.candidate_chat_contact_consents consent
+    where (consent.user_profile_id = any(v_profile_ids)
+       or consent.candidate_id = any(v_candidate_ids))
+      and not (consent.user_profile_id = any(v_profile_ids)
+       and consent.candidate_id = any(v_candidate_ids))
+  ) or exists (
+    select 1 from public.candidate_chat_contact_consent_events event
+    where (event.user_profile_id = any(v_profile_ids)
+       or event.candidate_id = any(v_candidate_ids))
+      and not (event.user_profile_id = any(v_profile_ids)
+       and event.candidate_id = any(v_candidate_ids))
+  ) then
+    raise exception 'acceptance_chat_cleanup_external_reference_detected';
+  end if;
+
   perform set_config('app.acceptance_cleanup_run', p_run_id, true);
 
   if coalesce(array_length(v_conversation_ids, 1), 0) > 0 then

@@ -38,6 +38,25 @@ assert.match(
   cleanupSql,
   /fixture\.owner_run_id = p_run_id[\s\S]*fixture\.active = true/,
 );
+const residuePreflight = cleanupSql.indexOf(
+  "acceptance_chat_cleanup_external_reference_detected",
+);
+const firstDelete = cleanupSql.indexOf(
+  "delete from public.chat_message_receipt_events",
+);
+assert.ok(residuePreflight > 0 && residuePreflight < firstDelete);
+for (const reference of [
+  "conversation.recipient_profile_id = any(v_profile_ids)",
+  "conversation.candidate_id = any(v_candidate_ids)",
+  "participant.user_profile_id = any(v_profile_ids)",
+  "message.sender_profile_id = any(v_profile_ids)",
+  "event.actor_profile_id = any(v_profile_ids)",
+]) {
+  assert.ok(
+    cleanupSql.includes(reference),
+    `missing cleanup preflight: ${reference}`,
+  );
+}
 assert.match(
   cleanupSql,
   /delete from public\.chat_message_receipt_events[\s\S]*delete from public\.chat_message_receipts[\s\S]*delete from public\.chat_message_events[\s\S]*delete from public\.chat_messages[\s\S]*delete from public\.chat_conversation_participants[\s\S]*delete from public\.chat_conversations/,
