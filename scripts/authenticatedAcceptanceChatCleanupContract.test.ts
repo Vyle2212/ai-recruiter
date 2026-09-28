@@ -16,6 +16,14 @@ assert.match(cleanupSql, /classification = 'acceptance'/);
 assert.match(cleanupSql, /acceptance_enabled = true/);
 assert.match(
   cleanupSql,
+  /drop function if exists private\.acceptance_chat_cleanup_allowed\(\);/,
+);
+assert.match(
+  cleanupSql,
+  /revoke all on function private\.acceptance_chat_cleanup_allowed\(uuid, uuid, uuid\)\s+from public, anon, authenticated;/,
+);
+assert.match(
+  cleanupSql,
   /harness_version =\s*'production-trust-authenticated-acceptance-v2'/,
 );
 assert.match(
@@ -29,6 +37,10 @@ assert.match(
 assert.match(
   cleanupSql,
   /conversation\.created_by_profile_id = any\(v_profile_ids\)/,
+);
+assert.match(
+  cleanupSql,
+  /conversation\.recipient_profile_id is null[\s\S]*conversation\.recipient_profile_id = any\(v_profile_ids\)/,
 );
 assert.match(
   cleanupSql,
@@ -57,6 +69,29 @@ for (const reference of [
     `missing cleanup preflight: ${reference}`,
   );
 }
+for (const scopedTriggerCall of [
+  /private\.acceptance_chat_cleanup_allowed\(\s*null, old\.user_profile_id, old\.candidate_id\s*\)/,
+  /private\.acceptance_chat_cleanup_allowed\(\s*old\.conversation_id, null, null\s*\)/,
+]) {
+  assert.match(cleanupSql, scopedTriggerCall);
+}
+assert.doesNotMatch(
+  cleanupSql,
+  /if\s+tg_op = 'DELETE' and private\.acceptance_chat_cleanup_allowed\(\)/,
+  "a session GUC alone must never unlock append-only row deletion",
+);
+assert.match(
+  cleanupSql,
+  /creator\.entity_id = conversation\.created_by_profile_id::text/,
+);
+assert.match(
+  cleanupSql,
+  /recipient\.entity_id = conversation\.recipient_profile_id::text/,
+);
+assert.match(
+  cleanupSql,
+  /member\.entity_id = participant\.user_profile_id::text/,
+);
 assert.match(
   cleanupSql,
   /delete from public\.chat_message_receipt_events[\s\S]*delete from public\.chat_message_receipts[\s\S]*delete from public\.chat_message_events[\s\S]*delete from public\.chat_messages[\s\S]*delete from public\.chat_conversation_participants[\s\S]*delete from public\.chat_conversations/,

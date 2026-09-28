@@ -31,7 +31,14 @@ begin
 end
 $preflight$;
 
-create or replace function private.acceptance_chat_cleanup_allowed()
+-- A custom session setting is not sufficient authorization by itself. Bind
+-- every immutable-row bypass to the synthetic entities owned by that run.
+drop function if exists private.acceptance_chat_cleanup_allowed();
+create or replace function private.acceptance_chat_cleanup_allowed(
+  p_conversation_id uuid,
+  p_user_profile_id uuid,
+  p_candidate_id uuid
+)
 returns boolean
 language sql
 stable
@@ -56,9 +63,91 @@ as $$
         current_setting('app.acceptance_cleanup_run', true)
         and run.synthetic_namespace = 'ptf1c2/' || run.run_id
         and run.status in ('provisioning', 'ready', 'running', 'failed')
+    )
+    and (
+      (
+        p_conversation_id is not null
+        and p_user_profile_id is null
+        and p_candidate_id is null
+        and exists (
+          select 1
+          from public.chat_conversations conversation
+          where conversation.id = p_conversation_id
+            and exists (
+              select 1
+              from public.acceptance_test_entities creator
+              where creator.run_id =
+                current_setting('app.acceptance_cleanup_run', true)
+                and creator.entity_type = 'user_profile'
+                and creator.entity_id = conversation.created_by_profile_id::text
+            )
+            and (
+              conversation.recipient_profile_id is null
+              or exists (
+                select 1
+                from public.acceptance_test_entities recipient
+                where recipient.run_id =
+                  current_setting('app.acceptance_cleanup_run', true)
+                  and recipient.entity_type = 'user_profile'
+                  and recipient.entity_id = conversation.recipient_profile_id::text
+              )
+            )
+            and (
+              conversation.candidate_id is null
+              or exists (
+                select 1
+                from public.acceptance_synthetic_candidates fixture
+                where fixture.owner_run_id =
+                  current_setting('app.acceptance_cleanup_run', true)
+                  and fixture.synthetic_namespace =
+                    'ptf1c2/' || current_setting(
+                      'app.acceptance_cleanup_run', true
+                    )
+                  and fixture.candidate_id = conversation.candidate_id
+                  and fixture.active = true
+              )
+            )
+            and not exists (
+              select 1
+              from public.chat_conversation_participants participant
+              where participant.conversation_id = conversation.id
+                and not exists (
+                  select 1
+                  from public.acceptance_test_entities member
+                  where member.run_id =
+                    current_setting('app.acceptance_cleanup_run', true)
+                    and member.entity_type = 'user_profile'
+                    and member.entity_id = participant.user_profile_id::text
+                )
+            )
+        )
+      )
+      or (
+        p_conversation_id is null
+        and p_user_profile_id is not null
+        and p_candidate_id is not null
+        and exists (
+          select 1
+          from public.acceptance_test_entities profile
+          where profile.run_id =
+            current_setting('app.acceptance_cleanup_run', true)
+            and profile.entity_type = 'user_profile'
+            and profile.entity_id = p_user_profile_id::text
+        )
+        and exists (
+          select 1
+          from public.acceptance_synthetic_candidates fixture
+          where fixture.owner_run_id =
+            current_setting('app.acceptance_cleanup_run', true)
+            and fixture.synthetic_namespace =
+              'ptf1c2/' || current_setting('app.acceptance_cleanup_run', true)
+            and fixture.candidate_id = p_candidate_id
+            and fixture.active = true
+        )
+      )
     );
 $$;
-revoke all on function private.acceptance_chat_cleanup_allowed()
+revoke all on function private.acceptance_chat_cleanup_allowed(uuid, uuid, uuid)
   from public, anon, authenticated;
 
 create or replace function public.reject_candidate_chat_contact_consent_event_change()
@@ -68,7 +157,9 @@ security invoker
 set search_path = ''
 as $$
 begin
-  if tg_op = 'DELETE' and private.acceptance_chat_cleanup_allowed() then
+  if tg_op = 'DELETE' and private.acceptance_chat_cleanup_allowed(
+    null, old.user_profile_id, old.candidate_id
+  ) then
     return old;
   end if;
   raise exception 'Candidate chat contact consent audit is append-only';
@@ -82,7 +173,9 @@ security invoker
 set search_path = ''
 as $$
 begin
-  if tg_op = 'DELETE' and private.acceptance_chat_cleanup_allowed() then
+  if tg_op = 'DELETE' and private.acceptance_chat_cleanup_allowed(
+    old.conversation_id, null, null
+  ) then
     return old;
   end if;
   raise exception 'Chat receipt audit is append-only';
@@ -96,7 +189,9 @@ security invoker
 set search_path = ''
 as $$
 begin
-  if tg_op = 'DELETE' and private.acceptance_chat_cleanup_allowed() then
+  if tg_op = 'DELETE' and private.acceptance_chat_cleanup_allowed(
+    old.conversation_id, null, null
+  ) then
     return old;
   end if;
   raise exception 'Chat messages are immutable';
@@ -110,7 +205,9 @@ security invoker
 set search_path = ''
 as $$
 begin
-  if tg_op = 'DELETE' and private.acceptance_chat_cleanup_allowed() then
+  if tg_op = 'DELETE' and private.acceptance_chat_cleanup_allowed(
+    old.conversation_id, null, null
+  ) then
     return old;
   end if;
   raise exception 'Chat message audit is append-only';
@@ -179,6 +276,10 @@ begin
     into v_conversation_ids
   from public.chat_conversations conversation
   where conversation.created_by_profile_id = any(v_profile_ids)
+    and (
+      conversation.recipient_profile_id is null
+      or conversation.recipient_profile_id = any(v_profile_ids)
+    )
     and (
       conversation.candidate_id is null
       or conversation.candidate_id = any(v_candidate_ids)
