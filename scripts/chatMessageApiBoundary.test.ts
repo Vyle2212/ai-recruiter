@@ -43,13 +43,13 @@ async function main() {
   assert.match(source, /candidate_chat_contact_consents/);
   assert.match(source, /auth\.admin\.getUserById/);
   assert.match(source, /client_feature_entitlements/);
-  assert.match(source, /\.eq\("feature", "candidate_chat"\)/);
+  assert.doesNotMatch(source, /\.eq\("feature", "candidate_chat"\)/);
   assert.match(source, /\.eq\("organization_id", client\.organization_id\)/);
   assert.match(source, /client_candidate_access/);
   assert.match(source, /client_job_ownership/);
   assert.match(source, /authorizeChatConversation\(/);
   const route = fs.readFileSync("app/api/chat/conversations/[conversationId]/messages/route.ts", "utf8");
-  assert.match(route, /authorizeClientCandidateMessage\(conversationId\)/);
+  assert.match(route, /authorizeChatRequest\(conversationId\)/);
   assert.match(route, /CHAT_ENABLED !== "true"/);
   assert.match(route, /same_origin_required/);
   assert.match(route, /message_type: "user"/);

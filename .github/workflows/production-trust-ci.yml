@@ -152,6 +152,7 @@ jobs:
           node --import tsx scripts/chatConversationCreateBoundary.test.ts
           node --import tsx scripts/chatReceiptApiBoundary.test.ts
           node --import tsx scripts/chatMessageApiBoundary.test.ts
+          node --import tsx scripts/chatInternalConversationBoundary.test.ts
 
       - name: Authenticated acceptance harness safety contracts
         env:

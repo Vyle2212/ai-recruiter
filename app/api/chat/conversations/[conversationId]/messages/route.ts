@@ -1,4 +1,4 @@
-import { authorizeClientCandidateMessage } from "@/lib/chatMessageApiAuthorization";
+import { authorizeChatRequest } from "@/lib/chatRequestAuthorization";
 import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
 
 export const runtime = "nodejs";
@@ -14,7 +14,7 @@ async function scope(context: Params) {
   const { conversationId } = await context.params;
   if (!uuid.test(conversationId))
     return { allowed: false as const, status: 400, code: "invalid_conversation_id" };
-  return authorizeClientCandidateMessage(conversationId);
+  return authorizeChatRequest(conversationId);
 }
 
 export async function GET(_request: Request, context: Params) {

@@ -28,7 +28,7 @@ async function main() {
   const source = fs.readFileSync(
     "app/api/chat/conversations/[conversationId]/receipts/route.ts", "utf8",
   );
-  assert.match(source, /authorizeClientCandidateMessage\(conversationId\)/);
+  assert.match(source, /authorizeChatRequest\(conversationId\)/);
   assert.match(source, /\.eq\("user_profile_id", permission\.profileId\)/);
   assert.match(source, /\.eq\("conversation_id", permission\.conversationId\)/);
   assert.match(source, /\.is\("read_at", null\)/);

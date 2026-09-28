@@ -67,7 +67,7 @@ for (const requirement of [
   "candidate_chat_contact_consents",
   "auth.users",
 ]) assert.match(sql, new RegExp(requirement.replace(".", "\\.")));
-assert.match(sql, /entitlement\.feature = 'candidate_chat'/);
+assert.doesNotMatch(sql, /entitlement\.feature = 'candidate_chat'/);
 assert.match(sql, /auth_user\.email_confirmed_at is not null/);
 assert.match(sql, /candidate_auth\.email_confirmed_at is not null/);
 assert.match(sql, /membership\.organization_id = c\.organization_id/);
@@ -88,6 +88,9 @@ assert.match(
   sql,
   /grant execute on function public\.create_client_candidate_chat_conversation\(uuid, uuid, uuid\)[\s\S]*to service_role/,
 );
+assert.match(sql, /unique index chat_recruiter_admin_active_pair_key/);
+assert.match(sql, /create function public\.create_recruiter_admin_chat_conversation\(/);
+assert.match(sql, /grant execute on function public\.create_recruiter_admin_chat_conversation\(uuid, uuid\)[\s\S]*to service_role/);
 assert.match(sql, /from public, anon, authenticated/);
 assert.doesNotMatch(sql, /grant .* to (?:anon|authenticated)/i);
 assert.doesNotMatch(sql, /security definer/i);
