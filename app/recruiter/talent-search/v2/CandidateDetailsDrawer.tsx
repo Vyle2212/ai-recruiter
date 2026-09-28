@@ -1541,14 +1541,6 @@ export default function CandidateDetailsDrawer({
               Compare
             </button>
             <RequestOriginalCvButton candidateId={candidate.candidateId} />
-            <a
-              href={`/api/candidate360/${encodeURIComponent(candidate.candidateId)}/resume?mode=inline`}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200"
-            >
-              Open original CV
-            </a>
           </footer>
         ) : null}
       </aside>
