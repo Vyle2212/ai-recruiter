@@ -148,6 +148,7 @@ jobs:
           node --import tsx scripts/productionAuthConfiguration.test.ts
           node --import tsx scripts/chatAuthorizationCore.test.ts
           node --import tsx scripts/candidateChatConsentBoundary.test.ts
+          node --import tsx scripts/chatConversationStoreContract.test.ts
 
       - name: Authenticated acceptance harness safety contracts
         env:
