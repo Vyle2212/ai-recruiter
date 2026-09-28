@@ -21,7 +21,7 @@ export default function RecruiterAdminChat({ admins }: { admins: Array<{ id: str
       });
       if (!response.ok) {
         if ([401, 403, 404].includes(response.status))
-          throw new Error("This admin conversation is no longer available to your account.");
+          throw new Error("Chat is no longer available.");
         throw new Error("Chat is temporarily unavailable. Please try again.");
       }
       const result = await response.json();

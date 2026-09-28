@@ -156,6 +156,7 @@ jobs:
           node --import tsx scripts/chatClientRecruiterBoundary.test.ts
           node --import tsx scripts/chatRecruiterCandidateBoundary.test.ts
           node --import tsx scripts/chatClientCandidateEntryBoundary.test.ts
+          node --import tsx scripts/chatRecruiterAdminEntryBoundary.test.ts
 
       - name: Authenticated acceptance harness safety contracts
         env:
@@ -267,6 +268,7 @@ jobs:
       - name: Scoped formatting check
         run: |
           npm run check:production-trust:format
+          npx prettier --check scripts/chatRecruiterAdminEntryBoundary.test.ts
           npx prettier --check docs/precision-v172-blank-project-anchor-20260926.md
           npx prettier --check docs/precision-v171-leading-client-project-card-20260926.md
           npx prettier --check docs/precision-v170-split-role-project-cards-20260926.md

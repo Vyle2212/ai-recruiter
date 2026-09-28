@@ -35,7 +35,7 @@ export default async function RecruiterAssignedWork({ searchParams }: {
   if (!enabled) return <main className="min-h-screen bg-[#05070A] p-8 text-slate-100"><div className="mx-auto max-w-5xl"><h1 className="text-3xl font-semibold">Assigned Work</h1><p className="mt-4 text-slate-400">Client sharing is not available in this environment yet.</p></div></main>;
 
   const db = createLazySupabaseServiceClient();
-  const [candidateResult, jobResult, adminResult] = await Promise.all([
+  const [candidateResult, jobResult, organizationResult, adminResult] = await Promise.all([
     db.rpc("recruiter_shared_candidates", {
       p_recruiter_profile_id: profile.id, p_before: candidateCursor.date,
       p_before_id: candidateCursor.id, p_limit: 21,
@@ -45,12 +45,19 @@ export default async function RecruiterAssignedWork({ searchParams }: {
       p_before_id: jobCursor.id, p_limit: 21,
     }),
     process.env.CHAT_ENABLED === "true" && profile.organization_id
+      ? db.from("organizations").select("organization_type,status")
+        .eq("id", profile.organization_id).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    process.env.CHAT_ENABLED === "true" && profile.organization_id
       ? db.from("user_profiles").select("id,full_name")
         .eq("organization_id", profile.organization_id).eq("role", "admin")
         .eq("status", "active").order("id", { ascending: true }).limit(20)
       : Promise.resolve({ data: [], error: null }),
   ]);
   const unavailable = !!candidateResult.error || !!jobResult.error;
+  const chatAvailable = process.env.CHAT_ENABLED === "true" && !organizationResult.error &&
+    organizationResult.data?.organization_type === "internal" && organizationResult.data.status === "active" &&
+    !adminResult.error && !!adminResult.data?.length;
   const candidateRows: SharedCandidate[] = unavailable ? [] : (candidateResult.data || []).slice(0, 20);
   const jobRows: SharedJob[] = unavailable ? [] : (jobResult.data || []).slice(0, 20);
   const next = (kind: "candidate" | "job") => {
@@ -72,7 +79,7 @@ export default async function RecruiterAssignedWork({ searchParams }: {
 
   return <main className="min-h-screen bg-[#05070A] px-6 py-10 text-slate-100"><div className="mx-auto max-w-5xl space-y-8">
     <header><h1 className="text-3xl font-semibold">Assigned Work</h1><p className="mt-2 text-slate-400">Active jobs and candidates shared by clients you support.</p></header>
-    {process.env.CHAT_ENABLED === "true" && !adminResult.error && !!adminResult.data?.length &&
+    {chatAvailable &&
       <RecruiterAdminChat admins={adminResult.data.map(admin => ({ id: admin.id, name: admin.full_name || "Admin" }))} />}
     {unavailable && <p role="alert" className="rounded-xl border border-amber-500/30 p-5 text-amber-200">Assigned work is unavailable. No client access is assumed.</p>}
     {!unavailable && <>
