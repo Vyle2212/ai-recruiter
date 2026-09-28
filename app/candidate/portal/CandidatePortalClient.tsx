@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { useCallback, useEffect, useState } from "react";
 import { finalizePossiblyCompletedSignedCvUpload } from "@/lib/signedCvUploadFinalization";
 import { MAX_ORIGINAL_BYTES } from "@/lib/cvUploadLimits";
+import CandidateChatConsent from "./CandidateChatConsent";
 
 type PortalResponse = {
   profile: any;
@@ -247,7 +248,7 @@ async function json(response: Response) {
   return body;
 }
 
-export default function CandidatePortalClient() {
+export default function CandidatePortalClient({ chatEnabled }: { chatEnabled: boolean }) {
   const [data, setData] = useState<PortalResponse | null>(null);
   const [fields, setFields] = useState<Record<string, any>>({});
   const [file, setFile] = useState<File | null>(null);
@@ -435,6 +436,7 @@ export default function CandidatePortalClient() {
         ) : null}
         {data && profile ? (
           <>
+            {chatEnabled && <CandidateChatConsent />}
             <section className={panel}>
               <div className="flex flex-wrap justify-between gap-4">
                 <div>

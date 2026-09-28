@@ -16,8 +16,20 @@ export default function ChatConversation({ conversationId, suggestionsEnabled }:
   const [status, setStatus] = useState<"loading" | "ready" | "denied" | "error">("loading");
   const [sending, setSending] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
+  const [unreadCount, setUnreadCount] = useState<number | null>(null);
+  const [markingRead, setMarkingRead] = useState(false);
   const [error, setError] = useState("");
   const endpoint = `/api/chat/conversations/${encodeURIComponent(conversationId)}/messages`;
+  const receiptsEndpoint = `/api/chat/conversations/${encodeURIComponent(conversationId)}/receipts`;
+
+  const refreshReceipts = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const response = await fetch(receiptsEndpoint, { cache: "no-store", signal });
+      if (!response.ok) { if (!signal?.aborted) setUnreadCount(null); return; }
+      const result = await response.json();
+      if (!signal?.aborted) setUnreadCount(Number.isSafeInteger(result.unreadCount) ? result.unreadCount : null);
+    } catch { if (!signal?.aborted) setUnreadCount(null); }
+  }, [receiptsEndpoint]);
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -34,12 +46,25 @@ export default function ChatConversation({ conversationId, suggestionsEnabled }:
       setViewerId(result.viewerProfileId);
       setStatus("ready");
       setError("");
+      void refreshReceipts(signal);
     } catch (cause) {
       if (signal?.aborted) return;
       setError(cause instanceof Error ? cause.message : "Messages are temporarily unavailable.");
       setStatus("error");
     }
-  }, [endpoint]);
+  }, [endpoint, refreshReceipts]);
+
+  async function markRead() {
+    if (markingRead || !unreadCount || status !== "ready") return;
+    setMarkingRead(true);
+    try {
+      const response = await fetch(receiptsEndpoint, { method: "POST" });
+      if ([401, 403, 404].includes(response.status)) { setStatus("denied"); return; }
+      if (!response.ok) throw new Error("Read status could not be updated.");
+      await refreshReceipts();
+    } catch { setError("Read status could not be updated. Please retry."); }
+    finally { setMarkingRead(false); }
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -103,7 +128,10 @@ export default function ChatConversation({ conversationId, suggestionsEnabled }:
       <section className="mx-auto flex min-h-[75vh] max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-700/70 bg-[#0D1728] shadow-2xl shadow-black/30">
         <header className="flex items-center justify-between border-b border-slate-700/70 px-5 py-4">
           <div><p className="text-xs font-semibold uppercase tracking-widest text-cyan-300">SAP Talent Hub</p><h1 className="mt-1 text-xl font-semibold">Conversation</h1></div>
-          {status === "ready" && <button type="button" onClick={() => void refresh()} className="rounded-lg border border-slate-600 px-3 py-2 text-sm hover:border-cyan-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300">Refresh messages</button>}
+          {status === "ready" && <div className="flex flex-wrap items-center gap-2">
+            {unreadCount !== null && unreadCount > 0 && <button type="button" disabled={markingRead} onClick={() => void markRead()} className="rounded-lg border border-cyan-600 px-3 py-2 text-sm text-cyan-200 disabled:opacity-50">{markingRead ? "Updating…" : `Mark ${unreadCount} unread as read`}</button>}
+            <button type="button" onClick={() => void refresh()} className="rounded-lg border border-slate-600 px-3 py-2 text-sm hover:border-cyan-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300">Refresh messages</button>
+          </div>}
         </header>
         <div aria-live="polite" className="flex-1 space-y-3 overflow-y-auto p-5">
           {status === "loading" && <p className="text-slate-400">Loading conversation…</p>}
