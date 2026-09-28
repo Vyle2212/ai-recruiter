@@ -36,6 +36,7 @@ export type ChatAuthorizationContext = {
     anySubscriptionActive: boolean;
     candidateAccessActive?: boolean;
     recruiterAssignmentActive?: boolean;
+    recruiterSupportActive?: boolean;
   };
   recruiter?: {
     candidateAssignmentActive?: boolean;
@@ -154,7 +155,7 @@ export function authorizeChatConversation(
       return { allowed: false, code: "candidate_access_required" };
   }
   if (input.channelKind === "client_recruiter") {
-    if (!input.client?.recruiterAssignmentActive)
+    if (!input.client?.recruiterAssignmentActive || !input.client?.recruiterSupportActive)
       return { allowed: false, code: "recruiter_assignment_required" };
   }
   if (input.channelKind === "recruiter_candidate") {

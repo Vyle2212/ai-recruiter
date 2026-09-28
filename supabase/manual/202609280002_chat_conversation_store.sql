@@ -319,6 +319,7 @@ begin
       and exists (
         select 1 from public.client_feature_entitlements entitlement
         where entitlement.client_id = c.client_id
+          and entitlement.feature = 'recruiter_support'
           and entitlement.status = 'active'
           and btrim(entitlement.plan_code) <> ''
           and entitlement.valid_from <= now()
@@ -587,6 +588,7 @@ begin
     and exists (
       select 1 from public.client_feature_entitlements entitlement
       where entitlement.client_id = client.client_id
+        and entitlement.feature = 'recruiter_support'
         and entitlement.status = 'active' and btrim(entitlement.plan_code) <> ''
         and entitlement.valid_from <= now()
         and (entitlement.valid_until is null or entitlement.valid_until > now())

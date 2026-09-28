@@ -43,6 +43,7 @@ const activeClient = {
   anySubscriptionActive: true,
   candidateAccessActive: true,
   recruiterAssignmentActive: true,
+  recruiterSupportActive: true,
 };
 
 const clientCandidate: ChatAuthorizationContext = {
@@ -126,6 +127,15 @@ assert.equal(
     client: activeClient,
   }).allowed,
   true,
+);
+assert.deepEqual(
+  authorizeChatConversation({
+    actor: client, recipient: recruiter, channelKind: "client_recruiter",
+    scope: { jobId: "job-1" },
+    client: { ...activeClient, recruiterSupportActive: false },
+  }),
+  { allowed: false, code: "recruiter_assignment_required" },
+  "a plan without recruiter support cannot open client recruiter chat",
 );
 assert.deepEqual(
   authorizeChatConversation({
