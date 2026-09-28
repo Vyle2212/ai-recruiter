@@ -89,6 +89,9 @@ assert.match(
   /grant execute on function public\.create_client_candidate_chat_conversation\(uuid, uuid, uuid\)[\s\S]*to service_role/,
 );
 assert.match(sql, /unique index chat_recruiter_admin_active_pair_key/);
+assert.match(sql, /unique index chat_recruiter_candidate_active_client_key/);
+assert.match(sql, /create function public\.create_recruiter_candidate_chat_conversation\(/);
+assert.match(sql, /grant execute on function public\.create_recruiter_candidate_chat_conversation\(uuid, uuid, uuid\)[\s\S]*to service_role/);
 assert.match(sql, /unique index chat_client_recruiter_active_without_job_key/);
 assert.match(sql, /unique index chat_client_recruiter_active_with_job_key/);
 assert.match(sql, /create function public\.create_client_recruiter_chat_conversation\(/);
