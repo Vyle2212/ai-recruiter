@@ -1645,6 +1645,12 @@ export default function CandidateSearchV2Client({
   const [compareAnchorCandidateId, setCompareAnchorCandidateId] = useState("");
   const [compareAnchorResult, setCompareAnchorResult] =
     useState<SearchResult | null>(null);
+  const comparisonRequestRef = useRef<Record<string, unknown> | null>(null);
+  const [jobComparison, setJobComparison] = useState<SearchResponse | null>(
+    null,
+  );
+  const [jobComparisonLoading, setJobComparisonLoading] = useState(false);
+  const [jobComparisonError, setJobComparisonError] = useState("");
   const [shortlistJobId, setShortlistJobId] = useState<string | null>(null);
   const [shortlistPreviewJob, setShortlistPreviewJob] = useState(false);
   const [shortlistContextReady, setShortlistContextReady] = useState(false);
@@ -1767,6 +1773,70 @@ export default function CandidateSearchV2Client({
   );
 
   const results = response?.results || [];
+  useEffect(() => {
+    if (
+      !comparePackOpen ||
+      comparePackScope !== "shortlisted" ||
+      !shortlistJobId ||
+      !comparisonRequestRef.current ||
+      !response ||
+      response.summary.page !== 1
+    ) {
+      setJobComparison(null);
+      setJobComparisonLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setJobComparison(null);
+    setJobComparisonError("");
+    setJobComparisonLoading(true);
+    void fetch("/api/recruiter/search-v2", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      signal: controller.signal,
+      body: JSON.stringify({
+        ...comparisonRequestRef.current,
+        page: 1,
+        pageSize: 20,
+        comparison: {
+          scope: "shortlisted",
+          jobId: shortlistJobId,
+          anchorCandidateId: compareAnchorCandidateId || undefined,
+        },
+      }),
+    })
+      .then(async (reply) => {
+        if (!reply.ok) throw new Error("Job comparison is unavailable.");
+        const payload: unknown = await reply.json();
+        if (
+          !payload ||
+          typeof payload !== "object" ||
+          !("results" in payload) ||
+          !Array.isArray(payload.results) ||
+          !("summary" in payload)
+        )
+          throw new Error("Invalid comparison response.");
+        if (!controller.signal.aborted)
+          setJobComparison(payload as SearchResponse);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted)
+          setJobComparisonError("Job comparison is unavailable. Please retry.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setJobComparisonLoading(false);
+      });
+    return () => controller.abort();
+  }, [
+    comparePackOpen,
+    comparePackScope,
+    shortlistJobId,
+    compareAnchorCandidateId,
+    shortlistRevision,
+    response?.generatedAt,
+    response?.summary.page,
+  ]);
   const shortlistResultIds = results
     .filter((item) => item.talentPool !== "linkedin_talent_pool")
     .map((item) => item.candidateId)
@@ -1854,6 +1924,7 @@ export default function CandidateSearchV2Client({
       setShortlistCount((current) =>
         Math.max(0, current + (wasSaved ? -1 : 1)),
       );
+      setShortlistRevision((current) => current + 1);
     } catch (error) {
       setShortlistError(
         error instanceof Error
@@ -1883,12 +1954,15 @@ export default function CandidateSearchV2Client({
     )
       ? [compareAnchorCandidate, ...results]
       : results;
-  const compareCandidates = searchV2ComparisonCandidates(
-    comparisonResults,
-    shortlistedIds,
-    comparePackScope,
-    compareAnchorCandidateId,
-  );
+  const compareCandidates =
+    comparePackScope === "shortlisted"
+      ? jobComparison?.results || []
+      : searchV2ComparisonCandidates(
+          comparisonResults,
+          shortlistedIds,
+          "matches",
+          compareAnchorCandidateId,
+        );
   const resultRankByCandidateId = new Map(
     results.map((candidate, index) => [candidate.candidateId, index + 1]),
   );
@@ -2917,6 +2991,23 @@ export default function CandidateSearchV2Client({
         );
       const networkStartedAt = performance.now();
       const correlatedRequestId = `search-${requestId}-${Date.now().toString(36)}`;
+      const requestPayload = {
+        ...browserRequest,
+        rawQuery: requestRawQuery,
+        ...(paginationNavigation &&
+        !externalBatchCursor &&
+        response.nextCursor &&
+        pageNumber === response.summary.page + 1
+          ? { cursor: response.nextCursor }
+          : {}),
+        ...(externalBatchCursor ? { externalBatchCursor } : {}),
+        ...(requestIntegrityPlan
+          ? { integrityPlan: requestIntegrityPlan }
+          : {}),
+        includeRelocationRemote:
+          requestCommittedRequirements.includeRelocationRemote,
+        externalVerifiedOnly: requestExternalVerifiedOnly,
+      };
       const fetchResponse = await fetch("/api/recruiter/search-v2", {
         method: "POST",
         headers: {
@@ -2924,23 +3015,7 @@ export default function CandidateSearchV2Client({
           "X-Search-Request-Id": correlatedRequestId,
         },
         signal: abortController.signal,
-        body: JSON.stringify({
-          ...browserRequest,
-          rawQuery: requestRawQuery,
-          ...(paginationNavigation &&
-          !externalBatchCursor &&
-          response.nextCursor &&
-          pageNumber === response.summary.page + 1
-            ? { cursor: response.nextCursor }
-            : {}),
-          ...(externalBatchCursor ? { externalBatchCursor } : {}),
-          ...(requestIntegrityPlan
-            ? { integrityPlan: requestIntegrityPlan }
-            : {}),
-          includeRelocationRemote:
-            requestCommittedRequirements.includeRelocationRemote,
-          externalVerifiedOnly: requestExternalVerifiedOnly,
-        }),
+        body: JSON.stringify(requestPayload),
       });
       const payload: unknown = await fetchResponse.json();
       const networkMs = performance.now() - networkStartedAt;
@@ -2973,6 +3048,10 @@ export default function CandidateSearchV2Client({
       if (reconciliation.status === "invalid")
         throw new Error(INVALID_SEARCH_RESPONSE_MESSAGE);
       const committedResponse = reconciliation.response as SearchResponse;
+      if (pageNumber === 1 && requestTalentPool === "internal_profiles") {
+        comparisonRequestRef.current = requestPayload;
+        setJobComparison(null);
+      }
       const reconciliationStartedAt = performance.now();
       if (externalBatchCursor) pageCacheRef.current.clear();
       pendingResultsScrollPageRef.current = pageNumber;
@@ -4203,7 +4282,11 @@ export default function CandidateSearchV2Client({
                 <button
                   type="button"
                   aria-pressed={comparePackScope === "shortlisted"}
-                  disabled={shortlistLoading || Boolean(shortlistError)}
+                  disabled={
+                    !shortlistJobId ||
+                    shortlistLoading ||
+                    Boolean(shortlistError)
+                  }
                   onClick={() => setComparePackScope("shortlisted")}
                   className={
                     comparePackScope === "shortlisted"
@@ -4229,14 +4312,29 @@ export default function CandidateSearchV2Client({
                   </button>
                 ))}
               </div>
+              {comparePackScope === "shortlisted" && !shortlistJobId ? (
+                <p role="status" className="mt-3 text-xs text-amber-200">
+                  Select an active job to compare its shortlisted candidates.
+                </p>
+              ) : null}
+              {comparePackScope === "shortlisted" && jobComparisonLoading ? (
+                <p role="status" className="mt-3 text-xs text-cyan-200">
+                  Loading the job shortlist comparison...
+                </p>
+              ) : null}
+              {comparePackScope === "shortlisted" && jobComparisonError ? (
+                <p role="alert" className="mt-3 text-xs text-rose-200">
+                  {jobComparisonError}
+                </p>
+              ) : null}
               <p className="mt-3 text-xs text-slate-400">
                 Showing {Math.min(comparePackSize, compareCandidates.length)} of{" "}
                 {comparePackScope === "shortlisted"
-                  ? compareCandidates.length
+                  ? jobComparison?.summary.visibleTotal || 0
                   : response.summary.visibleTotal}{" "}
                 available ranked profiles
                 {comparePackScope === "shortlisted"
-                  ? " shortlisted within the first 20 matches"
+                  ? " in this job shortlist comparison (including the baseline when needed)"
                   : ""}
                 .
                 {response.evaluationMode === "identity_only"

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
+import { selectJobComparisonResults } from "@/lib/searchV2JobComparison";
 
 import { adaptCandidatesToSearchV2Documents } from "@/lib/candidateSearchV2Adapter";
 
@@ -88,7 +90,46 @@ type SearchV2Body = CandidateSearchV2Request & {
 
   matchQuality?: SearchMatchQuality;
   integrityPlan?: GuidedSearchHandoff["integrityPlan"];
+  comparison?: {
+    scope: "shortlisted";
+    jobId: string;
+    anchorCandidateId?: string;
+  };
 };
+
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const comparisonDatabase = createLazySupabaseServiceClient();
+
+async function jobShortlistedRankedResults(
+  ranked: CandidateSearchV2Result[],
+  comparison: NonNullable<SearchV2Body["comparison"]>,
+  ownerProfileId: string,
+  organizationId: string | null,
+) {
+  const ids = new Set<string>();
+  // Never silently truncate a large shortlist. The bounded read prevents a
+  // user-controlled list from creating an unbounded database request.
+  for (let offset = 0; offset <= 10000; offset += 500) {
+    let query = comparisonDatabase
+      .from("recruiter_search_shortlist_items")
+      .select("candidate_id")
+      .eq("owner_profile_id", ownerProfileId)
+      .eq("scope_key", `job:${comparison.jobId.toLowerCase()}`)
+      .order("id", { ascending: true })
+      .range(offset, offset + 499);
+    query = organizationId
+      ? query.eq("organization_id", organizationId)
+      : query.is("organization_id", null);
+    const { data, error } = await query;
+    if (error) throw error;
+    for (const item of data || []) ids.add(item.candidate_id);
+    if ((data || []).length < 500) break;
+    if (offset === 10000)
+      throw new Error("Shortlist exceeds comparison limit.");
+  }
+  return selectJobComparisonResults(ranked, ids, comparison.anchorCandidateId);
+}
 
 const SEARCH_RANKING_CACHE_VERSION = SEARCH_V2_CACHE_VERSION;
 const SEARCH_RANKING_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -334,6 +375,20 @@ export async function POST(request: NextRequest) {
       rawQuery: queryNormalization.rawQuery,
       query: queryNormalization.normalizedQuery,
     };
+    if (
+      body.comparison &&
+      (body.comparison.scope !== "shortlisted" ||
+        !UUID.test(body.comparison.jobId) ||
+        (body.comparison.anchorCandidateId &&
+          !UUID.test(body.comparison.anchorCandidateId)) ||
+        body.talentPool === "linkedin_talent_pool" ||
+        body.page !== 1 ||
+        body.pageSize !== 20)
+    )
+      return NextResponse.json(
+        { error: "Invalid job comparison request." },
+        { status: 400, headers: { "Cache-Control": "private, no-store" } },
+      );
     if (
       (Array.isArray(body.documents) || Array.isArray(body.candidates)) &&
       !searchV2RequestDatasetAllowed({
@@ -781,6 +836,17 @@ export async function POST(request: NextRequest) {
       "candidate_name_lookup",
       "identity_token_lookup",
     ].includes(unifiedIntent.type);
+    if (
+      body.comparison &&
+      (identityOnly ||
+        ["hybrid_candidate_evaluation", "company_search"].includes(
+          unifiedIntent.type,
+        ))
+    )
+      return NextResponse.json(
+        { error: "Comparison requires a ranked job search." },
+        { status: 400, headers: { "Cache-Control": "private, no-store" } },
+      );
     const profile = buildSearchExecutionProfile(browserRequest, {
       datasetRevision,
       authorizationScopeHash: authorization.scope.cacheKey,
@@ -810,19 +876,27 @@ export async function POST(request: NextRequest) {
     const cached = rankingCacheable ? freshRankedSearch(cacheKey) : null;
     const cacheReadMs = performance.now() - cacheReadStartedAt;
     if (cached) {
+      const visibleRanked = body.comparison
+        ? await jobShortlistedRankedResults(
+            cached.rankedResults,
+            body.comparison,
+            authorization.scope.profileId,
+            authorization.scope.organizationId,
+          )
+        : cached.rankedResults;
       const result = paginateRankedCandidatesV2(
-        cached.rankedResults,
+        visibleRanked,
         cached.totalDocuments,
         searchRequest,
         profileHash,
       );
       result.committedSearchId = profileHash;
       result.requestId = requestCorrelationId;
-      const tiers = searchV2TierCounts(cached.rankedResults);
+      const tiers = searchV2TierCounts(visibleRanked);
       result.summary = {
         ...result.summary,
         eligibleTotal: cached.eligibleTotal,
-        visibleTotal: cached.rankedResults.length,
+        visibleTotal: visibleRanked.length,
         verifiedVisible: tiers.exact_verified,
         supportedVisible: tiers.exact_supported,
         relatedVisible: tiers.related,
@@ -1117,19 +1191,27 @@ export async function POST(request: NextRequest) {
       );
     const rankedResults = visibleSearchV2Results(eligibleResults, profile);
     const presentationStartedAt = performance.now();
+    const visibleRanked = body.comparison
+      ? await jobShortlistedRankedResults(
+          rankedResults,
+          body.comparison,
+          authorization.scope.profileId,
+          authorization.scope.organizationId,
+        )
+      : rankedResults;
     const result = paginateRankedCandidatesV2(
-      rankedResults,
+      visibleRanked,
       dedupe.documents.length,
       searchRequest,
       profileHash,
     );
     result.committedSearchId = profileHash;
     result.requestId = requestCorrelationId;
-    const tiers = searchV2TierCounts(rankedResults);
+    const tiers = searchV2TierCounts(visibleRanked);
     result.summary = {
       ...result.summary,
       eligibleTotal: eligibleResults.length,
-      visibleTotal: rankedResults.length,
+      visibleTotal: visibleRanked.length,
       verifiedVisible: tiers.exact_verified,
       supportedVisible: tiers.exact_supported,
       relatedVisible: tiers.related,
