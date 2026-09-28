@@ -699,15 +699,67 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
   test("Search V2 shows Comparison beside Shortlist with separate employer and client periods", async ({
     page,
   }) => {
+    const db = acceptanceAdminClient();
+    const runHash = pseudonymousAcceptanceIdentifier(
+      acceptanceRequired("ACCEPTANCE_RUN_ID"),
+    );
+    const { data: job, error: jobError } = await db
+      .from("jobs")
+      .select("id")
+      .eq("title", `PTF synthetic job ${runHash}`)
+      .single();
+    expect(jobError).toBeNull();
+    expect(job?.id).toBeTruthy();
     const shortlist = await authenticatedApi("recruiter");
-    const selection = { candidateId: internalCandidateId, jobId: null };
+    const selection = { candidateId: internalCandidateId, jobId: job!.id };
     try {
       const saved = await shortlist.post("/api/recruiter/search-v2/shortlist", {
         data: selection,
       });
       expect(saved.status()).toBe(200);
+      const comparisonRequest = {
+        query: acceptanceRequired("ACCEPTANCE_INTERNAL_SEARCH_QUERY"),
+        talentPool: "internal_profiles",
+        page: 1,
+        pageSize: 20,
+        comparison: {
+          scope: "shortlisted",
+          jobId: job!.id,
+          anchorCandidateId: internalCandidateId,
+        },
+      };
+      const compared = await shortlist.post(searchPath, {
+        data: comparisonRequest,
+      });
+      expect(compared.status()).toBe(200);
+      const comparedBody = await compared.json();
+      expect(
+        comparedBody.results.map(
+          (item: { candidateId: string }) => item.candidateId,
+        ),
+      ).toContain(internalCandidateId);
+      const otherJob = await shortlist.post(searchPath, {
+        data: {
+          ...comparisonRequest,
+          comparison: {
+            scope: "shortlisted",
+            jobId: "00000000-0000-4000-8000-000000000001",
+          },
+        },
+      });
+      expect(otherJob.status()).toBe(200);
+      expect((await otherJob.json()).results).toEqual([]);
+      const denied = await authenticatedApi("candidate");
+      try {
+        await expectPrivateErrorOnly(
+          await denied.post(searchPath, { data: comparisonRequest }),
+          403,
+        );
+      } finally {
+        await denied.dispose();
+      }
       await installAuthenticatedBrowserState(page.context(), "recruiter");
-      await page.goto(searchPage);
+      await page.goto(`${searchPage}?jobId=${encodeURIComponent(job!.id)}`);
       await page
         .getByPlaceholder(
           "Senior SAP FICO consultant in Malaysia with implementation experience",
@@ -765,7 +817,7 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       );
       expect(removed.status()).toBe(200);
       const after = await shortlist.get(
-        `/api/recruiter/search-v2/shortlist?candidateIds=${encodeURIComponent(internalCandidateId)}`,
+        `/api/recruiter/search-v2/shortlist?jobId=${encodeURIComponent(job!.id)}&candidateIds=${encodeURIComponent(internalCandidateId)}`,
       );
       expect(after.status()).toBe(200);
       expect((await after.json()).candidateIds).not.toContain(

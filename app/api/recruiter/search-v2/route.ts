@@ -101,8 +101,8 @@ const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const comparisonDatabase = createLazySupabaseServiceClient();
 
-async function jobShortlistedRankedResults(
-  ranked: CandidateSearchV2Result[],
+async function jobShortlistedRankedResults<T extends { candidateId: string }>(
+  ranked: T[],
   comparison: NonNullable<SearchV2Body["comparison"]>,
   ownerProfileId: string,
   organizationId: string | null,
@@ -836,17 +836,6 @@ export async function POST(request: NextRequest) {
       "candidate_name_lookup",
       "identity_token_lookup",
     ].includes(unifiedIntent.type);
-    if (
-      body.comparison &&
-      (identityOnly ||
-        ["hybrid_candidate_evaluation", "company_search"].includes(
-          unifiedIntent.type,
-        ))
-    )
-      return NextResponse.json(
-        { error: "Comparison requires a ranked job search." },
-        { status: 400, headers: { "Cache-Control": "private, no-store" } },
-      );
     const profile = buildSearchExecutionProfile(browserRequest, {
       datasetRevision,
       authorizationScopeHash: authorization.scope.cacheKey,
@@ -1007,14 +996,24 @@ export async function POST(request: NextRequest) {
       const identityPage = searchRequest.page || 1;
       const identityPageSize = searchRequest.pageSize || 20;
       const startIndex = (identityPage - 1) * identityPageSize;
-      const identityResults = allMatches
-        .slice(startIndex, startIndex + identityPageSize)
-        .map(({ document, matchRank }) =>
-          identityOnlyCandidateProjection(
-            document,
-            matchRank === 0 ? "exact" : matchRank === 1 ? "partial" : "fuzzy",
-          ),
-        );
+      const projectedMatches = allMatches.map(({ document, matchRank }) =>
+        identityOnlyCandidateProjection(
+          document,
+          matchRank === 0 ? "exact" : matchRank === 1 ? "partial" : "fuzzy",
+        ),
+      );
+      const visibleMatches = body.comparison
+        ? await jobShortlistedRankedResults(
+            projectedMatches,
+            body.comparison,
+            authorization.scope.profileId,
+            authorization.scope.organizationId,
+          )
+        : projectedMatches;
+      const identityResults = visibleMatches.slice(
+        startIndex,
+        startIndex + identityPageSize,
+      );
       const totalMs = performance.now() - startedAt;
       const phases = {
         parse: queryParsingMs,
@@ -1042,9 +1041,9 @@ export async function POST(request: NextRequest) {
           },
           summary: {
             totalDocuments: dedupe.documents.length,
-            totalMatched: allMatches.length,
+            totalMatched: visibleMatches.length,
             eligibleTotal: allMatches.length,
-            visibleTotal: allMatches.length,
+            visibleTotal: visibleMatches.length,
             verifiedVisible: 0,
             supportedVisible: 0,
             relatedVisible: 0,
@@ -1108,19 +1107,27 @@ export async function POST(request: NextRequest) {
         directRequest,
         unifiedIntent,
       );
+      const visibleDirectResults = body.comparison
+        ? await jobShortlistedRankedResults(
+            directResults,
+            body.comparison,
+            authorization.scope.profileId,
+            authorization.scope.organizationId,
+          )
+        : directResults;
       const result = paginateRankedCandidatesV2(
-        directResults,
+        visibleDirectResults,
         dedupe.documents.length,
         directRequest,
         profileHash,
       );
       result.committedSearchId = profileHash;
       result.requestId = requestCorrelationId;
-      const tiers = searchV2TierCounts(directResults);
+      const tiers = searchV2TierCounts(visibleDirectResults);
       result.summary = {
         ...result.summary,
         eligibleTotal: directResults.length,
-        visibleTotal: directResults.length,
+        visibleTotal: visibleDirectResults.length,
         verifiedVisible: tiers.exact_verified,
         supportedVisible: tiers.exact_supported,
         relatedVisible: tiers.related,
