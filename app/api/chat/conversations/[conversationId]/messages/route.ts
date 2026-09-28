@@ -29,7 +29,7 @@ export async function GET(_request: Request, context: Params) {
     .order("created_at", { ascending: false }).order("id", { ascending: false })
     .limit(50);
   if (error) return reply({ error: "chat_store_unavailable" }, 503);
-  return reply({ messages: (data || []).reverse() });
+  return reply({ messages: (data || []).reverse(), viewerProfileId: permission.profileId });
 }
 
 export async function POST(request: Request, context: Params) {
