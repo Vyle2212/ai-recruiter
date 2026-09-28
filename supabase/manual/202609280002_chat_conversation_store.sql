@@ -45,7 +45,8 @@ create table public.chat_conversations (
   check (
     (channel_kind = 'client_candidate' and client_id is not null and candidate_id is not null)
     or (channel_kind = 'recruiter_candidate' and candidate_id is not null)
-    or (channel_kind = 'client_recruiter' and client_id is not null)
+    or (channel_kind = 'client_recruiter' and organization_id is not null
+        and client_id is not null and recipient_profile_id is not null)
     or (channel_kind = 'recruiter_admin' and organization_id is not null
         and recipient_profile_id is not null)
   ),
@@ -72,6 +73,12 @@ create unique index chat_client_candidate_active_with_job_key
 create unique index chat_recruiter_admin_active_pair_key
   on public.chat_conversations(created_by_profile_id, recipient_profile_id)
   where channel_kind = 'recruiter_admin' and status = 'active';
+create unique index chat_client_recruiter_active_without_job_key
+  on public.chat_conversations(created_by_profile_id, recipient_profile_id)
+  where channel_kind = 'client_recruiter' and status = 'active' and job_id is null;
+create unique index chat_client_recruiter_active_with_job_key
+  on public.chat_conversations(created_by_profile_id, recipient_profile_id, job_id)
+  where channel_kind = 'client_recruiter' and status = 'active' and job_id is not null;
 
 create table public.chat_conversation_participants (
   conversation_id uuid not null references public.chat_conversations(id) on delete restrict,
@@ -266,6 +273,58 @@ begin
       ))
   ) then
     raise exception 'Client candidate chat permission changed';
+  end if;
+  if exists (
+    select 1 from public.chat_conversations c
+    where c.id = new.conversation_id and c.channel_kind = 'client_recruiter'
+  ) and not exists (
+    select 1 from public.chat_conversations c
+    join public.user_profiles client
+      on client.id = c.created_by_profile_id
+     and client.role = 'client' and client.status = 'active'
+     and client.client_id = c.client_id
+     and client.organization_id = c.organization_id
+    join public.user_profiles recruiter
+      on recruiter.id = c.recipient_profile_id
+     and recruiter.role in ('recruiter', 'recruiter_manager')
+     and recruiter.status = 'active'
+    join public.chat_conversation_participants client_participant
+      on client_participant.conversation_id = c.id
+     and client_participant.user_profile_id = client.id
+     and client_participant.role_snapshot = 'client'
+     and client_participant.status = 'active'
+    join public.chat_conversation_participants recruiter_participant
+      on recruiter_participant.conversation_id = c.id
+     and recruiter_participant.user_profile_id = recruiter.id
+     and recruiter_participant.role_snapshot = recruiter.role
+     and recruiter_participant.status = 'active'
+    join public.client_memberships membership
+      on membership.user_profile_id = client.id
+     and membership.organization_id = c.organization_id
+     and membership.client_id = c.client_id and membership.status = 'active'
+    join public.client_recruiter_assignments assignment
+      on assignment.client_id = c.client_id
+     and assignment.recruiter_profile_id = recruiter.id
+     and assignment.status = 'active'
+    where c.id = new.conversation_id
+      and new.sender_profile_id in (client.id, recruiter.id)
+      and (select count(*) from public.chat_conversation_participants participant
+           where participant.conversation_id = c.id) = 2
+      and exists (
+        select 1 from public.client_feature_entitlements entitlement
+        where entitlement.client_id = c.client_id
+          and entitlement.status = 'active'
+          and btrim(entitlement.plan_code) <> ''
+          and entitlement.valid_from <= now()
+          and (entitlement.valid_until is null or entitlement.valid_until > now())
+      )
+      and (c.job_id is null or exists (
+        select 1 from public.client_job_ownership ownership
+        where ownership.client_id = c.client_id
+          and ownership.job_id = c.job_id and ownership.status = 'active'
+      ))
+  ) then
+    raise exception 'Client recruiter chat permission changed';
   end if;
   if exists (
     select 1 from public.chat_conversations c
@@ -482,6 +541,93 @@ $$;
 revoke all on function public.create_client_candidate_chat_conversation(uuid, uuid, uuid)
   from public, anon, authenticated;
 grant execute on function public.create_client_candidate_chat_conversation(uuid, uuid, uuid)
+  to service_role;
+
+-- A client may contact only an actively assigned recruiter while any paid
+-- subscription is active. An optional job remains inside the client's scope.
+create function public.create_client_recruiter_chat_conversation(
+  p_client_profile_id uuid, p_recruiter_profile_id uuid, p_job_id uuid default null
+) returns uuid language plpgsql security invoker set search_path = '' as $$
+declare
+  v_client_id uuid;
+  v_organization_id uuid;
+  v_conversation_id uuid;
+  v_recruiter_role text;
+begin
+  select client.client_id, client.organization_id, recruiter.role
+    into v_client_id, v_organization_id, v_recruiter_role
+  from public.user_profiles client
+  join public.user_profiles recruiter
+    on recruiter.id = p_recruiter_profile_id
+   and recruiter.role in ('recruiter', 'recruiter_manager')
+   and recruiter.status = 'active'
+  join public.client_memberships membership
+    on membership.user_profile_id = client.id
+   and membership.organization_id = client.organization_id
+   and membership.client_id = client.client_id
+   and membership.status = 'active'
+  join public.client_recruiter_assignments assignment
+    on assignment.client_id = client.client_id
+   and assignment.recruiter_profile_id = recruiter.id
+   and assignment.status = 'active'
+  where client.id = p_client_profile_id
+    and client.role = 'client' and client.status = 'active'
+    and exists (
+      select 1 from public.client_feature_entitlements entitlement
+      where entitlement.client_id = client.client_id
+        and entitlement.status = 'active' and btrim(entitlement.plan_code) <> ''
+        and entitlement.valid_from <= now()
+        and (entitlement.valid_until is null or entitlement.valid_until > now())
+    )
+    and (p_job_id is null or exists (
+      select 1 from public.client_job_ownership ownership
+      where ownership.client_id = client.client_id
+        and ownership.job_id = p_job_id and ownership.status = 'active'
+    ));
+  if v_client_id is null or v_organization_id is null or v_recruiter_role is null then
+    raise exception using errcode = 'P0001', message = 'chat_scope_not_available';
+  end if;
+
+  insert into public.chat_conversations
+    (channel_kind, organization_id, client_id, job_id,
+     created_by_profile_id, recipient_profile_id)
+  values ('client_recruiter', v_organization_id, v_client_id, p_job_id,
+          p_client_profile_id, p_recruiter_profile_id)
+  on conflict do nothing returning id into v_conversation_id;
+  if v_conversation_id is null then
+    select id into v_conversation_id from public.chat_conversations
+    where channel_kind = 'client_recruiter' and status = 'active'
+      and created_by_profile_id = p_client_profile_id
+      and recipient_profile_id = p_recruiter_profile_id
+      and job_id is not distinct from p_job_id;
+    if v_conversation_id is null
+       or (select count(*) from public.chat_conversation_participants
+           where conversation_id = v_conversation_id) <> 2
+       or not exists (
+         select 1 from public.chat_conversation_participants
+         where conversation_id = v_conversation_id
+           and user_profile_id = p_client_profile_id
+           and role_snapshot = 'client' and status = 'active'
+       ) or not exists (
+         select 1 from public.chat_conversation_participants
+         where conversation_id = v_conversation_id
+           and user_profile_id = p_recruiter_profile_id
+           and role_snapshot = v_recruiter_role and status = 'active'
+       ) then
+      raise exception using errcode = 'P0001', message = 'chat_conversation_inconsistent';
+    end if;
+  else
+    insert into public.chat_conversation_participants
+      (conversation_id, user_profile_id, role_snapshot)
+    values (v_conversation_id, p_client_profile_id, 'client'),
+           (v_conversation_id, p_recruiter_profile_id, v_recruiter_role);
+  end if;
+  return v_conversation_id;
+end
+$$;
+revoke all on function public.create_client_recruiter_chat_conversation(uuid, uuid, uuid)
+  from public, anon, authenticated;
+grant execute on function public.create_client_recruiter_chat_conversation(uuid, uuid, uuid)
   to service_role;
 
 -- Recruiter initiates one private thread with an active admin in the same

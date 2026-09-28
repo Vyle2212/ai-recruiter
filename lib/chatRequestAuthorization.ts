@@ -2,6 +2,7 @@ import "server-only";
 
 import { authorizeClientCandidateMessage } from "./chatMessageApiAuthorization";
 import { authorizeRecruiterAdminMessage } from "./chatInternalAuthorization";
+import { authorizeClientRecruiterMessage } from "./chatClientRecruiterAuthorization";
 import { createLazySupabaseServiceClient } from "./runtimeClients";
 import { createClient } from "@/utils/supabase/server";
 
@@ -19,5 +20,7 @@ export async function authorizeChatRequest(conversationId: string) {
     return authorizeClientCandidateMessage(conversationId);
   if (data?.channel_kind === "recruiter_admin")
     return authorizeRecruiterAdminMessage(conversationId);
+  if (data?.channel_kind === "client_recruiter")
+    return authorizeClientRecruiterMessage(conversationId);
   return { allowed: false as const, status: 404, code: "conversation_not_available" };
 }
