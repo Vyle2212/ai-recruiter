@@ -12,6 +12,7 @@ for (const table of [
   "chat_messages",
   "chat_message_events",
   "chat_message_receipts",
+  "chat_message_receipt_events",
 ]) {
   assert.match(sql, new RegExp(`create table public\\.${table}`));
   assert.match(
@@ -46,6 +47,10 @@ assert.match(
 );
 assert.match(sql, /chat_messages_immutable/);
 assert.match(sql, /chat_message_events_immutable/);
+assert.match(sql, /chat_receipt_events_immutable/);
+assert.match(sql, /chat_receipt_read_audit/);
+assert.match(sql, /insert into public\.chat_message_receipts[\s\S]*p\.user_profile_id <> new\.sender_profile_id/);
+assert.match(sql, /foreign key \(message_id, conversation_id, user_profile_id\)/);
 assert.match(sql, /chat_conversation_scope_immutable/);
 assert.match(sql, /unique index chat_client_candidate_active_scope_key/);
 assert.match(sql, /create function public\.create_client_candidate_chat_conversation\(/);

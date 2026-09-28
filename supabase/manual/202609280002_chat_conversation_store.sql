@@ -18,7 +18,8 @@ begin
      or to_regclass('public.chat_conversation_participants') is not null
      or to_regclass('public.chat_messages') is not null
      or to_regclass('public.chat_message_events') is not null
-     or to_regclass('public.chat_message_receipts') is not null then
+     or to_regclass('public.chat_message_receipts') is not null
+     or to_regclass('public.chat_message_receipt_events') is not null then
     raise exception 'chat_store_already_installed';
   end if;
 end
@@ -117,6 +118,7 @@ create table public.chat_message_receipts (
   delivered_at timestamptz,
   read_at timestamptz,
   primary key (message_id, user_profile_id),
+  unique (message_id, conversation_id, user_profile_id),
   constraint chat_message_receipts_message_scope
     foreign key (message_id, conversation_id)
     references public.chat_messages(id, conversation_id)
@@ -131,6 +133,59 @@ create table public.chat_message_receipts (
 create index chat_message_receipts_unread_idx
   on public.chat_message_receipts(user_profile_id, conversation_id)
   where read_at is null;
+
+create table public.chat_message_receipt_events (
+  id uuid primary key default gen_random_uuid(),
+  message_id uuid not null,
+  conversation_id uuid not null,
+  user_profile_id uuid not null,
+  action text not null check (action = 'read'),
+  created_at timestamptz not null default now(),
+  constraint chat_receipt_events_receipt
+    foreign key (message_id, conversation_id, user_profile_id)
+    references public.chat_message_receipts(message_id, conversation_id, user_profile_id)
+    on delete restrict
+);
+create index chat_receipt_events_profile_idx
+  on public.chat_message_receipt_events(user_profile_id, created_at desc);
+
+create function public.record_chat_receipt_read()
+returns trigger language plpgsql security invoker set search_path = '' as $$
+begin
+  if old.message_id is distinct from new.message_id
+     or old.conversation_id is distinct from new.conversation_id
+     or old.user_profile_id is distinct from new.user_profile_id
+     or (old.read_at is not null and old.read_at is distinct from new.read_at)
+     or (old.delivered_at is not null
+         and old.delivered_at is distinct from new.delivered_at)
+     or (new.read_at is not null and new.read_at < new.delivered_at) then
+    raise exception 'Chat receipt identity and timestamps are immutable';
+  end if;
+  if old.read_at is null and new.read_at is not null then
+    insert into public.chat_message_receipt_events
+      (message_id, conversation_id, user_profile_id, action)
+    values (new.message_id, new.conversation_id, new.user_profile_id, 'read');
+  end if;
+  return new;
+end
+$$;
+revoke all on function public.record_chat_receipt_read()
+  from public, anon, authenticated;
+create trigger chat_receipt_read_audit
+before update on public.chat_message_receipts
+for each row execute function public.record_chat_receipt_read();
+
+create function public.reject_chat_receipt_event_change()
+returns trigger language plpgsql security invoker set search_path = '' as $$
+begin
+  raise exception 'Chat receipt audit is append-only';
+end
+$$;
+revoke all on function public.reject_chat_receipt_event_change()
+  from public, anon, authenticated;
+create trigger chat_receipt_events_immutable
+before update or delete on public.chat_message_receipt_events
+for each row execute function public.reject_chat_receipt_event_change();
 
 create function public.enforce_chat_message_active_scope()
 returns trigger language plpgsql security invoker set search_path = '' as $$
@@ -204,6 +259,12 @@ begin
   insert into public.chat_message_events
     (message_id, conversation_id, actor_profile_id, action)
   values (new.id, new.conversation_id, new.sender_profile_id, 'sent');
+  insert into public.chat_message_receipts
+    (message_id, conversation_id, user_profile_id, delivered_at)
+  select new.id, new.conversation_id, p.user_profile_id, new.created_at
+  from public.chat_conversation_participants p
+  where p.conversation_id = new.conversation_id
+    and p.status = 'active' and p.user_profile_id <> new.sender_profile_id;
   update public.chat_conversations
     set last_message_at = new.created_at,
         updated_at = new.created_at
@@ -366,15 +427,19 @@ alter table public.chat_message_events enable row level security;
 alter table public.chat_message_events force row level security;
 alter table public.chat_message_receipts enable row level security;
 alter table public.chat_message_receipts force row level security;
+alter table public.chat_message_receipt_events enable row level security;
+alter table public.chat_message_receipt_events force row level security;
 
 revoke all on public.chat_conversations,
   public.chat_conversation_participants, public.chat_messages,
-  public.chat_message_events, public.chat_message_receipts
+  public.chat_message_events, public.chat_message_receipts,
+  public.chat_message_receipt_events
   from public, anon, authenticated;
 grant select, insert, update on public.chat_conversations,
   public.chat_conversation_participants, public.chat_message_receipts
   to service_role;
 grant select, insert on public.chat_messages, public.chat_message_events
   to service_role;
+grant select, insert on public.chat_message_receipt_events to service_role;
 
 commit;
