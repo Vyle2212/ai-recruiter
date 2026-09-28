@@ -272,6 +272,9 @@ begin
     where c.id = new.conversation_id and c.channel_kind = 'recruiter_admin'
   ) and not exists (
     select 1 from public.chat_conversations c
+    join public.organizations org
+      on org.id = c.organization_id
+     and org.organization_type = 'internal' and org.status = 'active'
     join public.user_profiles recruiter
       on recruiter.id = c.created_by_profile_id
      and recruiter.role in ('recruiter', 'recruiter_manager')
@@ -281,7 +284,19 @@ begin
       on admin.id = c.recipient_profile_id
      and admin.role = 'admin' and admin.status = 'active'
      and admin.organization_id = c.organization_id
+    join public.chat_conversation_participants recruiter_participant
+      on recruiter_participant.conversation_id = c.id
+     and recruiter_participant.user_profile_id = recruiter.id
+     and recruiter_participant.role_snapshot = recruiter.role
+     and recruiter_participant.status = 'active'
+    join public.chat_conversation_participants admin_participant
+      on admin_participant.conversation_id = c.id
+     and admin_participant.user_profile_id = admin.id
+     and admin_participant.role_snapshot = 'admin'
+     and admin_participant.status = 'active'
     where c.id = new.conversation_id
+      and (select count(*) from public.chat_conversation_participants participant
+           where participant.conversation_id = c.id) = 2
       and new.sender_profile_id in (recruiter.id, admin.id)
   ) then
     raise exception 'Recruiter admin chat permission changed';
@@ -507,12 +522,13 @@ begin
       raise exception 'Recruiter admin conversation conflict';
     end if;
     if (select count(*) from public.chat_conversation_participants
-        where conversation_id = v_conversation_id and status = 'active') <> 2
+        where conversation_id = v_conversation_id) <> 2
        or not exists (
          select 1 from public.chat_conversation_participants
          where conversation_id = v_conversation_id
            and user_profile_id = p_recruiter_profile_id
-           and role_snapshot in ('recruiter', 'recruiter_manager')
+           and role_snapshot = (select role from public.user_profiles
+                                where id = p_recruiter_profile_id)
            and status = 'active'
        ) or not exists (
          select 1 from public.chat_conversation_participants

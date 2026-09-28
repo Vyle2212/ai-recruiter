@@ -37,6 +37,8 @@ async function main() {
   assert.match(auth, /orgResult\.data\.status !== "active"/);
   assert.match(sql, /create function public\.create_recruiter_admin_chat_conversation\([\s\S]*security invoker/);
   assert.match(sql, /create function public\.enforce_chat_message_active_scope\([\s\S]*Recruiter admin chat permission changed/);
+  assert.match(sql, /org\.organization_type = 'internal' and org\.status = 'active'[\s\S]*recruiter_participant\.role_snapshot = recruiter\.role/);
+  assert.match(sql, /admin_participant\.role_snapshot = 'admin'[\s\S]*count\(\*\) from public\.chat_conversation_participants participant/);
   console.log("Internal chat boundary passed.");
 }
 
