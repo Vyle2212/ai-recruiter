@@ -370,6 +370,47 @@ export async function updateClientShareApiSession(request: NextRequest) {
   return response;
 }
 
+/** Refresh only the browser session. The handler reloads all chat scope and
+ * entitlements for each operation before using the server-only data client. */
+export async function updateChatApiSession(request: NextRequest) {
+  if (request.method !== "GET" && request.method !== "POST")
+    return recruiterApiJson(405, "method_not_allowed", "Method not allowed.");
+  if (request.method === "POST") {
+    const rejection = validateRecruiterApiWriteRequest({
+      method: request.method,
+      url: request.url,
+      headers: request.headers,
+      policyId: "chat.messages.write",
+      maxRequestBytes: 12000,
+    });
+    if (rejection)
+      return recruiterApiJson(rejection.status, rejection.code, "Access is not permitted.");
+  }
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key)
+    return recruiterApiJson(401, "authentication_required", "Authentication is required.");
+  let response = NextResponse.next({ request });
+  const supabase = createServerClient(url, key, {
+    cookieOptions: supabaseServerCookieOptions(),
+    cookies: {
+      getAll: () => request.cookies.getAll(),
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        response = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          response.cookies.set(name, value, options));
+      },
+    },
+  });
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user)
+    return recruiterApiJson(401, "authentication_required", "Authentication is required.");
+  for (const [name, value] of Object.entries(recruiterApiHeaders))
+    response.headers.set(name, value);
+  return response;
+}
+
 export async function updateStagingSession(request: NextRequest) {
   let response = NextResponse.next({
     request,

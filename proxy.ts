@@ -7,6 +7,7 @@ import {
   isStagingPortalGuardEnabled,
   shouldProtectPortal,
   updateClientShareApiSession,
+  updateChatApiSession,
   updateRecruiterApiSession,
   updateStagingSession,
 } from "./utils/supabase/proxy";
@@ -21,6 +22,10 @@ export async function proxy(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/api/recruiter/");
   const clientShareApi =
     request.nextUrl.pathname === "/api/client/recruiter-shares";
+  const chatApi = request.nextUrl.pathname.startsWith("/api/chat/");
+  if (chatApi && process.env.CHAT_ENABLED !== "true")
+    return NextResponse.json({ error: "not_found" }, { status: 404,
+      headers: { "Cache-Control": "private, no-store" } });
   if (
     process.env.VERCEL_ENV === "production" &&
     process.env.PRODUCTION_AUTH_ENABLED === "true" &&
@@ -39,6 +44,7 @@ export async function proxy(request: NextRequest) {
     (shouldProtectPortal(request.nextUrl.pathname) ||
       recruiterApiNamespace ||
       clientShareApi ||
+      chatApi ||
       Boolean(apiPolicy))
   ) {
     return new NextResponse("Acceptance authentication is not configured.", {
@@ -52,6 +58,10 @@ export async function proxy(request: NextRequest) {
 
   if (clientShareApi) {
     return updateClientShareApiSession(request);
+  }
+
+  if (chatApi) {
+    return updateChatApiSession(request);
   }
 
   if (
