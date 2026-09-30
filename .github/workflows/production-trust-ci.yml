@@ -336,6 +336,9 @@ jobs:
       - name: Clean dependency installation
         run: npm ci
 
+      - name: Verify tracked source encoding
+        run: node scripts/verifyTrackedTextUtf8.cjs
+
       - name: Next.js 16.3.5 Webpack production build
         run: npm run build:webpack
 
