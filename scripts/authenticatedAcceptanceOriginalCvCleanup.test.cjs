@@ -9,7 +9,7 @@ const end=provision.indexOf("\nasync function verifyDatabaseMarker",start);
 assert.ok(start>=0 && end>start,"cleanup source boundaries must be present");
 const source='const ORIGINAL_CV_BUCKET="candidate-original-cvs";\n'+key.slice(key.indexOf("export function originalCvReference")).replaceAll("export function","function")+"\n"+provision.slice(start,end);
 const compiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
-const ctx={};vm.createContext(ctx);vm.runInContext(compiled+"\nglobalThis.cleanup=cleanupRunOwnedOriginalCvData;",ctx);
+const ctx={};vm.createContext(ctx);vm.runInContext(compiled+"\nglobalThis.cleanup=cleanupRunOwnedOriginalCvData;globalThis.nameForRun=syntheticUploadCandidateName;",ctx);
 const owner="00000000-0000-4000-8000-000000000001";
 const filename="00000000-0000-4000-8000-000000000002.pdf";
 const candidate="00000000-0000-4000-8000-000000000003";
@@ -24,7 +24,7 @@ function client(options={}){
    then:(resolve,reject)=>{
     if(op==="delete"){events.push("delete:"+table);return Promise.resolve({error:null}).then(resolve,reject)}
     if(table==="candidates"&&!events.includes("delete:candidates"))
-     return Promise.resolve({data:options.candidatesNull?null:[{id:candidate,name:options.wrongName?"Real Candidate":"PTF synthetic upload runhash",source_file:"candidate-original-cvs/"+owner+"/"+filename}],error:null}).then(resolve,reject);
+     return Promise.resolve({data:options.candidatesNull?null:[{id:candidate,name:options.wrongName?"Real Candidate":"Synthetic Abcdefghijklmnop",source_file:"candidate-original-cvs/"+owner+"/"+filename}],error:null}).then(resolve,reject);
     const count=options.dependency&&table==="chat_conversations"?1:0;
     return Promise.resolve({count,error:null}).then(resolve,reject);
    }};
@@ -33,13 +33,16 @@ function client(options={}){
  return c;
 }
 (async()=>{
- const good=client();await ctx.cleanup(good,[owner],"runhash");
+ assert.equal(ctx.nameForRun("0123456789abcdef"),"Synthetic Abcdefghijklmnop");
+ assert.throws(()=>ctx.nameForRun("runhash"));
+ assert.notEqual(ctx.nameForRun("0123456789abcdef"),ctx.nameForRun("1123456789abcdef"));
+ const good=client();await ctx.cleanup(good,[owner],"0123456789abcdef");
  assert.deepEqual(good.events,["delete:candidate_upload_reviews","delete:candidates","storage-remove"]);
  for(const options of [{wrongName:true},{dependency:true}]){
-  const c=client(options);await assert.rejects(ctx.cleanup(c,[owner],"runhash"));assert.deepEqual(c.events,[]);
+  const c=client(options);await assert.rejects(ctx.cleanup(c,[owner],"0123456789abcdef"));assert.deepEqual(c.events,[]);
  }
  for(const options of [{storageNull:true},{candidatesNull:true}]){
-  const c=client(options);await assert.rejects(ctx.cleanup(c,[owner],"runhash"),undefined,"ambiguous discovery must fail closed");assert.deepEqual(c.events,[]);
+  const c=client(options);await assert.rejects(ctx.cleanup(c,[owner],"0123456789abcdef"),undefined,"ambiguous discovery must fail closed");assert.deepEqual(c.events,[]);
  }
  console.log("Cleanup behavioral regression PASS");
 })().catch(e=>{console.error(e.message);process.exitCode=1});
