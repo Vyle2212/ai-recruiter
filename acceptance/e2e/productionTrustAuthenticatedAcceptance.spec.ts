@@ -735,6 +735,21 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     await expect(page.getByRole("tab", { name: /Experience/ })).toBeVisible();
     await expect(page.getByRole("tab", { name: /Projects/ })).toBeVisible();
     const drawer = page.getByRole("dialog");
+    const sections = ["Overview", "Experience", "Projects", "Education", "Skills"];
+    for (const section of sections) {
+      const tab = drawer.getByRole("tab", {
+        name: new RegExp(`^${section}(?:,|$)`),
+      });
+      await expect(tab).toBeVisible();
+      await tab.click();
+      await expect(tab).toHaveAttribute("aria-selected", "true");
+      const panel = drawer.getByRole("tabpanel");
+      await expect(panel).toBeVisible();
+      await expect(panel).toHaveAttribute(
+        "aria-labelledby",
+        `candidate-detail-${section.toLowerCase()}-tab`,
+      );
+    }
     await drawer.getByRole("tab", { name: /Experience/ }).click();
     await expect(
       drawer.getByText("PTF Synthetic Consulting Ltd", { exact: true }).first(),
