@@ -12,7 +12,7 @@ export default async function LoginPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const acceptance = process.env.APP_ENV === "acceptance";
-  if (process.env.VERCEL_ENV === "production") {
+  if (process.env.VERCEL_ENV === "production" && !acceptance) {
     const enabled = productionAuthConfigured();
     return (
       <main className="min-h-screen bg-[#05070A] text-slate-100">
