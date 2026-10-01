@@ -35,11 +35,14 @@ async function main() {
   assert.match(auth, /client_candidate_shares/);
   assert.match(auth, /client_recruiter_assignments/);
   assert.match(auth, /client_candidate_access/);
-  assert.match(auth, /\.eq\("feature", "recruiter_support"\)/);
+  assert.doesNotMatch(auth, /\.eq\("feature", "recruiter_support"\)/);
+  assert.match(auth, /anyActiveSubscription\(subscription\.data/);
   assert.match(dispatch, /authorizeRecruiterCandidateMessage\(conversationId\)/);
   assert.match(sql, /create function public\.create_recruiter_candidate_chat_conversation\([\s\S]*security invoker/);
   assert.match(sql, /Recruiter candidate chat permission changed/);
   assert.match(sql, /candidate_auth\.email_confirmed_at is not null/);
+  assert.doesNotMatch(sql, /entitlement\.feature = 'recruiter_support'/);
+  assert.match(sql, /btrim\(entitlement\.plan_code\) <> ''/);
   assert.match(sql, /grant execute on function public\.create_recruiter_candidate_chat_conversation\(uuid, uuid, uuid\)[\s\S]*to service_role/);
   console.log("Recruiter candidate chat boundary passed.");
 }
