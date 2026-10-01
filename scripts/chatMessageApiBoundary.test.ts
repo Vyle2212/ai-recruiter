@@ -48,6 +48,31 @@ async function main() {
   assert.match(source, /client_candidate_access/);
   assert.match(source, /client_job_ownership/);
   assert.match(source, /authorizeChatConversation\(/);
+  const dispatcher = fs.readFileSync("lib/chatRequestAuthorization.ts", "utf8");
+  assert.match(
+    dispatcher,
+    /\.from\("chat_conversations"\)[\s\S]*\.select\("channel_kind"\)\.eq\("id", conversationId\)\.maybeSingle\(\)/,
+    "the authenticated dispatcher must resolve only the path conversation",
+  );
+  for (const [channelKind, authorizer] of [
+    ["client_candidate", "authorizeClientCandidateMessage"],
+    ["recruiter_admin", "authorizeRecruiterAdminMessage"],
+    ["client_recruiter", "authorizeClientRecruiterMessage"],
+    ["recruiter_candidate", "authorizeRecruiterCandidateMessage"],
+  ] as const) {
+    assert.match(
+      dispatcher,
+      new RegExp(
+        `data\\?\\.channel_kind === "${channelKind}"[\\s\\S]{0,160}return ${authorizer}\\(conversationId\\)`,
+      ),
+      `${channelKind} messages must re-run their channel-specific authorization`,
+    );
+  }
+  assert.doesNotMatch(
+    dispatcher,
+    /request\.(?:json|text)\(|body\.(?:profileId|candidateId|clientId|organizationId)/,
+    "actor and scope may not come from the message request body",
+  );
   const route = fs.readFileSync("app/api/chat/conversations/[conversationId]/messages/route.ts", "utf8");
   assert.match(route, /authorizeChatRequest\(conversationId\)/);
   assert.match(route, /CHAT_ENABLED !== "true"/);
