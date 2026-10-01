@@ -64,6 +64,24 @@ assert.equal(
   `candidate-original-cvs/${ownedKey}`,
 );
 
+// Cleanup must reject every key that escapes the exact synthetic owner prefix.
+for (const unsafeKey of [
+  ownedKey.split("/")[1],
+  `${other}/00000000-0000-4000-8000-000000000003.pdf`,
+  `${owner}x/00000000-0000-4000-8000-000000000003.pdf`,
+  `${owner}//00000000-0000-4000-8000-000000000003.pdf`,
+  `${owner}/nested/00000000-0000-4000-8000-000000000003.pdf`,
+  `${owner}/%2e%2e/00000000-0000-4000-8000-000000000003.pdf`,
+  `${owner}/00000000-0000-4000-8000-000000000003.pdf?download=1`,
+  `${owner}/00000000-0000-4000-8000-000000000003.html`,
+  `${owner}\\00000000-0000-4000-8000-000000000003.pdf`,
+]) {
+  assert.equal(ownedOriginalCvObjectKey(owner, unsafeKey), false);
+}
+for (const unsafeOwner of ["", "not-a-uuid", `${owner}/`, `../${owner}`]) {
+  assert.equal(ownedOriginalCvObjectKey(unsafeOwner, ownedKey), false);
+}
+
 const upload = fs.readFileSync("app/api/upload-cv/route.ts", "utf8");
 assert.match(upload, /commitCandidateWithArchivedCv\(/);
 assert.doesNotMatch(
