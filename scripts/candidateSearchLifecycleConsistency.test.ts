@@ -51,6 +51,10 @@ for (const status of ["deleted", "non_sap", "rejected_noise"]) {
   );
 }
 assert.deepEqual([...CANDIDATE_SEARCH_BLOCKED_STATUSES].sort(), blocked.sort());
+assert.ok(
+  CANDIDATE_SEARCH_REVIEW_CONFIRMATION_STATUSES.includes("not_claimed"),
+  "a migrated but unclaimed profile must stay out of recruiter search",
+);
 assert.equal(
   missingOptionalLifecycleColumn({
     code: "42703",
@@ -358,6 +362,11 @@ assert.match(
   /\.select\(\["id", "status", \.\.\.optionalColumns\]\.join\(","\)\)/,
 );
 assert.match(lifecycleAdapter, /CANDIDATE_SEARCH_BLOCKED_STATUSES/);
+assert.match(
+  lifecycleAdapter,
+  /CANDIDATE_SEARCH_REVIEW_CONFIRMATION_STATUSES\.join\(","\)/,
+  "fresh Search V2 lifecycle lookup must block every review confirmation state",
+);
 assert.match(lifecycleAdapter, /documents\.filter\(/);
 assert.match(lifecycleAdapter, /setCurrentBlockedCandidatesResolverForTests/);
 assert.match(lifecycleAdapter, /process\.env\.NODE_ENV !== "test"/);
