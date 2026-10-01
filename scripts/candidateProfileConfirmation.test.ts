@@ -212,4 +212,36 @@ assert.match(
 assert.match(route, /apply_candidate_profile_confirmation/);
 assert.match(route, /candidate_profile_verified_email_required/);
 assert.doesNotMatch(route, /body\.candidateId|body\.candidate_id/);
+assert.match(
+  route,
+  /\.eq\("id", authorization\.scope\.candidateId\)/,
+  "confirmation must load only the candidate resolved from the authenticated ownership chain",
+);
+for (const [parameter, scopedValue] of [
+  ["p_auth_user_id", "authUserId"],
+  ["p_user_profile_id", "userProfileId"],
+  ["p_candidate_id", "candidateId"],
+  ["p_expected_updated_at", "candidateUpdatedAt"],
+] as const) {
+  assert.match(
+    route,
+    new RegExp(\`${parameter}: authorization\\.scope\\.${scopedValue}\`),
+    \`${parameter} must come from the authenticated ownership scope\`,
+  );
+}
+assert.match(
+  transaction,
+  /where id = p_user_profile_id and auth_user_id = p_auth_user_id[\s\S]*?v_profile\.candidate_id is distinct from p_candidate_id/,
+  "the transaction must bind auth user, profile and candidate before mutation",
+);
+assert.match(
+  transaction,
+  /where user_profile_id = p_user_profile_id and candidate_id = p_candidate_id[\s\S]*?v_account\.status <> 'active'/,
+  "the candidate account mapping must be exact and active",
+);
+assert.match(
+  transaction,
+  /where id = p_candidate_id[\s\S]*?v_candidate\.updated_at is distinct from p_expected_updated_at/,
+  "the owned candidate row must still match the authorized version",
+);
 console.log("candidateProfileConfirmation.test.ts passed");
