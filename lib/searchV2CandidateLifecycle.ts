@@ -6,6 +6,7 @@ import type { CandidateSearchV2Document } from "./candidateSearchV2Types";
 import { createCandidateSupabaseAdminClient } from "./candidateSupabase";
 import {
   CANDIDATE_SEARCH_BLOCKED_STATUSES,
+  CANDIDATE_SEARCH_REVIEW_CONFIRMATION_STATUSES,
   missingOptionalLifecycleColumn,
 } from "./candidateSearchLifecycle";
 
@@ -44,7 +45,7 @@ async function currentBlockedCandidates(signal?: AbortSignal) {
         filters.push("extraction_coverage_status.eq.incomplete_needs_review");
       if (optionalColumns.has("profile_confirmation_status"))
         filters.push(
-          "profile_confirmation_status.in.(claimed_incomplete,recruiter_review_required)",
+          `profile_confirmation_status.in.(${CANDIDATE_SEARCH_REVIEW_CONFIRMATION_STATUSES.join(",")})`,
         );
       let query = supabase
         .from("candidates")
