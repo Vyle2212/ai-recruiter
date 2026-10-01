@@ -71,7 +71,7 @@ export async function authorizeClientRecruiterMessage(
       .eq("organization_id", client.organization_id).eq("client_id", client.client_id)
       .eq("status", "active").limit(1),
     db.from("client_feature_entitlements").select("status,plan_code,valid_from,valid_until")
-      .eq("client_id", client.client_id).eq("feature", "recruiter_support"),
+      .eq("client_id", client.client_id),
     db.from("client_recruiter_assignments").select("id")
       .eq("client_id", client.client_id).eq("recruiter_profile_id", recruiter.id)
       .eq("status", "active").limit(1),
@@ -94,7 +94,6 @@ export async function authorizeClientRecruiterMessage(
       membershipActive: Boolean(membership.data?.length),
       anySubscriptionActive: anyActiveSubscription(subscriptions.data || [], Date.now()),
       recruiterAssignmentActive: Boolean(assignment.data?.length),
-      recruiterSupportActive: anyActiveSubscription(subscriptions.data || [], Date.now()),
     },
   });
   if (!decision.allowed) return deny(decision.code);
