@@ -37,6 +37,50 @@ assert.deepEqual(
   "an unknown baseline never synthesizes or duplicates a candidate",
 );
 
+const rankedPack = Array.from({ length: 25 }, (_, index) => ({
+  candidateId: `candidate-${index + 1}`,
+}));
+const fullShortlist = new Set(
+  rankedPack.slice(0, 21).map((candidate) => candidate.candidateId),
+);
+for (const packSize of [5, 10, 20] as const) {
+  const matchesPack = searchV2ComparisonCandidates(
+    rankedPack,
+    fullShortlist,
+    "matches",
+    "candidate-25",
+  ).slice(0, packSize);
+  assert.equal(matchesPack.length, packSize);
+  assert.equal(
+    matchesPack[0].candidateId,
+    "candidate-25",
+    "the selected baseline must lead every full Top 5/10/20 comparison",
+  );
+  assert.equal(
+    new Set(matchesPack.map((candidate) => candidate.candidateId)).size,
+    packSize,
+    "a full comparison pack cannot contain duplicate profiles",
+  );
+
+  const shortlistedPack = searchV2ComparisonCandidates(
+    rankedPack,
+    fullShortlist,
+    "shortlisted",
+    "candidate-25",
+  ).slice(0, packSize);
+  assert.equal(shortlistedPack.length, packSize);
+  assert.equal(shortlistedPack[0].candidateId, "candidate-25");
+  assert.deepEqual(
+    shortlistedPack
+      .slice(1)
+      .map((candidate) => candidate.candidateId),
+    rankedPack
+      .slice(0, packSize - 1)
+      .map((candidate) => candidate.candidateId),
+    "job-shortlisted alternatives must preserve the ranked order at every pack depth",
+  );
+}
+
 const search = fs.readFileSync(
   "app/recruiter/talent-search/v2/CandidateSearchV2Client.tsx",
   "utf8",
