@@ -1,3 +1,4 @@
+import { appendFile } from "node:fs/promises";
 import { ORIGINAL_CV_BUCKET, ownedOriginalCvObjectKey } from "../../lib/originalCvArchiveKey";
 import type { RecruiterCopilotAnswer } from "../../lib/recruiterCopilotAnswerEngine";
 import { test, expect, type APIResponse } from "@playwright/test";
@@ -728,6 +729,13 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       const reference = await signed.json();
       expect(ownedOriginalCvObjectKey(owner, reference.objectKey)).toBe(true);
       expect(reference.contentType).toBe("text/plain");
+      const ledgerPath =
+        `${acceptanceRequired("ACCEPTANCE_CREDENTIAL_BUNDLE_PATH")}.original-cv-ledger.jsonl`;
+      await appendFile(
+        ledgerPath,
+        `${JSON.stringify({ objectKey: reference.objectKey })}\n`,
+        { encoding: "utf8", mode: 0o600 },
+      );
       const bucket = database.storage.from(ORIGINAL_CV_BUCKET);
       const uploaded = await bucket.uploadToSignedUrl(
         reference.objectKey, reference.token, bytes,
