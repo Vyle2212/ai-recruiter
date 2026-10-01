@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { jsPDF } from "jspdf";
 
 import { prepareCandidateCv } from "../lib/candidateCvIngestion";
 import { evaluateCandidateProfileCompletion } from "../lib/candidateProfileIngestion";
@@ -110,6 +111,57 @@ async function main() {
       false,
     );
   }
+  const scannedPdf = new jsPDF({ unit: "pt", format: "a4" });
+  const scannedBytes = Buffer.from(scannedPdf.output("arraybuffer"));
+  const ocrProfiles: Array<Record<string, unknown>> = [];
+  for (const source of ["admin_upload", "candidate_upload"] as const) {
+    const prepared = await prepareCandidateCv({
+      buffer: scannedBytes,
+      fileName: "synthetic-scanned-sap-mm.pdf",
+      source,
+      pdfOcr: async (
+        originalBytes,
+        pages,
+        pagesRequiringOcrText,
+        fallbackReason,
+      ) => {
+        assert.equal(
+          originalBytes.equals(scannedBytes),
+          true,
+          "OCR must receive the original archived PDF bytes",
+        );
+        assert.equal(pages, 1);
+        assert.deepEqual(pagesRequiringOcrText, [1]);
+        assert.equal(fallbackReason, "PDF_TEXT_EMPTY_OR_TOO_SHORT");
+        return cv;
+      },
+    });
+    assert.equal(prepared.accepted, true);
+    if (!prepared.accepted) throw new Error("synthetic_ocr_cv_rejected");
+    assert.deepEqual(prepared.sourceExtraction, {
+      method: "ocr",
+      pageCount: 1,
+      reason: "PDF_TEXT_EMPTY_OR_TOO_SHORT",
+    });
+    assert.equal(prepared.candidatePayload.name, "Synthetic Abcdefghijklmnop");
+    assert.equal(
+      prepared.candidatePayload.employment_history[0].employer,
+      "Synthetic Consulting",
+    );
+    assert.equal(
+      prepared.candidatePayload.project_history[0].client,
+      "Synthetic Manufacturing",
+    );
+    const comparable = structuredClone(prepared.candidatePayload);
+    delete comparable.profile_source_type;
+    ocrProfiles.push(comparable);
+  }
+  assert.deepEqual(
+    ocrProfiles[0],
+    ocrProfiles[1],
+    "admin and candidate OCR uploads must produce the same parser output",
+  );
+
   console.log(
     "Synthetic candidate upload, employer/project and search gate passed.",
   );
