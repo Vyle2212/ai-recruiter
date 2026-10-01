@@ -23,6 +23,10 @@ import {
 } from "../lib/acceptanceSyntheticIdentityContract";
 import { acceptanceCleanupPlan } from "../lib/acceptanceCleanupPlan";
 import { ACCEPTANCE_SYNTHETIC_CANDIDATE_ID } from "../lib/acceptanceSyntheticCandidateFixture";
+import {
+  ORIGINAL_CV_BUCKET,
+  ownedOriginalCvObjectKey,
+} from "../lib/originalCvArchiveKey";
 
 type SafeConfig = Extract<
   ReturnType<typeof evaluateAcceptanceEnvironment>,
@@ -80,6 +84,46 @@ function adminClient(config: SafeConfig) {
   return createClient(config.supabaseUrl, config.serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+}
+
+const MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY = 100;
+
+async function cleanupRunOwnedOriginalCvObjects(
+  client: SupabaseClient,
+  authUserIds: string[],
+) {
+  const bucket = client.storage.from(ORIGINAL_CV_BUCKET);
+  for (const authUserId of authUserIds) {
+    const { data, error } = await bucket.list(authUserId, {
+      limit: MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY + 1,
+      offset: 0,
+      sortBy: { column: "name", order: "asc" },
+    });
+    if (error)
+      throw new Error("acceptance_original_cv_discovery_failed");
+    const entries = data || [];
+    if (entries.length > MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY)
+      throw new Error("acceptance_original_cv_cleanup_bound_exceeded");
+    const objectKeys = entries.map((entry) => {
+      if (!entry.id)
+        throw new Error("acceptance_original_cv_unexpected_layout");
+      const objectKey = `${authUserId}/${entry.name}`;
+      if (!ownedOriginalCvObjectKey(authUserId, objectKey))
+        throw new Error("acceptance_original_cv_ownership_mismatch");
+      return objectKey;
+    });
+    if (objectKeys.length) {
+      const { error: removeError } = await bucket.remove(objectKeys);
+      if (removeError)
+        throw new Error("acceptance_original_cv_cleanup_failed");
+    }
+    const { data: remaining, error: residueError } = await bucket.list(
+      authUserId,
+      { limit: 1, offset: 0 },
+    );
+    if (residueError || (remaining || []).length)
+      throw new Error("acceptance_original_cv_residue_detected");
+  }
 }
 
 async function verifyDatabaseMarker(
@@ -422,6 +466,10 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
   );
   const plan = acceptanceCleanupPlan(entities);
   const profileIds = plan.profileIds;
+  // Delete only objects below this run's synthetic auth-user UUID prefixes,
+  // verify ownership for every exact key, and prove the prefixes are empty
+  // before deleting the identities that establish run ownership.
+  await cleanupRunOwnedOriginalCvObjects(client, plan.authUserIds);
   const chatProbe = await client
     .from("chat_conversations")
     .select("id", { count: "exact", head: true })
