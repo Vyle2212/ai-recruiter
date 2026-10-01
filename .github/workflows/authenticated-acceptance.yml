@@ -95,6 +95,8 @@ jobs:
           node --import tsx scripts/chatReceiptApiBoundary.test.ts
           node --import tsx scripts/chatRecruiterAdminEntryBoundary.test.ts
           node --import tsx scripts/chatRecruiterCandidateBoundary.test.ts
+          node scripts/authenticatedAcceptanceOriginalCvCleanup.test.cjs
+          node --import tsx scripts/originalCvArchiveContract.test.ts
           node --import tsx scripts/originalCvReadAccess.test.ts
           node --import tsx scripts/searchV2JobComparison.test.ts
           node --import tsx scripts/recruiterDashboard.test.ts
