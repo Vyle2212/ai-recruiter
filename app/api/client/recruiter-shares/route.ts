@@ -11,7 +11,7 @@ const headers = {
 };
 const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 const reject = (error: string, status: number) =>
-  Response.json({ error }, { status, headers });
+  Response.json({ error: { code: error } }, { status, headers });
 
 async function requireClientShareAuthorization() {
   const auth = await createClient();
