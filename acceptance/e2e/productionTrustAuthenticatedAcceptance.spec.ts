@@ -1,3 +1,4 @@
+import { ORIGINAL_CV_BUCKET, ownedOriginalCvObjectKey } from "../../lib/originalCvArchiveKey";
 import type { RecruiterCopilotAnswer } from "../../lib/recruiterCopilotAnswerEngine";
 import { test, expect, type APIResponse } from "@playwright/test";
 
@@ -696,6 +697,56 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       await anonymous.dispose();
       await wrongRole.dispose();
       await client.dispose();
+    }
+  });
+
+
+  test("synthetic private CV upload preserves bytes and rejects digest mismatch", async ({}, testInfo) => {
+    const admin = await authenticatedApi("admin");
+    const database = acceptanceAdminClient();
+    const owner = (await credentialBundle()).identities.admin.authUserId;
+    const bytes = Buffer.from("Synthetic acceptance integrity fixture. No real candidate data.");
+    const fileName = "synthetic-integrity.txt";
+    const claimedDigest = "0".repeat(64);
+    try {
+      const signed = await admin.post("/api/upload-cv/sign", {
+        data: { fileName, size: bytes.length, contentDigest: claimedDigest },
+      });
+      expect(signed.status()).toBe(200);
+      const reference = await signed.json();
+      expect(ownedOriginalCvObjectKey(owner, reference.objectKey)).toBe(true);
+      expect(reference.contentType).toBe("text/plain");
+      const bucket = database.storage.from(ORIGINAL_CV_BUCKET);
+      const uploaded = await bucket.uploadToSignedUrl(
+        reference.objectKey, reference.token, bytes,
+        { contentType: reference.contentType },
+      );
+      expect(uploaded.error).toBeNull();
+      const readback = await bucket.download(reference.objectKey);
+      expect(readback.error).toBeNull();
+      expect(readback.data).toBeTruthy();
+      expect(Buffer.from(await readback.data!.arrayBuffer()).equals(bytes)).toBe(true);
+      const rejected = await admin.post("/api/upload-cv", {
+        data: { fileName, objectKey: reference.objectKey, size: bytes.length, contentDigest: claimedDigest },
+      });
+      expect(rejected.status()).toBe(409);
+      const sourceFile = `${ORIGINAL_CV_BUCKET}/${reference.objectKey}`;
+      const review = await database.from("candidate_upload_reviews")
+        .select("source_file").eq("source_file", sourceFile).limit(2);
+      expect(review.error).toBeNull();
+      expect(review.data?.length).toBe(1);
+      const candidates = await database.from("candidates")
+        .select("id", { count: "exact", head: true }).eq("source_file", sourceFile);
+      expect(candidates.error).toBeNull();
+      expect(candidates.count).toBe(0);
+      await attachSanitized(testInfo, "synthetic-upload-integrity", {
+        signedUpload: true, originalBytesMatch: true,
+        digestMismatchDenied: true, reviewQueued: true, candidateCreated: false,
+      });
+    } finally {
+      await admin.dispose();
+      // The armed workflow cleanup removes the exact run-owned object/review
+      // even when an assertion above fails; no credentials or paths are attached.
     }
   });
 
