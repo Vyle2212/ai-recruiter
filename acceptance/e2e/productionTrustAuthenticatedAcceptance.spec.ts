@@ -883,13 +883,27 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       const matchingScope = pack.getByRole("button", {
         name: "All matching results",
       });
-      await matchingScope.click();
-      await expect(matchingScope).toHaveAttribute("aria-pressed", "true");
-      for (const size of [5, 10, 20]) {
-        await pack.getByRole("button", { name: `Top ${size}` }).click();
+      // A one-profile fixture must never be padded or duplicated to fill a pack.
+      // Check actual table contents for every size in both job-aware scopes.
+      for (const scope of [shortlistedScope, matchingScope]) {
+        await scope.click();
+        await expect(scope).toHaveAttribute("aria-pressed", "true");
         await expect(
-          pack.getByRole("button", { name: `Top ${size}` }),
-        ).toHaveAttribute("aria-pressed", "true");
+          pack.getByText(/Showing 1 of 1 available ranked profiles/),
+        ).toBeVisible();
+        for (const size of [5, 10, 20]) {
+          await pack.getByRole("button", { name: `Top ${size}` }).click();
+          await expect(
+            pack.getByRole("button", { name: `Top ${size}` }),
+          ).toHaveAttribute("aria-pressed", "true");
+          await expect(pack.locator("tbody tr")).toHaveCount(1);
+          const row = pack.locator("tbody tr").first();
+          await expect(row).toContainText(
+            acceptanceRequired("ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER"),
+          );
+          await expect(row).toContainText("PTF Synthetic Consulting Ltd");
+          await expect(row).toContainText("PTF Synthetic Manufacturing Client");
+        }
       }
       await expect(
         pack.getByRole("columnheader", { name: "Employer / tenure" }),
