@@ -1,11 +1,12 @@
 import { notFound, redirect } from "next/navigation";
+import { acceptanceAuthConfigured } from "@/lib/acceptanceAuthConfiguration";
 import { productionAuthConfigured } from "@/lib/productionAuthConfiguration";
 import { createClient } from "@/utils/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProductionAdminPage() {
-  if (!productionAuthConfigured()) notFound();
+  if (!productionAuthConfigured() && !acceptanceAuthConfigured()) notFound();
   const supabase = await createClient();
   const { data: userResult } = await supabase.auth.getUser();
   if (!userResult.user) redirect("/auth/login");
