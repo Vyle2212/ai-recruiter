@@ -23,6 +23,7 @@ const roleTests = new Set([
   "anonymous and denied-role responses are private error-only JSON",
   "recruiter, manager and admin retain authorized Search V2 access",
   "browser route guard enforces the same role boundary",
+  "four authenticated role dashboards load within their own scope",
   "permission matrix denies privilege escalation and permits mapped roles",
   "controlled reversible role mutations match policy",
 ]);
@@ -33,6 +34,7 @@ const requiredTests = new Set([
   "anonymous and denied-role responses are private error-only JSON",
   "recruiter, manager and admin retain authorized Search V2 access",
   "browser route guard enforces the same role boundary",
+  "four authenticated role dashboards load within their own scope",
   "permission matrix denies privilege escalation and permits mapped roles",
   "write-request boundaries reject CSRF, type, size and action mismatch",
   "controlled reversible role mutations match policy",
