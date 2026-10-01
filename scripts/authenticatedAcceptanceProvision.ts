@@ -126,13 +126,70 @@ async function discoverRunOwnedOriginalCvObjectKeys(
   return objectKeys;
 }
 
+async function readRunOwnedOriginalCvLedger(ledgerPath: string) {
+  let contents = "";
+  try {
+    contents = await readFile(ledgerPath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw new Error("acceptance_original_cv_ledger_read_failed");
+  }
+  const objectKeys: string[] = [];
+  for (const line of contents.split("\n").filter(Boolean)) {
+    let entry: unknown;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      throw new Error("acceptance_original_cv_ledger_invalid");
+    }
+    if (
+      !entry ||
+      typeof entry !== "object" ||
+      Object.keys(entry).length !== 1 ||
+      typeof (entry as { objectKey?: unknown }).objectKey !== "string"
+    )
+      throw new Error("acceptance_original_cv_ledger_invalid");
+    objectKeys.push((entry as { objectKey: string }).objectKey);
+  }
+  return objectKeys;
+}
+
+function mergeRunOwnedOriginalCvObjectKeys(
+  discoveredObjectKeys: string[],
+  ledgerObjectKeys: string[],
+  authUserIds: string[],
+) {
+  const maximum =
+    MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY * authUserIds.length;
+  if (ledgerObjectKeys.length > maximum)
+    throw new Error("acceptance_original_cv_cleanup_bound_exceeded");
+  for (const objectKey of ledgerObjectKeys) {
+    if (
+      !authUserIds.some((authUserId) =>
+        ownedOriginalCvObjectKey(authUserId, objectKey),
+      )
+    )
+      throw new Error("acceptance_original_cv_ownership_mismatch");
+  }
+  const objectKeys = [...new Set([...discoveredObjectKeys, ...ledgerObjectKeys])];
+  if (objectKeys.length > maximum)
+    throw new Error("acceptance_original_cv_cleanup_bound_exceeded");
+  return objectKeys;
+}
+
 async function cleanupRunOwnedOriginalCvData(
   client: SupabaseClient,
   authUserIds: string[],
   runHash: string,
+  ledgerObjectKeys: string[] = [],
 ) {
-  const objectKeys = await discoverRunOwnedOriginalCvObjectKeys(
+  const discoveredObjectKeys = await discoverRunOwnedOriginalCvObjectKeys(
     client,
+    authUserIds,
+  );
+  const objectKeys = mergeRunOwnedOriginalCvObjectKeys(
+    discoveredObjectKeys,
+    ledgerObjectKeys,
     authUserIds,
   );
   if (!objectKeys.length) return;
@@ -562,7 +619,20 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
   // Delete only objects below this run's synthetic auth-user UUID prefixes,
   // verify ownership for every exact key, and prove the prefixes are empty
   // before deleting the identities that establish run ownership.
-  await cleanupRunOwnedOriginalCvData(client, plan.authUserIds, runHash);
+  const originalCvLedgerPath =
+    `${config.credentialBundlePath}.original-cv-ledger.jsonl`;
+  const ledgerObjectKeys =
+    await readRunOwnedOriginalCvLedger(originalCvLedgerPath);
+  await cleanupRunOwnedOriginalCvData(
+    client,
+    plan.authUserIds,
+    runHash,
+    ledgerObjectKeys,
+  );
+  await unlink(originalCvLedgerPath).catch((error) => {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+      throw new Error("acceptance_original_cv_ledger_remove_failed");
+  });
   const chatProbe = await client
     .from("chat_conversations")
     .select("id", { count: "exact", head: true })
