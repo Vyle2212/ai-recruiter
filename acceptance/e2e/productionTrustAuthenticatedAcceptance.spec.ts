@@ -1054,4 +1054,3 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     await recruiter.dispose();
   });
 });
-
