@@ -13,6 +13,7 @@ export const CANDIDATE_SEARCH_REVIEW_EXTRACTION_STATUSES = [
 ] as const;
 
 export const CANDIDATE_SEARCH_REVIEW_CONFIRMATION_STATUSES = [
+  "not_claimed",
   "claimed_incomplete",
   "recruiter_review_required",
 ] as const;
