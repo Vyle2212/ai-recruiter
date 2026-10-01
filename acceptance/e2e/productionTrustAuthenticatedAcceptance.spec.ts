@@ -457,6 +457,19 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       String(body.results[0].candidateId || body.results[0].id || ""),
     ).toBe(internalCandidateId);
     expect(internalCandidateId).toBeTruthy();
+    // Capture bounded numeric diagnostics before the budget assertion so a
+    // slow request still explains which server phases consumed the budget.
+    const serverPhases: Record<string, number> = {};
+    for (const metric of (response.headers()["server-timing"] || "").split(",")) {
+      const parsed = /^\\s*([a-zA-Z][a-zA-Z0-9_-]{0,40});dur=([0-9]+(?:\\.[0-9]+)?)\\s*$/.exec(metric);
+      if (parsed && Number.isFinite(Number(parsed[2])))
+        serverPhases[parsed[1]] = Number(parsed[2]);
+    }
+    await attachSanitized(testInfo, "internal-search-first-latency", {
+      latencyBudgetMs: SEARCH_V2_ACCEPTANCE_BUDGET_MS,
+      firstSearchMs,
+      serverPhases,
+    });
     expect(
       firstSearchMs,
       `first Search V2 response exceeded ${SEARCH_V2_ACCEPTANCE_BUDGET_MS}ms`,
