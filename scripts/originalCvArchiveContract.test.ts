@@ -82,6 +82,35 @@ for (const unsafeOwner of ["", "not-a-uuid", `${owner}/`, `../${owner}`]) {
   assert.equal(ownedOriginalCvObjectKey(unsafeOwner, ownedKey), false);
 }
 
+const acceptanceCleanup = fs.readFileSync(
+  "scripts/authenticatedAcceptanceProvision.ts",
+  "utf8",
+);
+assert.ok(
+  acceptanceCleanup.includes("return `PTF synthetic upload \${runHash}`;"),
+  "run-owned upload candidates require an exact pseudonymous name marker",
+);
+assert.match(
+  acceptanceCleanup,
+  /\.in\("source_file", references\)/,
+  "candidate and review cleanup must be bound to exact run-owned references",
+);
+for (const restrictedTable of [
+  "candidate_chat_contact_consent_events",
+  "candidate_chat_contact_consents",
+  "chat_conversations",
+]) {
+  assert.ok(
+    acceptanceCleanup.includes(`"${restrictedTable}"`),
+    `cleanup must fail closed when ${restrictedTable} depends on an upload candidate`,
+  );
+}
+assert.ok(
+  acceptanceCleanup.indexOf("acceptance_original_cv_database_residue_detected") <
+    acceptanceCleanup.indexOf("bucket.remove(objectKeys)"),
+  "database residue must be proven empty before original bytes are removed",
+);
+
 const upload = fs.readFileSync("app/api/upload-cv/route.ts", "utf8");
 assert.match(upload, /commitCandidateWithArchivedCv\(/);
 assert.doesNotMatch(
