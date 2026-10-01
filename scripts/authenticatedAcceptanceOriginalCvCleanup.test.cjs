@@ -2,6 +2,8 @@ const assert=require("node:assert/strict");
 const vm=require("node:vm");
 const ts=require("typescript");
 const fs=require("node:fs");
+const os=require("node:os");
+const path=require("node:path");
 const provision=fs.readFileSync("scripts/authenticatedAcceptanceProvision.ts","utf8");
 const key=fs.readFileSync("lib/originalCvArchiveKey.ts","utf8");
 const start=provision.indexOf("const MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY");
@@ -9,7 +11,7 @@ const end=provision.indexOf("\nasync function verifyDatabaseMarker",start);
 assert.ok(start>=0 && end>start,"cleanup source boundaries must be present");
 const source='const ORIGINAL_CV_BUCKET="candidate-original-cvs";\n'+key.slice(key.indexOf("export function originalCvReference")).replaceAll("export function","function")+"\n"+provision.slice(start,end);
 const compiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
-const ctx={};vm.createContext(ctx);vm.runInContext(compiled+"\nglobalThis.cleanup=cleanupRunOwnedOriginalCvData;globalThis.nameForRun=syntheticUploadCandidateName;",ctx);
+const ctx={readFile:fs.promises.readFile};vm.createContext(ctx);vm.runInContext(compiled+"\nglobalThis.cleanup=cleanupRunOwnedOriginalCvData;globalThis.nameForRun=syntheticUploadCandidateName;globalThis.readLedger=readRunOwnedOriginalCvLedger;",ctx);
 const owner="00000000-0000-4000-8000-000000000001";
 const filename="00000000-0000-4000-8000-000000000002.pdf";
 const candidate="00000000-0000-4000-8000-000000000003";
@@ -65,6 +67,15 @@ function client(options={}){
   const c=client(options);await assert.rejects(ctx.cleanup(c,[owner],"0123456789abcdef"));assert.deepEqual(c.events,["delete:candidate_upload_reviews","delete:candidates","storage-remove"],"storage cleanup ambiguity must fail closed");
  }
  const ledgerKey=owner+"/"+filename;
+ const ledgerDir=fs.mkdtempSync(path.join(os.tmpdir(),"acceptance-cv-ledger-"));
+ try{
+  const ledgerFile=path.join(ledgerDir,"ledger.jsonl");
+  fs.writeFileSync(ledgerFile,JSON.stringify({objectKey:ledgerKey})+"\n");
+  assert.deepEqual(Array.from(await ctx.readLedger(ledgerFile)),[ledgerKey]);
+  fs.writeFileSync(ledgerFile,"not-json\n");
+  await assert.rejects(ctx.readLedger(ledgerFile));
+  assert.deepEqual(Array.from(await ctx.readLedger(path.join(ledgerDir,"missing.jsonl"))),[]);
+ }finally{fs.rmSync(ledgerDir,{recursive:true,force:true})}
  const missingBytes=client({storageEmpty:true});
  await ctx.cleanup(missingBytes,[owner],"0123456789abcdef",[ledgerKey]);
  assert.deepEqual(missingBytes.events,["delete:candidate_upload_reviews","delete:candidates","storage-remove"],"ledger reference must drive database cleanup even when bytes are missing");
