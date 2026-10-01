@@ -83,6 +83,25 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Verify durable recruiter storage contracts
         run: npm run test:recruiter-runtime-storage
+      - name: Verify remaining product authorization contracts
+        run: |
+          node --import tsx scripts/candidateChatConsentBoundary.test.ts
+          node --import tsx scripts/chatAuthorizationCore.test.ts
+          node --import tsx scripts/chatClientCandidateEntryBoundary.test.ts
+          node --import tsx scripts/chatClientRecruiterBoundary.test.ts
+          node --import tsx scripts/chatConversationCreateBoundary.test.ts
+          node --import tsx scripts/chatInternalConversationBoundary.test.ts
+          node --import tsx scripts/chatMessageApiBoundary.test.ts
+          node --import tsx scripts/chatReceiptApiBoundary.test.ts
+          node --import tsx scripts/chatRecruiterAdminEntryBoundary.test.ts
+          node --import tsx scripts/chatRecruiterCandidateBoundary.test.ts
+          node --import tsx scripts/originalCvReadAccess.test.ts
+          node --import tsx scripts/searchV2JobComparison.test.ts
+          node --import tsx scripts/recruiterDashboard.test.ts
+          node --import tsx scripts/recruiterWorkflowAnalytics.test.ts
+          node --import tsx scripts/clientExecutiveReportRequest.test.ts
+          node --import tsx scripts/clientExecutiveReport.test.ts
+          node --import tsx scripts/executiveCompareState.test.ts
       - name: Verify canonical synthetic name lookup
         run: |
           node --import tsx scripts/authenticatedAcceptanceSyntheticPreflight.test.ts
