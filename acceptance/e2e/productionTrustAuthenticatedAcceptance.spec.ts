@@ -712,6 +712,18 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       const signed = await admin.post("/api/upload-cv/sign", {
         data: { fileName, size: bytes.length, contentDigest: claimedDigest },
       });
+      if (signed.status() !== 200) {
+        const failure = await signed.json().catch(() => null);
+        const reason = failure?.error === "CV upload is waiting for database and review-queue setup."
+          ? "foundation_unavailable"
+          : failure?.error === "Private CV storage is unavailable."
+            ? "private_storage_unavailable"
+            : "unclassified";
+        await testInfo.attach("acceptance_upload_sign_failure", {
+          body: Buffer.from(JSON.stringify({ status: signed.status(), reason })),
+          contentType: "application/json",
+        });
+      }
       expect(signed.status()).toBe(200);
       const reference = await signed.json();
       expect(ownedOriginalCvObjectKey(owner, reference.objectKey)).toBe(true);
