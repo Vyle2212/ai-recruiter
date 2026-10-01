@@ -226,7 +226,7 @@ for (const [parameter, scopedValue] of [
   assert.match(
     route,
     new RegExp(\`${parameter}: authorization\\.scope\\.${scopedValue}\`),
-    \`${parameter} must come from the authenticated ownership scope\`,
+    `${parameter} must come from the authenticated ownership scope`,
   );
 }
 assert.match(
