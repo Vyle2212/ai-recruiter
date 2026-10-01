@@ -87,7 +87,7 @@ const acceptanceCleanup = fs.readFileSync(
   "utf8",
 );
 assert.ok(
-  acceptanceCleanup.includes("return `PTF synthetic upload \${runHash}`;"),
+  acceptanceCleanup.includes("return `Synthetic ${suffix[0].toUpperCase()}${suffix.slice(1)}`;"),
   "run-owned upload candidates require an exact pseudonymous name marker",
 );
 assert.match(
