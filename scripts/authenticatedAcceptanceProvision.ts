@@ -171,6 +171,17 @@ function mergeRunOwnedOriginalCvObjectKeys(
     )
       throw new Error("acceptance_original_cv_ownership_mismatch");
   }
+  for (const authUserId of authUserIds) {
+    const ownedLedgerKeys = new Set(
+      ledgerObjectKeys.filter((objectKey) =>
+        ownedOriginalCvObjectKey(authUserId, objectKey),
+      ),
+    );
+    if (
+      ownedLedgerKeys.size > MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY
+    )
+      throw new Error("acceptance_original_cv_cleanup_bound_exceeded");
+  }
   const objectKeys = [...new Set([...discoveredObjectKeys, ...ledgerObjectKeys])];
   if (objectKeys.length > maximum)
     throw new Error("acceptance_original_cv_cleanup_bound_exceeded");
