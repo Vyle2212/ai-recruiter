@@ -71,5 +71,10 @@ function client(options={}){
  const foreignLedger=client({storageEmpty:true});
  await assert.rejects(ctx.cleanup(foreignLedger,[owner],"0123456789abcdef",["00000000-0000-4000-8000-000000000099/"+filename]));
  assert.deepEqual(foreignLedger.events,[],"foreign ledger reference must fail before mutation");
+ const overboundLedger=Array.from({length:101},(_,index)=>
+  owner+"/00000000-0000-4000-8000-"+String(index).padStart(12,"0")+".pdf");
+ const overbound=client({storageEmpty:true});
+ await assert.rejects(ctx.cleanup(overbound,[owner],"0123456789abcdef",overboundLedger));
+ assert.deepEqual(overbound.events,[],"per-owner ledger bound must fail before mutation");
  console.log("Cleanup behavioral regression PASS");
 })().catch(e=>{console.error(e.message);process.exitCode=1});
