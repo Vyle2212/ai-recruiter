@@ -89,7 +89,12 @@ function adminClient(config: SafeConfig) {
 const MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY = 100;
 
 function syntheticUploadCandidateName(runHash: string) {
-  return `PTF synthetic upload ${runHash}`;
+  if (!/^[0-9a-f]{16}$/.test(runHash))
+    throw new Error("acceptance_upload_run_hash_invalid");
+  const suffix = [...runHash]
+    .map((digit) => String.fromCharCode(97 + parseInt(digit, 16)))
+    .join("");
+  return `Synthetic ${suffix[0].toUpperCase()}${suffix.slice(1)}`;
 }
 
 async function discoverRunOwnedOriginalCvObjectKeys(
