@@ -122,6 +122,57 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     await attachSanitized(testInfo, "browser-role-matrix", outcomes);
   });
 
+  test("four authenticated role dashboards load within their own scope", async ({
+    browser,
+  }, testInfo) => {
+    const dashboards = [
+      {
+        role: "admin",
+        path: "/admin/production",
+        heading: "AI Recruiter Admin",
+      },
+      {
+        role: "recruiter",
+        path: "/recruiter/assigned-work",
+        heading: "Assigned Work",
+      },
+      {
+        role: "client",
+        path: "/client/portal",
+        heading: "Client Portal",
+      },
+      {
+        role: "candidate",
+        path: "/candidate/portal",
+        heading: "Candidate Portal",
+        ready: "Profile readiness",
+      },
+    ] as const;
+    const outcomes: Record<string, string> = {};
+    for (const dashboard of dashboards) {
+      const context = await browser.newContext({
+        storageState: (await authenticatedSession(dashboard.role)).storageState,
+      });
+      await installAcceptanceBrowserBridge(context);
+      const page = await context.newPage();
+      try {
+        await page.goto(dashboard.path);
+        await expect(page).toHaveURL(new RegExp(dashboard.path));
+        await expect(
+          page.getByRole("heading", { name: dashboard.heading, level: 1 }),
+        ).toBeVisible();
+        if ("ready" in dashboard)
+          await expect(
+            page.getByRole("heading", { name: dashboard.ready }),
+          ).toBeVisible();
+        outcomes[dashboard.role] = "loaded_in_role_scope";
+      } finally {
+        await context.close();
+      }
+    }
+    await attachSanitized(testInfo, "four-role-dashboards", outcomes);
+  });
+
   test("permission matrix denies privilege escalation and permits mapped roles", async ({}, testInfo) => {
     const recruiter = await authenticatedApi("recruiter");
     const manager = await authenticatedApi("recruiter_manager");
@@ -460,8 +511,13 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     // Capture bounded numeric diagnostics before the budget assertion so a
     // slow request still explains which server phases consumed the budget.
     const serverPhases: Record<string, number> = {};
-    for (const metric of (response.headers()["server-timing"] || "").split(",")) {
-      const parsed = /^\\s*([a-zA-Z][a-zA-Z0-9_-]{0,40});dur=([0-9]+(?:\\.[0-9]+)?)\\s*$/.exec(metric);
+    for (const metric of (response.headers()["server-timing"] || "").split(
+      ",",
+    )) {
+      const parsed =
+        /^\\s*([a-zA-Z][a-zA-Z0-9_-]{0,40});dur=([0-9]+(?:\\.[0-9]+)?)\\s*$/.exec(
+          metric,
+        );
       if (parsed && Number.isFinite(Number(parsed[2])))
         serverPhases[parsed[1]] = Number(parsed[2]);
     }
