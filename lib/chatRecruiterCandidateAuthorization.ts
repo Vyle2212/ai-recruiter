@@ -74,7 +74,7 @@ export async function authorizeRecruiterCandidateMessage(
       .eq("client_id", conversation.client_id).eq("candidate_id", conversation.candidate_id)
       .eq("status", "active").limit(1),
     db.from("client_feature_entitlements").select("status,plan_code,valid_from,valid_until")
-      .eq("client_id", conversation.client_id).eq("feature", "recruiter_support"),
+      .eq("client_id", conversation.client_id),
     db.from("candidate_accounts").select("status")
       .eq("user_profile_id", candidate.id).eq("candidate_id", candidate.candidate_id).limit(1),
     db.from("candidate_chat_contact_consents").select("consent")
