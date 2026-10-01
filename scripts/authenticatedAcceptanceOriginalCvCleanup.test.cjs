@@ -18,7 +18,8 @@ function client(options={}){
  let removed=false;
  const bucket={list:async()=>({
   data:options.storageNull||removed&&options.storageReadbackNull?null:
-   removed&&!options.storageResidue?[]:[{id:"object",name:filename}],
+   options.storageEmpty&&!removed||removed&&!options.storageResidue?[]:
+    [{id:"object",name:filename}],
   error:null
  }),
  remove:async()=>{events.push("storage-remove");if(!options.storageRemoveError)removed=true;return {error:options.storageRemoveError?{message:"blocked"}:null}}};
@@ -63,5 +64,12 @@ function client(options={}){
  for(const options of [{storageRemoveError:true},{storageResidue:true},{storageReadbackNull:true}]){
   const c=client(options);await assert.rejects(ctx.cleanup(c,[owner],"0123456789abcdef"));assert.deepEqual(c.events,["delete:candidate_upload_reviews","delete:candidates","storage-remove"],"storage cleanup ambiguity must fail closed");
  }
+ const ledgerKey=owner+"/"+filename;
+ const missingBytes=client({storageEmpty:true});
+ await ctx.cleanup(missingBytes,[owner],"0123456789abcdef",[ledgerKey]);
+ assert.deepEqual(missingBytes.events,["delete:candidate_upload_reviews","delete:candidates","storage-remove"],"ledger reference must drive database cleanup even when bytes are missing");
+ const foreignLedger=client({storageEmpty:true});
+ await assert.rejects(ctx.cleanup(foreignLedger,[owner],"0123456789abcdef",["00000000-0000-4000-8000-000000000099/"+filename]));
+ assert.deepEqual(foreignLedger.events,[],"foreign ledger reference must fail before mutation");
  console.log("Cleanup behavioral regression PASS");
 })().catch(e=>{console.error(e.message);process.exitCode=1});
