@@ -104,7 +104,7 @@ async function discoverRunOwnedOriginalCvObjectKeys(
       offset: 0,
       sortBy: { column: "name", order: "asc" },
     });
-    if (error)
+    if (error || !Array.isArray(data))
       throw new Error("acceptance_original_cv_discovery_failed");
     const entries = data || [];
     if (entries.length > MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY)
@@ -141,6 +141,7 @@ async function cleanupRunOwnedOriginalCvData(
     .limit(MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY + 1);
   if (
     candidateDiscoveryError ||
+    !Array.isArray(candidates) ||
     (candidates || []).length >
       MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY
   )
@@ -208,7 +209,7 @@ async function cleanupRunOwnedOriginalCvData(
       authUserId,
       { limit: 1, offset: 0 },
     );
-    if (residueError || (remaining || []).length)
+    if (residueError || !Array.isArray(remaining) || remaining.length)
       throw new Error("acceptance_original_cv_residue_detected");
   }
 }
