@@ -88,11 +88,16 @@ function adminClient(config: SafeConfig) {
 
 const MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY = 100;
 
-async function cleanupRunOwnedOriginalCvObjects(
+function syntheticUploadCandidateName(runHash: string) {
+  return `PTF synthetic upload ${runHash}`;
+}
+
+async function discoverRunOwnedOriginalCvObjectKeys(
   client: SupabaseClient,
   authUserIds: string[],
 ) {
   const bucket = client.storage.from(ORIGINAL_CV_BUCKET);
+  const objectKeys: string[] = [];
   for (const authUserId of authUserIds) {
     const { data, error } = await bucket.list(authUserId, {
       limit: MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY + 1,
@@ -104,19 +109,101 @@ async function cleanupRunOwnedOriginalCvObjects(
     const entries = data || [];
     if (entries.length > MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY)
       throw new Error("acceptance_original_cv_cleanup_bound_exceeded");
-    const objectKeys = entries.map((entry) => {
+    for (const entry of entries) {
       if (!entry.id)
         throw new Error("acceptance_original_cv_unexpected_layout");
       const objectKey = `${authUserId}/${entry.name}`;
       if (!ownedOriginalCvObjectKey(authUserId, objectKey))
         throw new Error("acceptance_original_cv_ownership_mismatch");
-      return objectKey;
-    });
-    if (objectKeys.length) {
-      const { error: removeError } = await bucket.remove(objectKeys);
-      if (removeError)
-        throw new Error("acceptance_original_cv_cleanup_failed");
+      objectKeys.push(objectKey);
     }
+  }
+  return objectKeys;
+}
+
+async function cleanupRunOwnedOriginalCvData(
+  client: SupabaseClient,
+  authUserIds: string[],
+  runHash: string,
+) {
+  const objectKeys = await discoverRunOwnedOriginalCvObjectKeys(
+    client,
+    authUserIds,
+  );
+  if (!objectKeys.length) return;
+  const references = objectKeys.map(
+    (objectKey) => `${ORIGINAL_CV_BUCKET}/${objectKey}`,
+  );
+  const { data: candidates, error: candidateDiscoveryError } = await client
+    .from("candidates")
+    .select("id,name,source_file")
+    .in("source_file", references)
+    .limit(MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY + 1);
+  if (
+    candidateDiscoveryError ||
+    (candidates || []).length >
+      MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY
+  )
+    throw new Error("acceptance_original_cv_candidate_discovery_failed");
+  const expectedName = syntheticUploadCandidateName(runHash);
+  if (
+    (candidates || []).some(
+      (candidate) =>
+        candidate.name !== expectedName ||
+        !references.includes(String(candidate.source_file || "")),
+    )
+  )
+    throw new Error("acceptance_original_cv_candidate_ownership_mismatch");
+  const candidateIds = (candidates || []).map((candidate) => candidate.id);
+  for (const table of [
+    "candidate_chat_contact_consent_events",
+    "candidate_chat_contact_consents",
+    "chat_conversations",
+  ]) {
+    if (!candidateIds.length) break;
+    const { count, error } = await client
+      .from(table)
+      .select("id", { count: "exact", head: true })
+      .in("candidate_id", candidateIds);
+    if (error || count !== 0)
+      throw new Error("acceptance_original_cv_candidate_dependency_detected");
+  }
+  const { error: reviewDeleteError } = await client
+    .from("candidate_upload_reviews")
+    .delete()
+    .in("source_file", references);
+  if (reviewDeleteError)
+    throw new Error("acceptance_original_cv_review_cleanup_failed");
+  if (candidateIds.length) {
+    const { error: candidateDeleteError } = await client
+      .from("candidates")
+      .delete()
+      .in("id", candidateIds);
+    if (candidateDeleteError)
+      throw new Error("acceptance_original_cv_candidate_cleanup_failed");
+  }
+  const [candidateResidue, reviewResidue] = await Promise.all([
+    client
+      .from("candidates")
+      .select("id", { count: "exact", head: true })
+      .in("source_file", references),
+    client
+      .from("candidate_upload_reviews")
+      .select("id", { count: "exact", head: true })
+      .in("source_file", references),
+  ]);
+  if (
+    candidateResidue.error ||
+    reviewResidue.error ||
+    candidateResidue.count !== 0 ||
+    reviewResidue.count !== 0
+  )
+    throw new Error("acceptance_original_cv_database_residue_detected");
+  const bucket = client.storage.from(ORIGINAL_CV_BUCKET);
+  const { error: removeError } = await bucket.remove(objectKeys);
+  if (removeError)
+    throw new Error("acceptance_original_cv_cleanup_failed");
+  for (const authUserId of authUserIds) {
     const { data: remaining, error: residueError } = await bucket.list(
       authUserId,
       { limit: 1, offset: 0 },
@@ -469,7 +556,7 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
   // Delete only objects below this run's synthetic auth-user UUID prefixes,
   // verify ownership for every exact key, and prove the prefixes are empty
   // before deleting the identities that establish run ownership.
-  await cleanupRunOwnedOriginalCvObjects(client, plan.authUserIds);
+  await cleanupRunOwnedOriginalCvData(client, plan.authUserIds, runHash);
   const chatProbe = await client
     .from("chat_conversations")
     .select("id", { count: "exact", head: true })
