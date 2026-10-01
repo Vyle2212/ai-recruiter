@@ -4,7 +4,7 @@ import { prepareCandidateCv } from "../lib/candidateCvIngestion";
 import { evaluateCandidateProfileCompletion } from "../lib/candidateProfileIngestion";
 import { candidateSearchLifecycleDecision } from "../lib/candidateSearchLifecycle";
 
-const cv = `Synthetic Candidate
+const cv = `Synthetic Abcdefghijklmnop
 Email: synthetic@example.invalid
 Location: Singapore
 
@@ -46,6 +46,7 @@ async function main() {
     assert.equal(prepared.accepted, true);
     if (!prepared.accepted) throw new Error("synthetic_cv_rejected");
     const profile = prepared.candidatePayload;
+    assert.equal(profile.name, "Synthetic Abcdefghijklmnop", "run-owned name must survive both parser entry points");
     assert.equal(profile.profile_source_type, source);
     assert.equal(profile.current_company, "Synthetic Consulting");
     assert.equal(
