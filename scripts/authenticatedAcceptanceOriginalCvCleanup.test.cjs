@@ -16,16 +16,25 @@ const candidate="00000000-0000-4000-8000-000000000003";
 function client(options={}){
  const events=[];
  let removed=false;
- const bucket={list:async()=>({data:options.storageNull?null:removed?[]:[{id:"object",name:filename}],error:null}),
- remove:async()=>{events.push("storage-remove");removed=true;return {error:null}}};
+ const bucket={list:async()=>({
+  data:options.storageNull||removed&&options.storageReadbackNull?null:
+   removed&&!options.storageResidue?[]:[{id:"object",name:filename}],
+  error:null
+ }),
+ remove:async()=>{events.push("storage-remove");if(!options.storageRemoveError)removed=true;return {error:options.storageRemoveError?{message:"blocked"}:null}}};
  const c={events,storage:{from:()=>bucket},from:(table)=>{
   let op="select";
   const q={select:()=>q,delete:()=>{op="delete";return q},in:()=>q,limit:()=>q,
    then:(resolve,reject)=>{
-    if(op==="delete"){events.push("delete:"+table);return Promise.resolve({error:null}).then(resolve,reject)}
+    if(op==="delete"){
+     events.push("delete:"+table);
+     const error=table==="candidate_upload_reviews"&&options.reviewDeleteError||
+      table==="candidates"&&options.candidateDeleteError?{message:"blocked"}:null;
+     return Promise.resolve({error}).then(resolve,reject);
+    }
     if(table==="candidates"&&!events.includes("delete:candidates"))
      return Promise.resolve({data:options.candidatesNull?null:[{id:candidate,name:options.wrongName?"Real Candidate":"Synthetic Abcdefghijklmnop",source_file:"candidate-original-cvs/"+owner+"/"+filename}],error:null}).then(resolve,reject);
-    const count=options.dependency&&table==="chat_conversations"?1:0;
+    const count=options.dependency&&table==="chat_conversations"||options.databaseResidue&&table==="candidates"?1:0;
     return Promise.resolve({count,error:null}).then(resolve,reject);
    }};
    return q;
@@ -43,6 +52,16 @@ function client(options={}){
  }
  for(const options of [{storageNull:true},{candidatesNull:true}]){
   const c=client(options);await assert.rejects(ctx.cleanup(c,[owner],"0123456789abcdef"),undefined,"ambiguous discovery must fail closed");assert.deepEqual(c.events,[]);
+ }
+ for(const [options,events] of [
+  [{reviewDeleteError:true},["delete:candidate_upload_reviews"]],
+  [{candidateDeleteError:true},["delete:candidate_upload_reviews","delete:candidates"]],
+  [{databaseResidue:true},["delete:candidate_upload_reviews","delete:candidates"]],
+ ]){
+  const c=client(options);await assert.rejects(ctx.cleanup(c,[owner],"0123456789abcdef"));assert.deepEqual(c.events,events,"database failure must preserve original bytes");
+ }
+ for(const options of [{storageRemoveError:true},{storageResidue:true},{storageReadbackNull:true}]){
+  const c=client(options);await assert.rejects(ctx.cleanup(c,[owner],"0123456789abcdef"));assert.deepEqual(c.events,["delete:candidate_upload_reviews","delete:candidates","storage-remove"],"storage cleanup ambiguity must fail closed");
  }
  console.log("Cleanup behavioral regression PASS");
 })().catch(e=>{console.error(e.message);process.exitCode=1});
