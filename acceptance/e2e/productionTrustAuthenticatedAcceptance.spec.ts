@@ -842,6 +842,18 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
           contentType: reference.contentType,
         });
       expect(upload.error).toBeNull();
+      const originalReadback = await database.storage
+        .from(ORIGINAL_CV_BUCKET)
+        .download(objectKey);
+      expect(originalReadback.error).toBeNull();
+      expect(originalReadback.data).toBeTruthy();
+      const readbackBytes = Buffer.from(
+        await originalReadback.data!.arrayBuffer(),
+      );
+      expect(readbackBytes.equals(bytes)).toBe(true);
+      expect(createHash("sha256").update(readbackBytes).digest("hex")).toBe(
+        contentDigest,
+      );
 
       const parsed = await candidate.post("/api/candidate/profile/cv", {
         data: { fileName, objectKey, size: bytes.length, contentDigest },
@@ -859,6 +871,21 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       expect(review.status()).toBe(200);
       const reviewBody = await review.json();
       expect(reviewBody.searchable).toBe(false);
+      const beforeConfirmation = await recruiter.post(searchPath, {
+        data: {
+          query: acceptanceRequired("ACCEPTANCE_INTERNAL_SEARCH_QUERY"),
+          talentPool: "internal_profiles",
+        },
+      });
+      expect(beforeConfirmation.status()).toBe(200);
+      const hiddenSearchBody = await beforeConfirmation.json();
+      expect(Array.isArray(hiddenSearchBody.results)).toBe(true);
+      expect(
+        hiddenSearchBody.results.some(
+          (item: Record<string, unknown>) =>
+            String(item.candidateId || item.id || "") === internalCandidateId,
+        ),
+      ).toBe(false);
       expect(JSON.stringify(reviewBody.profile.workExperience)).toContain(
         "PTF Synthetic Consulting Ltd",
       );
