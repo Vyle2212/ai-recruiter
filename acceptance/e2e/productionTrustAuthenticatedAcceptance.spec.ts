@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { appendFile } from "node:fs/promises";
 import { ORIGINAL_CV_BUCKET, ownedOriginalCvObjectKey } from "../../lib/originalCvArchiveKey";
 import type { RecruiterCopilotAnswer } from "../../lib/recruiterCopilotAnswerEngine";
@@ -767,6 +768,195 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       await admin.dispose();
       // The armed workflow cleanup removes the exact run-owned object/review
       // even when an assertion above fails; no credentials or paths are attached.
+    }
+  });
+
+  test("candidate upload parses employer and project, confirms ownership and becomes searchable", async ({}, testInfo) => {
+    const candidate = await authenticatedApi("candidate");
+    const recruiter = await authenticatedApi("recruiter");
+    const database = acceptanceAdminClient();
+    const owner = (await credentialBundle()).identities.candidate.authUserId;
+    const fileName = "synthetic-candidate-lifecycle.txt";
+    let objectKey = "";
+    try {
+      const initial = await candidate.get("/api/candidate/profile");
+      expect(initial.status()).toBe(200);
+      const initialProfile = await initial.json();
+      const verifiedEmail = String(initialProfile.verifiedEmail || "");
+      expect(verifiedEmail).toContain("@");
+      const bytes = Buffer.from(
+        [
+          "Synthetic PTF Tester",
+          "Email: " + verifiedEmail,
+          "Phone: +60123456789",
+          "Location: Malaysia",
+          "Current title: SAP FICO Consultant",
+          "",
+          "PROFESSIONAL EXPERIENCE",
+          "PTF Synthetic Consulting Ltd",
+          "SAP FICO Consultant",
+          "January 2022 - Present",
+          "Configured SAP FI and CO for implementation and support.",
+          "",
+          "PTF Synthetic Services Ltd",
+          "SAP Finance Analyst",
+          "January 2018 - December 2021",
+          "",
+          "PROJECT EXPERIENCE",
+          "Project: PTF Synthetic S/4HANA Finance Implementation",
+          "Client: PTF Synthetic Manufacturing Client",
+          "Employer: PTF Synthetic Consulting Ltd",
+          "Role: SAP FICO Consultant",
+          "January 2023 - December 2023",
+          "SAP S/4HANA design, configuration, testing, go-live and hypercare.",
+          "",
+          "SKILLS",
+          "SAP FICO, SAP FI, SAP CO, SAP S/4HANA",
+          "",
+          "EDUCATION",
+          "Bachelor of Information Systems, PTF Synthetic University, 2017",
+          "",
+          "LANGUAGES",
+          "English - Professional",
+        ].join("\n"),
+      );
+      const contentDigest = createHash("sha256").update(bytes).digest("hex");
+      const signed = await candidate.post("/api/candidate/profile/cv/sign", {
+        data: { fileName, size: bytes.length, contentDigest },
+      });
+      expect(signed.status()).toBe(200);
+      const reference = await signed.json();
+      objectKey = String(reference.objectKey || "");
+      expect(ownedOriginalCvObjectKey(owner, objectKey)).toBe(true);
+      const ledgerPath =
+        acceptanceRequired("ACCEPTANCE_CREDENTIAL_BUNDLE_PATH") +
+        ".original-cv-ledger.jsonl";
+      await appendFile(
+        ledgerPath,
+        JSON.stringify({ objectKey }) + "\n",
+        { encoding: "utf8", mode: 0o600 },
+      );
+      const upload = await database.storage
+        .from(ORIGINAL_CV_BUCKET)
+        .uploadToSignedUrl(objectKey, reference.token, bytes, {
+          contentType: reference.contentType,
+        });
+      expect(upload.error).toBeNull();
+
+      const parsed = await candidate.post("/api/candidate/profile/cv", {
+        data: { fileName, objectKey, size: bytes.length, contentDigest },
+      });
+      expect(parsed.status()).toBe(200);
+      const parsedBody = await parsed.json();
+      expect(parsedBody).toMatchObject({
+        accepted: true,
+        candidateId: internalCandidateId,
+        searchable: false,
+        confirmationRequired: true,
+      });
+
+      const review = await candidate.get("/api/candidate/profile");
+      expect(review.status()).toBe(200);
+      const reviewBody = await review.json();
+      expect(reviewBody.searchable).toBe(false);
+      expect(JSON.stringify(reviewBody.profile.workExperience)).toContain(
+        "PTF Synthetic Consulting Ltd",
+      );
+      expect(JSON.stringify(reviewBody.profile.projectExperience)).toContain(
+        "PTF Synthetic Manufacturing Client",
+      );
+
+      const confirmation = await candidate.post(
+        "/api/candidate/profile/confirmation",
+        {
+          data: {
+            expectedUpdatedAt: reviewBody.version,
+            submittedFields: {
+              displayName: "Synthetic PTF Tester",
+              email: verifiedEmail,
+              phone: "+60123456789",
+              currentTitle: "SAP FICO Consultant",
+              currentCompany: "PTF Synthetic Consulting Ltd",
+              location: "Malaysia",
+              workExperience: JSON.stringify([
+                {
+                  employer: "PTF Synthetic Consulting Ltd",
+                  title: "SAP FICO Consultant",
+                  start_date: "2022-01",
+                  end_date: "",
+                  current: true,
+                },
+                {
+                  employer: "PTF Synthetic Services Ltd",
+                  title: "SAP Finance Analyst",
+                  start_date: "2018-01",
+                  end_date: "2021-12",
+                  current: false,
+                },
+              ]),
+              sapModules: "FICO, FI, CO",
+              techSkills: "SAP FICO, SAP FI, SAP CO, SAP S/4HANA",
+              projectExperience: JSON.stringify([
+                {
+                  project: "PTF Synthetic S/4HANA Finance Implementation",
+                  client: "PTF Synthetic Manufacturing Client",
+                  role: "SAP FICO Consultant",
+                  start_date: "2023-01",
+                  end_date: "2023-12",
+                  current: false,
+                },
+              ]),
+              education: JSON.stringify([
+                {
+                  institution: "PTF Synthetic University",
+                  qualification: "Bachelor of Information Systems",
+                  graduation_year: "2017",
+                },
+              ]),
+              certifications: "[]",
+              languages: JSON.stringify([
+                { language: "English", proficiency: "Professional" },
+              ]),
+              confirmAccuracy: true,
+              consentToShare: true,
+            },
+          },
+        },
+      );
+      expect(confirmation.status()).toBe(200);
+      expect(await confirmation.json()).toMatchObject({
+        confirmed: true,
+        profileStatus: "candidate_confirmed",
+        searchable: true,
+      });
+
+      const search = await recruiter.post(searchPath, {
+        data: {
+          query: acceptanceRequired("ACCEPTANCE_INTERNAL_SEARCH_QUERY"),
+          talentPool: "internal_profiles",
+        },
+      });
+      expect(search.status()).toBe(200);
+      const searchBody = await search.json();
+      expect(
+        searchBody.results?.some(
+          (item: Record<string, unknown>) =>
+            String(item.candidateId || item.id || "") === internalCandidateId,
+        ),
+      ).toBe(true);
+      await attachSanitized(testInfo, "candidate-cv-confirmation-search", {
+        signedUpload: true,
+        originalBytesPreserved: true,
+        parserEmployerClientSeparated: true,
+        hiddenBeforeConfirmation: true,
+        candidateConfirmed: true,
+        searchableAfterConfirmation: true,
+      });
+    } finally {
+      await candidate.dispose();
+      await recruiter.dispose();
+      // Workflow cleanup consumes the exact ledger reference and proves that
+      // the candidate, review row and private bytes leave no run-owned residue.
     }
   });
 
