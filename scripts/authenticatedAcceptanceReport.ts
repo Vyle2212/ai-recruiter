@@ -45,6 +45,7 @@ const requiredTests = new Set([
   "synthetic Search V2 shortlist persists for its owner and can be removed",
   "synthetic client job share requires assigned support and can be revoked",
   "synthetic private CV upload preserves bytes and rejects digest mismatch",
+  "candidate upload parses employer and project, confirms ownership and becomes searchable",
   "original CV read denies recruiter without admin approval",
   "synthetic candidate drawer remains private and preserves Experience/Projects semantics",
   "Search V2 shows Comparison beside Shortlist with separate employer and client periods",
