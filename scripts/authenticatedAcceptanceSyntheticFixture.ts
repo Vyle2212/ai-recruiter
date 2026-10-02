@@ -165,7 +165,7 @@ async function verifyCandidate(
   const { data, error } = await client
     .from("candidates")
     .select(
-      "id,name,email,phone,linkedin_url,title,current_title,current_company,headline,summary,current_location,raw_text,resume_text,location,country,experience,education,skills,sap_modules,primary_module,secondary_modules,status",
+      "id,name,email,phone,linkedin_url,title,current_title,current_company,headline,summary,current_location,raw_text,resume_text,location,country,experience,education,skills,sap_modules,primary_module,secondary_modules,status,profile_confirmation_status",
     )
     .eq("id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID)
     .single();
