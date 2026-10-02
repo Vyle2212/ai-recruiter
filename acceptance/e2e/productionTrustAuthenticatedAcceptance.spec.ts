@@ -1,5 +1,8 @@
+import { createHash } from "node:crypto";
+import { appendFile } from "node:fs/promises";
+import { ORIGINAL_CV_BUCKET, ownedOriginalCvObjectKey } from "../../lib/originalCvArchiveKey";
 import type { RecruiterCopilotAnswer } from "../../lib/recruiterCopilotAnswerEngine";
-import { test, expect } from "@playwright/test";
+import { test, expect, type APIResponse } from "@playwright/test";
 
 import {
   acceptanceRequired,
@@ -17,9 +20,11 @@ import {
 } from "./acceptanceHelpers";
 import { ACCEPTANCE_SYNTHETIC_CANDIDATE_ID } from "../../lib/acceptanceSyntheticCandidateFixture";
 import { parseAcceptanceExternalMode } from "../../lib/acceptanceFixtureLease";
+import { pseudonymousAcceptanceIdentifier } from "../../lib/acceptanceEnvironmentSafety";
 
 const searchPath = "/api/recruiter/search-v2";
 const searchPage = "/recruiter/talent-search/v2";
+const SEARCH_V2_ACCEPTANCE_BUDGET_MS = 3_000;
 const runToken = String(process.env.ACCEPTANCE_RUN_ID || "ptf1c2-missing");
 const externalMode = parseAcceptanceExternalMode(
   process.env.ACCEPTANCE_EXTERNAL_MODE,
@@ -118,6 +123,57 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       await context.close();
     }
     await attachSanitized(testInfo, "browser-role-matrix", outcomes);
+  });
+
+  test("four authenticated role dashboards load within their own scope", async ({
+    browser,
+  }, testInfo) => {
+    const dashboards = [
+      {
+        role: "admin",
+        path: "/admin/production",
+        heading: "AI Recruiter Admin",
+      },
+      {
+        role: "recruiter",
+        path: "/recruiter/assigned-work",
+        heading: "Assigned Work",
+      },
+      {
+        role: "client",
+        path: "/client/portal",
+        heading: "Client Portal",
+      },
+      {
+        role: "candidate",
+        path: "/candidate/portal",
+        heading: "Candidate Portal",
+        ready: "Profile readiness",
+      },
+    ] as const;
+    const outcomes: Record<string, string> = {};
+    for (const dashboard of dashboards) {
+      const context = await browser.newContext({
+        storageState: (await authenticatedSession(dashboard.role)).storageState,
+      });
+      await installAcceptanceBrowserBridge(context);
+      const page = await context.newPage();
+      try {
+        await page.goto(dashboard.path);
+        await expect(page).toHaveURL(new RegExp(dashboard.path));
+        await expect(
+          page.getByRole("heading", { name: dashboard.heading, level: 1 }),
+        ).toBeVisible();
+        if ("ready" in dashboard)
+          await expect(
+            page.getByRole("heading", { name: dashboard.ready }),
+          ).toBeVisible();
+        outcomes[dashboard.role] = "loaded_in_role_scope";
+      } finally {
+        await context.close();
+      }
+    }
+    await attachSanitized(testInfo, "four-role-dashboards", outcomes);
   });
 
   test("permission matrix denies privilege escalation and permits mapped roles", async ({}, testInfo) => {
@@ -439,9 +495,11 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     const api = await authenticatedApi("recruiter");
     const query = acceptanceRequired("ACCEPTANCE_INTERNAL_SEARCH_QUERY");
     const marker = acceptanceRequired("ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER");
+    const firstStartedAt = performance.now();
     const response = await api.post(searchPath, {
       data: { query, talentPool: "internal_profiles" },
     });
+    const firstSearchMs = Math.ceil(performance.now() - firstStartedAt);
     expect(response.status()).toBe(200);
     const body = await response.json();
     expect(body.results?.length).toBe(1);
@@ -453,9 +511,44 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       String(body.results[0].candidateId || body.results[0].id || ""),
     ).toBe(internalCandidateId);
     expect(internalCandidateId).toBeTruthy();
+    // Capture bounded numeric diagnostics before the budget assertion so a
+    // slow request still explains which server phases consumed the budget.
+    const serverPhases: Record<string, number> = {};
+    for (const metric of (response.headers()["server-timing"] || "").split(",")) {
+      const parsed = /^\s*([a-zA-Z][a-zA-Z0-9_-]{0,40});dur=([0-9]+(?:\.[0-9]+)?)\s*$/.exec(metric);
+      if (parsed && Number.isFinite(Number(parsed[2])))
+        serverPhases[parsed[1]] = Number(parsed[2]);
+    }
+    const clientOverheadMs = Math.max(
+      0,
+      firstSearchMs - (serverPhases.total || 0),
+    );
+    const latencyDiagnostic = {
+      latencyBudgetMs: SEARCH_V2_ACCEPTANCE_BUDGET_MS,
+      firstSearchMs,
+      clientOverheadMs,
+      serverPhases,
+    };
+    await attachSanitized(
+      testInfo,
+      "internal-search-first-latency",
+      latencyDiagnostic,
+    );
+    console.log(
+      JSON.stringify({
+        type: "acceptance_search_latency",
+        ...latencyDiagnostic,
+      }),
+    );
+    expect(
+      firstSearchMs,
+      `first Search V2 response exceeded ${SEARCH_V2_ACCEPTANCE_BUDGET_MS}ms`,
+    ).toBeLessThanOrEqual(SEARCH_V2_ACCEPTANCE_BUDGET_MS);
+    const warmStartedAt = performance.now();
     const repeated = await api.post(searchPath, {
       data: { query, talentPool: "internal_profiles" },
     });
+    const warmSearchMs = Math.ceil(performance.now() - warmStartedAt);
     expect(repeated.status()).toBe(200);
     const repeatedBody = await repeated.json();
     expect(
@@ -469,11 +562,462 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
         item.overallMatchScore,
       ]),
     );
+    expect(
+      warmSearchMs,
+      `warm Search V2 response exceeded ${SEARCH_V2_ACCEPTANCE_BUDGET_MS}ms`,
+    ).toBeLessThanOrEqual(SEARCH_V2_ACCEPTANCE_BUDGET_MS);
     await attachSanitized(testInfo, "internal-search", {
       resultCount: body.results.length,
       allResultsSynthetic: true,
+      latencyBudgetMs: SEARCH_V2_ACCEPTANCE_BUDGET_MS,
+      firstSearchMs,
+      warmSearchMs,
     });
     await api.dispose();
+  });
+
+  test("synthetic Search V2 shortlist persists for its owner and can be removed", async ({}, testInfo) => {
+    const target = "/api/recruiter/search-v2/shortlist";
+    const recruiter = await authenticatedApi("recruiter");
+    const denied = await authenticatedApi("client");
+    const selection = { candidateId: internalCandidateId, jobId: null };
+    try {
+      await expectPrivateErrorOnly(
+        await denied.post(target, { data: selection }),
+        403,
+      );
+      const saved = await recruiter.post(target, { data: selection });
+      expect(saved.status()).toBe(200);
+      expect((await saved.json()).shortlisted).toBe(true);
+      const scoped = await recruiter.get(
+        `${target}?candidateIds=${encodeURIComponent(internalCandidateId)}`,
+      );
+      expect(scoped.status()).toBe(200);
+      expect((await scoped.json()).candidateIds).toContain(internalCandidateId);
+      await attachSanitized(testInfo, "search-v2-shortlist", {
+        deniedRole: 403,
+        ownerSave: 200,
+        ownerReadback: true,
+      });
+    } finally {
+      const removed = await recruiter.delete(target, { data: selection });
+      expect(removed.status()).toBe(200);
+      const after = await recruiter.get(
+        `${target}?candidateIds=${encodeURIComponent(internalCandidateId)}`,
+      );
+      expect(after.status()).toBe(200);
+      expect((await after.json()).candidateIds).not.toContain(
+        internalCandidateId,
+      );
+      await denied.dispose();
+      await recruiter.dispose();
+    }
+  });
+
+  test("synthetic client job share requires assigned support and can be revoked", async ({}, testInfo) => {
+    const db = acceptanceAdminClient();
+    const runHash = pseudonymousAcceptanceIdentifier(
+      acceptanceRequired("ACCEPTANCE_RUN_ID"),
+    );
+    const { data: job, error: jobError } = await db
+      .from("jobs")
+      .select("id")
+      .eq("title", `PTF synthetic job ${runHash}`)
+      .single();
+    const { data: recruiter, error: recruiterError } = await db
+      .from("user_profiles")
+      .select("id")
+      .eq(
+        "auth_user_id",
+        (await credentialBundle()).identities.recruiter.authUserId,
+      )
+      .single();
+    expect(jobError).toBeNull();
+    expect(recruiterError).toBeNull();
+    expect(job?.id).toBeTruthy();
+    expect(recruiter?.id).toBeTruthy();
+    const payload = {
+      kind: "job",
+      resourceId: job!.id,
+      recruiterProfileId: recruiter!.id,
+      action: "share",
+    };
+    const anonymous = await anonymousAcceptanceApi();
+    const wrongRole = await authenticatedApi("recruiter");
+    const client = await authenticatedApi("client");
+    try {
+      await expectPrivateErrorOnly(
+        await anonymous.post("/api/client/recruiter-shares", { data: payload }),
+        401,
+      );
+      await expectPrivateErrorOnly(
+        await wrongRole.post("/api/client/recruiter-shares", { data: payload }),
+        403,
+      );
+      await expectPrivateErrorOnly(
+        await client.post("/api/client/recruiter-shares", {
+          data: {
+            ...payload,
+            resourceId: "00000000-0000-4000-8000-000000000000",
+          },
+        }),
+        403,
+      );
+      const shared = await client.post("/api/client/recruiter-shares", {
+        data: payload,
+      });
+      expect(shared.status()).toBe(200);
+      expect((await shared.json()).shared).toBe(true);
+      const { data: active, error: activeError } = await db
+        .from("client_job_shares")
+        .select("status")
+        .eq("job_id", job!.id)
+        .eq("recruiter_profile_id", recruiter!.id)
+        .single();
+      expect(activeError).toBeNull();
+      expect(active?.status).toBe("active");
+      const revoked = await client.post("/api/client/recruiter-shares", {
+        data: { ...payload, action: "revoke" },
+      });
+      expect(revoked.status()).toBe(200);
+      const { data: ended, error: endedError } = await db
+        .from("client_job_shares")
+        .select("status")
+        .eq("job_id", job!.id)
+        .eq("recruiter_profile_id", recruiter!.id)
+        .single();
+      expect(endedError).toBeNull();
+      expect(ended?.status).toBe("revoked");
+      await attachSanitized(testInfo, "synthetic-job-share", {
+        anonymous: 401,
+        recruiter: 403,
+        unowned: 403,
+        shared: true,
+        revoked: true,
+      });
+    } finally {
+      await anonymous.dispose();
+      await wrongRole.dispose();
+      await client.dispose();
+    }
+  });
+
+
+  test("synthetic private CV upload preserves bytes and rejects digest mismatch", async ({}, testInfo) => {
+    const admin = await authenticatedApi("admin");
+    const database = acceptanceAdminClient();
+    const owner = (await credentialBundle()).identities.admin.authUserId;
+    const bytes = Buffer.from("Synthetic acceptance integrity fixture. No real candidate data.");
+    const fileName = "synthetic-integrity.txt";
+    const claimedDigest = "0".repeat(64);
+    try {
+      const signed = await admin.post("/api/upload-cv/sign", {
+        data: { fileName, size: bytes.length, contentDigest: claimedDigest },
+      });
+      if (signed.status() !== 200) {
+        const failure = await signed.json().catch(() => null);
+        const reason = failure?.error === "CV upload is waiting for database and review-queue setup."
+          ? "foundation_unavailable"
+          : failure?.error === "Private CV storage is unavailable."
+            ? "private_storage_unavailable"
+            : "unclassified";
+        await testInfo.attach("acceptance_upload_sign_failure", {
+          body: Buffer.from(JSON.stringify({ status: signed.status(), reason })),
+          contentType: "application/json",
+        });
+      }
+      expect(signed.status()).toBe(200);
+      const reference = await signed.json();
+      expect(ownedOriginalCvObjectKey(owner, reference.objectKey)).toBe(true);
+      expect(reference.contentType).toBe("text/plain");
+      const ledgerPath =
+        `${acceptanceRequired("ACCEPTANCE_CREDENTIAL_BUNDLE_PATH")}.original-cv-ledger.jsonl`;
+      await appendFile(
+        ledgerPath,
+        `${JSON.stringify({ objectKey: reference.objectKey })}\n`,
+        { encoding: "utf8", mode: 0o600 },
+      );
+      const bucket = database.storage.from(ORIGINAL_CV_BUCKET);
+      const uploaded = await bucket.uploadToSignedUrl(
+        reference.objectKey, reference.token, bytes,
+        { contentType: reference.contentType },
+      );
+      expect(uploaded.error).toBeNull();
+      const readback = await bucket.download(reference.objectKey);
+      expect(readback.error).toBeNull();
+      expect(readback.data).toBeTruthy();
+      expect(Buffer.from(await readback.data!.arrayBuffer()).equals(bytes)).toBe(true);
+      const rejected = await admin.post("/api/upload-cv", {
+        data: { fileName, objectKey: reference.objectKey, size: bytes.length, contentDigest: claimedDigest },
+      });
+      expect(rejected.status()).toBe(409);
+      const sourceFile = `${ORIGINAL_CV_BUCKET}/${reference.objectKey}`;
+      const review = await database.from("candidate_upload_reviews")
+        .select("source_file").eq("source_file", sourceFile).limit(2);
+      expect(review.error).toBeNull();
+      expect(review.data?.length).toBe(1);
+      const candidates = await database.from("candidates")
+        .select("id", { count: "exact", head: true }).eq("source_file", sourceFile);
+      expect(candidates.error).toBeNull();
+      expect(candidates.count).toBe(0);
+      await attachSanitized(testInfo, "synthetic-upload-integrity", {
+        signedUpload: true, originalBytesMatch: true,
+        digestMismatchDenied: true, reviewQueued: true, candidateCreated: false,
+      });
+    } finally {
+      await admin.dispose();
+      // The armed workflow cleanup removes the exact run-owned object/review
+      // even when an assertion above fails; no credentials or paths are attached.
+    }
+  });
+
+  test("candidate upload parses employer and project, confirms ownership and becomes searchable", async ({}, testInfo) => {
+    const candidate = await authenticatedApi("candidate");
+    const recruiter = await authenticatedApi("recruiter");
+    const database = acceptanceAdminClient();
+    const owner = (await credentialBundle()).identities.candidate.authUserId;
+    const fileName = "synthetic-candidate-lifecycle.txt";
+    let objectKey = "";
+    try {
+      const initial = await candidate.get("/api/candidate/profile");
+      expect(initial.status()).toBe(200);
+      const initialProfile = await initial.json();
+      const verifiedEmail = String(initialProfile.verifiedEmail || "");
+      expect(verifiedEmail).toContain("@");
+      const bytes = Buffer.from(
+        [
+          "Synthetic PTF Tester",
+          "Email: " + verifiedEmail,
+          "Phone: +60123456789",
+          "Location: Malaysia",
+          "Current title: SAP FICO Consultant",
+          "",
+          "PROFESSIONAL EXPERIENCE",
+          "PTF Synthetic Consulting Ltd",
+          "SAP FICO Consultant",
+          "January 2022 - Present",
+          "Configured SAP FI and CO for implementation and support.",
+          "",
+          "PTF Synthetic Services Ltd",
+          "SAP Finance Analyst",
+          "January 2018 - December 2021",
+          "",
+          "PROJECT EXPERIENCE",
+          "Project: PTF Synthetic S/4HANA Finance Implementation",
+          "Client: PTF Synthetic Manufacturing Client",
+          "Employer: PTF Synthetic Consulting Ltd",
+          "Role: SAP FICO Consultant",
+          "January 2023 - December 2023",
+          "SAP S/4HANA design, configuration, testing, go-live and hypercare.",
+          "",
+          "SKILLS",
+          "SAP FICO, SAP FI, SAP CO, SAP S/4HANA",
+          "",
+          "EDUCATION",
+          "Bachelor of Information Systems, PTF Synthetic University, 2017",
+          "",
+          "LANGUAGES",
+          "English - Professional",
+        ].join("\n"),
+      );
+      const contentDigest = createHash("sha256").update(bytes).digest("hex");
+      const signed = await candidate.post("/api/candidate/profile/cv/sign", {
+        data: { fileName, size: bytes.length, contentDigest },
+      });
+      expect(signed.status()).toBe(200);
+      const reference = await signed.json();
+      objectKey = String(reference.objectKey || "");
+      expect(ownedOriginalCvObjectKey(owner, objectKey)).toBe(true);
+      const ledgerPath =
+        acceptanceRequired("ACCEPTANCE_CREDENTIAL_BUNDLE_PATH") +
+        ".original-cv-ledger.jsonl";
+      await appendFile(
+        ledgerPath,
+        JSON.stringify({ objectKey }) + "\n",
+        { encoding: "utf8", mode: 0o600 },
+      );
+      const upload = await database.storage
+        .from(ORIGINAL_CV_BUCKET)
+        .uploadToSignedUrl(objectKey, reference.token, bytes, {
+          contentType: reference.contentType,
+        });
+      expect(upload.error).toBeNull();
+      const originalReadback = await database.storage
+        .from(ORIGINAL_CV_BUCKET)
+        .download(objectKey);
+      expect(originalReadback.error).toBeNull();
+      expect(originalReadback.data).toBeTruthy();
+      const readbackBytes = Buffer.from(
+        await originalReadback.data!.arrayBuffer(),
+      );
+      expect(readbackBytes.equals(bytes)).toBe(true);
+      expect(createHash("sha256").update(readbackBytes).digest("hex")).toBe(
+        contentDigest,
+      );
+
+      const parsed = await candidate.post("/api/candidate/profile/cv", {
+        data: { fileName, objectKey, size: bytes.length, contentDigest },
+      });
+      expect(parsed.status()).toBe(200);
+      const parsedBody = await parsed.json();
+      expect(parsedBody).toMatchObject({
+        accepted: true,
+        candidateId: internalCandidateId,
+        searchable: false,
+        confirmationRequired: true,
+      });
+
+      const review = await candidate.get("/api/candidate/profile");
+      expect(review.status()).toBe(200);
+      const reviewBody = await review.json();
+      expect(reviewBody.searchable).toBe(false);
+      const beforeConfirmation = await recruiter.post(searchPath, {
+        data: {
+          query: acceptanceRequired("ACCEPTANCE_INTERNAL_SEARCH_QUERY"),
+          talentPool: "internal_profiles",
+        },
+      });
+      expect(beforeConfirmation.status()).toBe(200);
+      const hiddenSearchBody = await beforeConfirmation.json();
+      expect(Array.isArray(hiddenSearchBody.results)).toBe(true);
+      expect(
+        hiddenSearchBody.results.some(
+          (item: Record<string, unknown>) =>
+            String(item.candidateId || item.id || "") === internalCandidateId,
+        ),
+      ).toBe(false);
+      expect(JSON.stringify(reviewBody.profile.workExperience)).toContain(
+        "PTF Synthetic Consulting Ltd",
+      );
+      expect(JSON.stringify(reviewBody.profile.projectExperience)).toContain(
+        "PTF Synthetic Manufacturing Client",
+      );
+
+      const confirmation = await candidate.post(
+        "/api/candidate/profile/confirmation",
+        {
+          data: {
+            expectedUpdatedAt: reviewBody.version,
+            submittedFields: {
+              displayName: "Synthetic PTF Tester",
+              email: verifiedEmail,
+              phone: "+60123456789",
+              currentTitle: "SAP FICO Consultant",
+              currentCompany: "PTF Synthetic Consulting Ltd",
+              location: "Malaysia",
+              workExperience: JSON.stringify([
+                {
+                  employer: "PTF Synthetic Consulting Ltd",
+                  title: "SAP FICO Consultant",
+                  start_date: "2022-01",
+                  end_date: "",
+                  current: true,
+                },
+                {
+                  employer: "PTF Synthetic Services Ltd",
+                  title: "SAP Finance Analyst",
+                  start_date: "2018-01",
+                  end_date: "2021-12",
+                  current: false,
+                },
+              ]),
+              sapModules: "FICO, FI, CO",
+              techSkills: "SAP FICO, SAP FI, SAP CO, SAP S/4HANA",
+              projectExperience: JSON.stringify([
+                {
+                  project: "PTF Synthetic S/4HANA Finance Implementation",
+                  client: "PTF Synthetic Manufacturing Client",
+                  role: "SAP FICO Consultant",
+                  start_date: "2023-01",
+                  end_date: "2023-12",
+                  current: false,
+                },
+              ]),
+              education: JSON.stringify([
+                {
+                  institution: "PTF Synthetic University",
+                  qualification: "Bachelor of Information Systems",
+                  graduation_year: "2017",
+                },
+              ]),
+              certifications: "[]",
+              languages: JSON.stringify([
+                { language: "English", proficiency: "Professional" },
+              ]),
+              confirmAccuracy: true,
+              consentToShare: true,
+            },
+          },
+        },
+      );
+      expect(confirmation.status()).toBe(200);
+      expect(await confirmation.json()).toMatchObject({
+        confirmed: true,
+        profileStatus: "candidate_confirmed",
+        searchable: true,
+      });
+
+      const search = await recruiter.post(searchPath, {
+        data: {
+          query: acceptanceRequired("ACCEPTANCE_INTERNAL_SEARCH_QUERY"),
+          talentPool: "internal_profiles",
+        },
+      });
+      expect(search.status()).toBe(200);
+      const searchBody = await search.json();
+      expect(
+        searchBody.results?.some(
+          (item: Record<string, unknown>) =>
+            String(item.candidateId || item.id || "") === internalCandidateId,
+        ),
+      ).toBe(true);
+      await attachSanitized(testInfo, "candidate-cv-confirmation-search", {
+        signedUpload: true,
+        originalBytesPreserved: true,
+        parserEmployerClientSeparated: true,
+        hiddenBeforeConfirmation: true,
+        candidateConfirmed: true,
+        searchableAfterConfirmation: true,
+      });
+    } finally {
+      await candidate.dispose();
+      await recruiter.dispose();
+      // Workflow cleanup consumes the exact ledger reference and proves that
+      // the candidate, review row and private bytes leave no run-owned residue.
+    }
+  });
+
+  test("original CV read denies recruiter without admin approval", async ({}, testInfo) => {
+    const target = `/api/candidate360/${internalCandidateId}/resume`;
+    const deny = async (response: APIResponse, status: number) => {
+      expect(response.status()).toBe(status);
+      expect(response.headers()["cache-control"]).toContain("private");
+      expect(response.headers()["cache-control"]).toContain("no-store");
+      const body = await response.json();
+      expect(Object.keys(body)).toEqual(["error"]);
+      expect(body.error).toBeTruthy();
+    };
+    const anonymous = await anonymousAcceptanceApi();
+    const recruiter = await authenticatedApi("recruiter");
+    const client = await authenticatedApi("client");
+    const candidate = await authenticatedApi("candidate");
+    try {
+      await deny(await anonymous.get(target), 401);
+      await deny(await recruiter.get(target), 403);
+      await deny(await client.get(target), 403);
+      await deny(await candidate.get(target), 403);
+      await attachSanitized(testInfo, "original-cv-approval-boundary", {
+        anonymous: 401,
+        recruiterWithoutGrant: 403,
+        client: 403,
+        candidate: 403,
+      });
+    } finally {
+      await anonymous.dispose();
+      await recruiter.dispose();
+      await client.dispose();
+      await candidate.dispose();
+    }
   });
 
   test("synthetic candidate drawer remains private and preserves Experience/Projects semantics", async ({
@@ -488,13 +1032,28 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       .fill(acceptanceRequired("ACCEPTANCE_INTERNAL_SEARCH_QUERY"));
     await page.getByRole("button", { name: "Understand & review" }).click();
     await page.getByRole("button", { name: "Commit Search" }).click();
-    const open = page.getByRole("button", { name: "Open profile" });
+    const open = page.getByRole("button", { name: "Quick View" });
     await expect(open.first()).toBeVisible();
     await open.first().click();
     await expect(page.getByRole("dialog")).toBeVisible();
     await expect(page.getByRole("tab", { name: /Experience/ })).toBeVisible();
     await expect(page.getByRole("tab", { name: /Projects/ })).toBeVisible();
     const drawer = page.getByRole("dialog");
+    const sections = ["Overview", "Experience", "Projects", "Education", "Skills"];
+    for (const section of sections) {
+      const tab = drawer.getByRole("tab", {
+        name: new RegExp(`^${section}(?:,|$)`),
+      });
+      await expect(tab).toBeVisible();
+      await tab.click();
+      await expect(tab).toHaveAttribute("aria-selected", "true");
+      const panel = drawer.getByRole("tabpanel");
+      await expect(panel).toBeVisible();
+      await expect(panel).toHaveAttribute(
+        "aria-labelledby",
+        `candidate-detail-${section.toLowerCase()}-tab`,
+      );
+    }
     await drawer.getByRole("tab", { name: /Experience/ }).click();
     await expect(
       drawer.getByText("PTF Synthetic Consulting Ltd", { exact: true }).first(),
@@ -518,6 +1077,151 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       path: "artifacts/acceptance-evidence/private-candidate-drawer.png",
       fullPage: false,
     });
+  });
+
+  test("Search V2 shows Comparison beside Shortlist with separate employer and client periods", async ({
+    page,
+  }) => {
+    const db = acceptanceAdminClient();
+    const runHash = pseudonymousAcceptanceIdentifier(
+      acceptanceRequired("ACCEPTANCE_RUN_ID"),
+    );
+    const { data: job, error: jobError } = await db
+      .from("jobs")
+      .select("id")
+      .eq("title", `PTF synthetic job ${runHash}`)
+      .single();
+    expect(jobError).toBeNull();
+    expect(job?.id).toBeTruthy();
+    const shortlist = await authenticatedApi("recruiter");
+    const selection = { candidateId: internalCandidateId, jobId: job!.id };
+    try {
+      const saved = await shortlist.post("/api/recruiter/search-v2/shortlist", {
+        data: selection,
+      });
+      expect(saved.status()).toBe(200);
+      const comparisonRequest = {
+        query: acceptanceRequired("ACCEPTANCE_INTERNAL_SEARCH_QUERY"),
+        talentPool: "internal_profiles",
+        page: 1,
+        pageSize: 20,
+        comparison: {
+          scope: "shortlisted",
+          jobId: job!.id,
+          anchorCandidateId: internalCandidateId,
+        },
+      };
+      const compared = await shortlist.post(searchPath, {
+        data: comparisonRequest,
+      });
+      expect(compared.status()).toBe(200);
+      const comparedBody = await compared.json();
+      expect(
+        comparedBody.results.map(
+          (item: { candidateId: string }) => item.candidateId,
+        ),
+      ).toContain(internalCandidateId);
+      const otherJob = await shortlist.post(searchPath, {
+        data: {
+          ...comparisonRequest,
+          comparison: {
+            scope: "shortlisted",
+            jobId: "00000000-0000-4000-8000-000000000001",
+          },
+        },
+      });
+      expect(otherJob.status()).toBe(200);
+      expect((await otherJob.json()).results).toEqual([]);
+      const denied = await authenticatedApi("candidate");
+      try {
+        await expectPrivateErrorOnly(
+          await denied.post(searchPath, { data: comparisonRequest }),
+          403,
+        );
+      } finally {
+        await denied.dispose();
+      }
+      await installAuthenticatedBrowserState(page.context(), "recruiter");
+      await page.goto(`${searchPage}?jobId=${encodeURIComponent(job!.id)}`);
+      await page
+        .getByPlaceholder(
+          "Senior SAP FICO consultant in Malaysia with implementation experience",
+        )
+        .fill(acceptanceRequired("ACCEPTANCE_INTERNAL_SEARCH_QUERY"));
+      await page.getByRole("button", { name: "Understand & review" }).click();
+      await page.getByRole("button", { name: "Commit Search" }).click();
+      await expect(
+        page.getByRole("button", { name: "Compare", exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("link", { name: /^Shortlist \(/ }),
+      ).toBeVisible();
+      await page.getByRole("button", { name: "Compare", exact: true }).click();
+      const pack = page.getByRole("region", { name: "Candidate Comparison" });
+      await expect(pack).toBeVisible();
+      const shortlistedScope = pack.getByRole("button", {
+        name: "Shortlisted in this search",
+      });
+      await expect(shortlistedScope).toBeEnabled();
+      await shortlistedScope.click();
+      await expect(shortlistedScope).toHaveAttribute("aria-pressed", "true");
+      await expect(
+        pack.getByText("PTF Synthetic Consulting Ltd").first(),
+      ).toBeVisible();
+      const matchingScope = pack.getByRole("button", {
+        name: "All matching results",
+      });
+      // A one-profile fixture must never be padded or duplicated to fill a pack.
+      // Check actual table contents for every size in both job-aware scopes.
+      for (const scope of [shortlistedScope, matchingScope]) {
+        await scope.click();
+        await expect(scope).toHaveAttribute("aria-pressed", "true");
+        await expect(
+          pack.getByText(/Showing 1 of 1 available ranked profiles/),
+        ).toBeVisible();
+        for (const size of [5, 10, 20]) {
+          await pack.getByRole("button", { name: `Top ${size}` }).click();
+          await expect(
+            pack.getByRole("button", { name: `Top ${size}` }),
+          ).toHaveAttribute("aria-pressed", "true");
+          await expect(pack.locator("tbody tr")).toHaveCount(1);
+          const row = pack.locator("tbody tr").first();
+          await expect(row).toContainText(
+            acceptanceRequired("ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER"),
+          );
+          await expect(row).toContainText("PTF Synthetic Consulting Ltd");
+          await expect(row).toContainText("PTF Synthetic Manufacturing Client");
+        }
+      }
+      await expect(
+        pack.getByRole("columnheader", { name: "Employer / tenure" }),
+      ).toBeVisible();
+      await expect(
+        pack.getByRole("columnheader", { name: "Client project / period" }),
+      ).toBeVisible();
+      await expect(
+        pack.getByText("PTF Synthetic Consulting Ltd").first(),
+      ).toBeVisible();
+      await expect(
+        pack.getByText("PTF Synthetic Manufacturing Client").first(),
+      ).toBeVisible();
+    } finally {
+      const removed = await shortlist.delete(
+        "/api/recruiter/search-v2/shortlist",
+        {
+          data: selection,
+        },
+      );
+      expect(removed.status()).toBe(200);
+      const after = await shortlist.get(
+        `/api/recruiter/search-v2/shortlist?jobId=${encodeURIComponent(job!.id)}&candidateIds=${encodeURIComponent(internalCandidateId)}`,
+      );
+      expect(after.status()).toBe(200);
+      expect((await after.json()).candidateIds).not.toContain(
+        internalCandidateId,
+      );
+      await shortlist.dispose();
+    }
   });
 
   test("candidate-detail caches are isolated by authenticated actor scope", async ({}, testInfo) => {

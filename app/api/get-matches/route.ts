@@ -1,15 +1,27 @@
 import { NextResponse } from "next/server";
 import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
-import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
+import {
+  candidateSearchLifecycleDecision,
+  selectCandidateLifecycleCompatible,
+} from "@/lib/candidateSearchLifecycle";
+import {
+  recruiterSearchAuthorizationDenied,
+  recruiterSearchPrivateNoStoreHeaders,
+  requireRecruiterSearchAuthorization,
+} from "@/lib/recruiterSearchAuthorization";
 
 const supabase = createLazySupabaseServiceClient();
 
 export async function GET() {
   try {
-    const { data, error } = await supabase
-      .from("matches")
-      .select(
-        `
+    const authorization = await requireRecruiterSearchAuthorization({
+      permission: "candidate-detail:read",
+      route: "/api/get-matches",
+    });
+    if (!authorization.allowed)
+      return recruiterSearchAuthorizationDenied(authorization);
+    const { data, error } = await selectCandidateLifecycleCompatible<any[]>(
+      `
         id,
         score,
         reason,
@@ -28,10 +40,12 @@ export async function GET() {
           company
         )
       `,
-      )
-      .order("score", {
-        ascending: false,
-      });
+      (columns) =>
+        supabase
+          .from("matches")
+          .select(columns)
+          .order("score", { ascending: false }),
+    );
 
     if (error) {
       console.log(error);
@@ -40,7 +54,7 @@ export async function GET() {
         {
           error: error.message,
         },
-        { status: 500 },
+        { status: 500, headers: recruiterSearchPrivateNoStoreHeaders },
       );
     }
 
@@ -59,7 +73,9 @@ export async function GET() {
           ...candidate
         }: any) => candidate)(match.candidates),
       }));
-    return NextResponse.json(visible);
+    return NextResponse.json(visible, {
+      headers: recruiterSearchPrivateNoStoreHeaders,
+    });
   } catch (error: any) {
     console.log(error);
 
@@ -67,7 +83,7 @@ export async function GET() {
       {
         error: error.message,
       },
-      { status: 500 },
+      { status: 500, headers: recruiterSearchPrivateNoStoreHeaders },
     );
   }
 }

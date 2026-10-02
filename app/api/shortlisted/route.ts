@@ -5,7 +5,10 @@ import {
   recruiterSearchPrivateNoStoreHeaders,
   requireRecruiterSearchAuthorization,
 } from "@/lib/recruiterSearchAuthorization";
-import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
+import {
+  candidateSearchLifecycleDecision,
+  selectCandidateLifecycleCompatible,
+} from "@/lib/candidateSearchLifecycle";
 
 const supabase = createLazySupabaseServiceClient();
 
@@ -21,15 +24,22 @@ export async function POST(req: NextRequest) {
 
     const { candidate_id, job_id } = body;
 
-    const { data: candidate } = await supabase
-      .from("candidates")
-      .select(
+    const { data: candidate, error: candidateError } =
+      await selectCandidateLifecycleCompatible<any>(
         "id,name,email,raw_text,status,extraction_coverage_status,profile_confirmation_status",
-      )
-      .eq("id", candidate_id)
-      .single();
+        (columns) =>
+          supabase
+            .from("candidates")
+            .select(columns)
+            .eq("id", candidate_id)
+            .single(),
+      );
 
-    if (!candidate || !candidateSearchLifecycleDecision(candidate).visible) {
+    if (
+      candidateError ||
+      !candidate ||
+      !candidateSearchLifecycleDecision(candidate).visible
+    ) {
       return NextResponse.json(
         { error: "Candidate is not eligible for shortlisting." },
         { status: 409, headers: recruiterSearchPrivateNoStoreHeaders },

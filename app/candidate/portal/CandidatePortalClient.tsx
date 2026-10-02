@@ -3,6 +3,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { useCallback, useEffect, useState } from "react";
 import { finalizePossiblyCompletedSignedCvUpload } from "@/lib/signedCvUploadFinalization";
+import { MAX_ORIGINAL_BYTES } from "@/lib/cvUploadLimits";
+import CandidateChatConsent from "./CandidateChatConsent";
 
 type PortalResponse = {
   profile: any;
@@ -246,7 +248,11 @@ async function json(response: Response) {
   return body;
 }
 
-export default function CandidatePortalClient() {
+export default function CandidatePortalClient({
+  chatEnabled,
+}: {
+  chatEnabled: boolean;
+}) {
   const [data, setData] = useState<PortalResponse | null>(null);
   const [fields, setFields] = useState<Record<string, any>>({});
   const [file, setFile] = useState<File | null>(null);
@@ -316,9 +322,9 @@ export default function CandidatePortalClient() {
     try {
       if (
         !/\.(pdf|docx|doc|rtf|txt)$/i.test(file.name) ||
-        file.size > 10 * 1024 * 1024
+        file.size > MAX_ORIGINAL_BYTES
       )
-        throw new Error("Use one PDF, DOCX, DOC, RTF, or TXT CV up to 10 MB.");
+        throw new Error("Use one PDF, DOCX, DOC, RTF, or TXT CV up to 20 MB.");
       const contentDigest = await cvContentDigest(file);
       const signed = await json(
         await fetch("/api/candidate/profile/cv/sign", {
@@ -434,6 +440,7 @@ export default function CandidatePortalClient() {
         ) : null}
         {data && profile ? (
           <>
+            {chatEnabled && <CandidateChatConsent />}
             <section className={panel}>
               <div className="flex flex-wrap justify-between gap-4">
                 <div>
@@ -563,12 +570,12 @@ export default function CandidatePortalClient() {
                 {
                   key: "start_date",
                   label: "Start date",
-                  placeholder: "YYYY-MM or source precision",
+                  placeholder: "YYYY-MM; optional if no project dates stated",
                 },
                 {
                   key: "end_date",
                   label: "End date",
-                  placeholder: "YYYY-MM; leave blank only if Current",
+                  placeholder: "YYYY-MM; optional if no project dates stated",
                 },
               ]}
               onChange={(next) => setStructured("projectExperience", next)}
@@ -665,9 +672,8 @@ export default function CandidatePortalClient() {
                   : "Confirm complete profile"}
               </button>
               <p className="mt-3 text-xs text-slate-500">
-                Confirmation fails closed if any required field, explicit date,
-                SAP evidence, ownership check, version check, or search-index
-                readback is missing.
+                Confirmation checks required fields, dates when provided, SAP
+                evidence, ownership, version, and search-index readback.
               </p>
             </section>
           </>

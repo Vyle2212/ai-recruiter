@@ -60,5 +60,19 @@ assert.equal(
   datedResume("Present").extractedCurrentCompany,
   "Example Consulting",
 );
+const current = datedResume("Present").employerHistory.find(
+  (employment: { isCurrent: boolean }) => employment.isCurrent,
+);
+const now = new Date();
+assert.equal(
+  current?.durationMonths,
+  (now.getUTCFullYear() - 2020) * 12 + now.getUTCMonth() + 1,
+  "open-ended employment must advance with the current month",
+);
+assert.equal(
+  datedResume("Dec 2022").employerHistory[0]?.durationMonths,
+  36,
+  "historical employment duration must remain fixed",
+);
 
 console.log("Current employment inference tests passed");

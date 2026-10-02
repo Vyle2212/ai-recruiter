@@ -1014,12 +1014,12 @@ export default function WorkflowAutomationApprovalQueuePage() {
                         {readable(
                           item.proposal.ruleId,
                         )}
-                        {" Ã‚Â· "}
+                        {" · "}
                         Action:{" "}
                         {readable(
                           item.proposal.proposedAction,
                         )}
-                        {" Ã‚Â· "}
+                        {" · "}
                         Stage:{" "}
                         {readable(
                           item.proposal.currentStage,
@@ -1097,7 +1097,7 @@ export default function WorkflowAutomationApprovalQueuePage() {
 
                   <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
                     <div className="text-xs text-slate-600">
-                      Candidate writes: 0 Ã‚Â· Workflow writes: 0 Ã‚Â· Email sends: 0
+                      Candidate writes: 0 · Workflow writes: 0 · Email sends: 0
                     </div>
 
                     <div className="flex flex-wrap gap-2">
@@ -1165,7 +1165,7 @@ export default function WorkflowAutomationApprovalQueuePage() {
         </section>
 
         <div className="mt-6 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-xs leading-6 text-slate-400">
-          Review decisions only Ã‚Â· Candidate DB writes: 0 Ã‚Â· Workflow writes: 0 Ã‚Â· Audit writes: 0 Ã‚Â· Email sends: 0 Ã‚Â· Automatic execution: disabled
+          Review decisions only · Candidate DB writes: 0 · Workflow writes: 0 · Audit writes: 0 · Email sends: 0 · Automatic execution: disabled
         </div>
       </div>
     </main>

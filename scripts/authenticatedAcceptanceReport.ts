@@ -23,8 +23,36 @@ const roleTests = new Set([
   "anonymous and denied-role responses are private error-only JSON",
   "recruiter, manager and admin retain authorized Search V2 access",
   "browser route guard enforces the same role boundary",
+  "four authenticated role dashboards load within their own scope",
   "permission matrix denies privilege escalation and permits mapped roles",
   "controlled reversible role mutations match policy",
+]);
+// Keep the report tied to the actual acceptance contract. A count alone can
+// pass when an essential test is removed and an unrelated one is added.
+const requiredTests = new Set([
+  "exact deployed release is the requested HTTPS build",
+  "anonymous and denied-role responses are private error-only JSON",
+  "recruiter, manager and admin retain authorized Search V2 access",
+  "browser route guard enforces the same role boundary",
+  "four authenticated role dashboards load within their own scope",
+  "permission matrix denies privilege escalation and permits mapped roles",
+  "write-request boundaries reject CSRF, type, size and action mismatch",
+  "controlled reversible role mutations match policy",
+  "real recruiter login, private page, logout and browser back remain safe",
+  "deactivation invalidates an already-authorized session and reactivation reauthorizes",
+  "server-side session revocation invalidates subsequent API access",
+  "internal Search V2 uses only the synthetic acceptance dataset",
+  "synthetic Search V2 shortlist persists for its owner and can be removed",
+  "synthetic client job share requires assigned support and can be revoked",
+  "synthetic private CV upload preserves bytes and rejects digest mismatch",
+  "candidate upload parses employer and project, confirms ownership and becomes searchable",
+  "original CV read denies recruiter without admin approval",
+  "synthetic candidate drawer remains private and preserves Experience/Projects semantics",
+  "Search V2 shows Comparison beside Shortlist with separate employer and client periods",
+  "candidate-detail caches are isolated by authenticated actor scope",
+  "external continuation tokens fail closed across actor scope and after logout",
+  "Search V2 UI pagination reuses loaded data and expansion is one action",
+  "disabled external scope fails closed before provider execution",
 ]);
 
 async function main() {
@@ -64,8 +92,9 @@ async function main() {
     passedNames.has(name),
   );
   const testsPassed =
-    tests.length === 16 &&
-    new Set(tests.map((test) => test.test)).size === 16 &&
+    tests.length === requiredTests.size &&
+    new Set(tests.map((test) => test.test)).size === requiredTests.size &&
+    tests.every((test) => requiredTests.has(test.test)) &&
     tests.every(
       (test) =>
         test.status === "passed" ||

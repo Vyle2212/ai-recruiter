@@ -51,7 +51,19 @@ const plan = buildProductionCutoverPlan({
   currentCommitSha: commit,
   now,
 });
-assert.equal(plan.steps.length, 18);
+assert.equal(plan.steps.length, 23);
+for (const path of [
+  "supabase/manual/202609260006_recruiter_client_entitlements.sql",
+  "supabase/manual/202609260007_original_cv_approval_requests.sql",
+  "supabase/manual/202609260008_original_cv_access_audit.sql",
+  "supabase/manual/202609260009_original_cv_access_audit_readback.sql",
+]) {
+  assert.equal(
+    plan.steps.some((step) => step.path === path),
+    true,
+    `${path} must be in the supervised cutover sequence`,
+  );
+}
 assert.equal(
   plan.steps.some((step) =>
     step.path.endsWith("production_auth_foundation.sql"),

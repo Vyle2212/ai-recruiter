@@ -1012,10 +1012,10 @@ function talentSearchHref(snapshot: SearchSnapshot) {
   const module = String(filters.module || filters.primaryModule || snapshot.primaryModule || "").trim();
   if (keyword) {
     params.set("q", keyword);
-    params.set("keyword", keyword);
   }
-  if (module) params.set("module", module.startsWith("SAP ") ? module : "SAP " + module);
-  return params.toString() ? "/search?" + params.toString() : "/search";
+  if (module) params.set("sapModules", module.startsWith("SAP ") ? module : "SAP " + module);
+  const route = "/recruiter/talent-search/v2";
+  return params.toString() ? `${route}?${params.toString()}` : route;
 }
 function architectureScore(candidate: CandidateCompareSignal) {
   const role = architectureRole(candidate).toLowerCase();
@@ -4313,7 +4313,7 @@ export function CandidateCompareWorkspace() {
   const [currentSearchIds, setCurrentSearchIds] = useState<string[]>([]);
   const [searchSessionId, setSearchSessionId] = useState("");
   const [sessionMissing, setSessionMissing] = useState(false);
-  const [returnToTalentSearch, setReturnToTalentSearch] = useState("/search");
+  const [returnToTalentSearch, setReturnToTalentSearch] = useState("/recruiter/talent-search/v2");
   const [comparePreset, setComparePreset] = useState<ComparePreset>(5);
   const [compareFocus, setCompareFocus] = useState<CompareFocusMode>("All");
   const [exportOpen, setExportOpen] = useState(false);
@@ -4347,14 +4347,13 @@ export function CandidateCompareWorkspace() {
       const requestedModule = normalizeModule(params.get("module") || params.get("primaryModule") || "");
       const requestedSearchId = params.get("searchId") || params.get("searchSessionId") || "";
       const requestedPreset = Number(params.get("top") || params.get("preset") || 5);
-      const role = String(params.get("role") || "recruiter").toLowerCase();
-      const subscription = /^(true|1|yes|paid|subscribed|client_paid)$/i.test(String(params.get("subscription") || params.get("hasSubscription") || "false"));
-      const profileAccess = /^(true|1|yes|approved|allowed)$/i.test(String(params.get("hasProfileAccess") || params.get("profileApproved") || params.get("adminApproved") || "false"));
-      const credits = Number(params.get("credits") || params.get("chatCredits") || 0);
+      // URL parameters are navigation state, never subscription or role proof.
+      // These actions remain locked until a server-backed entitlement response
+      // is available for the signed-in viewer and this candidate.
       setComparePreset(requestedPreset === 10 || requestedPreset === 20 ? requestedPreset : 5);
-      setViewerRole(role);
-      setHasProfileAccess(profileAccess || subscription || role === "admin");
-      setChatCredits(Number.isFinite(credits) ? credits : 0);
+      setViewerRole("recruiter");
+      setHasProfileAccess(false);
+      setChatCredits(0);
 
       try {
         const snapshot = readCurrentSearchSnapshot(requestedSearchId, requestedModule);
@@ -4708,8 +4707,6 @@ export function CandidateCompareWorkspace() {
     </main>
   );
 }
-
-
 
 
 

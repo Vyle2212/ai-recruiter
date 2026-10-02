@@ -10,10 +10,19 @@ import React, {
   useState,
 } from "react";
 import {
+  BookmarkCheck,
+  BookmarkPlus,
+  BriefcaseBusiness,
+  Eye,
+  GitCompareArrows,
+  MapPin,
+  Search,
+  SlidersHorizontal,
+} from "lucide-react";
+import {
   CANDIDATE360_SEARCH_CONTEXT_KEY,
   candidate360MatchedByCandidate,
   candidate360SearchContextId,
-  candidate360SearchHref,
 } from "@/lib/candidate360SearchContext";
 import {
   parseRecruiterSearchIntent,
@@ -114,6 +123,7 @@ import {
   startSearchV2ReadinessPolling,
   type InternalSearchReadinessResponse,
 } from "@/lib/searchV2ReadinessPolling";
+import { searchV2ComparisonCandidates } from "@/lib/searchV2Comparison";
 // Phase 1 source-structure anchors retained across formatter output:
 // guidedWorkspace==="review"?"hidden" handleQueryChange(handoff.query)
 // disabled={sourceCapabilities?.external_talent_network.available===false}
@@ -290,7 +300,8 @@ type SearchResult = {
   matchLabel?: "Strong Match" | "Good Match" | "Potential Match" | null;
   profileCompletenessPercent?: number;
   externalEligibilityState?:
-    "evidence_supported" | "potential_needs_verification";
+    | "evidence_supported"
+    | "potential_needs_verification";
   unresolvedRequirementCount?: number;
   confirmedContradictionCount?: number;
   linkedInProfileUrl?: string | null;
@@ -340,7 +351,9 @@ type SearchResponse = NormalizedSearchV2Response<SearchResult> & {
   };
   aggregation?: import("@/lib/externalTalentTypes").ExternalTalentAggregation;
   evaluationMode?:
-    "identity_only" | "named_candidate_evaluation" | "requirements_ranking";
+    | "identity_only"
+    | "named_candidate_evaluation"
+    | "requirements_ranking";
 };
 type SearchUiState =
   | "not_committed"
@@ -601,6 +614,7 @@ async function ensureSearchReadiness(
   if (
     !response.ok &&
     payload.error?.code !== "SEARCH_INDEX_WARMING" &&
+    payload.error?.code !== "SEARCH_INDEX_EMPTY" &&
     payload.status !== "failed"
   )
     throw new Error("SAP Talent Hub readiness could not be checked.");
@@ -713,7 +727,7 @@ function uniqueLocationParts(result: SearchResult) {
 
 function Tag({ children }: { children: React.ReactNode }) {
   return (
-    <span className="rounded-full border border-cyan-900 bg-cyan-950/40 px-2.5 py-1 text-xs text-cyan-200">
+    <span className="rounded-full border border-cyan-700/40 bg-cyan-400/10 px-2.5 py-1 text-xs font-medium text-cyan-100">
       {children}
     </span>
   );
@@ -722,13 +736,15 @@ function Tag({ children }: { children: React.ReactNode }) {
 export function CompactCandidateCard({
   result,
   rank,
-  searchContextId,
   intent,
   expanded,
   diagnostic,
   onToggle,
+  shortlisted = false,
+  shortlistPending = false,
+  onShortlistToggle,
+  onCompare,
   onOpenTab,
-  jobId,
   identityLookup = false,
   selected = false,
   reviewed = false,
@@ -738,13 +754,17 @@ export function CompactCandidateCard({
 }: {
   result: SearchResult;
   rank: number;
-  searchContextId: string;
+  searchContextId?: string;
+  jobId?: string;
   intent: RecruiterSearchIntent;
   expanded: boolean;
   diagnostic: CandidateDrawerDiagnostic;
   onToggle: () => void;
+  shortlisted?: boolean;
+  shortlistPending?: boolean;
+  onShortlistToggle?: () => void;
+  onCompare?: () => void;
   onOpenTab?: (tab: "Experience" | "Projects" | "Education" | "Skills") => void;
-  jobId?: string;
   identityLookup?: boolean;
   selected?: boolean;
   reviewed?: boolean;
@@ -797,12 +817,6 @@ export function CompactCandidateCard({
         ) === index,
     )
     .join(" \u00B7 ");
-  const candidateHref = candidate360SearchHref(
-    result.candidateId,
-    searchContextId,
-    jobId,
-  );
-  const shortlistHref = `/recruiter/shortlist?candidateId=${encodeURIComponent(result.candidateId)}&from=search-v2`;
   const matchLabel = diagnostic.matchLevel;
   const rankingScore = displayedRankingScore(result);
   const externalNeedsVerification =
@@ -826,13 +840,13 @@ export function CompactCandidateCard({
     result.queryRelevantSkills || [],
   );
   const displayedSkills = identityLookup ? allProfileSkills : matchedSkills;
-  const strongestSkills = displayedSkills.slice(0, 8);
+  const strongestSkills = displayedSkills.slice(0, 5);
   const matchSummary = identityLookup
     ? []
     : buildCandidateMatchPreview(
         integrity?.requirements || [],
         diagnostic.criteria,
-        5,
+        4,
       );
   const currentEmploymentConfirmed = Boolean(currentEmployment);
   const primarySpecialization = strongestSkills.length
@@ -912,8 +926,8 @@ export function CompactCandidateCard({
         : "Not found in profile";
 
   return (
-    <article className="rounded-xl border border-slate-800/90 bg-slate-950/55 px-4 py-3 transition hover:border-slate-700 hover:bg-slate-900/35">
-      <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,.68fr)_auto] xl:items-start">
+    <article className="rounded-2xl border border-slate-700/60 bg-gradient-to-br from-slate-900 via-[#101c2a] to-slate-950 p-5 shadow-[0_12px_32px_-24px_rgba(0,0,0,.9)] transition duration-200 hover:border-cyan-500/45 hover:shadow-[0_18px_40px_-28px_rgba(34,211,238,.5)] focus-within:border-cyan-400/60">
+      <div className="grid min-w-0 gap-5 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(19rem,.82fr)_auto] xl:items-start">
         <div className="min-w-0 xl:col-start-1 xl:row-start-1">
           <div className="flex items-center gap-2">
             {result.talentPool === "linkedin_talent_pool" &&
@@ -928,10 +942,10 @@ export function CompactCandidateCard({
                 className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-300"
               />
             ) : null}
-            <span className="text-[11px] font-medium tabular-nums text-slate-600">
+            <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full border border-slate-600/70 bg-slate-800/80 px-1 text-[11px] font-bold tabular-nums text-slate-300">
               #{rank}
             </span>
-            <h2 className="min-w-0 break-words text-lg font-semibold leading-6 text-white">
+            <h2 className="min-w-0 break-words text-xl font-semibold leading-7 tracking-tight text-white">
               {identityHeading}
             </h2>
             {anonymousCandidate ? (
@@ -941,19 +955,28 @@ export function CompactCandidateCard({
             ) : null}
           </div>
           {displayedRole ? (
-            <p className="mt-1 text-sm font-medium leading-5 text-slate-300">
+            <p className="mt-2 text-sm font-semibold leading-5 text-cyan-100">
               <span className="mr-1 text-xs text-slate-500">{roleLabel}:</span>
               {displayedRole}
             </p>
           ) : null}
           {employer && companyLabel ? (
-            <p className="mt-0.5 text-sm text-slate-400">
+            <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-400">
+              <BriefcaseBusiness
+                aria-hidden="true"
+                className="h-3.5 w-3.5 shrink-0 text-slate-500"
+              />
               {companyLabel}: {employer}
             </p>
           ) : null}
           {location ? (
-            <p className="mt-1 text-sm text-slate-400">
-              <span className="text-slate-500">Location:</span> {location}
+            <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-400">
+              <MapPin
+                aria-hidden="true"
+                className="h-3.5 w-3.5 shrink-0 text-slate-500"
+              />
+              <span className="sr-only">Location: </span>
+              {location}
             </p>
           ) : null}
           {result.totalYearsExperience != null ? (
@@ -1041,7 +1064,7 @@ export function CompactCandidateCard({
             </div>
           ) : null}
         </div>
-        <div className="min-w-0 xl:col-start-2 xl:row-span-2 xl:row-start-1">
+        <div className="min-w-0 rounded-xl border border-slate-700/45 bg-slate-950/45 p-3.5 xl:col-start-2 xl:row-span-2 xl:row-start-1">
           <div className="flex flex-wrap items-center gap-2">
             <span
               className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${fitClasses}`}
@@ -1092,8 +1115,8 @@ export function CompactCandidateCard({
           result.talentPool !== "linkedin_talent_pool" &&
           matchSummary.length ? (
             <>
-              <p className="mt-2 text-xs font-semibold text-slate-300">
-                Match summary
+              <p className="mt-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-300">
+                Why this profile matches
               </p>
               <ul className="mt-1.5 space-y-1">
                 {queryStatements.supported.map((item) => (
@@ -1214,7 +1237,7 @@ export function CompactCandidateCard({
             </p>
           ) : null}
         </div>
-        <div className="flex flex-wrap gap-2 md:justify-end xl:col-start-3 xl:row-start-1">
+        <div className="flex flex-wrap items-start gap-2 border-t border-slate-700/50 pt-3 md:justify-end md:border-t-0 md:pt-0 xl:col-start-3 xl:row-start-1">
           {result.talentPool === "linkedin_talent_pool" && onReviewedChange ? (
             <button
               type="button"
@@ -1255,12 +1278,38 @@ export function CompactCandidateCard({
               </span>
             </a>
           ) : null}
-          <a
-            href={shortlistHref}
-            className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:bg-slate-900"
-          >
-            Shortlist
-          </a>
+          {result.talentPool !== "linkedin_talent_pool" ? (
+            <button
+              type="button"
+              aria-pressed={shortlisted}
+              disabled={!onShortlistToggle || shortlistPending}
+              onClick={onShortlistToggle}
+              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-600 bg-slate-800/70 px-3 text-sm font-semibold text-slate-100 transition hover:border-cyan-400/60 hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+            >
+              {shortlisted ? (
+                <BookmarkCheck aria-hidden="true" className="mr-1.5 h-4 w-4" />
+              ) : (
+                <BookmarkPlus aria-hidden="true" className="mr-1.5 h-4 w-4" />
+              )}
+              {shortlistPending
+                ? "Saving..."
+                : shortlisted
+                  ? "✓ Shortlisted"
+                  : "+ Shortlist"}
+            </button>
+          ) : null}
+          {result.talentPool !== "linkedin_talent_pool" ? (
+            <button
+              type="button"
+              onClick={onCompare}
+              disabled={!onCompare}
+              aria-label={`Compare ${identityHeading} with candidates in this search`}
+              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-cyan-400/60 bg-cyan-400/10 px-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 disabled:opacity-50"
+            >
+              <GitCompareArrows aria-hidden="true" className="mr-1.5 h-4 w-4" />
+              Compare
+            </button>
+          ) : null}
           <button
             type="button"
             data-candidate-details-trigger={result.candidateId}
@@ -1279,9 +1328,10 @@ export function CompactCandidateCard({
                 result.talentPool,
               ).catch(() => {});
             }}
-            className="inline-flex min-h-9 items-center justify-center rounded-lg bg-cyan-300 px-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200"
+            className="inline-flex min-h-10 items-center justify-center rounded-lg bg-cyan-300 px-4 text-sm font-bold text-slate-950 transition hover:bg-cyan-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
-            Open profile
+            <Eye aria-hidden="true" className="mr-1.5 h-4 w-4" />
+            Quick View
           </button>
         </div>
       </div>
@@ -1290,14 +1340,14 @@ export function CompactCandidateCard({
       (preview.employment.length ||
         preview.projects.length ||
         preview.education) ? (
-        <div className="mt-3 max-w-3xl border-t border-slate-800 pt-3">
+        <div className="mt-4 max-w-3xl border-t border-slate-700/50 pt-4">
           {preview.employment.length ? (
             <section className="min-w-0" aria-label="Recent experience">
               <h3 className="text-xs font-semibold text-slate-300">
                 Recent experience ({preview.employmentCount})
               </h3>
               <ol className="mt-2 space-y-1.5">
-                {preview.employment.slice(0, 3).map((item) => (
+                {preview.employment.slice(0, 2).map((item) => (
                   <li key={item.id} className="text-sm text-slate-400">
                     <p className="truncate font-medium text-slate-200">
                       {item.title || "Role not provided"}
@@ -1305,7 +1355,7 @@ export function CompactCandidateCard({
                     <p className="truncate">
                       {[
                         item.employer,
-                        (item.start || item.end)
+                        item.start || item.end
                           ? formatCandidateProfilePeriod(
                               item.start,
                               item.end,
@@ -1319,6 +1369,15 @@ export function CompactCandidateCard({
                   </li>
                 ))}
               </ol>
+              {preview.employmentCount > 2 ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenTab?.("Experience")}
+                  className="mt-1 text-[11px] font-medium text-cyan-300 hover:text-cyan-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300"
+                >
+                  View all experience
+                </button>
+              ) : null}
             </section>
           ) : null}
           {preview.projects.length ? (
@@ -1327,7 +1386,7 @@ export function CompactCandidateCard({
                 Relevant projects ({preview.projectCount})
               </h3>
               <ol className="mt-2 space-y-1.5">
-                {preview.projects.slice(0, 2).map((item) => (
+                {preview.projects.slice(0, 1).map((item) => (
                   <li key={item.id} className="text-xs text-slate-400">
                     <p className="truncate font-medium text-slate-200">
                       {item.name || "Project name not provided in source"}
@@ -1338,7 +1397,7 @@ export function CompactCandidateCard({
                         item.role ? `Role: ${item.role}` : null,
                         ...item.lifecycle,
                         ...item.modules,
-                        (item.start || item.end)
+                        item.start || item.end
                           ? formatCandidateProfilePeriod(item.start, item.end)
                           : null,
                       ]
@@ -1348,7 +1407,7 @@ export function CompactCandidateCard({
                   </li>
                 ))}
               </ol>
-              {preview.projectCount > 2 ? (
+              {preview.projectCount > 1 ? (
                 <button
                   type="button"
                   onClick={() => onOpenTab?.("Projects")}
@@ -1471,24 +1530,28 @@ export function CompactCandidateCard({
             </details>
           ) : null}
           <div className="mt-4 flex flex-wrap gap-2">
-            <a
-              href={shortlistHref}
-              className="inline-flex min-h-9 items-center rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-200"
-            >
-              Shortlist
-            </a>
+            {result.talentPool !== "linkedin_talent_pool" ? (
+              <button
+                type="button"
+                aria-pressed={shortlisted}
+                disabled={!onShortlistToggle || shortlistPending}
+                onClick={onShortlistToggle}
+                className="inline-flex min-h-9 items-center rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-200"
+              >
+                {shortlistPending
+                  ? "Saving..."
+                  : shortlisted
+                    ? "✓ Shortlisted"
+                    : "+ Shortlist"}
+              </button>
+            ) : null}
             <button
               type="button"
-              className="inline-flex min-h-9 items-center rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-200"
-            >
-              Compare
-            </button>
-            <a
-              href={candidateHref}
+              onClick={onToggle}
               className="inline-flex min-h-9 items-center rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-950"
             >
-              Open full profile
-            </a>
+              {expanded ? "Close Quick View" : "Quick View"}
+            </button>
           </div>
         </section>
       ) : null}
@@ -1574,6 +1637,33 @@ export default function CandidateSearchV2Client({
   const [reviewedExternalCandidateIds, setReviewedExternalCandidateIds] =
     useState<Set<string>>(() => new Set());
   const [externalWorkflowMessage, setExternalWorkflowMessage] = useState("");
+  const [comparePackOpen, setComparePackOpen] = useState(false);
+  const [comparePackSize, setComparePackSize] = useState<5 | 10 | 20>(5);
+  const [comparePackScope, setComparePackScope] = useState<
+    "matches" | "shortlisted"
+  >("matches");
+  const [compareAnchorCandidateId, setCompareAnchorCandidateId] = useState("");
+  const [compareAnchorResult, setCompareAnchorResult] =
+    useState<SearchResult | null>(null);
+  const comparisonRequestRef = useRef<Record<string, unknown> | null>(null);
+  const [jobComparison, setJobComparison] = useState<SearchResponse | null>(
+    null,
+  );
+  const [jobComparisonLoading, setJobComparisonLoading] = useState(false);
+  const [jobComparisonError, setJobComparisonError] = useState("");
+  const [shortlistJobId, setShortlistJobId] = useState<string | null>(null);
+  const [shortlistPreviewJob, setShortlistPreviewJob] = useState(false);
+  const [shortlistContextReady, setShortlistContextReady] = useState(false);
+  const [shortlistedIds, setShortlistedIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [shortlistCount, setShortlistCount] = useState(0);
+  const [shortlistPendingIds, setShortlistPendingIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [shortlistError, setShortlistError] = useState("");
+  const [shortlistLoading, setShortlistLoading] = useState(true);
+  const [shortlistRevision, setShortlistRevision] = useState(0);
 
   const [matchQuality, setMatchQuality] = useState<
     "any" | "relevant" | "strong"
@@ -1638,6 +1728,9 @@ export default function CandidateSearchV2Client({
       setLoading(false);
       setStillSearching(false);
       setExpandedCandidateId("");
+      setComparePackOpen(false);
+      setCompareAnchorCandidateId("");
+      setCompareAnchorResult(null);
       setGuidedIntegrityPlan(null);
       setGuidedProvenance(null);
       setGuidedSearchIdentity(null);
@@ -1680,6 +1773,199 @@ export default function CandidateSearchV2Client({
   );
 
   const results = response?.results || [];
+  useEffect(() => {
+    if (
+      !comparePackOpen ||
+      comparePackScope !== "shortlisted" ||
+      !shortlistJobId ||
+      !comparisonRequestRef.current ||
+      !response ||
+      response.summary.page !== 1
+    ) {
+      setJobComparison(null);
+      setJobComparisonLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setJobComparison(null);
+    setJobComparisonError("");
+    setJobComparisonLoading(true);
+    void fetch("/api/recruiter/search-v2", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      signal: controller.signal,
+      body: JSON.stringify({
+        ...comparisonRequestRef.current,
+        page: 1,
+        pageSize: 20,
+        comparison: {
+          scope: "shortlisted",
+          jobId: shortlistJobId,
+          anchorCandidateId: compareAnchorCandidateId || undefined,
+        },
+      }),
+    })
+      .then(async (reply) => {
+        if (!reply.ok) throw new Error("Job comparison is unavailable.");
+        const payload: unknown = await reply.json();
+        if (
+          !payload ||
+          typeof payload !== "object" ||
+          !("results" in payload) ||
+          !Array.isArray(payload.results) ||
+          !("summary" in payload)
+        )
+          throw new Error("Invalid comparison response.");
+        if (!controller.signal.aborted)
+          setJobComparison(payload as SearchResponse);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted)
+          setJobComparisonError("Job comparison is unavailable. Please retry.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setJobComparisonLoading(false);
+      });
+    return () => controller.abort();
+  }, [
+    comparePackOpen,
+    comparePackScope,
+    shortlistJobId,
+    compareAnchorCandidateId,
+    shortlistRevision,
+    response?.generatedAt,
+    response?.summary.page,
+  ]);
+  const shortlistResultIds = results
+    .filter((item) => item.talentPool !== "linkedin_talent_pool")
+    .map((item) => item.candidateId)
+    .join(",");
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const jobId = params.get("jobId");
+    const validJobId =
+      jobId &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        jobId,
+      );
+    setShortlistJobId(validJobId ? jobId : null);
+    setShortlistPreviewJob(
+      params.get("previewJob") === "1" || Boolean(jobId && !validJobId),
+    );
+    setShortlistContextReady(true);
+  }, []);
+  useEffect(() => {
+    if (!shortlistContextReady || !shortlistResultIds) return;
+    const controller = new AbortController();
+    const params = new URLSearchParams({ candidateIds: shortlistResultIds });
+    if (shortlistJobId) params.set("jobId", shortlistJobId);
+    setShortlistError("");
+    setShortlistLoading(true);
+    fetch(`/api/recruiter/search-v2/shortlist?${params}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (reply) => {
+        if (!reply.ok) throw new Error("Shortlist is unavailable.");
+        return reply.json();
+      })
+      .then((payload) => {
+        if (controller.signal.aborted) return;
+        setShortlistedIds(new Set(payload.candidateIds || []));
+        setShortlistCount(Number(payload.count) || 0);
+        setShortlistLoading(false);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setShortlistLoading(false);
+          setShortlistError("Shortlist is unavailable. Please retry later.");
+        }
+      });
+    return () => controller.abort();
+  }, [
+    shortlistContextReady,
+    shortlistJobId,
+    shortlistResultIds,
+    shortlistRevision,
+  ]);
+
+  async function toggleShortlist(candidateId: string) {
+    if (shortlistPendingIds.has(candidateId) || shortlistLoading) return;
+    const wasSaved = shortlistedIds.has(candidateId);
+    if (
+      wasSaved &&
+      !window.confirm("Remove this candidate from your shortlist?")
+    )
+      return;
+    setShortlistPendingIds((current) => new Set(current).add(candidateId));
+    try {
+      const reply = await fetch("/api/recruiter/search-v2/shortlist", {
+        method: wasSaved ? "DELETE" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidateId, jobId: shortlistJobId }),
+      });
+      if (!reply.ok) {
+        if (reply.status === 409) {
+          const payload = await reply.json().catch(() => null);
+          throw new Error(
+            payload?.error || "This candidate cannot be shortlisted.",
+          );
+        }
+        throw new Error("Shortlist could not be updated. Please retry.");
+      }
+      setShortlistError("");
+      setShortlistedIds((current) => {
+        const next = new Set(current);
+        if (wasSaved) next.delete(candidateId);
+        else next.add(candidateId);
+        return next;
+      });
+      setShortlistCount((current) =>
+        Math.max(0, current + (wasSaved ? -1 : 1)),
+      );
+      setShortlistRevision((current) => current + 1);
+    } catch (error) {
+      setShortlistError(
+        error instanceof Error
+          ? error.message
+          : "Shortlist could not be updated. Please retry.",
+      );
+    } finally {
+      setShortlistPendingIds((current) => {
+        const next = new Set(current);
+        next.delete(candidateId);
+        return next;
+      });
+    }
+  }
+  const compareAnchorCandidate =
+    results.find(
+      (candidate) => candidate.candidateId === compareAnchorCandidateId,
+    ) ||
+    (compareAnchorResult?.candidateId === compareAnchorCandidateId
+      ? compareAnchorResult
+      : null);
+  const comparisonResults =
+    compareAnchorCandidate &&
+    !results.some(
+      (candidate) =>
+        candidate.candidateId === compareAnchorCandidate.candidateId,
+    )
+      ? [compareAnchorCandidate, ...results]
+      : results;
+  const compareCandidates =
+    comparePackScope === "shortlisted"
+      ? jobComparison?.results || []
+      : searchV2ComparisonCandidates(
+          comparisonResults,
+          shortlistedIds,
+          "matches",
+          compareAnchorCandidateId,
+        );
+  const resultRankByCandidateId = new Map(
+    results.map((candidate, index) => [candidate.candidateId, index + 1]),
+  );
   const externalAggregation = response?.aggregation;
   const externalRejectionPresentation = response?.rejectionSummary
     ? externalRejectionSummaryPresentation(response.rejectionSummary)
@@ -1837,11 +2123,28 @@ export default function CandidateSearchV2Client({
   const selectedDrawerCandidate =
     results.find((result) => result.candidateId === expandedCandidateId) ||
     null;
+  useEffect(() => {
+    if (!committedSnapshot || loading) return;
+    const params = new URLSearchParams(window.location.search);
+    const target = params.get("focusCandidateId");
+    if (!target) return;
+    // A name search can return several people; never open a different profile.
+    if (results.some((result) => result.candidateId === target)) {
+      setDrawerInitialTab("Overview");
+      setExpandedCandidateId(target);
+      params.delete("focusCandidateId");
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${params.size ? `?${params}` : ""}${window.location.hash}`,
+      );
+    }
+  }, [committedSnapshot, loading, results]);
   const showingPreviousResults = Boolean(
     committedSnapshot &&
-    (searchEditorOpen ||
-      normalizePreparedSearchQuery(committedSnapshot.query) !==
-        normalizePreparedSearchQuery(query)),
+      (searchEditorOpen ||
+        normalizePreparedSearchQuery(committedSnapshot.query) !==
+          normalizePreparedSearchQuery(query)),
   );
   const closeCandidateDrawer = useCallback(() => {
     const candidateId = expandedCandidateId;
@@ -2554,8 +2857,8 @@ export default function CandidateSearchV2Client({
     });
     const changingPage = Boolean(
       paginationNavigation &&
-      committedSnapshot &&
-      committedSnapshot.response.summary.page !== pageNumber,
+        committedSnapshot &&
+        committedSnapshot.response.summary.page !== pageNumber,
     );
     const pendingKey = `${semanticSearchKey}:page:${pageNumber}${externalBatchCursor ? ":external-batch:" + externalBatchCursor : ""}`;
     if (pendingSearchKeyRef.current === pendingKey) return;
@@ -2688,6 +2991,23 @@ export default function CandidateSearchV2Client({
         );
       const networkStartedAt = performance.now();
       const correlatedRequestId = `search-${requestId}-${Date.now().toString(36)}`;
+      const requestPayload = {
+        ...browserRequest,
+        rawQuery: requestRawQuery,
+        ...(paginationNavigation &&
+        !externalBatchCursor &&
+        response.nextCursor &&
+        pageNumber === response.summary.page + 1
+          ? { cursor: response.nextCursor }
+          : {}),
+        ...(externalBatchCursor ? { externalBatchCursor } : {}),
+        ...(requestIntegrityPlan
+          ? { integrityPlan: requestIntegrityPlan }
+          : {}),
+        includeRelocationRemote:
+          requestCommittedRequirements.includeRelocationRemote,
+        externalVerifiedOnly: requestExternalVerifiedOnly,
+      };
       const fetchResponse = await fetch("/api/recruiter/search-v2", {
         method: "POST",
         headers: {
@@ -2695,36 +3015,20 @@ export default function CandidateSearchV2Client({
           "X-Search-Request-Id": correlatedRequestId,
         },
         signal: abortController.signal,
-        body: JSON.stringify({
-          ...browserRequest,
-          rawQuery: requestRawQuery,
-          ...(paginationNavigation &&
-          !externalBatchCursor &&
-          response.nextCursor &&
-          pageNumber === response.summary.page + 1
-            ? { cursor: response.nextCursor }
-            : {}),
-          ...(externalBatchCursor ? { externalBatchCursor } : {}),
-          ...(requestIntegrityPlan
-            ? { integrityPlan: requestIntegrityPlan }
-            : {}),
-          includeRelocationRemote:
-            requestCommittedRequirements.includeRelocationRemote,
-          externalVerifiedOnly: requestExternalVerifiedOnly,
-        }),
+        body: JSON.stringify(requestPayload),
       });
       const payload: unknown = await fetchResponse.json();
       const networkMs = performance.now() - networkStartedAt;
       if (!fetchResponse.ok)
         throw new Error(
           payload &&
-            typeof payload === "object" &&
-            "error" in payload &&
-            (typeof payload.error === "string" ||
-              (payload.error &&
-                typeof payload.error === "object" &&
-                "message" in payload.error &&
-                typeof payload.error.message === "string"))
+          typeof payload === "object" &&
+          "error" in payload &&
+          (typeof payload.error === "string" ||
+            (payload.error &&
+              typeof payload.error === "object" &&
+              "message" in payload.error &&
+              typeof payload.error.message === "string"))
             ? typeof payload.error === "string"
               ? payload.error
               : String(payload.error.message)
@@ -2744,6 +3048,10 @@ export default function CandidateSearchV2Client({
       if (reconciliation.status === "invalid")
         throw new Error(INVALID_SEARCH_RESPONSE_MESSAGE);
       const committedResponse = reconciliation.response as SearchResponse;
+      if (pageNumber === 1 && requestTalentPool === "internal_profiles") {
+        comparisonRequestRef.current = requestPayload;
+        setJobComparison(null);
+      }
       const reconciliationStartedAt = performance.now();
       if (externalBatchCursor) pageCacheRef.current.clear();
       pendingResultsScrollPageRef.current = pageNumber;
@@ -2851,23 +3159,27 @@ export default function CandidateSearchV2Client({
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <section className="border-b border-slate-800 bg-slate-950/95">
+    <main className="min-h-screen bg-[#08111e] text-slate-100">
+      <section className="border-b border-cyan-500/15 bg-gradient-to-br from-[#122943] via-[#0b1b2e] to-[#08111e]">
         <div className="mx-auto max-w-7xl px-5 py-8">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-white">
+              <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">
+                SAP Talent Hub · Search V2
+              </p>
+              <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
                 Search candidates
               </h1>
 
-              <p className="mt-2 max-w-3xl text-sm text-slate-400">
-                Find and triage relevant talent quickly.
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
+                Find SAP talent, inspect grounded match evidence and shortlist
+                with confidence.
               </p>
             </div>
 
             <a
               href="/recruiter/dashboard"
-              className="text-sm font-semibold text-cyan-300 hover:text-cyan-200"
+              className="rounded-lg border border-cyan-500/25 bg-cyan-400/5 px-4 py-2 text-sm font-semibold text-cyan-200 transition hover:border-cyan-400/60 hover:bg-cyan-400/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
             >
               Back to Dashboard
             </a>
@@ -2967,14 +3279,14 @@ export default function CandidateSearchV2Client({
           className={
             guidedWorkspace === "review" || showCompactSearchSummary
               ? "hidden"
-              : "rounded-2xl border border-slate-800 bg-slate-900/40 p-5"
+              : "rounded-2xl border border-slate-700/60 bg-gradient-to-br from-[#132238] to-[#0d1726] p-5 shadow-[0_20px_50px_-36px_rgba(0,0,0,.9)]"
           }
         >
           <div data-testid="search-v2-form-layout" className="space-y-4">
             <div className="grid gap-4 xl:grid-cols-[minmax(28rem,1fr)_12rem_15rem] xl:items-end">
               <div ref={historyRootRef} className="relative min-w-0">
                 <label>
-                  <span className="text-sm font-semibold text-slate-200">
+                  <span className="text-sm font-semibold text-white">
                     Describe who you&apos;re looking for
                   </span>
                   <textarea
@@ -3015,7 +3327,7 @@ export default function CandidateSearchV2Client({
                     rows={2}
                     title={query}
                     placeholder="Senior SAP FICO consultant in Malaysia with implementation experience"
-                    className="mt-2 min-h-16 w-full min-w-0 resize-none overflow-hidden rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-base leading-6 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500"
+                    className="mt-2 min-h-16 w-full min-w-0 resize-none overflow-hidden rounded-xl border border-slate-600 bg-[#091421] px-4 py-3 text-base leading-6 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
                   />
                 </label>
                 {historyOpen && historySuggestions.length ? (
@@ -3113,7 +3425,8 @@ export default function CandidateSearchV2Client({
                   value={talentPool}
                   onChange={(event) => {
                     const nextTalentPool = event.target.value as
-                      "internal_profiles" | "linkedin_talent_pool";
+                      | "internal_profiles"
+                      | "linkedin_talent_pool";
                     selectedTalentPoolRef.current = nextTalentPool;
                     sourceReadinessRevisionRef.current += 1;
                     latestRequestIdRef.current += 1;
@@ -3180,15 +3493,17 @@ export default function CandidateSearchV2Client({
                 aria-expanded={filtersOpen}
                 aria-controls="search-filter-panel"
                 onClick={() => setFiltersOpen((value) => !value)}
-                className="min-h-12 rounded-xl border border-slate-700 px-4 text-sm font-semibold text-slate-200 hover:border-slate-500"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-600 bg-slate-800/60 px-4 text-sm font-semibold text-slate-100 transition hover:border-cyan-400/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
               >
+                <SlidersHorizontal aria-hidden="true" className="h-4 w-4" />
                 Filters ({activeFilterCount})
               </button>
               <button
                 type="submit"
                 disabled={!query.trim()}
-                className="min-h-12 rounded-xl bg-cyan-400 px-6 text-sm font-bold text-slate-950 outline-none transition hover:bg-cyan-300 focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-cyan-300 px-6 text-sm font-bold text-slate-950 outline-none transition hover:bg-cyan-200 focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
               >
+                <Search aria-hidden="true" className="h-4 w-4" />
                 Understand & review
               </button>
             </div>
@@ -3510,9 +3825,9 @@ export default function CandidateSearchV2Client({
               : "mt-7 scroll-mt-4"
           }
         >
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 border-b border-slate-700/50 pb-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-white">
+              <h2 className="text-2xl font-semibold tracking-tight text-white">
                 {showingPreviousResults ||
                 searchUiState === "refreshing_existing_results"
                   ? `Results from previous search — ${committedSnapshot?.query}`
@@ -3825,23 +4140,10 @@ export default function CandidateSearchV2Client({
               <span className="text-slate-400">
                 {selectedExternalCandidateIds.size} selected
               </span>
-              <a
-                href={
-                  selectedExternalCandidateIds.size
-                    ? `/recruiter/shortlist?candidateIds=${encodeURIComponent(
-                        [...selectedExternalCandidateIds].join(","),
-                      )}&from=search-v2`
-                    : "#"
-                }
-                aria-disabled={!selectedExternalCandidateIds.size}
-                onClick={(event) => {
-                  if (!selectedExternalCandidateIds.size)
-                    event.preventDefault();
-                }}
-                className="rounded-lg border border-slate-700 px-3 py-2 font-semibold text-slate-200 aria-disabled:cursor-not-allowed aria-disabled:opacity-45"
-              >
-                Bulk Shortlist
-              </a>
+              <span className="text-xs text-slate-500">
+                Selection is for verification only; it is not saved to a
+                shortlist.
+              </span>
               <button
                 type="button"
                 disabled={
@@ -3875,6 +4177,287 @@ export default function CandidateSearchV2Client({
             </div>
           ) : null}
 
+          {results.length ? (
+            <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+              <a
+                href={`/recruiter/shortlist${shortlistJobId ? `?jobId=${encodeURIComponent(shortlistJobId)}` : ""}`}
+                className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 hover:border-slate-500"
+              >
+                Shortlist ({shortlistCount})
+              </a>
+              <button
+                type="button"
+                aria-expanded={comparePackOpen}
+                aria-controls="search-v2-compare-pack"
+                onClick={() => {
+                  setCompareAnchorCandidateId("");
+                  setCompareAnchorResult(null);
+                  if (response.summary.page !== 1) {
+                    void runSearch(1, true).then(() =>
+                      setComparePackOpen(true),
+                    );
+                  } else {
+                    setComparePackOpen((current) => !current);
+                  }
+                }}
+                disabled={loading}
+                className="rounded-lg border border-cyan-500/50 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-500/20 disabled:opacity-50"
+              >
+                Compare
+              </button>
+              <span className="text-xs text-slate-400">
+                Compare matching or shortlisted candidates in this search.
+              </span>
+              {shortlistPreviewJob ? (
+                <span className="text-xs text-amber-200">
+                  This job is a preview; Shortlist saves to your general list.
+                </span>
+              ) : null}
+              {shortlistError ? (
+                <span role="alert" className="text-xs text-amber-200">
+                  {shortlistError}{" "}
+                  <button
+                    type="button"
+                    onClick={() => setShortlistRevision((value) => value + 1)}
+                    className="underline"
+                  >
+                    Retry
+                  </button>
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+
+          {comparePackOpen &&
+          !loading &&
+          results.length &&
+          response.summary.page === 1 ? (
+            <section
+              id="search-v2-compare-pack"
+              aria-label="Candidate Comparison"
+              className="mt-3 rounded-xl border border-cyan-500/30 bg-[#0B1118] p-4"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">
+                    Candidate Comparison
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Ranked results from the committed search. Employer tenure
+                    and client project periods are shown separately; missing
+                    evidence is left blank.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setComparePackOpen(false)}
+                  className="text-sm text-slate-300 hover:text-white"
+                >
+                  Close
+                </button>
+              </div>
+              {compareAnchorCandidate ? (
+                <p className="mt-3 rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-xs text-cyan-100">
+                  Comparing from {cleanCandidateName(compareAnchorCandidate)} as
+                  the baseline candidate.
+                </p>
+              ) : null}
+              <div
+                className="mt-4 flex flex-wrap gap-2"
+                role="group"
+                aria-label="Compare pack size"
+              >
+                <button
+                  type="button"
+                  aria-pressed={comparePackScope === "matches"}
+                  onClick={() => setComparePackScope("matches")}
+                  className={
+                    comparePackScope === "matches"
+                      ? "rounded-lg bg-slate-200 px-3 py-2 text-sm font-semibold text-slate-950"
+                      : "rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200"
+                  }
+                >
+                  All matching results
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={comparePackScope === "shortlisted"}
+                  disabled={
+                    !shortlistJobId ||
+                    shortlistLoading ||
+                    Boolean(shortlistError)
+                  }
+                  onClick={() => setComparePackScope("shortlisted")}
+                  className={
+                    comparePackScope === "shortlisted"
+                      ? "rounded-lg bg-slate-200 px-3 py-2 text-sm font-semibold text-slate-950"
+                      : "rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 disabled:opacity-50"
+                  }
+                >
+                  Shortlisted in this search
+                </button>
+                {([5, 10, 20] as const).map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    aria-pressed={comparePackSize === size}
+                    onClick={() => setComparePackSize(size)}
+                    className={
+                      comparePackSize === size
+                        ? "rounded-lg bg-cyan-300 px-3 py-2 text-sm font-semibold text-slate-950"
+                        : "rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200"
+                    }
+                  >
+                    Top {size}
+                  </button>
+                ))}
+              </div>
+              {comparePackScope === "shortlisted" && !shortlistJobId ? (
+                <p role="status" className="mt-3 text-xs text-amber-200">
+                  Select an active job to compare its shortlisted candidates.
+                </p>
+              ) : null}
+              {comparePackScope === "shortlisted" && jobComparisonLoading ? (
+                <p role="status" className="mt-3 text-xs text-cyan-200">
+                  Loading the job shortlist comparison...
+                </p>
+              ) : null}
+              {comparePackScope === "shortlisted" && jobComparisonError ? (
+                <p role="alert" className="mt-3 text-xs text-rose-200">
+                  {jobComparisonError}
+                </p>
+              ) : null}
+              <p className="mt-3 text-xs text-slate-400">
+                Showing {Math.min(comparePackSize, compareCandidates.length)} of{" "}
+                {comparePackScope === "shortlisted"
+                  ? jobComparison?.summary.visibleTotal || 0
+                  : response.summary.visibleTotal}{" "}
+                available ranked profiles
+                {comparePackScope === "shortlisted"
+                  ? " in this job shortlist comparison (including the baseline when needed)"
+                  : ""}
+                .
+                {response.evaluationMode === "identity_only"
+                  ? " Identity lookup does not provide a fit ranking."
+                  : ""}
+              </p>
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[1020px] border-collapse text-left text-sm">
+                  <thead className="text-xs text-slate-400">
+                    <tr className="border-b border-slate-700">
+                      <th scope="col" className="p-3">
+                        Rank / profile
+                      </th>
+                      <th scope="col" className="p-3">
+                        Match
+                      </th>
+                      <th scope="col" className="p-3">
+                        Employer / tenure
+                      </th>
+                      <th scope="col" className="p-3">
+                        Client project / period
+                      </th>
+                      <th scope="col" className="p-3">
+                        SAP modules
+                      </th>
+                      <th scope="col" className="p-3">
+                        Experience
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {compareCandidates
+                      .slice(0, comparePackSize)
+                      .map((candidate) => {
+                        const employment =
+                          candidate.profilePreview?.currentEmployment ||
+                          candidate.profilePreview?.latestEmployment;
+                        const project = candidate.profilePreview?.projects[0];
+                        const diagnostic = diagnosticsByCandidate.get(
+                          candidate.candidateId,
+                        );
+                        return (
+                          <tr
+                            key={candidate.candidateId}
+                            className="border-b border-slate-800 align-top text-slate-200"
+                          >
+                            <td className="p-3">
+                              <span className="block text-xs text-cyan-300">
+                                {candidate.candidateId ===
+                                compareAnchorCandidateId
+                                  ? "Baseline"
+                                  : `#${resultRankByCandidateId.get(candidate.candidateId) ?? "—"}`}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDrawerInitialTab("Overview");
+                                  setExpandedCandidateId(candidate.candidateId);
+                                }}
+                                className="mt-1 font-semibold text-white underline decoration-slate-600 underline-offset-2 hover:decoration-cyan-300"
+                              >
+                                {cleanCandidateName(candidate)}
+                              </button>
+                              <span className="mt-1 block text-xs text-slate-400">
+                                {candidate.currentTitle ||
+                                  candidate.profileTitle ||
+                                  "Title unavailable"}
+                              </span>
+                            </td>
+                            <td className="p-3">
+                              {response.evaluationMode === "identity_only"
+                                ? "Not evaluated"
+                                : diagnostic?.matchLevel || "Not evaluated"}
+                            </td>
+                            <td className="p-3">
+                              <span className="block">
+                                {employment?.employer ||
+                                  candidate.currentEmployer ||
+                                  "Not provided"}
+                              </span>
+                              <span className="mt-1 block text-xs text-slate-400">
+                                {employment &&
+                                (employment.start || employment.end)
+                                  ? formatCandidateProfilePeriod(
+                                      employment.start,
+                                      employment.end,
+                                      employment.current,
+                                    )
+                                  : "Employment period not provided"}
+                              </span>
+                            </td>
+                            <td className="p-3">
+                              <span className="block">
+                                {project?.client || "Client not provided"}
+                              </span>
+                              <span className="mt-1 block text-xs text-slate-400">
+                                {project?.name || "Project not provided"}
+                                {project && (project.start || project.end)
+                                  ? ` · ${formatCandidateProfilePeriod(project.start, project.end)}`
+                                  : " · Project period not provided"}
+                              </span>
+                            </td>
+                            <td className="p-3">
+                              {candidate.verifiedSapModules
+                                .slice(0, 5)
+                                .join(", ") || "Not verified"}
+                            </td>
+                            <td className="p-3">
+                              {candidate.totalYearsExperience === null
+                                ? "Not established"
+                                : formatTotalCareerExperience(
+                                    candidate.totalYearsExperience,
+                                  )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ) : null}
+
           <div
             aria-busy={loading}
             className={`mt-4 min-h-[12rem] space-y-3 transition-opacity ${loading && response ? "opacity-70" : showingPreviousResults ? "opacity-45" : "opacity-100"}`}
@@ -3889,8 +4472,34 @@ export default function CandidateSearchV2Client({
                   index +
                   1
                 }
-                searchContextId={searchContextId}
                 intent={committedIntent}
+                shortlisted={shortlistedIds.has(result.candidateId)}
+                shortlistPending={shortlistPendingIds.has(result.candidateId)}
+                onShortlistToggle={
+                  !shortlistContextReady || shortlistLoading
+                    ? undefined
+                    : () => void toggleShortlist(result.candidateId)
+                }
+                onCompare={() => {
+                  setCompareAnchorCandidateId(result.candidateId);
+                  setCompareAnchorResult(result);
+                  setComparePackScope("matches");
+                  setComparePackOpen(true);
+                  const scrollToComparison = () =>
+                    window.requestAnimationFrame(() =>
+                      document
+                        .getElementById("search-v2-compare-pack")
+                        ?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        }),
+                    );
+                  if (response.summary.page !== 1) {
+                    void runSearch(1, true).then(scrollToComparison);
+                  } else {
+                    scrollToComparison();
+                  }
+                }}
                 expanded={expandedCandidateId === result.candidateId}
                 diagnostic={diagnosticsByCandidate.get(result.candidateId)!}
                 onToggle={() =>
@@ -3905,7 +4514,6 @@ export default function CandidateSearchV2Client({
                   setDrawerInitialTab(tab);
                   setExpandedCandidateId(result.candidateId);
                 }}
-                jobId={committedSnapshot?.provenance?.jobId}
                 identityLookup={[
                   "candidate_name_lookup",
                   "identity_token_lookup",
@@ -4027,21 +4635,43 @@ export default function CandidateSearchV2Client({
         {selectedDrawerCandidate ? (
           <CandidateDetailsDrawer
             candidate={selectedDrawerCandidate as CandidateDrawerResult}
-            diagnostic={diagnosticsByCandidate.get(
-              selectedDrawerCandidate.candidateId,
-            )!}
+            diagnostic={
+              diagnosticsByCandidate.get(selectedDrawerCandidate.candidateId)!
+            }
             visibleCandidates={results as CandidateDrawerResult[]}
             searchContextLabel={committedSnapshot?.query || query}
-            fullProfileHref={candidate360SearchHref(
+            shortlisted={shortlistedIds.has(
               selectedDrawerCandidate.candidateId,
-              searchContextId,
-              committedSnapshot?.provenance?.jobId,
             )}
-            shortlistHref={
-              "/recruiter/shortlist?candidateId=" +
-              encodeURIComponent(selectedDrawerCandidate.candidateId) +
-              "&from=search-v2"
+            shortlistPending={shortlistPendingIds.has(
+              selectedDrawerCandidate.candidateId,
+            )}
+            onShortlistToggle={
+              !shortlistContextReady ||
+              shortlistLoading ||
+              Boolean(shortlistError)
+                ? undefined
+                : () =>
+                    void toggleShortlist(selectedDrawerCandidate.candidateId)
             }
+            onCompare={() => {
+              setCompareAnchorCandidateId(selectedDrawerCandidate.candidateId);
+              setCompareAnchorResult(selectedDrawerCandidate);
+              setComparePackScope("matches");
+              setComparePackOpen(true);
+              setExpandedCandidateId("");
+              const scrollToComparison = () =>
+                window.requestAnimationFrame(() =>
+                  document
+                    .getElementById("search-v2-compare-pack")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                );
+              if (response.summary.page !== 1) {
+                void runSearch(1, true).then(scrollToComparison);
+              } else {
+                scrollToComparison();
+              }
+            }}
             onClose={closeCandidateDrawer}
             onSelect={(candidateId) => {
               setDrawerInitialTab("Overview");

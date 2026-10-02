@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@/utils/supabase/server";
 import { supabase } from "@/lib/supabase";
+import { selectCandidateLifecycleCompatible } from "@/lib/candidateSearchLifecycle";
 
 export type CandidateCvAuthorization = {
   authUserId: string;
@@ -120,13 +121,15 @@ export async function authorizeCandidateCvUpload(): Promise<
     };
   }
 
-  const candidateResult = await supabase
-    .from("candidates")
-    .select(
-      "id,updated_at,source_file,cv_version,extraction_coverage_status,profile_confirmation_status",
-    )
-    .eq("id", profile.candidate_id)
-    .limit(2);
+  const candidateResult = await selectCandidateLifecycleCompatible<any[]>(
+    "id,updated_at,source_file,cv_version,extraction_coverage_status,profile_confirmation_status",
+    (columns) =>
+      supabase
+        .from("candidates")
+        .select(columns)
+        .eq("id", profile.candidate_id)
+        .limit(2),
+  );
   if (candidateResult.error || candidateResult.data?.length !== 1)
     return { allowed: false, status: 409, code: "candidate_record_ambiguous" };
 

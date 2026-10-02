@@ -5,6 +5,7 @@ on:
     branches:
       - "codex/precision-*"
       - "codex/production-trust-*"
+      - "codex/production-admin-*"
       - "codex/recruiter-api-authorization-*"
       - "codex/dependency-security-*"
       - "codex/authenticated-acceptance-*"
@@ -13,6 +14,7 @@ on:
     branches:
       - "codex/profile-source-recovery"
       - "codex/production-trust-*"
+      - "codex/production-admin-*"
       - "codex/recruiter-api-authorization-*"
       - "codex/dependency-security-*"
       - "codex/authenticated-acceptance-*"
@@ -141,12 +143,27 @@ jobs:
         run: npm run test:github-actions-pinning
 
       - name: Route policy and authorization matrix
-        run: npm run test:production-trust:authorization
+        run: |
+          npm run test:production-trust:authorization
+          node --import tsx scripts/productionAuthConfiguration.test.ts
+          node --import tsx scripts/chatAuthorizationCore.test.ts
+          node --import tsx scripts/candidateChatConsentBoundary.test.ts
+          node --import tsx scripts/chatConversationStoreContract.test.ts
+          node --import tsx scripts/chatConversationCreateBoundary.test.ts
+          node --import tsx scripts/chatReceiptApiBoundary.test.ts
+          node --import tsx scripts/chatMessageApiBoundary.test.ts
+          node --import tsx scripts/chatInternalConversationBoundary.test.ts
+          node --import tsx scripts/chatClientRecruiterBoundary.test.ts
+          node --import tsx scripts/chatRecruiterCandidateBoundary.test.ts
+          node --import tsx scripts/chatClientCandidateEntryBoundary.test.ts
+          node --import tsx scripts/chatRecruiterAdminEntryBoundary.test.ts
 
       - name: Authenticated acceptance harness safety contracts
         env:
           NODE_OPTIONS: --conditions=react-server
-        run: npm run test:acceptance:harness
+        run: |
+          npm run test:acceptance:harness
+          node --import tsx scripts/searchV2AcceptanceLatencyContract.test.ts
 
       - name: Search authorization, cache scope, and candidate privacy
         run: |
@@ -155,15 +172,20 @@ jobs:
           node --import tsx scripts/candidateResponsePrivacy.test.ts
 
       - name: Internal and external Search V2 regressions
-        run: npm run test:production-trust:search-regression
+        run: |
+          npm run test:production-trust:search-regression
+          node --import tsx scripts/searchV2ComparisonActions.test.ts
+          node --import tsx scripts/searchV2PerformanceUx.test.ts
 
       - name: Canonical evidence and immutable golden regressions
         run: |
           npm run test:production-trust:canonical
+          node --import tsx scripts/projectRoleProvenanceDeduplication.test.ts
           node --import tsx scripts/currentEmploymentInference.test.ts
 
       - name: CV source layout and complete-document OCR regressions
         run: |
+          node --import tsx scripts/cvParserNameBoundary.test.ts
           node --import tsx scripts/candidateSourcePreservation.test.ts
           node --import tsx scripts/pdfTextLayout.test.ts
           node --import tsx scripts/docxTextLayout.test.ts
@@ -200,12 +222,16 @@ jobs:
           node --import tsx scripts/originalCareerLayouts.test.ts
           node --import tsx scripts/threeTierRecovery.test.ts
           node --import tsx scripts/candidateSecurityFixtureRls.test.ts
+          node --import tsx scripts/stagingAuthPrivatePolicyHelpers.test.ts
+          node --import tsx scripts/acceptanceAuthPrivatePolicyHelpers.test.ts
+          node --import tsx scripts/privateRlsPreviewHelpers.test.ts
           node --import tsx scripts/productionPrivateDataRlsCutover.test.ts
           node --import tsx scripts/productionCutoverPlan.test.ts
           node --import tsx scripts/originalCvCollectionManifest.test.ts
           node --import tsx scripts/productionAuthFoundation.test.ts
           node --import tsx scripts/candidateProfileLifecycleBatch.test.ts
           node --import tsx scripts/candidateCvIngestionParity.test.ts
+          node --import tsx scripts/candidateUploadLifecycleAcceptance.test.ts
           node --import tsx scripts/offlineCvParserAudit.test.ts
           node --import tsx scripts/legacyCvUploadBoundary.test.ts
           node --import tsx scripts/candidateOwnedCvUpdate.test.ts
@@ -245,6 +271,9 @@ jobs:
       - name: Scoped formatting check
         run: |
           npm run check:production-trust:format
+          npx prettier --check acceptance/e2e/productionTrustAuthenticatedAcceptance.spec.ts scripts/searchV2AcceptanceLatency.mjs scripts/searchV2AcceptanceLatencyContract.test.ts
+          npx prettier --check scripts/chatRecruiterAdminEntryBoundary.test.ts
+          npx prettier --check app/candidate/portal/CandidateChatConsent.tsx app/api/candidate/chat-consent/route.ts scripts/candidateChatConsentBoundary.test.ts
           npx prettier --check docs/precision-v172-blank-project-anchor-20260926.md
           npx prettier --check docs/precision-v171-leading-client-project-card-20260926.md
           npx prettier --check docs/precision-v170-split-role-project-cards-20260926.md
@@ -307,8 +336,14 @@ jobs:
       - name: Clean dependency installation
         run: npm ci
 
+      - name: Verify tracked source encoding
+        run: node scripts/verifyTrackedTextUtf8.cjs
+
       - name: Next.js 16.3.5 Webpack production build
         run: npm run build:webpack
+
+      - name: Verify PDF fonts are bundled with CV upload routes
+        run: node --import tsx scripts/pdfFontTrace.test.ts
 
       - name: Scan client bundle for server secret material
         run: npm run scan:production-trust:bundle

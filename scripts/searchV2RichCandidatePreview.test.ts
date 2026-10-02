@@ -277,7 +277,7 @@ const markup = renderToStaticMarkup(
 for (const expected of [
   "Latest known role",
   "88% Strong Match",
-  "Match summary",
+  "Why this profile matches",
   "Met: SAP FICO",
   "SAP FICO",
   "Recent experience",
@@ -285,7 +285,7 @@ for (const expected of [
   "Education",
   "View all experience",
   "View all projects",
-  "Open profile",
+  "Quick View",
 ])
   assert.match(markup, new RegExp(expected));
 assert.doesNotMatch(markup, /Company not provided|Evidence confidence/);

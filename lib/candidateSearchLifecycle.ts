@@ -13,6 +13,7 @@ export const CANDIDATE_SEARCH_REVIEW_EXTRACTION_STATUSES = [
 ] as const;
 
 export const CANDIDATE_SEARCH_REVIEW_CONFIRMATION_STATUSES = [
+  "not_claimed",
   "claimed_incomplete",
   "recruiter_review_required",
 ] as const;
@@ -32,6 +33,44 @@ const reviewExtraction = new Set<string>(
 const reviewConfirmation = new Set<string>(
   CANDIDATE_SEARCH_REVIEW_CONFIRMATION_STATUSES,
 );
+
+/** Only a known missing optional lifecycle column permits a legacy retry. */
+export function missingOptionalLifecycleColumn(
+  error: {
+    code?: string;
+    message?: string;
+  } | null,
+) {
+  if (error?.code !== "42703") return null;
+  return (
+    /\b(extraction_coverage_status|profile_confirmation_status)\b/i
+      .exec(error.message || "")?.[1]
+      ?.toLowerCase() || null
+  );
+}
+
+/** Retry only absent migration-owned lifecycle fields; preserve all other errors. */
+export async function selectCandidateLifecycleCompatible<T>(
+  columns: string,
+  run: (columns: string) => PromiseLike<{
+    data: T | null;
+    error: { code?: string; message?: string } | null;
+  }>,
+) {
+  let selection = columns;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const result = await run(selection);
+    const missing = missingOptionalLifecycleColumn(result.error);
+    if (!missing || !new RegExp(`\\b${missing}\\b`, "i").test(selection))
+      return result;
+    selection = selection
+      .replace(new RegExp(`\\b${missing}\\s*,?\\s*`, "gi"), "")
+      .replace(/,\s*,/g, ",")
+      .replace(/,\s*([)])/g, "$1")
+      .replace(/,\s*$/, "");
+  }
+  throw new Error("Candidate lifecycle compatibility retry exhausted.");
+}
 
 export function normalizedCandidateLifecycleStatus(value: unknown) {
   return String(value ?? "")

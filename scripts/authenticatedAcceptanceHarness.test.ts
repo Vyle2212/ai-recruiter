@@ -98,7 +98,8 @@ async function main() {
     const names = [...source.matchAll(/test\("([^"\n]+)"/g)].map(
       (match) => match[1],
     );
-    assert.equal(names.length, 16);
+    assert.equal(names.length, 23);
+    assert.equal(new Set(names).size, names.length);
     const specs = names.map((title) => ({
       title,
       tests: [
@@ -151,7 +152,15 @@ async function main() {
     specs[0].tests[0].results[0].status = "failed";
     writeFileSync(input, JSON.stringify({ suites: [{ suites: [{ specs }] }] }));
     assert.equal(execute().status, 1);
-    assert.equal(JSON.parse(readFileSync(output, "utf8")).testCount, 16);
+    assert.equal(JSON.parse(readFileSync(output, "utf8")).testCount, 23);
+    specs[0].tests[0].results[0].status = "passed";
+    specs[0].title = "unrelated replacement test";
+    writeFileSync(input, JSON.stringify({ suites: [{ suites: [{ specs }] }] }));
+    assert.equal(
+      execute().status,
+      1,
+      "Replacing a required test must block acceptance even at the same count",
+    );
     writeFileSync(input, "{}");
     assert.equal(
       execute().status,

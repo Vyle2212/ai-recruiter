@@ -1,4 +1,7 @@
-import { candidateSearchLifecycleDecision } from "./candidateSearchLifecycle";
+import {
+  candidateSearchLifecycleDecision,
+  selectCandidateLifecycleCompatible,
+} from "./candidateSearchLifecycle";
 
 type CandidateLifecycleRow = {
   id?: unknown;
@@ -37,10 +40,13 @@ export async function loadCandidateSearchMutationEligibility(
   const requestedIds = normalizedIds(candidateIds);
   if (!requestedIds.length)
     return candidateSearchMutationEligibility([], requestedIds);
-  const { data, error } = await client
-    .from("candidates")
-    .select("id,status,extraction_coverage_status,profile_confirmation_status")
-    .in("id", requestedIds);
+  const { data, error } = await selectCandidateLifecycleCompatible<
+    CandidateLifecycleRow[]
+  >(
+    "id,status,extraction_coverage_status,profile_confirmation_status",
+    (columns) =>
+      client.from("candidates").select(columns).in("id", requestedIds),
+  );
   if (error)
     throw new Error(error.message || "Unable to verify candidate eligibility.");
   return candidateSearchMutationEligibility(data || [], requestedIds);

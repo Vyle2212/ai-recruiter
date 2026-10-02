@@ -398,13 +398,13 @@ export default function RecruiterWorkflowCopilotPage() {
 
               <p className="mt-2 text-sm text-slate-300">
                 Candidate DB writes: {data.safety.candidateDbWrites}
-                {" Ã‚Â· "}
+                {" · "}
                 Workflow writes: {data.safety.workflowWrites}
-                {" Ã‚Â· "}
+                {" · "}
                 Email sends: {data.safety.emailSends}
-                {" Ã‚Â· "}
+                {" · "}
                 OpenAI calls: {data.safety.openAiCalls}
-                {" Ã‚Â· "}
+                {" · "}
                 Read only: {data.safety.readOnly ? "yes" : "no"}
               </p>
             </section>

@@ -2,6 +2,16 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
+  BookmarkCheck,
+  BookmarkPlus,
+  Check,
+  CircleAlert,
+  GitCompareArrows,
+  MapPin,
+  Minus,
+  UserRound,
+} from "lucide-react";
+import {
   SEARCH_V2_CANDIDATE_DETAIL_RESPONSE_VERSION,
   type SearchV2RecruiterCandidateDetail,
 } from "@/lib/searchV2CandidateDetailContract";
@@ -25,6 +35,7 @@ import {
   type CandidateProfileTab,
 } from "@/lib/candidateProfilePresentation";
 import { canonicalCandidateSkillCollection } from "@/lib/candidateProfileSkills";
+import { RequestOriginalCvButton } from "@/components/RequestOriginalCvButton";
 import type { ExternalTalentProfilePresentation } from "@/lib/externalTalentProfile";
 
 export type CandidateDrawerResult = {
@@ -253,8 +264,10 @@ export default function CandidateDetailsDrawer({
   diagnostic,
   visibleCandidates,
   searchContextLabel,
-  fullProfileHref,
-  shortlistHref,
+  shortlisted,
+  shortlistPending,
+  onShortlistToggle,
+  onCompare,
   onClose,
   onSelect,
   identityLookup = false,
@@ -264,8 +277,10 @@ export default function CandidateDetailsDrawer({
   diagnostic: CandidateDrawerDiagnostic;
   visibleCandidates: CandidateDrawerResult[];
   searchContextLabel: string;
-  fullProfileHref: string;
-  shortlistHref: string;
+  shortlisted: boolean;
+  shortlistPending: boolean;
+  onShortlistToggle?: () => void;
+  onCompare?: () => void;
   onClose: () => void;
   onSelect: (candidateId: string) => void;
   identityLookup?: boolean;
@@ -281,6 +296,7 @@ export default function CandidateDetailsDrawer({
   const [aiAnalysis, setAiAnalysis] = useState("");
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
   const drawerRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
   const contentScrollRef = useRef<HTMLDivElement | null>(null);
   const selectedIndex = visibleCandidates.findIndex(
     (item) => item.candidateId === candidate.candidateId,
@@ -329,13 +345,17 @@ export default function CandidateDetailsDrawer({
   }, [tab, educationFocus, candidate.candidateId, profile]);
 
   useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     drawerRef.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab" || !drawerRef.current) return;
@@ -360,7 +380,7 @@ export default function CandidateDetailsDrawer({
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [onClose]);
+  }, []);
 
   const enterprise = profile?.enterpriseProfile;
   const employment = enterprise?.employmentTimeline || [];
@@ -499,13 +519,16 @@ export default function CandidateDetailsDrawer({
         aria-modal="true"
         aria-label={`Candidate details for ${name}`}
         tabIndex={-1}
-        className="absolute inset-y-0 right-0 flex h-[100dvh] w-full flex-col border-l border-slate-700 bg-slate-950 shadow-2xl sm:w-[min(48vw,880px)]"
+        className="absolute inset-y-0 right-0 flex h-[100dvh] w-full flex-col border-l border-cyan-500/20 bg-[#0b1420] shadow-[-24px_0_80px_-32px_rgba(0,0,0,.85)] sm:w-[min(48vw,880px)]"
       >
-        <header className="shrink-0 border-b border-slate-800 px-5 py-4">
+        <header className="shrink-0 border-b border-slate-700/60 bg-gradient-to-br from-[#12253a] via-[#0e1b2b] to-[#0b1420] px-5 py-5">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <h2 className="truncate text-xl font-semibold text-white">
-                {name}
+              <h2 className="flex min-w-0 items-center gap-3 text-2xl font-semibold tracking-tight text-white">
+                <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-400/10 text-cyan-200">
+                  <UserRound aria-hidden="true" className="h-5 w-5" />
+                </span>
+                <span className="truncate">{name}</span>
               </h2>
               {!nameAvailable ? (
                 <p className="mt-1 text-xs text-slate-400">Name not provided</p>
@@ -523,7 +546,10 @@ export default function CandidateDetailsDrawer({
                 </p>
               ) : null}
               {location ? (
-                <p className="mt-1 text-xs text-slate-500">{location}</p>
+                <p className="mt-1 flex items-center gap-1 text-xs text-slate-400">
+                  <MapPin aria-hidden="true" className="h-3.5 w-3.5" />
+                  {location}
+                </p>
               ) : null}
               <p className="mt-1 text-xs font-medium text-cyan-300">
                 {candidate.talentPool === "linkedin_talent_pool"
@@ -546,14 +572,6 @@ export default function CandidateDetailsDrawer({
                     {" "}
                     (opens external profile in a new tab)
                   </span>
-                </a>
-              ) : null}
-              {candidate.talentPool !== "linkedin_talent_pool" ? (
-                <a
-                  href={shortlistHref}
-                  className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-100"
-                >
-                  Shortlist
                 </a>
               ) : null}
               {candidate.talentPool === "linkedin_talent_pool" ? (
@@ -663,7 +681,7 @@ export default function CandidateDetailsDrawer({
           <nav
             aria-label="Candidate detail sections"
             role="tablist"
-            className="mt-4 flex gap-1 overflow-x-auto"
+            className="mt-5 flex gap-1 overflow-x-auto border-b border-slate-700/50"
           >
             {tabState.map(
               ({ tab: item, count, hasRecords, unavailableReason }) => (
@@ -786,41 +804,110 @@ export default function CandidateDetailsDrawer({
                 </div>
               ) : (
                 <Panel title="Match summary">
-                  <p className="line-clamp-2 text-sm text-slate-300">
-                    {searchContextLabel}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-400">
-                    <p>
-                      <span className="font-semibold text-slate-200">
-                        {diagnostic.matchLevel}
-                      </span>
+                  <div className="rounded-xl border border-cyan-500/20 bg-slate-900/60 p-4">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                      Search context
                     </p>
-                    <p>
-                      Requirement coverage:{" "}
-                      <span className="text-slate-200">
-                        {diagnostic.requirementCoveragePercent == null
-                          ? "Not provided"
-                          : `${diagnostic.requirementCoveragePercent}%`}
-                      </span>
+                    <p className="mt-1 line-clamp-2 text-sm font-medium text-slate-100">
+                      {searchContextLabel}
                     </p>
+                    <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-700/60 pt-3 text-xs text-slate-400">
+                      <p>
+                        <span className="font-semibold text-slate-200">
+                          {diagnostic.matchLevel}
+                        </span>
+                      </p>
+                      <p>
+                        Requirement coverage:{" "}
+                        <span className="text-slate-200">
+                          {diagnostic.requirementCoveragePercent == null
+                            ? "Not provided"
+                            : `${diagnostic.requirementCoveragePercent}%`}
+                        </span>
+                      </p>
+                    </div>
+                    {diagnostic.requirements.length ? (
+                      <ul
+                        aria-label="Match criteria"
+                        className="mt-4 space-y-3"
+                      >
+                        {diagnostic.requirements.slice(0, 4).map((item) => {
+                          const met =
+                            item.state === "verified" ||
+                            item.state === "supported";
+                          const conflict = item.state === "conflicting";
+                          return (
+                            <li
+                              key={item.id}
+                              className="flex items-start gap-2.5 text-sm leading-5"
+                            >
+                              <span className="sr-only">
+                                {met
+                                  ? "Met: "
+                                  : conflict
+                                    ? "Conflicting: "
+                                    : "Needs verification: "}
+                              </span>
+                              {met ? (
+                                <Check
+                                  aria-hidden="true"
+                                  className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300"
+                                />
+                              ) : conflict ? (
+                                <CircleAlert
+                                  aria-hidden="true"
+                                  className="mt-0.5 h-4 w-4 shrink-0 text-rose-300"
+                                />
+                              ) : (
+                                <Minus
+                                  aria-hidden="true"
+                                  className="mt-0.5 h-4 w-4 shrink-0 text-amber-300"
+                                />
+                              )}
+                              <span>
+                                <strong className="font-semibold text-slate-100">
+                                  {item.label}
+                                </strong>
+                                <span className="text-slate-400">
+                                  {" "}
+                                  — {item.reason || "Evidence not provided"}
+                                </span>
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="mt-4 text-sm text-slate-400">
+                        Criteria are not available for this search.
+                      </p>
+                    )}
+                    {diagnostic.requirements.length > 4 ? (
+                      <details className="mt-4 border-t border-slate-700/60 pt-3">
+                        <summary className="cursor-pointer text-xs font-semibold text-cyan-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300">
+                          Show {diagnostic.requirements.length - 4} more
+                          criteria
+                        </summary>
+                        <ul className="mt-3 space-y-2 text-xs text-slate-300">
+                          {diagnostic.requirements.slice(4).map((item) => (
+                            <li key={item.id}>
+                              {item.state === "verified" ||
+                              item.state === "supported"
+                                ? "Met"
+                                : item.state === "conflicting"
+                                  ? "Conflicting"
+                                  : "Needs verification"}{" "}
+                              ·{" "}
+                              <span className="font-semibold text-slate-100">
+                                {item.label}:
+                              </span>{" "}
+                              {item.reason || "Evidence not provided"}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    ) : null}
                   </div>
-                  <details className="mt-2">
-                    <summary className="cursor-pointer text-xs font-semibold text-cyan-300">
-                      View all criteria
-                    </summary>
-                    <ul className="mt-2 flex flex-wrap gap-1.5">
-                      {diagnostic.requirements.map((item) => (
-                        <li
-                          key={item.id}
-                          title={item.label}
-                          aria-label={item.label}
-                          className="max-w-full truncate rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-300"
-                        >
-                          {item.label}
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
                 </Panel>
               )}
               {candidate.talentPool === "linkedin_talent_pool" &&
@@ -878,7 +965,11 @@ export default function CandidateDetailsDrawer({
                           ? ` · ${formatEmploymentTenure(item.start, item.end, item.current)}`
                           : ""}
                       </p>
-                      {item.estimatedTenure ? <p className="mt-1 text-xs text-amber-200">{formatProjectTenureEstimate(item.estimatedTenure)}</p> : null}
+                      {item.estimatedTenure ? (
+                        <p className="mt-1 text-xs text-amber-200">
+                          {formatProjectTenureEstimate(item.estimatedTenure)}
+                        </p>
+                      ) : null}
                       {item.location ? (
                         <p className="mt-1 text-sm text-slate-400">
                           {item.location}
@@ -1516,19 +1607,45 @@ export default function CandidateDetailsDrawer({
         </div>
 
         {candidate.talentPool !== "linkedin_talent_pool" ? (
-          <footer className="flex shrink-0 flex-wrap gap-2 border-t border-slate-800 bg-slate-950 px-6 py-4">
-            <a
-              href={shortlistHref}
-              className="rounded-lg bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950"
+          <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-slate-700/70 bg-[#101d2d] px-5 py-4 shadow-[0_-16px_32px_-24px_rgba(0,0,0,.9)]">
+            <button
+              type="button"
+              aria-pressed={shortlisted}
+              disabled={!onShortlistToggle || shortlistPending}
+              onClick={onShortlistToggle}
+              className="min-h-10 rounded-lg bg-cyan-300 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-cyan-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50"
             >
-              Shortlist
-            </a>
-            <a
-              href={fullProfileHref}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200"
+              {shortlisted ? (
+                <BookmarkCheck
+                  aria-hidden="true"
+                  className="mr-1.5 inline h-4 w-4"
+                />
+              ) : (
+                <BookmarkPlus
+                  aria-hidden="true"
+                  className="mr-1.5 inline h-4 w-4"
+                />
+              )}
+              {shortlistPending
+                ? "Saving..."
+                : shortlisted
+                  ? "✓ Shortlisted"
+                  : "+ Shortlist"}
+            </button>
+            <button
+              type="button"
+              aria-label="Compare this candidate"
+              disabled={!onCompare}
+              onClick={onCompare}
+              className="min-h-10 rounded-lg border border-cyan-400/60 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Open full profile
-            </a>
+              <GitCompareArrows
+                aria-hidden="true"
+                className="mr-1.5 inline h-4 w-4"
+              />
+              Compare
+            </button>
+            <RequestOriginalCvButton candidateId={candidate.candidateId} />
           </footer>
         ) : null}
       </aside>

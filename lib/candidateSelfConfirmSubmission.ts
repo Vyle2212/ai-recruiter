@@ -136,6 +136,15 @@ function completeDatedRow(
       ((current && !end) || (!current && endValue && endValue >= startValue)),
   );
 }
+function completeProjectRow(row: Record<string, any>) {
+  const identity = Boolean(rowValue(row, "name", "project", "client"));
+  const role = Boolean(rowValue(row, "role", "title"));
+  const start = rowValue(row, "startDate", "start_date");
+  const end = rowValue(row, "endDate", "end_date");
+  if (!identity || !role) return false;
+  if (!start) return !end && row.current !== true;
+  return completeDatedRow(row, identity, role);
+}
 function structuredRequirementReason(fieldName: string, value: unknown) {
   if (fieldName === "sapModules" || fieldName === "techSkills")
     return text(value)
@@ -164,15 +173,11 @@ function structuredRequirementReason(fieldName: string, value: unknown) {
       rows.length > 0 &&
       rows.every((item) => {
         const row = item as Record<string, any>;
-        return completeDatedRow(
-          row,
-          Boolean(rowValue(row, "name", "project", "client")),
-          Boolean(rowValue(row, "role", "title")),
-        );
+        return completeProjectRow(row);
       });
     return valid
       ? ""
-      : "Every SAP project needs project/client, role, valid ISO start/end dates in order, or an explicit Current marker.";
+      : "Every SAP project needs project/client and role. Dates may both be blank; if supplied, they must form a valid ISO range or an explicit Current period.";
   }
   if (fieldName === "education") {
     const valid =

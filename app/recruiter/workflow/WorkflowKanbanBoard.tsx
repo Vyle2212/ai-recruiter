@@ -348,7 +348,7 @@ export function WorkflowKanbanBoard({
                                         title="Drag candidate"
                                         {...dragProvided.dragHandleProps}
                                       >
-                                        ÃƒÂ¢Ã¢â‚¬Â¹Ã‚Â®ÃƒÂ¢Ã¢â‚¬Â¹Ã‚Â®
+                                        ⋮⋮
                                       </div>
 
                                       <Link
@@ -518,7 +518,7 @@ export function WorkflowKanbanBoard({
                 </h3>
 
                 <p className="mt-1 text-sm text-slate-400">
-                  {PIPELINE_STAGE_LABELS[pendingMove.fromStage]} ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢{" "}
+                  {PIPELINE_STAGE_LABELS[pendingMove.fromStage]} →{" "}
                   {PIPELINE_STAGE_LABELS[pendingMove.toStage]}
                 </p>
               </div>
@@ -579,7 +579,7 @@ export function WorkflowKanbanBoard({
                 {preview.decision.blockers?.length ? (
                   <ul className="mt-3 space-y-1 text-sm text-red-100">
                     {preview.decision.blockers.map((blocker) => (
-                      <li key={blocker}>ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ {blocker}</li>
+                      <li key={blocker}>• {blocker}</li>
                     ))}
                   </ul>
                 ) : null}
@@ -587,7 +587,7 @@ export function WorkflowKanbanBoard({
                 {preview.decision.warnings?.length ? (
                   <ul className="mt-3 space-y-1 text-sm text-amber-100">
                     {preview.decision.warnings.map((warning) => (
-                      <li key={warning}>ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ {warning}</li>
+                      <li key={warning}>• {warning}</li>
                     ))}
                   </ul>
                 ) : null}

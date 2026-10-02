@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { buildCandidate360Profile } from "../lib/candidate360Profile";
 import { redactCandidate360Contact } from "../lib/candidate360ContactBoundary";
+import { originalCvReadGrant } from "../lib/originalCvAccess";
 
 const original = buildCandidate360Profile({
   id: "synthetic-candidate",
@@ -33,6 +34,14 @@ const resumeRoute = fs.readFileSync(
   "utf8",
 );
 assert.match(loader, /return redactCandidate360Contact\(result\)/);
-assert.match(resumeRoute, /contact_approval_required/);
-assert.doesNotMatch(resumeRoute, /\.from\(["']candidates["']\)/);
+assert.match(resumeRoute, /authorization\.scope\.role !== "admin"/);
+assert.match(resumeRoute, /original_cv_entitlement_required/);
+assert.match(resumeRoute, /recruiterSearchPrivateNoStoreHeaders/);
+assert.match(resumeRoute, /originalCvReadGrant/);
+
+const originalCvReference =
+  "candidate-original-cvs/00000000-0000-4000-8000-000000000000.pdf";
+assert.equal(originalCvReadGrant("client", originalCvReference), null);
+assert.equal(originalCvReadGrant("recruiter", originalCvReference), null);
+assert.ok(originalCvReadGrant("admin", originalCvReference));
 console.log("Candidate360 contact boundary tests passed");

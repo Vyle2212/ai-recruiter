@@ -7,6 +7,9 @@ async function main() {
     sha: process.env.ACCEPTANCE_DEPLOYED_SHA,
     id: process.env.ACCEPTANCE_ENVIRONMENT_ID,
     project: process.env.ACCEPTANCE_SUPABASE_PROJECT_REF,
+    candidateUpload: process.env.CANDIDATE_CV_UPLOAD_ENABLED,
+    candidateConfirmation:
+      process.env.CANDIDATE_PROFILE_CONFIRMATION_ENABLED,
   };
   const route = await import("../app/api/acceptance/release/route");
   delete process.env.ACCEPTANCE_TEST_MODE;
@@ -20,6 +23,8 @@ async function main() {
     "78cd22bd706e7b11ae2750fcee4fa057f1a3d8d1";
   process.env.ACCEPTANCE_ENVIRONMENT_ID = "synthetic-acceptance-environment";
   process.env.ACCEPTANCE_SUPABASE_PROJECT_REF = "synthetic-project-ref";
+  process.env.CANDIDATE_CV_UPLOAD_ENABLED = "true";
+  process.env.CANDIDATE_PROFILE_CONFIRMATION_ENABLED = "true";
   const response = await route.GET();
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("cache-control"), "private, no-store");
@@ -28,6 +33,8 @@ async function main() {
   assert.equal(body.schemaVersion, "acceptance-release-evidence-v3");
   assert.equal(body.externalTalentEnabled, false);
   assert.equal(body.externalProviderConfigured, false);
+  assert.equal(body.candidateCvUploadEnabled, true);
+  assert.equal(body.candidateProfileConfirmationEnabled, true);
   assert.equal(body.classification, "acceptance");
   assert.match(body.environmentHash, /^[a-f0-9]{16}$/);
   assert.match(body.projectRefHash, /^[a-f0-9]{16}$/);
@@ -41,7 +48,11 @@ async function main() {
             ? "ACCEPTANCE_DEPLOYED_SHA"
             : key === "id"
               ? "ACCEPTANCE_ENVIRONMENT_ID"
-              : "ACCEPTANCE_SUPABASE_PROJECT_REF";
+              : key === "project"
+                ? "ACCEPTANCE_SUPABASE_PROJECT_REF"
+                : key === "candidateUpload"
+                  ? "CANDIDATE_CV_UPLOAD_ENABLED"
+                  : "CANDIDATE_PROFILE_CONFIRMATION_ENABLED";
     if (value === undefined) delete process.env[envKey];
     else process.env[envKey] = value;
   }

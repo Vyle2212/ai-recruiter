@@ -5,6 +5,7 @@ import {
   recruiterSearchPrivateNoStoreHeaders,
   requireRecruiterSearchAuthorization,
 } from "@/lib/recruiterSearchAuthorization";
+import { originalCvReference } from "@/lib/originalCvArchiveKey";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,13 +19,7 @@ function normalize(value: string) {
 }
 
 function redactCandidate(candidate: any) {
-  const hasOriginalCv = Boolean(
-    candidate.cv_url ||
-      candidate.resume_url ||
-      candidate.file_url ||
-      candidate.original_cv ||
-      candidate.originalCv
-  );
+  const hasOriginalCv = Boolean(originalCvReference(candidate.source_file));
 
   const redacted = { ...candidate };
   // Contact approval is intentionally DB-backed only. Until that workflow exists,
@@ -38,6 +33,13 @@ function redactCandidate(candidate: any) {
   redacted.file_url = "";
   redacted.original_cv = "";
   redacted.originalCv = "";
+  // A raw CV embeds contact information even when scalar contact fields are
+  // blank. The private source path is resolved only by the authorized route.
+  for (const key of [
+    "source_file", "sourceFile", "archivedCvReference", "raw_text",
+    "resume_text", "raw_cv", "cv_text", "parsed_resume", "parsed_json",
+    "normalized_email", "normalized_phone", "linkedin_url", "linkedinUrl",
+  ]) delete redacted[key];
   redacted.has_original_cv = hasOriginalCv;
   redacted.contact_redacted = true;
   return redacted;

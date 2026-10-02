@@ -170,13 +170,6 @@ const extractionAuditSource = fs.readFileSync(new URL("../scripts/auditCandidate
 assert.equal(extractionAuditSource.includes("classifyCandidateSearchVisibility"), true, "Extraction audit should use shared recruiter-search visibility gate");
 
 const searchPageSource = fs.readFileSync(new URL("../app/search/page.tsx", import.meta.url), "utf8");
-assert.equal(searchPageSource.includes("sortCandidatesForRecruiter"), false, "Talent Search UI must not client-side resort API results");
-assert.equal(searchPageSource.includes("const nextCandidates = rawCandidates;"), true, "Talent Search UI should preserve API item order exactly");
-assert.equal(searchPageSource.includes("summaryVisibility.canSeeInternalMetrics"), true, "internal diagnostics should remain role-gated and hidden from recruiter UI");
-assert.equal(searchPageSource.includes("Latest CV"), false, "search card does not render Latest CV");
-assert.equal(searchPageSource.includes("updatedLine"), true, "search card renders Updated month/year");
-assert.equal(searchPageSource.includes("Current Employer:"), true, "search card renders current employer");
-assert.equal(searchPageSource.includes("Previous Employer:"), true, "search card renders previous employer");
-assert.equal(searchPageSource.includes("Expected Salary:"), true, "search card renders expected salary conditionally");
+assert.match(searchPageSource, /redirect\("\/recruiter\/talent-search\/v2"\)/, "legacy search must use the canonical search route");
 
 console.log("Search quality gate tests passed");

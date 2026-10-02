@@ -12,6 +12,7 @@ import { requireRecruiterSearchAuthorization } from "@/lib/recruiterSearchAuthor
 import { buildCandidate360, type Candidate360Model } from "@/lib/candidate360Engine";
 import { buildCandidateValidationState } from "@/lib/candidateValidation";
 import { calculateSubmissionConfidence } from "@/lib/submissionConfidence";
+import { originalCvReference } from "@/lib/originalCvArchiveKey";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,7 +24,7 @@ function safeParam(value: string | string[] | undefined, fallback = "") {
   return value || fallback;
 }
 
-function safeInternalHref(value: string, fallback = "/search") {
+function safeInternalHref(value: string, fallback = "/recruiter/talent-search/v2") {
   const text = String(value || "").trim();
   if (!text) return fallback;
   if (/^https?:\/\//i.test(text)) {
@@ -813,8 +814,8 @@ export default async function Candidate360Page({
   const { id } = await params;
   const sp = searchParams ? await searchParams : {};
   const decodedId = decodeURIComponent(id);
-  const returnTo = safeInternalHref(safeParam(sp.returnTo, ""), "/search");
-  const backLabel = returnTo.startsWith("/compare") ? "Back to Compare" : returnTo.startsWith("/shortlist") ? "Back to Shortlist" : returnTo.startsWith("/matches") ? "Back to Matches" : "Return to Talent Search";
+  const returnTo = safeInternalHref(safeParam(sp.returnTo, ""), "/recruiter/talent-search/v2");
+  const backLabel = returnTo.startsWith("/compare") ? "Back to Compare" : returnTo.startsWith("/shortlist") ? "Back to Shortlist" : "Return to Talent Search";
   const searchId = safeParam(sp.searchId, safeParam(sp.searchSessionId, ""));
   const authorization = await requireRecruiterSearchAuthorization({
     permission: "candidate-detail:read",
@@ -874,6 +875,8 @@ export default async function Candidate360Page({
 
   candidate = mergeCandidateWithSearchIndex(candidate, indexQuery.data);
   const candidateRaw = candidate as AnyRecord;
+  const originalCvAvailable =
+    viewerRole === "admin" && Boolean(originalCvReference(candidateRaw.source_file));
   const validationState = buildCandidateValidationState(candidateRaw);
 
   const matchQuery = await supabase
@@ -1191,6 +1194,16 @@ export default async function Candidate360Page({
           >
             &larr; {backLabel}
           </Link>
+          {originalCvAvailable ? (
+            <a
+              href={`/api/candidate360/${encodeURIComponent(candidate.id)}/resume`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full border border-cyan-500/40 bg-cyan-500/15 px-4 py-2 text-sm font-semibold text-cyan-100"
+            >
+              Open original CV
+            </a>
+          ) : null}
           <div className="rounded-full border border-slate-700/40 bg-white/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
             Candidate 360
           </div>
@@ -1539,7 +1552,6 @@ export default async function Candidate360Page({
     </main>
   );
 }
-
 
 
 

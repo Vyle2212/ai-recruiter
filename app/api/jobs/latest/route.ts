@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
+import { createLazySupabaseServiceClient } from '@/lib/runtimeClients'
+
+const supabase = createLazySupabaseServiceClient()
 
 export async function GET() {
   try {
-    const supabase = await createClient()
-
     const { data, error } = await supabase
       .from('jobs')
       .select('*')

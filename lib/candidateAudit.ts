@@ -400,9 +400,8 @@ export async function loadRealTalentPoolCandidates() {
     process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey =
     process.env.CANDIDATE_SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseKey) throw new Error("Candidate audit failed: missing Supabase URL/key for Talent Pool candidate source.");
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseKey) throw new Error("Candidate audit failed: missing Supabase URL/service key for Talent Pool candidate source.");
 
   const supabase = createClient(supabaseUrl, supabaseKey);
   const candidates: AnyRecord[] = [];

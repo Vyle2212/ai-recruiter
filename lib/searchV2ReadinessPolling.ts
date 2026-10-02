@@ -77,6 +77,7 @@ export function startSearchV2ReadinessPolling({
       }
       if (
         value.status === "failed" ||
+        value.error?.retryable === false ||
         value.error?.code?.includes("FAILED") ||
         value.error?.code?.includes("TIMEOUT")
       ) {

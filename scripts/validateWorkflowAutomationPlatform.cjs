@@ -413,7 +413,7 @@ function validateRequiredFiles() {
     );
 
     console.log(
-      `Ã¢Å“â€œ ${requiredFile}`,
+      `✓ ${requiredFile}`,
     );
   }
 
@@ -459,7 +459,7 @@ function validateRouteContracts() {
     );
 
     console.log(
-      `Ã¢Å“â€œ GET-only: ${routePath}`,
+      `✓ GET-only: ${routePath}`,
     );
   }
 
@@ -583,7 +583,7 @@ function validateSafetyInvariants() {
     }
 
     console.log(
-      `Ã¢Å“â€œ Safe: ${relativePath}`,
+      `✓ Safe: ${relativePath}`,
     );
   }
 
@@ -731,7 +731,7 @@ function validateAtomicFileStores() {
     );
 
     console.log(
-      `Ã¢Å“â€œ Atomic write: ${relativePath}`,
+      `✓ Atomic write: ${relativePath}`,
     );
   }
 
@@ -770,8 +770,9 @@ function runWorkflowTests() {
 
     runCommand(
       testName,
-      "npx",
+      process.execPath,
       [
+        "--import",
         "tsx",
         testName,
       ],
@@ -801,15 +802,15 @@ function printSummary(
     const symbol =
       result.status ===
       "PASSED"
-        ? "Ã¢Å“â€œ"
-        : "Ãƒâ€”";
+        ? "✓"
+        : "×";
 
     console.log(
       `${symbol} ${result.status.padEnd(
         6,
       )} ${result.name} (${seconds}s)${
         result.detail
-          ? ` Ã¢â‚¬â€ ${result.detail}`
+          ? ` — ${result.detail}`
           : ""
       }`,
     );

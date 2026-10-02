@@ -64,6 +64,53 @@ assert.equal(
   `candidate-original-cvs/${ownedKey}`,
 );
 
+// Cleanup must reject every key that escapes the exact synthetic owner prefix.
+for (const unsafeKey of [
+  ownedKey.split("/")[1],
+  `${other}/00000000-0000-4000-8000-000000000003.pdf`,
+  `${owner}x/00000000-0000-4000-8000-000000000003.pdf`,
+  `${owner}//00000000-0000-4000-8000-000000000003.pdf`,
+  `${owner}/nested/00000000-0000-4000-8000-000000000003.pdf`,
+  `${owner}/%2e%2e/00000000-0000-4000-8000-000000000003.pdf`,
+  `${owner}/00000000-0000-4000-8000-000000000003.pdf?download=1`,
+  `${owner}/00000000-0000-4000-8000-000000000003.html`,
+  `${owner}\\00000000-0000-4000-8000-000000000003.pdf`,
+]) {
+  assert.equal(ownedOriginalCvObjectKey(owner, unsafeKey), false);
+}
+for (const unsafeOwner of ["", "not-a-uuid", `${owner}/`, `../${owner}`]) {
+  assert.equal(ownedOriginalCvObjectKey(unsafeOwner, ownedKey), false);
+}
+
+const acceptanceCleanup = fs.readFileSync(
+  "scripts/authenticatedAcceptanceProvision.ts",
+  "utf8",
+);
+assert.ok(
+  acceptanceCleanup.includes("return `Synthetic ${suffix[0].toUpperCase()}${suffix.slice(1)}`;"),
+  "run-owned upload candidates require an exact pseudonymous name marker",
+);
+assert.match(
+  acceptanceCleanup,
+  /\.in\("source_file", references\)/,
+  "candidate and review cleanup must be bound to exact run-owned references",
+);
+for (const restrictedTable of [
+  "candidate_chat_contact_consent_events",
+  "candidate_chat_contact_consents",
+  "chat_conversations",
+]) {
+  assert.ok(
+    acceptanceCleanup.includes(`"${restrictedTable}"`),
+    `cleanup must fail closed when ${restrictedTable} depends on an upload candidate`,
+  );
+}
+assert.ok(
+  acceptanceCleanup.indexOf("acceptance_original_cv_database_residue_detected") <
+    acceptanceCleanup.indexOf("bucket.remove(objectKeys)"),
+  "database residue must be proven empty before original bytes are removed",
+);
+
 const upload = fs.readFileSync("app/api/upload-cv/route.ts", "utf8");
 assert.match(upload, /commitCandidateWithArchivedCv\(/);
 assert.doesNotMatch(
@@ -126,6 +173,7 @@ const sql = fs.readFileSync(
 );
 assert.match(sql, /'candidate-original-cvs', 'candidate-original-cvs', false/);
 assert.doesNotMatch(sql, /CREATE POLICY|TO authenticated|TO anon/i);
+assert.match(sql, new RegExp(`false, ${MAX_ORIGINAL_BYTES},`));
 const readback = fs.readFileSync(
   "supabase/manual/202609240004_private_original_cv_archive_readback.sql",
   "utf8",
@@ -133,6 +181,23 @@ const readback = fs.readFileSync(
 assert.match(readback, /BEGIN READ ONLY/);
 assert.match(readback, /bucket\.public IS DISTINCT FROM false/);
 assert.match(readback, /roles && ARRAY\['public', 'anon', 'authenticated'\]/);
+assert.match(
+  readback,
+  new RegExp(`file_size_limit IS DISTINCT FROM ${MAX_ORIGINAL_BYTES}`),
+);
+const limitCutover = fs.readFileSync(
+  "supabase/manual/202609260000_private_original_cv_bucket_limit.sql",
+  "utf8",
+);
+assert.match(
+  limitCutover,
+  new RegExp(`SET file_size_limit = ${MAX_ORIGINAL_BYTES}`),
+);
+assert.match(limitCutover, /bucket\.public IS DISTINCT FROM false/);
+assert.match(
+  limitCutover,
+  /roles && ARRAY\['public', 'anon', 'authenticated'\]/,
+);
 for (const [, type] of supportedSources) {
   assert.match(sql, new RegExp(`'${type}'`));
   assert.match(readback, new RegExp(`'${type}'`));

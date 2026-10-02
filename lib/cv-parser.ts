@@ -85,6 +85,13 @@ const CONSULTING_BRANDS = [
 ];
 
 const BAD_NAME_PHRASES = [
+  "curriculum vitae",
+  "resume",
+  "candidate profile",
+  "candidate name",
+  "full name",
+  "personal particulars",
+  "personal details",
   "career objective",
   "career objectives",
   "professional summary",
@@ -256,21 +263,6 @@ function nameFromEmail(email: string | null) {
   if (!email) return null;
 
   const local0 = email.split("@")[0].toLowerCase();
-  const hardMap: Record<string, string> = {
-    "syed.maly1986": "Syed Maly",
-    "syed_maly1986": "Syed Maly",
-    janahjosette_jose: "Janah Josette Jose",
-    "janahjosette.jose": "Janah Josette Jose",
-    gerarddomingo: "Gerardo Domingo",
-    liannesdelacruz: "Lianne de la Cruz",
-    liannedelacruz: "Lianne de la Cruz",
-    "aap.jaehapni": "Aap Jaehapni",
-    "r.m.pangilinan": "Ronald M Pangilinan",
-    rio_caagbay: "Rio Caagbay",
-  };
-
-  if (hardMap[local0]) return hardMap[local0];
-
   const local = local0
     .replace(/\d+$/g, "")
     .replace(/[_\-.]+/g, " ")
@@ -312,15 +304,14 @@ export function extractCandidateName(text: string, fileName?: string) {
   const raw = cleanText(text);
   const lines = linesOf(raw).slice(0, 140);
 
-  const explicit = raw.match(/(?:Candidate\s+Name|Full\s+Name|Name)\s*[:\-]\s*([A-Z][A-Za-z'’.\-\s]{3,45})/i)?.[1];
-  if (explicit && looksLikeHumanName(explicit)) return titleCaseName(explicit);
-
-  const fromEmail = nameFromEmail(extractEmail(raw));
-  const emailAtTop = lines.findIndex((l) => /@/.test(l));
-  if (fromEmail && emailAtTop <= 20) return fromEmail;
-
-  const fromFile = nameFromFileName(fileName);
-  if (fromFile) return fromFile;
+  for (const line of lines.slice(0, 35)) {
+    const explicit = line
+      .match(/^(?:Candidate[ \t]+Name|Full[ \t]+Name|Name)[ \t]*[:\-][ \t]*([^\r\n]{3,70})$/i)?.[1]
+      ?.replace(/[ \t]+(?:Email|Phone|Mobile|Contact)[ \t]*[:\-].*$/i, "")
+      .trim();
+    if (explicit && looksLikeHumanName(explicit))
+      return titleCaseName(explicit);
+  }
 
   const contactIdx = lines.findIndex((l) => /@|mobile|phone|contact|whatsapp|\+\d/i.test(l));
   if (contactIdx > 0) {
@@ -335,9 +326,16 @@ export function extractCandidateName(text: string, fileName?: string) {
     }
   }
 
-  for (const line of lines.slice(0, 35)) {
+  for (const line of lines.slice(0, 12)) {
     if (looksLikeHumanName(line)) return titleCaseName(line);
   }
+
+  const fromFile = nameFromFileName(fileName);
+  if (fromFile) return fromFile;
+
+  const fromEmail = nameFromEmail(extractEmail(raw));
+  const emailAtTop = lines.findIndex((l) => /@/.test(l));
+  if (fromEmail && emailAtTop >= 0 && emailAtTop <= 20) return fromEmail;
 
   return "Candidate Name Not Detected";
 }

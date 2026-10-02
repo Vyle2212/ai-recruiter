@@ -77,6 +77,34 @@ if (accepted.accepted) {
   assert.equal(accepted.searchRow.candidate_id, current.id);
   assert.equal(accepted.searchRow.primary_module, "FICO");
 }
+const undatedProjects = buildCandidateProfileConfirmation({
+  candidateId: current.id,
+  submittedFields: {
+    ...fields,
+    projectExperience: JSON.stringify([
+      {
+        project: "S/4HANA Transformation",
+        client: "Client One",
+        role: "FICO Consultant",
+      },
+    ]),
+  },
+  profile,
+  currentCandidate: current,
+});
+assert.equal(
+  undatedProjects.accepted,
+  true,
+  "a project without source dates can be confirmed",
+);
+if (undatedProjects.accepted) {
+  assert.equal(undatedProjects.candidatePayload.projects[0].start_date, "");
+  assert.equal(undatedProjects.candidatePayload.projects[0].end_date, null);
+  assert.equal(
+    undatedProjects.candidatePayload.experience[0].start_date,
+    "2021-01",
+  );
+}
 
 for (const [label, patch] of [
   ["sharing consent", { consentToShare: false }],
@@ -160,6 +188,11 @@ assert.match(transaction, /insert into public\.candidate_search_index/);
 assert.match(transaction, /p_accuracy_consent is distinct from true/);
 assert.match(transaction, /p_sharing_consent is distinct from true/);
 assert.match(transaction, /security invoker/);
+assert.match(
+  transaction,
+  /coalesce\(btrim\(row->>'start_date'\), ''\) = ''\s+and \(\s+coalesce\(btrim\(row->>'end_date'\), ''\) <> ''/,
+  "the future database confirmation contract must allow wholly undated projects",
+);
 assert.match(transaction, /set search_path = ''/);
 assert.match(
   transaction,
@@ -179,4 +212,36 @@ assert.match(
 assert.match(route, /apply_candidate_profile_confirmation/);
 assert.match(route, /candidate_profile_verified_email_required/);
 assert.doesNotMatch(route, /body\.candidateId|body\.candidate_id/);
+assert.match(
+  route,
+  /\.eq\("id", authorization\.scope\.candidateId\)/,
+  "confirmation must load only the candidate resolved from the authenticated ownership chain",
+);
+for (const [parameter, scopedValue] of [
+  ["p_auth_user_id", "authUserId"],
+  ["p_user_profile_id", "userProfileId"],
+  ["p_candidate_id", "candidateId"],
+  ["p_expected_updated_at", "candidateUpdatedAt"],
+] as const) {
+  assert.match(
+    route,
+    new RegExp(parameter + ": authorization\\.scope\\." + scopedValue),
+    parameter + " must come from the authenticated ownership scope",
+  );
+}
+assert.match(
+  transaction,
+  /where id = p_user_profile_id and auth_user_id = p_auth_user_id[\s\S]*?v_profile\.candidate_id is distinct from p_candidate_id/,
+  "the transaction must bind auth user, profile and candidate before mutation",
+);
+assert.match(
+  transaction,
+  /where user_profile_id = p_user_profile_id and candidate_id = p_candidate_id[\s\S]*?v_account\.status <> 'active'/,
+  "the candidate account mapping must be exact and active",
+);
+assert.match(
+  transaction,
+  /where id = p_candidate_id[\s\S]*?v_candidate\.updated_at is distinct from p_expected_updated_at/,
+  "the owned candidate row must still match the authorized version",
+);
 console.log("candidateProfileConfirmation.test.ts passed");

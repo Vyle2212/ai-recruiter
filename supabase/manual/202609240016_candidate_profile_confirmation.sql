@@ -159,30 +159,41 @@ begin
         and coalesce(btrim(row->>'client'), '') = ''
       )
       or coalesce(btrim(row->>'role'), '') = ''
-      or coalesce(btrim(row->>'start_date'), '') = ''
-      or (row->>'start_date') !~ '^[0-9]{4}(-[0-9]{2}(-[0-9]{2})?)?$'
-      or (length(row->>'start_date') >= 7 and substring(row->>'start_date', 6, 2) not between '01' and '12')
-      or (length(row->>'start_date') = 10 and substring(row->>'start_date', 9, 2) not between '01' and '31')
       or (
-        coalesce((row->>'current')::boolean, false) is true
-        and coalesce(btrim(row->>'end_date'), '') <> ''
-      )
-      or (
-        coalesce((row->>'current')::boolean, false) is not true
+        coalesce(btrim(row->>'start_date'), '') = ''
         and (
-          coalesce(btrim(row->>'end_date'), '') = ''
-          or (row->>'end_date') !~ '^[0-9]{4}(-[0-9]{2}(-[0-9]{2})?)?$'
-          or (length(row->>'end_date') >= 7 and substring(row->>'end_date', 6, 2) not between '01' and '12')
-          or (length(row->>'end_date') = 10 and substring(row->>'end_date', 9, 2) not between '01' and '31')
+          coalesce(btrim(row->>'end_date'), '') <> ''
+          or coalesce((row->>'current')::boolean, false)
         )
       )
       or (
-        coalesce(btrim(row->>'end_date'), '') <> ''
-        and left(row->>'end_date', 4) < left(row->>'start_date', 4)
-      )
-      or (
-        length(row->>'start_date') >= 7 and length(row->>'end_date') >= 7
-        and left(row->>'end_date', 7) < left(row->>'start_date', 7)
+        coalesce(btrim(row->>'start_date'), '') <> ''
+        and (
+          (row->>'start_date') !~ '^[0-9]{4}(-[0-9]{2}(-[0-9]{2})?)?$'
+          or (length(row->>'start_date') >= 7 and substring(row->>'start_date', 6, 2) not between '01' and '12')
+          or (length(row->>'start_date') = 10 and substring(row->>'start_date', 9, 2) not between '01' and '31')
+          or (
+            coalesce((row->>'current')::boolean, false)
+            and coalesce(btrim(row->>'end_date'), '') <> ''
+          )
+          or (
+            not coalesce((row->>'current')::boolean, false)
+            and (
+              coalesce(btrim(row->>'end_date'), '') = ''
+              or (row->>'end_date') !~ '^[0-9]{4}(-[0-9]{2}(-[0-9]{2})?)?$'
+              or (length(row->>'end_date') >= 7 and substring(row->>'end_date', 6, 2) not between '01' and '12')
+              or (length(row->>'end_date') = 10 and substring(row->>'end_date', 9, 2) not between '01' and '31')
+            )
+          )
+          or (
+            coalesce(btrim(row->>'end_date'), '') <> ''
+            and left(row->>'end_date', 4) < left(row->>'start_date', 4)
+          )
+          or (
+            length(row->>'start_date') >= 7 and length(row->>'end_date') >= 7
+            and left(row->>'end_date', 7) < left(row->>'start_date', 7)
+          )
+        )
       )
   ) then
     raise exception 'candidate_profile_confirmation_project_incomplete';

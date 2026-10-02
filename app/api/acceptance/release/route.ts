@@ -70,6 +70,10 @@ export async function GET() {
             .digest("hex")
             .slice(0, 16)
         : "",
+      candidateCvUploadEnabled:
+        process.env.CANDIDATE_CV_UPLOAD_ENABLED === "true",
+      candidateProfileConfirmationEnabled:
+        process.env.CANDIDATE_PROFILE_CONFIRMATION_ENABLED === "true",
       externalTalentEnabled:
         process.env.EXTERNAL_TALENT_SEARCH_ENABLED === "true",
       externalProviderConfigured:

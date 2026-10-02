@@ -3,7 +3,8 @@ import type { SearchV2ProjectionReadiness } from "./searchV2Dataset";
 export type SearchV2ReadinessErrorCode =
   | "SEARCH_INDEX_WARMING"
   | "SEARCH_INDEX_WARM_FAILED"
-  | "SEARCH_INDEX_WARM_TIMEOUT";
+  | "SEARCH_INDEX_WARM_TIMEOUT"
+  | "SEARCH_INDEX_EMPTY";
 
 export function searchV2ReadinessHttpContract(
   readiness: Readonly<SearchV2ProjectionReadiness>,
@@ -11,16 +12,21 @@ export function searchV2ReadinessHttpContract(
 ) {
   const ready = readiness.status === "ready" && population > 0;
   const warming = readiness.status === "cold" || readiness.status === "warming";
+  const empty = readiness.status === "ready" && population === 0;
   const code: SearchV2ReadinessErrorCode | null = ready
     ? null
+    : empty
+      ? "SEARCH_INDEX_EMPTY"
     : warming
       ? "SEARCH_INDEX_WARMING"
       : readiness.errorCode === "SEARCH_INDEX_WARM_TIMEOUT"
         ? "SEARCH_INDEX_WARM_TIMEOUT"
         : "SEARCH_INDEX_WARM_FAILED";
-  const message = warming
-    ? "Preparing candidate search. This should only take a moment."
-    : "Candidate search could not be prepared. Please try again.";
+  const message = empty
+    ? "No candidate profiles have been loaded into this environment yet."
+    : warming
+      ? "Preparing candidate search. This should only take a moment."
+      : "Candidate search could not be prepared. Please try again.";
 
   return {
     status: ready ? 200 : 503,
@@ -41,7 +47,7 @@ export function searchV2ReadinessHttpContract(
             error: {
               code,
               message,
-              retryable: true,
+              retryable: !empty,
             },
           }
         : {}),

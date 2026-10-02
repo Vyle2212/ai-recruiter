@@ -1,3 +1,127 @@
-import Link from "next/link";import {buildClientFeedbackActionsPreview,buildClientPortalMvpPreview} from "../../../lib/clientPortalMvpPreview";
-const card="rounded-2xl border border-slate-800 bg-[#0B0F16] p-5",badge="rounded-full border border-slate-700 px-3 py-1",disabled="cursor-not-allowed rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-500";
-export default async function ClientPortalPage({searchParams}:{searchParams:Promise<Record<string,string|string[]|undefined>>}){const params=await searchParams,portal=buildClientPortalMvpPreview(params),jobs=portal.activeJobs,packs=portal.submittedPacks,board=portal.candidateReviewBoard,reports=portal.reportCenter,pending=jobs.reduce((sum,item)=>sum+item.pendingFeedbackCount,0),submitted=jobs.reduce((sum,item)=>sum+item.submittedCandidateCount,0);return <main className="min-h-screen bg-[#05070A] text-slate-100"><header className="border-b border-slate-800 bg-[#070A0F] px-6 py-8"><div className="mx-auto max-w-7xl"><div className="flex flex-wrap gap-2 text-xs">{["Staging auth active","Role guard active","No feedback saved","No email sent"].map(item=><span className={badge} key={item}>{item}</span>)}</div><h1 className="mt-4 text-4xl font-semibold">Client Portal</h1><p className="mt-2 text-cyan-100">Review submitted candidates, shortlist packs, and reports.</p><p className="mt-2 text-sm text-slate-400">{portal.clientName}{portal.clientId?" Â· "+portal.clientId:""}</p></div></header><div className="mx-auto max-w-7xl space-y-7 px-6 py-8"><section className="rounded-2xl border border-violet-500/25 bg-violet-500/5 p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold text-violet-100">Mock session / role context</h2><p className="mt-2 text-sm text-slate-300">Authenticated staging role: client Â· Session and role guard active.</p></div><div className="flex gap-3 text-sm"><Link className="text-cyan-300" href="/auth/login?role=client">Sign in preview</Link><Link className="text-cyan-300" href="/auth/mock-session?role=client">Mock client session</Link></div></div></section><section><h2 className="mb-3 text-lg font-semibold">Client dashboard overview</h2><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{[["Active jobs",jobs.filter(job=>job.status==="active_preview").length],["Submitted candidates",submitted],["Submitted packs",packs.length],["Reports available",reports.reports.length],["Pending feedback",pending]].map(([label,value])=><article className={card} key={label}><div className="text-xs text-slate-500">{label}</div><div className="mt-2 text-3xl font-semibold">{value}</div></article>)}</div></section><section id="active-jobs"><h2 className="mb-3 text-lg font-semibold">Active jobs</h2><div className="grid gap-4 lg:grid-cols-2">{jobs.map(job=><article className={card} key={job.jobId}><div className="flex justify-between gap-3"><div><h3 className="text-lg font-semibold">{job.jobTitle}</h3><p className="mt-1 text-sm text-slate-400">{job.location||"Location not provided"} Â· {job.employmentType||"Employment type not provided"}</p></div><span className="text-xs text-emerald-200">{job.status}</span></div><dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2"><div>Submitted candidates: {job.submittedCandidateCount}</div><div>Submitted packs: {job.submittedPackCount}</div><div>Pending feedback: {job.pendingFeedbackCount}</div><div>Reports: {job.reportCount}</div></dl></article>)}</div></section><section><h2 className="mb-3 text-lg font-semibold">Submitted packs</h2><div className="grid gap-4 md:grid-cols-2">{packs.map(pack=><article className="rounded-2xl border border-cyan-500/25 bg-cyan-500/5 p-5" key={pack.packId}><div className="flex justify-between gap-3"><div><h3 className="text-xl font-semibold">Pack {pack.packSize}</h3><p className="mt-1 text-sm text-slate-400">{pack.jobTitle} Â· {pack.candidateCount} candidates</p></div><span className="text-xs text-cyan-200">{pack.status}</span></div><div className="mt-4 flex flex-wrap gap-3 text-sm">{pack.packCompareUrl&&<Link className="text-cyan-300" href={pack.packCompareUrl}>Open submitted pack preview</Link>}{pack.clientReportUrl&&<Link className="text-slate-400" href={pack.clientReportUrl}>Report preview Â· internal bridge</Link>}</div></article>)}</div></section><section><h2 className="mb-3 text-lg font-semibold">Candidate review board</h2><div className="grid gap-4 lg:grid-cols-2">{board.map(candidate=><article className={card} key={candidate.candidateId}><div className="flex justify-between gap-4"><div><h3 className="text-lg font-semibold">{candidate.candidateName}</h3><p className="mt-1 text-sm text-slate-400">{candidate.title||"Title not provided"} Â· {candidate.currentCompany||"Company not provided"} Â· {candidate.location||"Location not provided"}</p></div><div className="text-right"><div className="text-cyan-200">{candidate.score??"â€”"}</div><div className="text-xs text-slate-500">{candidate.fitLabel}</div></div></div><p className="mt-3 text-xs text-emerald-100">Highlights: {candidate.highlights.join(" Â· ")}</p><p className="mt-2 text-xs text-amber-100">Risks / missing: {[...candidate.risks,...candidate.missingInfo].join(" Â· ")||"None recorded"}</p><p className="mt-2 text-xs text-slate-500">Review status: {candidate.reviewStatus}</p><Link className="mt-4 inline-block text-sm text-cyan-300" href={candidate.clientCandidateUrl}>Open candidate review</Link><div className="mt-4 flex flex-wrap gap-2">{buildClientFeedbackActionsPreview(candidate.candidateId,jobs[0]?.jobId).map(action=><button className={disabled} disabled key={action.actionKey} title={action.helperText}>{action.label}</button>)}</div></article>)}</div></section><section className={card}><h2 className="font-semibold">Report & submission center</h2><div className="mt-4 grid gap-5 md:grid-cols-2"><div><h3 className="text-sm font-semibold text-cyan-100">Executive reports</h3>{reports.reports.length?reports.reports.map(report=><Link className="mt-2 block text-sm text-slate-400" href={report.url||"#"} key={report.id}>{report.label} Â· internal preview bridge</Link>):<p className="mt-2 text-sm text-slate-500">No reports supplied.</p>}</div><div><h3 className="text-sm font-semibold text-cyan-100">Candidate submissions</h3>{reports.submissions.map(submission=><Link className="mt-2 block text-sm text-cyan-300" href={submission.url} key={submission.candidateId}>{submission.label}</Link>)}</div></div><div className="mt-5 flex gap-2"><button disabled className={disabled}>Download disabled</button><button disabled className={disabled}>Export disabled</button></div><p className="mt-3 text-xs text-slate-500">Email sends: 0</p></section><section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5"><h2 className="font-semibold text-amber-100">Feedback action preview</h2><p className="mt-2 text-sm text-slate-300">Feedback is not saved yet. Interview and more-information requests are not sent. A future controlled workflow will notify the recruiter.</p></section><section className={card}><h2 className="font-semibold">Next steps</h2><ol className="mt-4 grid gap-3 text-sm md:grid-cols-2">{portal.nextSteps.map((item,index)=><li className="flex gap-3" key={item}><span className="text-cyan-300">{index+1}.</span>{item}</li>)}</ol></section><section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5"><h2 className="font-semibold text-emerald-100">Safety</h2><p className="mt-2 text-sm text-slate-300">No client DB writes Â· No feedback writes Â· No candidate DB writes Â· No email sends Â· Staging auth active Â· No OpenAI calls</p></section></div></main>;}
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import { createClient } from "@/utils/supabase/server";
+import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
+import { anyActiveSubscription } from "@/lib/chatSubscriptionState";
+import ClientRecruiterSharing from "./ClientRecruiterSharing";
+
+export const dynamic = "force-dynamic";
+
+const featureLabels: Record<string, string> = {
+  unlimited_search: "Search V2",
+  unlimited_job_posts: "Job posting",
+  candidate_comparison: "Candidate Comparison",
+  recruiter_support: "Recruiter support",
+  candidate_chat: "Candidate chat",
+  ats: "ATS",
+};
+const card = "rounded-2xl border border-slate-800 bg-[#0B0F16] p-5";
+
+export default async function ClientPortalPage({ searchParams }: { searchParams: Promise<{ page?: string; jobsPage?: string }> }) {
+  const params = await searchParams;
+  const requestedPage = params.page || "1";
+  const page = /^[1-9]\d{0,5}$/.test(requestedPage) ? Math.min(Number(requestedPage), 100000) : 1;
+  const requestedJobsPage = params.jobsPage || "1";
+  const jobsPage = /^[1-9]\d{0,5}$/.test(requestedJobsPage) ? Math.min(Number(requestedJobsPage), 100000) : 1;
+  const auth = await createClient();
+  const { data: user, error: authError } = await auth.auth.getUser();
+  if (authError || !user.user) redirect("/auth/login?next=%2Fclient%2Fportal");
+  const { data: profile, error: profileError } = await auth
+    .from("user_profiles")
+    .select("id,role,status,client_id")
+    .eq("auth_user_id", user.user.id)
+    .maybeSingle();
+  if (profileError || !profile || profile.role !== "client" || profile.status !== "active" || !profile.client_id)
+    redirect("/portal");
+
+  const db = createLazySupabaseServiceClient();
+  const membership = await db.from("client_memberships")
+    .select("id").eq("user_profile_id", profile.id)
+    .eq("client_id", profile.client_id).eq("status", "active").limit(1);
+  if (membership.error || membership.data?.length !== 1)
+    return <main className="min-h-screen bg-[#05070A] px-6 py-16 text-slate-100"><div className="mx-auto max-w-4xl rounded-2xl border border-amber-500/30 p-8"><h1 className="text-3xl font-semibold">Client Portal</h1><p className="mt-4 text-slate-300">Your client membership is not active or cannot be verified. Contact the platform administrator.</p></div></main>;
+
+  const [candidates, jobs, recruiters, entitlements] = await Promise.all([
+    db.from("client_candidate_access").select("candidate_id", { count: "exact", head: true }).eq("client_id", profile.client_id).eq("status", "active"),
+    db.from("client_job_ownership").select("job_id", { count: "exact", head: true }).eq("client_id", profile.client_id).eq("status", "active"),
+    db.from("client_recruiter_assignments").select("id", { count: "exact", head: true }).eq("client_id", profile.client_id).eq("status", "active"),
+    db.from("client_feature_entitlements").select("feature,status,valid_from,valid_until,plan_code").eq("client_id", profile.client_id),
+  ]);
+  const available = !candidates.error && !jobs.error && !recruiters.error && !entitlements.error;
+  const now = Date.now();
+  const features = available ? (entitlements.data || []).filter(item =>
+    item.status === "active" &&
+    Number.isFinite(Date.parse(String(item.valid_from))) &&
+    Date.parse(String(item.valid_from)) <= now &&
+    (!item.valid_until || (Number.isFinite(Date.parse(String(item.valid_until))) && Date.parse(String(item.valid_until)) > now))
+  ) : [];
+  const candidateChatIncluded = available && anyActiveSubscription(entitlements.data || [], now);
+  const plan = features[0]?.plan_code || "No active plan";
+  const recruiterSupport = features.some(item => item.feature === "recruiter_support");
+  let sharing: React.ReactNode = null;
+  if (available && recruiterSupport) {
+    const [access, ownedJobs, assignments] = await Promise.all([
+      db.from("client_candidate_access").select("candidate_id")
+        .eq("client_id", profile.client_id).eq("status", "active")
+        .order("created_at", { ascending: false }).order("candidate_id", { ascending: true })
+        .range((page - 1) * 20, page * 20 - 1),
+      db.from("client_job_ownership").select("job_id")
+        .eq("client_id", profile.client_id).eq("status", "active")
+        .order("created_at", { ascending: false }).order("job_id", { ascending: true })
+        .range((jobsPage - 1) * 20, jobsPage * 20 - 1),
+      db.from("client_recruiter_assignments").select("recruiter_profile_id")
+        .eq("client_id", profile.client_id).eq("status", "active").limit(50),
+    ]);
+    if (access.error || ownedJobs.error || assignments.error) {
+      sharing = <p className="text-amber-200">Recruiter sharing is temporarily unavailable.</p>;
+    } else {
+      const candidateIds = (access.data || []).map(row => row.candidate_id);
+      const jobIds = (ownedJobs.data || []).map(row => row.job_id);
+      const recruiterIds = (assignments.data || []).map(row => row.recruiter_profile_id);
+      const [candidateRows, jobRows, recruiterRows, shareRows, jobShareRows] = await Promise.all([
+        candidateIds.length ? db.from("candidates").select("id,name,current_title").in("id", candidateIds) : Promise.resolve({ data: [], error: null }),
+        jobIds.length ? db.from("jobs").select("id,title,company").in("id", jobIds) : Promise.resolve({ data: [], error: null }),
+        recruiterIds.length ? db.from("user_profiles").select("id,full_name,email,role,status").in("id", recruiterIds).eq("role", "recruiter").eq("status", "active") : Promise.resolve({ data: [], error: null }),
+        candidateIds.length ? db.from("client_candidate_shares").select("candidate_id,recruiter_profile_id,status")
+          .eq("client_id", profile.client_id).in("candidate_id", candidateIds) : Promise.resolve({ data: [], error: null }),
+        jobIds.length ? db.from("client_job_shares").select("job_id,recruiter_profile_id,status")
+          .eq("client_id", profile.client_id).in("job_id", jobIds) : Promise.resolve({ data: [], error: null }),
+      ]);
+      sharing = candidateRows.error || jobRows.error || recruiterRows.error || shareRows.error || jobShareRows.error
+        ? <p className="text-amber-200">Recruiter sharing is temporarily unavailable.</p>
+        : <ClientRecruiterSharing
+            chatEnabled={process.env.CHAT_ENABLED === "true"}
+            candidates={(candidateRows.data || []).map(row => ({ id: row.id, name: row.name || "Candidate", title: row.current_title || "" }))}
+            jobs={(jobRows.data || []).map(row => ({ id: row.id, name: row.title || "Job", title: row.company || "" }))}
+            recruiters={(recruiterRows.data || []).map(row => ({ id: row.id, name: row.full_name || row.email || "Recruiter" }))}
+            shares={[
+              ...(shareRows.data || []).filter(row => row.status === "active").map(row => ({ kind: "candidate" as const, resourceId: row.candidate_id, recruiterId: row.recruiter_profile_id })),
+              ...(jobShareRows.data || []).filter(row => row.status === "active").map(row => ({ kind: "job" as const, resourceId: row.job_id, recruiterId: row.recruiter_profile_id })),
+            ]}
+            totalCandidates={candidates.count || 0}
+            totalJobs={jobs.count || 0}
+            page={page}
+            jobsPage={jobsPage}
+          />;
+    }
+  }
+
+  return <main className="min-h-screen bg-[#05070A] text-slate-100">
+    <header className="border-b border-slate-800 bg-[#070A0F] px-6 py-10"><div className="mx-auto max-w-7xl"><p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">Client workspace</p><h1 className="mt-3 text-4xl font-semibold">Client Portal</h1><p className="mt-2 text-slate-400">Your jobs, candidate access and subscription features.</p></div></header>
+    <div className="mx-auto max-w-7xl space-y-8 px-6 py-8">
+      {!available && <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 text-amber-100">The client workspace data is unavailable. No candidate or subscription access is assumed.</section>}
+      <section aria-label="Client overview" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[["Visible candidates", candidates.count], ["Owned jobs", jobs.count], ["Assigned recruiters", recruiters.count], ["Subscription", plan]].map(([label, value]) =>
+          <article className={card} key={String(label)}><h2 className="text-sm text-slate-400">{label}</h2><p className="mt-3 text-2xl font-semibold">{available ? value ?? 0 : "Unavailable"}</p></article>)}
+      </section>
+      <section className={card}><h2 className="text-xl font-semibold">Features in your plan</h2>
+        {features.length ? <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{features.filter(item => item.feature !== "candidate_chat").map(item => <li className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-4 text-cyan-100" key={item.feature}>{featureLabels[item.feature] || item.feature}</li>)}{candidateChatIncluded && <li className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-4 text-cyan-100" key="candidate_chat">Candidate chat <span className="block text-xs text-cyan-200/75">Included with any active subscription; candidate account and contact consent required.</span></li>}</ul> : <p className="mt-3 text-slate-400">No active feature entitlement is available for this workspace.</p>}
+        <p className="mt-4 text-sm text-slate-500">A listed entitlement does not grant access to a feature until its workspace is released.</p>
+      </section>
+      {process.env.CLIENT_CANDIDATE_LOOKUP_ENABLED === "true" && available && features.some(item => item.feature === "unlimited_search") &&
+        <section className={card}><h2 className="text-xl font-semibold">Find assigned candidates</h2><p className="mt-2 text-slate-400">Search the candidates currently granted to your client account by name, title or company.</p><Link href="/client/candidate-search" className="mt-4 inline-block rounded-lg bg-cyan-700 px-5 py-3 font-medium">Open candidate lookup</Link></section>}
+      <section className={card}><h2 className="text-xl font-semibold">Your workspace</h2><p className="mt-3 text-slate-400">{available && (candidates.count || 0) === 0 && (jobs.count || 0) === 0 ? "No candidates or jobs have been assigned to your account yet." : "Only candidates and jobs explicitly assigned to your client account can appear here."}</p><p className="mt-3 text-sm text-slate-500">Search, Shortlist, Candidate Comparison, feedback and recruiter sharing will appear here as each authenticated flow passes acceptance testing.</p></section>
+      {recruiterSupport && <section className={card}><h2 className="text-xl font-semibold">Work with your assigned recruiter</h2><p className="mt-2 text-sm text-slate-400">Share candidates visible to your account and jobs owned by your client account. Opening an original CV requires separate admin approval.</p><div className="mt-5">{sharing}</div></section>}
+    </div>
+  </main>;
+}

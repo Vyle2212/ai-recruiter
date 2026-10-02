@@ -5,6 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import { candidateCvRejectedOriginalPolicy } from "../lib/candidateCvIngestion";
 import { originalCvStorageReadStatus } from "../lib/originalCvStorageRead";
+import { MAX_ORIGINAL_BYTES } from "../lib/cvUploadLimits";
 
 const bytes = Buffer.from("synthetic candidate CV bytes");
 const digest = createHash("sha256").update(bytes).digest("hex");
@@ -70,7 +71,7 @@ const stubs: Record<string, unknown> = {
   "@/lib/originalCvArchive": {},
   "@/lib/originalCvStorageRead": { originalCvStorageReadStatus },
   "@/lib/originalCvArchiveKey": {
-    MAX_ORIGINAL_BYTES: 10 * 1024 * 1024,
+    MAX_ORIGINAL_BYTES,
     ORIGINAL_CV_BUCKET: "candidate-original-cvs",
     ownedOriginalCvObjectKey: (user: string, key: string) =>
       user === owner && key === objectKey,

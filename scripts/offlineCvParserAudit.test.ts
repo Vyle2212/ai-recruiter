@@ -190,6 +190,10 @@ async function main() {
     assert.equal(undersized.status, 1);
     assert.equal(undersized.stdout, "");
     assert.equal(undersized.stderr, "offline_cv_audit_directory_invalid\n");
+    assert.match(
+      fs.readFileSync("scripts/auditOfflineCvParser.ts", "utf8"),
+      /minimumUnique = Number\(option\(args, "--minimum-unique"\) \|\| "970"\)/,
+    );
 
     const baselineDirectory = fs.mkdtempSync(
       path.join(os.tmpdir(), "private-parser-baseline-"),

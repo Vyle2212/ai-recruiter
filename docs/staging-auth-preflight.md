@@ -4,10 +4,10 @@ This read-only CLI summarizes the staging authentication execution gate before i
 
 ## Commands
 
-- `npm run staging-auth:preflight` — inspect normalized current safe flags; blocked is informational and exits 0.
-- `npm run staging-auth:preflight -- --json` — emit the safe normalized report as JSON.
-- `npm run staging-auth:preflight -- --strict` — exit 1 unless the staging gate is ready; this changes only the exit code.
-- `npm run staging-auth:preflight -- --write-report` — opt in to `reports/staging-auth-preflight.json`.
+- `npm run staging-auth:preflight` â€” inspect normalized current safe flags; blocked is informational and exits 0.
+- `npm run staging-auth:preflight -- --json` â€” emit the safe normalized report as JSON.
+- `npm run staging-auth:preflight -- --strict` â€” exit 1 unless the staging gate is ready; this changes only the exit code.
+- `npm run staging-auth:preflight -- --write-report` â€” opt in to `reports/staging-auth-preflight.json`.
 - Simulations: `--simulate-empty`, `--simulate-local`, `--simulate-test`, `--simulate-production`, `--simulate-production-enabled`, `--simulate-staging-requested`, `--simulate-incomplete`, or `--simulate-approved`.
 
 Exactly one simulation may be selected. Simulations use deterministic inputs and do not read current flags. The approved simulation is only a model of the ready state; it performs no action.

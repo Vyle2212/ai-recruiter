@@ -25,7 +25,12 @@ begin
   if v_security_definer then
     raise exception 'candidate_owned_cv_must_be_security_invoker';
   end if;
-  if not coalesce(v_config, array[]::text[]) @> array['search_path=']::text[] then
+  -- PostgreSQL records SET search_path = '' as search_path="" on some
+  -- versions; both represent an empty path with no caller-controlled schema.
+  if not (
+    coalesce(v_config, array[]::text[]) @> array['search_path=']::text[]
+    or coalesce(v_config, array[]::text[]) @> array['search_path=""']::text[]
+  ) then
     raise exception 'candidate_owned_cv_search_path_not_empty';
   end if;
 
@@ -56,7 +61,7 @@ begin
     where p.oid = v_function::oid
       and pg_get_functiondef(p.oid) like '%for update%'
       and pg_get_functiondef(p.oid) like '%candidate_owned_cv_stale_version%'
-      and pg_get_functiondef(p.oid) like '%profile_confirmation_status = ''claimed_incomplete''%'
+      and pg_get_functiondef(p.oid) like '%profile_confirmation_status = ''''claimed_incomplete''''%'
       and pg_get_functiondef(p.oid) like '%delete from public.candidate_search_index%'
   ) then
     raise exception 'candidate_owned_cv_transaction_contract_invalid';
