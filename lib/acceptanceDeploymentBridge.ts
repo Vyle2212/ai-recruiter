@@ -105,6 +105,8 @@ type ReleaseEvidence = {
   deploymentHash?: unknown;
   externalTalentEnabled?: unknown;
   externalProviderConfigured?: unknown;
+  candidateCvUploadEnabled?: unknown;
+  candidateProfileConfirmationEnabled?: unknown;
 };
 
 export async function fetchAcceptanceReleaseEvidence(
@@ -141,6 +143,8 @@ export async function fetchAcceptanceReleaseEvidence(
     body.projectRefHash === acceptanceHash(expected.projectRef) &&
     typeof body.buildId === "string" &&
     body.buildId.length > 0 &&
+    typeof body.candidateCvUploadEnabled === "boolean" &&
+    typeof body.candidateProfileConfirmationEnabled === "boolean" &&
     (expected.externalMode !== "required" ||
       (body.externalTalentEnabled === true &&
         body.externalProviderConfigured === true)) &&
@@ -159,6 +163,9 @@ export async function fetchAcceptanceReleaseEvidence(
       typeof body.deploymentHash === "string" ? body.deploymentHash : "",
     externalTalentEnabled: body.externalTalentEnabled === true,
     externalProviderConfigured: body.externalProviderConfigured === true,
+    candidateCvUploadEnabled: body.candidateCvUploadEnabled === true,
+    candidateProfileConfirmationEnabled:
+      body.candidateProfileConfirmationEnabled === true,
   };
 }
 
