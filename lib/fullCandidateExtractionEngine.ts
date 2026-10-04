@@ -117,9 +117,10 @@ function selectPreviousEmployment(history: EmploymentTenure[], current: Employme
 function parseExperienceYears(raw: string, re: any, employmentHistory: EmploymentTenure[]) {
   const snippets: Array<{kind:"total"|"sap"; value:string; evidence:string; source:string}> = [];
   const patterns: Array<{kind:"total"|"sap"; rx:RegExp; source:string}> = [
-    { kind: "total", rx: /\b(?:overall\s+)?(\d{1,2}(?:\.\d)?)\+?\s+years?\s+of\s+(?:professional\s+)?experience\b.{0,80}/ig, source: "explicit_total_experience" },
-    { kind: "total", rx: /\bover\s+(\d{1,2}(?:\.\d)?)\s+years?\s+of\s+(?:professional\s+)?experience\b.{0,80}/ig, source: "explicit_total_experience" },
-    { kind: "total", rx: /\boverall\s+(\d{1,2}(?:\.\d)?)\+?\s+years?\s+in\s+SAP\b.{0,80}/ig, source: "explicit_sap_experience" },
+    { kind: "total", rx: /\b(?:overall\s+)?(\d{1,2}(?:\.\d)?)\+?\s+years?\s+of\s+(?:professional\s+)?experience\b(?!\s+(?:in|with)\s+SAP\b).{0,80}/ig, source: "explicit_total_experience" },
+    { kind: "total", rx: /\bover\s+(\d{1,2}(?:\.\d)?)\s+years?\s+of\s+(?:professional\s+)?experience\b(?!\s+(?:in|with)\s+SAP\b).{0,80}/ig, source: "explicit_total_experience" },
+    { kind: "sap", rx: /\boverall\s+(\d{1,2}(?:\.\d)?)\+?\s+years?\s+in\s+SAP\b.{0,80}/ig, source: "explicit_sap_experience" },
+    { kind: "sap", rx: /\b(?:overall\s+|over\s+)?(\d{1,2}(?:\.\d)?)\+?\s+years?\s+(?:of\s+)?(?:professional\s+)?experience\s+(?:in|with)\s+SAP\b.{0,80}/ig, source: "explicit_sap_experience" },
     { kind: "sap", rx: /\b(?:over\s+)?(\d{1,2}(?:\.\d)?)\+?\s+years?\s+(?:of\s+)?SAP\s+(?:consulting\s+)?experience\b.{0,80}/ig, source: "explicit_sap_experience" },
     { kind: "sap", rx: /\b(\d{1,2}(?:\.\d)?)\+?\s+years?\s+in\s+SAP(?:\s+[A-Z0-9/]+)?\b.{0,80}/ig, source: "explicit_sap_experience" },
     { kind: "sap", rx: /\b(\d{1,2}(?:\.\d)?)\+?\s+years?\s+as\s+SAP\s+(?:Consultant|Developer|Architect|Manager)\b.{0,80}/ig, source: "explicit_sap_experience" },
