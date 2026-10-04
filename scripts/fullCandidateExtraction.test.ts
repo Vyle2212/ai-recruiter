@@ -132,12 +132,14 @@ for (const [text, expectedTotal, expectedSap] of [
   ["15+ years of experience", "15", ""],
   ["over 10 years of SAP experience", "", "10"],
   ["12 years in SAP FICO", "", "12"],
-  ["Overall 11+ years in SAP", "11", ""],
+  ["Overall 11+ years in SAP", "", "11"],
+  ["15 years of experience in SAP", "", "15"],
+  ["over 10 years of experience with SAP", "", "10"],
   ["having 5.1 years of SAP FICO", "", "5.1"],
 ] as Array<[string,string,string]>) {
   const item = extractFullCandidateProfile(cv({ id: `yoe-accept-${text}`, name: "Jane Fruelda", raw_text: `Jane Fruelda\nEmail: jane@example.com\nKuala Lumpur Malaysia\nSAP FICO Consultant\n${text}\nSAP FICO S/4HANA implementation support data migration UAT SIT project experience education skills` }));
-  if (expectedTotal) assert.equal(item.totalYearsExperience, expectedTotal, `${text} extracts total YOE`);
-  if (expectedSap) assert.equal(item.sapYearsExperience, expectedSap, `${text} extracts SAP YOE`);
+  assert.equal(item.totalYearsExperience, expectedTotal, `${text} separates total YOE`);
+  assert.equal(item.sapYearsExperience, expectedSap, `${text} separates SAP YOE`);
 }
 
 for (const text of ["over 1000 users", "13 subsidiaries", "RM70 mil over 5 years", "200 SAP team members", "2017 - 2020", "+60 12 345 6789"]) {
