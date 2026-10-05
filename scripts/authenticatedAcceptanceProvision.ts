@@ -87,6 +87,7 @@ function adminClient(config: SafeConfig) {
 }
 
 const MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY = 100;
+const ACCEPTANCE_LIFECYCLE_CANDIDATE_NAME = "Synthetic PTF Tester";
 
 function syntheticUploadCandidateName(runHash: string) {
   if (!/^[0-9a-f]{16}$/.test(runHash))
@@ -223,7 +224,7 @@ async function cleanupRunOwnedOriginalCvData(
   if (
     (candidates || []).some(
       (candidate) =>
-        candidate.name !== expectedName ||
+        ![expectedName, ACCEPTANCE_LIFECYCLE_CANDIDATE_NAME].includes(candidate.name) ||
         !references.includes(String(candidate.source_file || "")),
     )
   )
