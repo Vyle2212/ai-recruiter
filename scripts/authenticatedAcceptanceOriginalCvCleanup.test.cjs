@@ -9,9 +9,9 @@ const key=fs.readFileSync("lib/originalCvArchiveKey.ts","utf8");
 const start=provision.indexOf("const MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY");
 const end=provision.indexOf("\nasync function verifyDatabaseMarker",start);
 assert.ok(start>=0 && end>start,"cleanup source boundaries must be present");
-const source='const ORIGINAL_CV_BUCKET="candidate-original-cvs";\n'+key.slice(key.indexOf("export function originalCvReference")).replaceAll("export function","function")+"\n"+provision.slice(start,end);
+const source='const ACCEPTANCE_SYNTHETIC_CANDIDATE_ID="synthetic"; const ORIGINAL_CV_BUCKET="candidate-original-cvs";\n'+key.slice(key.indexOf("export function originalCvReference")).replaceAll("export function","function")+"\n"+provision.slice(start,end);
 const compiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
-const ctx={readFile:fs.promises.readFile};vm.createContext(ctx);vm.runInContext(compiled+"\nglobalThis.cleanup=cleanupRunOwnedOriginalCvData;globalThis.nameForRun=syntheticUploadCandidateName;globalThis.readLedger=readRunOwnedOriginalCvLedger;",ctx);
+const ctx={readFile:fs.promises.readFile};vm.createContext(ctx);vm.runInContext(compiled+"\nglobalThis.verifyChat=verifyAbsentChatFixtureReferences;globalThis.cleanup=cleanupRunOwnedOriginalCvData;globalThis.nameForRun=syntheticUploadCandidateName;globalThis.readLedger=readRunOwnedOriginalCvLedger;",ctx);
 const owner="00000000-0000-4000-8000-000000000001";
 const filename="00000000-0000-4000-8000-000000000002.pdf";
 const candidate="00000000-0000-4000-8000-000000000003";
@@ -89,5 +89,23 @@ function client(options={}){
  const overbound=client({storageEmpty:true});
  await assert.rejects(ctx.cleanup(overbound,[owner],"0123456789abcdef",overboundLedger));
  assert.deepEqual(overbound.events,[],"per-owner ledger bound must fail before mutation");
+
+ function chatClient(failAt=-1,ambiguous=false,fixtureCount=0,errorAt=-1){
+  let index=-1;
+  return {from(){const q={select(){return q},eq(){return q},in(){return q},then(resolve){
+   index++;return Promise.resolve({count:index===0?fixtureCount:index===failAt?(ambiguous?null:1):0,error:index===errorAt?{message:"blocked"}:null}).then(resolve)
+  }};return q}};
+ }
+ await ctx.verifyChat(chatClient(),[owner],"owned-run");
+ for(let i=1;i<=10;i++){
+  await assert.rejects(ctx.verifyChat(chatClient(i),[owner],"owned-run"));
+  await assert.rejects(ctx.verifyChat(chatClient(i,true),[owner],"owned-run"));
+  await assert.rejects(ctx.verifyChat(chatClient(-1,false,0,i),[owner],"owned-run"));
+ }
+ await assert.rejects(ctx.verifyChat(chatClient(-1,false,1),[owner],"owned-run"));
+ await assert.rejects(ctx.verifyChat(chatClient(-1,false,null),[owner],"owned-run"));
+ await assert.rejects(ctx.verifyChat(chatClient(-1,false,0,0),[owner],"owned-run"));
+ await assert.rejects(ctx.verifyChat(chatClient(),[],"owned-run"));
+
  console.log("Cleanup behavioral regression PASS");
 })().catch(e=>{console.error(e.message);process.exitCode=1});
