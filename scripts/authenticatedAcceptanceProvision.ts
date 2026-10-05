@@ -288,6 +288,37 @@ async function cleanupRunOwnedOriginalCvData(
   }
 }
 
+async function verifyAbsentChatFixtureReferences(
+  client: SupabaseClient,
+  profileIds: string[],
+  runId: string,
+) {
+  const fixture = await client
+    .from("acceptance_synthetic_candidates")
+    .select("candidate_id", { count: "exact", head: true })
+    .eq("owner_run_id", runId);
+  if (fixture.error || fixture.count !== 0 || profileIds.length === 0)
+    throw new Error("acceptance_chat_fixture_scope_unresolved");
+  const probes: [string, string, string[]][] = [
+    ["chat_conversations", "created_by_profile_id", profileIds],
+    ["chat_conversations", "recipient_profile_id", profileIds],
+    ["chat_conversation_participants", "user_profile_id", profileIds],
+    ["chat_messages", "sender_profile_id", profileIds],
+    ["chat_message_events", "actor_profile_id", profileIds],
+    ["candidate_chat_contact_consents", "user_profile_id", profileIds],
+    ["candidate_chat_contact_consent_events", "user_profile_id", profileIds],
+    ["chat_conversations", "candidate_id", [ACCEPTANCE_SYNTHETIC_CANDIDATE_ID]],
+    ["candidate_chat_contact_consents", "candidate_id", [ACCEPTANCE_SYNTHETIC_CANDIDATE_ID]],
+    ["candidate_chat_contact_consent_events", "candidate_id", [ACCEPTANCE_SYNTHETIC_CANDIDATE_ID]],
+  ];
+  for (const [table, column, ids] of probes) {
+    const result = await client.from(table)
+      .select("*", { count: "exact", head: true }).in(column, ids);
+    if (result.error || result.count !== 0)
+      throw new Error("acceptance_chat_fixture_references_unresolved");
+  }
+}
+
 async function verifyDatabaseMarker(
   client: SupabaseClient,
   config: SafeConfig,
@@ -654,8 +685,13 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
       "cleanup_acceptance_chat_run",
       { p_run_id: config.runId },
     );
-    if (chatCleanupError)
-      throw new Error("acceptance_chat_fixture_cleanup_failed");
+    if (chatCleanupError) {
+      if (chatCleanupError.message !== "acceptance_chat_cleanup_fixture_scope_missing")
+        throw new Error("acceptance_chat_fixture_cleanup_failed");
+      // No chat mutation is permitted when the candidate lease is gone.
+      // Continue identity cleanup only after exact zero-reference readback.
+      await verifyAbsentChatFixtureReferences(client, plan.profileIds, config.runId);
+    }
   } else if (
     !(["42P01", "PGRST205"] as string[]).includes(chatProbe.error.code)
   ) {
