@@ -226,6 +226,8 @@ jobs:
           cache: npm
       - name: Clean dependency installation
         run: npm ci
+      - name: Verify fail-closed cleanup recovery regressions
+        run: node scripts/authenticatedAcceptanceOriginalCvCleanup.test.cjs
       - name: Bind only the failed run's synthetic namespace
         shell: bash
         run: |
