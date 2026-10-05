@@ -1,6 +1,8 @@
 name: Production Trust Authenticated Acceptance
 run-name: >-
-  ${{ inputs.acceptance_scope == 'internal_only'
+  ${{ inputs.acceptance_scope == 'cleanup_run37'
+      && 'Recover acceptance run 37 residue'
+      || inputs.acceptance_scope == 'internal_only'
       && format('Internal Talent Hub acceptance · {0}', inputs.tested_sha)
       || format('Full-scope acceptance · {0}', inputs.tested_sha) }}
 
@@ -16,7 +18,7 @@ on:
         required: true
         type: choice
         default: internal_only
-        options: [internal_only, full_scope]
+        options: [internal_only, full_scope, cleanup_run37]
 
 permissions:
   contents: read
@@ -27,7 +29,7 @@ concurrency:
 
 jobs:
   authenticated-acceptance:
-    if: startsWith(github.ref_name, 'codex/authenticated-acceptance-')
+    if: inputs.acceptance_scope != 'cleanup_run37' && startsWith(github.ref_name, 'codex/authenticated-acceptance-')
     name: ${{ inputs.acceptance_scope == 'internal_only' && 'Exact-build internal Talent Hub acceptance' || 'Exact-build full-scope acceptance' }}
     runs-on: ubuntu-latest
     timeout-minutes: 55
@@ -180,3 +182,79 @@ jobs:
             artifacts/acceptance-evidence/*.png
           if-no-files-found: error
           retention-days: 7
+
+  recover-run37:
+    if: inputs.acceptance_scope == 'cleanup_run37' && startsWith(github.ref_name, 'codex/authenticated-acceptance-')
+    name: Recover exact run-owned acceptance residue
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: acceptance
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      ACCEPTANCE_TEST_MODE: "true"
+      APP_ENV: acceptance
+      ACCEPTANCE_DEPLOYMENT_PROTECTION_REQUIRED: "true"
+      ACCEPTANCE_EXTERNAL_MODE: disabled
+      ACCEPTANCE_BASE_URL: ${{ secrets.ACCEPTANCE_BASE_URL }}
+      ACCEPTANCE_EXPECTED_SHA: ${{ inputs.tested_sha }}
+      ACCEPTANCE_SUPABASE_URL: ${{ secrets.ACCEPTANCE_SUPABASE_URL }}
+      ACCEPTANCE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.ACCEPTANCE_SUPABASE_SERVICE_ROLE_KEY }}
+      ACCEPTANCE_SUPABASE_PROJECT_REF: ${{ secrets.ACCEPTANCE_SUPABASE_PROJECT_REF }}
+      ACCEPTANCE_SUPABASE_PROJECT_REF_ALLOWLIST: ${{ secrets.ACCEPTANCE_SUPABASE_PROJECT_REF_ALLOWLIST }}
+      ACCEPTANCE_PRODUCTION_PROJECT_REF_DENYLIST: ${{ secrets.ACCEPTANCE_PRODUCTION_PROJECT_REF_DENYLIST }}
+      ACCEPTANCE_ENVIRONMENT_ID: ${{ secrets.ACCEPTANCE_ENVIRONMENT_ID }}
+      ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER: Synthetic PTF Tester
+    steps:
+      - name: Checkout exact recovery revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+      - name: Verify exact revision and protected recovery scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ inputs.tested_sha }}" = "${{ github.sha }}"
+          test "$(git rev-parse HEAD)" = "$ACCEPTANCE_EXPECTED_SHA"
+          test "${{ inputs.acceptance_scope }}" = "cleanup_run37"
+          case "$ACCEPTANCE_BASE_URL" in https://*) ;; *) exit 1 ;; esac
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Clean dependency installation
+        run: npm ci
+      - name: Bind only the failed run's synthetic namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id="ptf1c2-gh-37236641902-1"
+          expires_at="$(date -u -d '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')"
+          {
+            echo "ACCEPTANCE_RUN_ID=$run_id"
+            echo "ACCEPTANCE_SYNTHETIC_NAMESPACE=ptf1c2/$run_id"
+            echo "ACCEPTANCE_CLEANUP_OWNER=github-actions"
+            echo "ACCEPTANCE_EXPIRES_AT=$expires_at"
+            echo "ACCEPTANCE_CREDENTIAL_BUNDLE_PATH=$RUNNER_TEMP/acceptance-recovery-credentials.json"
+          } >> "$GITHUB_ENV"
+      - name: Verify acceptance environment and database marker
+        run: npm run acceptance:environment:verify
+      - name: Clean only the failed run's identities and mutations
+        run: npm run acceptance:cleanup
+      - name: Verify identity and mutation cleanup
+        if: always()
+        run: npm run acceptance:cleanup:verify
+      - name: Remove any remaining exact-run search fixture
+        if: always()
+        run: npm run acceptance:synthetic:remove
+      - name: Verify zero exact-run residue
+        if: always()
+        run: npm run acceptance:synthetic:residue
+      - name: Remove temporary recovery credentials
+        if: always()
+        shell: bash
+        run: |
+          rm -f -- "${ACCEPTANCE_CREDENTIAL_BUNDLE_PATH:-/nonexistent}"
+          rm -f -- "${ACCEPTANCE_CREDENTIAL_BUNDLE_PATH:-/nonexistent}.original-cv-ledger.jsonl"
