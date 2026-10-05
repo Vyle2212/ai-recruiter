@@ -36,7 +36,7 @@ function client(options={}){
      return Promise.resolve({error}).then(resolve,reject);
     }
     if(table==="candidates"&&!events.includes("delete:candidates"))
-     return Promise.resolve({data:options.candidatesNull?null:[{id:candidate,name:options.wrongName?"Real Candidate":"Synthetic Abcdefghijklmnop",source_file:"candidate-original-cvs/"+owner+"/"+filename}],error:null}).then(resolve,reject);
+     return Promise.resolve({data:options.candidatesNull?null:[{id:candidate,name:options.wrongName?"Real Candidate":options.lifecycleName?"Synthetic PTF Tester":"Synthetic Abcdefghijklmnop",source_file:"candidate-original-cvs/"+owner+"/"+filename}],error:null}).then(resolve,reject);
     const count=options.dependency&&table==="chat_conversations"||options.databaseResidue&&table==="candidates"?1:0;
     return Promise.resolve({count,error:null}).then(resolve,reject);
    }};
@@ -50,6 +50,8 @@ function client(options={}){
  assert.notEqual(ctx.nameForRun("0123456789abcdef"),ctx.nameForRun("1123456789abcdef"));
  const good=client();await ctx.cleanup(good,[owner],"0123456789abcdef");
  assert.deepEqual(good.events,["delete:candidate_upload_reviews","delete:candidates","storage-remove"]);
+ const lifecycle=client({lifecycleName:true});await ctx.cleanup(lifecycle,[owner],"0123456789abcdef");
+ assert.deepEqual(lifecycle.events,good.events,"confirmed synthetic candidate must be cleaned");
  for(const options of [{wrongName:true},{dependency:true}]){
   const c=client(options);await assert.rejects(ctx.cleanup(c,[owner],"0123456789abcdef"));assert.deepEqual(c.events,[]);
  }
