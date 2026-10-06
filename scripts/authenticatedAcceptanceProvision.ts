@@ -659,23 +659,6 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
   );
   const plan = acceptanceCleanupPlan(entities);
   const profileIds = plan.profileIds;
-  // Delete only objects below this run's synthetic auth-user UUID prefixes,
-  // verify ownership for every exact key, and prove the prefixes are empty
-  // before deleting the identities that establish run ownership.
-  const originalCvLedgerPath =
-    `${config.credentialBundlePath}.original-cv-ledger.jsonl`;
-  const ledgerObjectKeys =
-    await readRunOwnedOriginalCvLedger(originalCvLedgerPath);
-  await cleanupRunOwnedOriginalCvData(
-    client,
-    plan.authUserIds,
-    runHash,
-    ledgerObjectKeys,
-  );
-  await unlink(originalCvLedgerPath).catch((error) => {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT")
-      throw new Error("acceptance_original_cv_ledger_remove_failed");
-  });
   const chatProbe = await client
     .from("chat_conversations")
     .select("id", { count: "exact", head: true })
@@ -697,6 +680,23 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
   ) {
     throw new Error("acceptance_chat_fixture_discovery_failed");
   }
+  // Delete only objects below this run's synthetic auth-user UUID prefixes,
+  // verify ownership for every exact key, and prove the prefixes are empty
+  // before deleting the identities that establish run ownership.
+  const originalCvLedgerPath =
+    `${config.credentialBundlePath}.original-cv-ledger.jsonl`;
+  const ledgerObjectKeys =
+    await readRunOwnedOriginalCvLedger(originalCvLedgerPath);
+  await cleanupRunOwnedOriginalCvData(
+    client,
+    plan.authUserIds,
+    runHash,
+    ledgerObjectKeys,
+  );
+  await unlink(originalCvLedgerPath).catch((error) => {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+      throw new Error("acceptance_original_cv_ledger_remove_failed");
+  });
   const { data: syntheticJobs, error: jobsDiscoveryError } = await client
     .from("jobs")
     .select("id")
