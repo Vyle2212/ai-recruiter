@@ -27,7 +27,8 @@ function client(options={}){
  remove:async()=>{events.push("storage-remove");if(!options.storageRemoveError)removed=true;return {error:options.storageRemoveError?{message:"blocked"}:null}}};
  const c={events,storage:{from:()=>bucket},from:(table)=>{
   let op="select";
-  const q={select:()=>q,delete:()=>{op="delete";return q},in:()=>q,limit:()=>q,
+  let selectedColumn;
+  const q={select:(column)=>{selectedColumn=column;return q},delete:()=>{op="delete";return q},in:()=>q,limit:()=>q,
    then:(resolve,reject)=>{
     if(op==="delete"){
      events.push("delete:"+table);
@@ -37,6 +38,11 @@ function client(options={}){
     }
     if(table==="candidates"&&!events.includes("delete:candidates"))
      return Promise.resolve({data:options.candidatesNull?null:[{id:candidate,name:options.wrongName?"Real Candidate":options.lifecycleName?"Synthetic PTF Tester":"Synthetic Abcdefghijklmnop",source_file:"candidate-original-cvs/"+owner+"/"+filename}],error:null}).then(resolve,reject);
+    // The deployed consent table has a composite key and no id column.
+    if(table==="candidate_chat_contact_consents" && selectedColumn!=="candidate_id")
+     return Promise.resolve({count:null,error:{code:"42703",message:"column id does not exist"}}).then(resolve,reject);
+    if(options.probeError && table==="candidate_chat_contact_consent_events")
+     return Promise.resolve({count:null,error:{code:"42501",message:"permission denied"}}).then(resolve,reject);
     const count=options.dependency&&table==="chat_conversations"||options.databaseResidue&&table==="candidates"?1:0;
     return Promise.resolve({count,error:null}).then(resolve,reject);
    }};
@@ -52,7 +58,7 @@ function client(options={}){
  assert.deepEqual(good.events,["delete:candidate_upload_reviews","delete:candidates","storage-remove"]);
  const lifecycle=client({lifecycleName:true});await ctx.cleanup(lifecycle,[owner],"0123456789abcdef");
  assert.deepEqual(lifecycle.events,good.events,"confirmed synthetic candidate must be cleaned");
- for(const options of [{wrongName:true},{dependency:true}]){
+ for(const options of [{wrongName:true},{dependency:true},{probeError:true}]){
   const c=client(options);await assert.rejects(ctx.cleanup(c,[owner],"0123456789abcdef"));assert.deepEqual(c.events,[]);
  }
  for(const options of [{storageNull:true},{candidatesNull:true}]){

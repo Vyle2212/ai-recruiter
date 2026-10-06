@@ -238,7 +238,7 @@ async function cleanupRunOwnedOriginalCvData(
     if (!candidateIds.length) break;
     const { count, error } = await client
       .from(table)
-      .select("id", { count: "exact", head: true })
+      .select("candidate_id", { count: "exact", head: true })
       .in("candidate_id", candidateIds);
     if (error || count !== 0)
       throw new Error("acceptance_original_cv_candidate_dependency_detected");
