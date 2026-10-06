@@ -102,12 +102,20 @@ assert.match(
 );
 
 const cleanupCall = provision.indexOf('"cleanup_acceptance_chat_run"');
+const originalCvCleanup = provision.indexOf(
+  "await cleanupRunOwnedOriginalCvData(",
+  cleanupCall,
+);
 const accountCleanup = provision.indexOf(
   '.from("candidate_accounts")',
   cleanupCall,
 );
 const profileCleanup = provision.indexOf('.from("user_profiles")', cleanupCall);
 assert.ok(cleanupCall >= 0, "provision cleanup must call the chat cleanup RPC");
+assert.ok(
+  originalCvCleanup > cleanupCall,
+  "chat cleanup must run before original CV candidate cleanup",
+);
 assert.ok(
   accountCleanup > cleanupCall,
   "chat cleanup must run before candidate account cleanup",
