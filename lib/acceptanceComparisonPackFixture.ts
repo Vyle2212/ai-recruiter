@@ -12,13 +12,18 @@ export function acceptanceComparisonPackFixture(runId: string) {
   const query = `Synthetic ${nameToken} Tester`;
   const candidates = Array.from({ length: 25 }, (_, index) => {
     const suffix = String(index + 1).padStart(2, "0");
+    const name = `${query} ${String.fromCharCode(65 + index)}`;
+    const source = acceptanceSyntheticCandidateRecord();
     const idDigest = createHash("sha256")
       .update(`${runId}:comparison:${suffix}`)
       .digest("hex");
     return {
-      ...acceptanceSyntheticCandidateRecord(),
+      ...source,
       id: `${idDigest.slice(0, 8)}-${idDigest.slice(8, 12)}-4${idDigest.slice(13, 16)}-8${idDigest.slice(17, 20)}-${idDigest.slice(20, 32)}`,
-      name: `${query} ${String.fromCharCode(65 + index)}`,
+      name,
+      // Distinct synthetic people need distinct original document identity;
+      // identical source text correctly collapses in the production deduper.
+      resume_text: `${name}\n${source.resume_text}`,
       email: `ptf-pack-${digest.slice(0, 12)}-${suffix}@acceptance.invalid`,
     };
   });

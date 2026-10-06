@@ -1,6 +1,7 @@
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
+  installAcceptanceComparisonPack,
   removeAcceptanceComparisonPack,
   verifyAcceptanceComparisonPackAbsent,
 } from "../lib/acceptanceComparisonPackRuntime";
@@ -294,6 +295,9 @@ async function main() {
       .insert(index);
     if (indexError)
       throw new Error("acceptance_synthetic_index_install_failed");
+    // Install the complete run dataset before preflight warms the 15-minute
+    // Search projection cache. Later tests select their own query and job.
+    await installAcceptanceComparisonPack(client, expected);
     await githubFlag("ACCEPTANCE_FIXTURE_INSTALLED");
   } else if (action === "verify") {
     await verifyCandidate(client, expected);

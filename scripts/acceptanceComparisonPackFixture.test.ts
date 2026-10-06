@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import {
   acceptanceComparisonPackFixture,
   validateAcceptanceComparisonPack,
 } from "../lib/acceptanceComparisonPackFixture";
 import { searchV2ComparisonCandidates } from "../lib/searchV2Comparison";
 import { buildCandidateSearchIndexRow } from "../lib/candidateSearchIndex";
-import { candidateSearchV2ProjectionDocument } from "../lib/candidateSearchV2Projection";
+import { candidateSearchV2ProjectionDocument, dedupeCandidateSearchV2Documents } from "../lib/candidateSearchV2Projection";
 import { canonicalLookupMatches, detectSearchV2UnifiedIntent } from "../lib/searchV2UnifiedIntent";
 import { normalizeSearchV2Query } from "../lib/searchV2QueryNormalization";
+import { normalizeActualCandidateSchema } from "../lib/candidate360SchemaNormalize";
 
 const run = "ptf1c2-gh-123456-1";
 const pack = acceptanceComparisonPackFixture(run);
@@ -21,8 +23,11 @@ const intent = detectSearchV2UnifiedIntent(normalizeSearchV2Query(pack.query).no
 assert.equal(intent.type, "candidate_name_lookup");
 assert.equal(intent.searchable, true);
 const documents = [...pack.candidates, ...next.candidates].map((row) =>
-  candidateSearchV2ProjectionDocument({ ...buildCandidateSearchIndexRow(row), display_name: row.name }),
+  ({ ...candidateSearchV2ProjectionDocument({ ...buildCandidateSearchIndexRow(row), display_name: normalizeActualCandidateSchema(row).candidateName || null }),
+    identitySignals: { sourceDocumentHash: createHash("sha256").update(row.resume_text.normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase()).digest("hex") },
+  }),
 );
+assert.equal(dedupeCandidateSearchV2Documents(documents).documents.length, 50);
 assert.deepEqual(
   new Set(canonicalLookupMatches(documents, intent).map(({ document }) => document.candidateId)),
   new Set(pack.candidates.map((row) => row.id)),

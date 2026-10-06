@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import {
-  installAcceptanceComparisonPack,
   removeAcceptanceComparisonPack,
 } from "../../lib/acceptanceComparisonPackRuntime";
 import { acceptanceComparisonPackFixture } from "../../lib/acceptanceComparisonPackFixture";
@@ -1255,7 +1254,7 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       await expect(
         pack.getByText("PTF Synthetic Manufacturing Client").first(),
       ).toBeVisible();
-      await installAcceptanceComparisonPack(db, packExpected);
+      // The pack is provisioned before the first Search request warms its cache.
       // Add every row through the authenticated API, scoped to this synthetic job.
       for (const candidate of fullPack.candidates) {
         const selected = { candidateId: candidate.id, jobId: job!.id };
