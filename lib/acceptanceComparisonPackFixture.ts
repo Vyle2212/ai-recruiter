@@ -6,7 +6,10 @@ export function acceptanceComparisonPackFixture(runId: string) {
   if (!/^ptf1c2-gh-\d+-\d+$/.test(runId))
     throw new Error("acceptance_pack_run_invalid");
   const digest = createHash("sha256").update(runId).digest("hex");
-  const query = `Synthetic PTF Pack ${digest.slice(0, 12)}`;
+  const nameToken = [...digest.slice(0, 12)]
+    .map((digit) => String.fromCharCode(97 + Number.parseInt(digit, 16)))
+    .join("");
+  const query = `Synthetic ${nameToken} Tester`;
   const candidates = Array.from({ length: 25 }, (_, index) => {
     const suffix = String(index + 1).padStart(2, "0");
     const idDigest = createHash("sha256")
@@ -15,7 +18,7 @@ export function acceptanceComparisonPackFixture(runId: string) {
     return {
       ...acceptanceSyntheticCandidateRecord(),
       id: `${idDigest.slice(0, 8)}-${idDigest.slice(8, 12)}-4${idDigest.slice(13, 16)}-8${idDigest.slice(17, 20)}-${idDigest.slice(20, 32)}`,
-      name: `${query} Tester ${suffix}`,
+      name: `${query} ${String.fromCharCode(65 + index)}`,
       email: `ptf-pack-${digest.slice(0, 12)}-${suffix}@acceptance.invalid`,
     };
   });

@@ -4,6 +4,10 @@ import {
   validateAcceptanceComparisonPack,
 } from "../lib/acceptanceComparisonPackFixture";
 import { searchV2ComparisonCandidates } from "../lib/searchV2Comparison";
+import { buildCandidateSearchIndexRow } from "../lib/candidateSearchIndex";
+import { candidateSearchV2ProjectionDocument } from "../lib/candidateSearchV2Projection";
+import { canonicalLookupMatches, detectSearchV2UnifiedIntent } from "../lib/searchV2UnifiedIntent";
+import { normalizeSearchV2Query } from "../lib/searchV2QueryNormalization";
 
 const run = "ptf1c2-gh-123456-1";
 const pack = acceptanceComparisonPackFixture(run);
@@ -12,6 +16,17 @@ validateAcceptanceComparisonPack(run, pack.candidates);
 assert.deepEqual(pack, acceptanceComparisonPackFixture(run));
 const next = acceptanceComparisonPackFixture("ptf1c2-gh-123456-2");
 const nextIds = new Set(next.candidates.map((row) => row.id));
+// Match the route's normalization before intent detection and real index projection.
+const intent = detectSearchV2UnifiedIntent(normalizeSearchV2Query(pack.query).normalizedQuery);
+assert.equal(intent.type, "candidate_name_lookup");
+assert.equal(intent.searchable, true);
+const documents = [...pack.candidates, ...next.candidates].map((row) =>
+  candidateSearchV2ProjectionDocument({ ...buildCandidateSearchIndexRow(row), display_name: row.name }),
+);
+assert.deepEqual(
+  new Set(canonicalLookupMatches(documents, intent).map(({ document }) => document.candidateId)),
+  new Set(pack.candidates.map((row) => row.id)),
+);
 assert.ok(pack.candidates.every((row) => !nextIds.has(row.id)));
 assert.throws(() => acceptanceComparisonPackFixture("production"));
 assert.throws(() =>

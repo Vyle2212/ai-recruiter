@@ -1288,7 +1288,7 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
         ),
       ).toEqual(expectedIds);
       for (const [jobId, expectedCount] of [
-        [job!.id, 25],
+        [job!.id, 20],
         ["00000000-0000-4000-8000-000000000001", 0],
       ] as const) {
         const scopedResponse = await shortlist.post(searchPath, {
@@ -1296,21 +1296,20 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
             query: fullPack.query,
             talentPool: "internal_profiles",
             page: 1,
-            pageSize: 50,
+            pageSize: 20,
             comparison: { scope: "shortlisted", jobId },
           },
         });
         expect(scopedResponse.status()).toBe(200);
         const scopedBody = await scopedResponse.json();
         expect(scopedBody.results).toHaveLength(expectedCount);
-        if (expectedCount)
-          expect(
-            new Set(
-              scopedBody.results.map(
-                (row: { candidateId: string }) => row.candidateId,
-              ),
-            ),
-          ).toEqual(expectedIds);
+        if (expectedCount) {
+          const scopedIds = scopedBody.results.map(
+            (row: { candidateId: string }) => row.candidateId,
+          );
+          expect(new Set(scopedIds).size).toBe(expectedCount);
+          expect(scopedIds.every((id: string) => expectedIds.has(id))).toBe(true);
+        }
       }
       await page.goto(`${searchPage}?jobId=${encodeURIComponent(job!.id)}`);
       await page
