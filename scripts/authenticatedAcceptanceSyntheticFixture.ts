@@ -1,5 +1,9 @@
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import {
+  removeAcceptanceComparisonPack,
+  verifyAcceptanceComparisonPackAbsent,
+} from "../lib/acceptanceComparisonPackRuntime";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import {
@@ -294,9 +298,11 @@ async function main() {
   } else if (action === "verify") {
     await verifyCandidate(client, expected);
   } else if (action === "remove") {
+    await removeAcceptanceComparisonPack(client, expected);
     await deleteExact(client, expected);
     await githubFlag("ACCEPTANCE_FIXTURE_REMOVED");
   } else if (action === "residue-verify") {
+    await verifyAcceptanceComparisonPackAbsent(client, expected);
     if (
       acceptanceFixtureState(await presence(client), expected) !== "available"
     )

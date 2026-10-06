@@ -111,6 +111,8 @@ jobs:
           node scripts/authenticatedAcceptanceOriginalCvCleanup.test.cjs
           node --import tsx scripts/originalCvArchiveContract.test.ts
           node --import tsx scripts/originalCvReadAccess.test.ts
+          node --import tsx scripts/acceptanceComparisonPackFixture.test.ts
+          node --import tsx scripts/acceptanceComparisonPackRuntime.test.ts
           node --import tsx scripts/searchV2JobComparison.test.ts
           node --import tsx scripts/recruiterDashboard.test.ts
           node --import tsx scripts/recruiterWorkflowAnalytics.test.ts
