@@ -1148,7 +1148,10 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
   test("Search V2 shows Comparison beside Shortlist with separate employer and client periods", async ({
     page,
   }, testInfo) => {
-    test.setTimeout(180_000);
+    // 25 authorized inserts plus 25 authorized deletes share this deadline.
+    // Run 49 completed the pack checks at 150s, then timed out during cleanup.
+    // Keep the 3s Search budget independent of this bounded fixture lifecycle.
+    test.setTimeout(300_000);
     const db = acceptanceAdminClient();
     const runHash = pseudonymousAcceptanceIdentifier(
       acceptanceRequired("ACCEPTANCE_RUN_ID"),
@@ -1377,6 +1380,7 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
           }
         }
       }
+      comparisonPhase("full-pack-verified");
       await attachSanitized(testInfo, "full-comparison-pack", {
         syntheticProfileCount: 25,
         verifiedPackSizes: [5, 10, 20],
@@ -1411,6 +1415,7 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
         internalCandidateId,
       );
       await shortlist.dispose();
+      comparisonPhase("cleanup-verified");
     }
   });
 
