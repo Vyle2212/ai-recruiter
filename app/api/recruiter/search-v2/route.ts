@@ -354,12 +354,29 @@ export async function GET(request: NextRequest) {
   );
 }
 export async function POST(request: NextRequest) {
+  const routeStartedAt = performance.now();
   const authorization = await requireRecruiterSearchAuthorization({
     permission: "search:read",
     route: "/api/recruiter/search-v2",
   });
   if (!authorization.allowed)
     return recruiterSearchAuthorizationDenied(authorization);
+
+  const authorizationMs = performance.now() - routeStartedAt;
+  const response = await authorizedSearchPost(request, authorization);
+  // Numeric timings expose no actor or credential information. Existing total
+  // starts after authorization, so retain it and report the full handler too.
+  response.headers.append(
+    "Server-Timing",
+    `authorization;dur=${authorizationMs.toFixed(1)}, handler;dur=${(performance.now() - routeStartedAt).toFixed(1)}`,
+  );
+  return response;
+}
+
+async function authorizedSearchPost(
+  request: NextRequest,
+  authorization: Extract<Awaited<ReturnType<typeof requireRecruiterSearchAuthorization>>, { allowed: true }>,
+) {
 
   try {
     const startedAt = performance.now();

@@ -533,7 +533,7 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     }
     const clientOverheadMs = Math.max(
       0,
-      firstSearchMs - (serverPhases.total || 0),
+      firstSearchMs - (serverPhases.handler || serverPhases.total || 0),
     );
     const latencyDiagnostic = {
       latencyBudgetMs: SEARCH_V2_ACCEPTANCE_BUDGET_MS,
