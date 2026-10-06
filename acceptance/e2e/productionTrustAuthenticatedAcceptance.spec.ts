@@ -574,6 +574,20 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
         item.overallMatchScore,
       ]),
     );
+    const warmServerPhases: Record<string, number> = {};
+    for (const metric of (repeated.headers()["server-timing"] || "").split(",")) {
+      const parsed = /^\s*([a-zA-Z][a-zA-Z0-9_-]{0,40});dur=([0-9]+(?:\.[0-9]+)?)\s*$/.exec(metric);
+      if (parsed && Number.isFinite(Number(parsed[2])))
+        warmServerPhases[parsed[1]] = Number(parsed[2]);
+    }
+    const warmDiagnostic = {
+      latencyBudgetMs: SEARCH_V2_ACCEPTANCE_BUDGET_MS,
+      warmSearchMs,
+      serverPhases: warmServerPhases,
+      clientOverheadMs: Math.max(0, warmSearchMs - (warmServerPhases.handler || warmServerPhases.total || 0)),
+    };
+    await attachSanitized(testInfo, "internal-search-warm-latency", warmDiagnostic);
+    console.log(JSON.stringify({ type: "acceptance_search_warm_latency", ...warmDiagnostic }));
     expect(
       warmSearchMs,
       `warm Search V2 response exceeded ${SEARCH_V2_ACCEPTANCE_BUDGET_MS}ms`,
@@ -1054,7 +1068,21 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
 
   test("synthetic candidate drawer remains private and preserves Experience/Projects semantics", async ({
     page,
-  }) => {
+  }, testInfo) => {
+    const detailApi = await authenticatedApi("recruiter");
+    try {
+      const detailResponse = await detailApi.get(`${searchPath}/candidate-details/${internalCandidateId}`);
+      expect(detailResponse.status()).toBe(200);
+      const detail = await detailResponse.json();
+      const projects = detail.enterpriseProfile?.projects || [];
+      const expectedClientPresent = projects.some((project: { client?: string }) => project.client === "PTF Synthetic Manufacturing Client");
+      const diagnostic = { projectCount: projects.length, expectedClientPresent };
+      await attachSanitized(testInfo, "drawer-project-source", diagnostic);
+      console.log(JSON.stringify({ type: "acceptance_drawer_project_source", ...diagnostic }));
+      expect(expectedClientPresent, "candidate-detail API must preserve the synthetic project client before checking the drawer").toBe(true);
+    } finally {
+      await detailApi.dispose();
+    }
     await installAuthenticatedBrowserState(page.context(), "recruiter");
     await page.goto(searchPage);
     await page
@@ -1144,7 +1172,13 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     };
     const fullPack = acceptanceComparisonPackFixture(packExpected.runId);
     const packSelections: { candidateId: string; jobId: string }[] = [];
+    const comparisonStartedAt = performance.now();
+    const comparisonPhase = (phase: string) => console.log(JSON.stringify({
+      type: "acceptance_comparison_phase", phase,
+      elapsedMs: Math.ceil(performance.now() - comparisonStartedAt),
+    }));
     try {
+      comparisonPhase("single-profile-api");
       const saved = await shortlist.post("/api/recruiter/search-v2/shortlist", {
         data: selection,
       });
@@ -1190,7 +1224,9 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       } finally {
         await denied.dispose();
       }
+      comparisonPhase("single-profile-ui");
       await installAuthenticatedBrowserState(page.context(), "recruiter");
+      comparisonPhase("full-pack-ui");
       await page.goto(`${searchPage}?jobId=${encodeURIComponent(job!.id)}`);
       await page
         .getByPlaceholder(
@@ -1256,6 +1292,7 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       ).toBeVisible();
       // The pack is provisioned before the first Search request warms its cache.
       // Add every row through the authenticated API, scoped to this synthetic job.
+      comparisonPhase("full-pack-shortlist");
       for (const candidate of fullPack.candidates) {
         const selected = { candidateId: candidate.id, jobId: job!.id };
         packSelections.push(selected);
@@ -1267,6 +1304,7 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
           ).status(),
         ).toBe(200);
       }
+      comparisonPhase("full-pack-api");
       const fullResponse = await shortlist.post(searchPath, {
         data: {
           query: fullPack.query,
@@ -1310,6 +1348,7 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
           expect(scopedIds.every((id: string) => expectedIds.has(id))).toBe(true);
         }
       }
+      comparisonPhase("full-pack-ui");
       await page.goto(`${searchPage}?jobId=${encodeURIComponent(job!.id)}`);
       await page
         .getByPlaceholder(
@@ -1346,6 +1385,7 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
         employerClientSeparated: true,
       });
     } finally {
+      comparisonPhase("cleanup");
       let packCleanupFailed = false;
       for (const selected of packSelections) {
         const removed = await shortlist.delete(
