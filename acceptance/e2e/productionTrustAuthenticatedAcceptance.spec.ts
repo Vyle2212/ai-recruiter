@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 import { appendFile } from "node:fs/promises";
-import { ORIGINAL_CV_BUCKET, ownedOriginalCvObjectKey } from "../../lib/originalCvArchiveKey";
+import {
+  ORIGINAL_CV_BUCKET,
+  ownedOriginalCvObjectKey,
+} from "../../lib/originalCvArchiveKey";
 import type { RecruiterCopilotAnswer } from "../../lib/recruiterCopilotAnswerEngine";
 import { test, expect, type APIResponse } from "@playwright/test";
 
@@ -514,8 +517,13 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     // Capture bounded numeric diagnostics before the budget assertion so a
     // slow request still explains which server phases consumed the budget.
     const serverPhases: Record<string, number> = {};
-    for (const metric of (response.headers()["server-timing"] || "").split(",")) {
-      const parsed = /^\s*([a-zA-Z][a-zA-Z0-9_-]{0,40});dur=([0-9]+(?:\.[0-9]+)?)\s*$/.exec(metric);
+    for (const metric of (response.headers()["server-timing"] || "").split(
+      ",",
+    )) {
+      const parsed =
+        /^\s*([a-zA-Z][a-zA-Z0-9_-]{0,40});dur=([0-9]+(?:\.[0-9]+)?)\s*$/.exec(
+          metric,
+        );
       if (parsed && Number.isFinite(Number(parsed[2])))
         serverPhases[parsed[1]] = Number(parsed[2]);
     }
@@ -702,12 +710,13 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     }
   });
 
-
   test("synthetic private CV upload preserves bytes and rejects digest mismatch", async ({}, testInfo) => {
     const admin = await authenticatedApi("admin");
     const database = acceptanceAdminClient();
     const owner = (await credentialBundle()).identities.admin.authUserId;
-    const bytes = Buffer.from("Synthetic acceptance integrity fixture. No real candidate data.");
+    const bytes = Buffer.from(
+      "Synthetic acceptance integrity fixture. No real candidate data.",
+    );
     const fileName = "synthetic-integrity.txt";
     const claimedDigest = "0".repeat(64);
     try {
@@ -716,13 +725,17 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       });
       if (signed.status() !== 200) {
         const failure = await signed.json().catch(() => null);
-        const reason = failure?.error === "CV upload is waiting for database and review-queue setup."
-          ? "foundation_unavailable"
-          : failure?.error === "Private CV storage is unavailable."
-            ? "private_storage_unavailable"
-            : "unclassified";
+        const reason =
+          failure?.error ===
+          "CV upload is waiting for database and review-queue setup."
+            ? "foundation_unavailable"
+            : failure?.error === "Private CV storage is unavailable."
+              ? "private_storage_unavailable"
+              : "unclassified";
         await testInfo.attach("acceptance_upload_sign_failure", {
-          body: Buffer.from(JSON.stringify({ status: signed.status(), reason })),
+          body: Buffer.from(
+            JSON.stringify({ status: signed.status(), reason }),
+          ),
           contentType: "application/json",
         });
       }
@@ -730,8 +743,7 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       const reference = await signed.json();
       expect(ownedOriginalCvObjectKey(owner, reference.objectKey)).toBe(true);
       expect(reference.contentType).toBe("text/plain");
-      const ledgerPath =
-        `${acceptanceRequired("ACCEPTANCE_CREDENTIAL_BUNDLE_PATH")}.original-cv-ledger.jsonl`;
+      const ledgerPath = `${acceptanceRequired("ACCEPTANCE_CREDENTIAL_BUNDLE_PATH")}.original-cv-ledger.jsonl`;
       await appendFile(
         ledgerPath,
         `${JSON.stringify({ objectKey: reference.objectKey })}\n`,
@@ -739,30 +751,47 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       );
       const bucket = database.storage.from(ORIGINAL_CV_BUCKET);
       const uploaded = await bucket.uploadToSignedUrl(
-        reference.objectKey, reference.token, bytes,
+        reference.objectKey,
+        reference.token,
+        bytes,
         { contentType: reference.contentType },
       );
       expect(uploaded.error).toBeNull();
       const readback = await bucket.download(reference.objectKey);
       expect(readback.error).toBeNull();
       expect(readback.data).toBeTruthy();
-      expect(Buffer.from(await readback.data!.arrayBuffer()).equals(bytes)).toBe(true);
+      expect(
+        Buffer.from(await readback.data!.arrayBuffer()).equals(bytes),
+      ).toBe(true);
       const rejected = await admin.post("/api/upload-cv", {
-        data: { fileName, objectKey: reference.objectKey, size: bytes.length, contentDigest: claimedDigest },
+        data: {
+          fileName,
+          objectKey: reference.objectKey,
+          size: bytes.length,
+          contentDigest: claimedDigest,
+        },
       });
       expect(rejected.status()).toBe(409);
       const sourceFile = `${ORIGINAL_CV_BUCKET}/${reference.objectKey}`;
-      const review = await database.from("candidate_upload_reviews")
-        .select("source_file").eq("source_file", sourceFile).limit(2);
+      const review = await database
+        .from("candidate_upload_reviews")
+        .select("source_file")
+        .eq("source_file", sourceFile)
+        .limit(2);
       expect(review.error).toBeNull();
       expect(review.data?.length).toBe(1);
-      const candidates = await database.from("candidates")
-        .select("id", { count: "exact", head: true }).eq("source_file", sourceFile);
+      const candidates = await database
+        .from("candidates")
+        .select("id", { count: "exact", head: true })
+        .eq("source_file", sourceFile);
       expect(candidates.error).toBeNull();
       expect(candidates.count).toBe(0);
       await attachSanitized(testInfo, "synthetic-upload-integrity", {
-        signedUpload: true, originalBytesMatch: true,
-        digestMismatchDenied: true, reviewQueued: true, candidateCreated: false,
+        signedUpload: true,
+        originalBytesMatch: true,
+        digestMismatchDenied: true,
+        reviewQueued: true,
+        candidateCreated: false,
       });
     } finally {
       await admin.dispose();
@@ -831,11 +860,10 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       const ledgerPath =
         acceptanceRequired("ACCEPTANCE_CREDENTIAL_BUNDLE_PATH") +
         ".original-cv-ledger.jsonl";
-      await appendFile(
-        ledgerPath,
-        JSON.stringify({ objectKey }) + "\n",
-        { encoding: "utf8", mode: 0o600 },
-      );
+      await appendFile(ledgerPath, JSON.stringify({ objectKey }) + "\n", {
+        encoding: "utf8",
+        mode: 0o600,
+      });
       const upload = await database.storage
         .from(ORIGINAL_CV_BUCKET)
         .uploadToSignedUrl(objectKey, reference.token, bytes, {
@@ -1039,7 +1067,13 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     await expect(page.getByRole("tab", { name: /Experience/ })).toBeVisible();
     await expect(page.getByRole("tab", { name: /Projects/ })).toBeVisible();
     const drawer = page.getByRole("dialog");
-    const sections = ["Overview", "Experience", "Projects", "Education", "Skills"];
+    const sections = [
+      "Overview",
+      "Experience",
+      "Projects",
+      "Education",
+      "Skills",
+    ];
     for (const section of sections) {
       const tab = drawer.getByRole("tab", {
         name: new RegExp(`^${section}(?:,|$)`),
