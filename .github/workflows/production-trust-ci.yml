@@ -175,6 +175,7 @@ jobs:
         run: |
           npm run test:production-trust:search-regression
           node --import tsx scripts/searchV2ComparisonActions.test.ts
+          node --import tsx scripts/acceptanceComparisonPackFixture.test.ts
           node --import tsx scripts/searchV2PerformanceUx.test.ts
 
       - name: Canonical evidence and immutable golden regressions
