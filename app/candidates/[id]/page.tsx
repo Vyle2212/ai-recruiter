@@ -1209,11 +1209,11 @@ export default async function Candidate360Page({
           </div>
         </div>
 
-        <section className="overflow-hidden rounded-[28px] bg-gradient-to-br from-[#111820] via-[#0d141c] to-[#091018] shadow-[0_24px_60px_rgba(0,0,0,0.30)] ring-1 ring-slate-800/45">
+        <section className="overflow-hidden rounded-[28px] bg-linear-to-br from-[#111820] via-[#0d141c] to-[#091018] shadow-[0_24px_60px_rgba(0,0,0,0.30)] ring-1 ring-slate-800/45">
           <div className="grid gap-6 px-5 py-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(340px,0.92fr)] xl:gap-8">
             <div className="space-y-4">
               <div className="flex items-start gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-cyan-400/20 bg-gradient-to-br from-cyan-500/20 to-blue-900/40 text-lg font-black text-cyan-100 shadow-inner shadow-cyan-950/30">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-cyan-400/20 bg-linear-to-br from-cyan-500/20 to-blue-900/40 text-lg font-black text-cyan-100 shadow-inner shadow-cyan-950/30">
                   {avatarInitials(model.identity.name)}
                 </div>
 
@@ -1446,7 +1446,7 @@ export default async function Candidate360Page({
                         ? "delivery"
                         : undefined;
               return (
-                <div key={capability} className="c360-surface-2 c360-hover-lift rounded-2xl p-3 ring-1 transition duration-200 xl:col-span-2 xl:[&:nth-last-child(2)]:col-start-2">
+                <div key={capability} className="c360-surface-2 c360-hover-lift rounded-2xl p-3 ring-1 transition duration-200 xl:col-span-2 xl:nth-last-2:col-start-2">
                   <div className="text-sm font-semibold text-white">{capability}</div>
                   <div className="mt-1 text-xs font-semibold leading-5 text-slate-300">{finding}</div>
                   <div className="mt-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Next Validation</div>

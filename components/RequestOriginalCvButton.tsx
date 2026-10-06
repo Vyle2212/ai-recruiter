@@ -47,7 +47,7 @@ export function RequestOriginalCvButton({
         type="button"
         disabled={busy}
         onClick={requestAccess}
-        className="rounded border border-amber-500/40 px-4 py-2 text-sm text-amber-100 disabled:opacity-50"
+        className="rounded-sm border border-amber-500/40 px-4 py-2 text-sm text-amber-100 disabled:opacity-50"
       >
         {busy ? "Sending..." : "Request original CV access"}
       </button>

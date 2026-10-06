@@ -596,7 +596,7 @@ export default function GuidedSourcingPanel({
                 maxLength={12000}
                 rows={7}
                 placeholder="Paste a job description or hiring brief..."
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 p-4 text-sm text-white outline-none focus:border-violet-400"
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 p-4 text-sm text-white outline-hidden focus:border-violet-400"
               />
             ) : null}
             {sourceMode === "posted_job_jd" ? (

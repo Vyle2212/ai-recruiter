@@ -25,7 +25,7 @@ export default function TransactionalDrawer({id,title,description,onCancel,child
     <button ref={closeRef} type="button" onClick={onCancel} aria-label={`Close ${title}`} className="rounded-lg border border-slate-700 px-3 py-2 text-slate-300 hover:border-slate-500 hover:text-white">Close</button>
    </header>
    <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7">{children}</div>
-   <footer className="sticky bottom-0 border-t border-slate-800 bg-slate-950/95 px-5 py-4 backdrop-blur sm:px-7">{footer}</footer>
+   <footer className="sticky bottom-0 border-t border-slate-800 bg-slate-950/95 px-5 py-4 backdrop-blur-sm sm:px-7">{footer}</footer>
   </section>
  </div>
 }

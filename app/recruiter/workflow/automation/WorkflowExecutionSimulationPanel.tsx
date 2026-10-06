@@ -64,7 +64,7 @@ function SimulationContent({
     <section className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.1em] text-emerald-200">
+          <div className="text-xs font-semibold uppercase tracking-widest text-emerald-200">
             Execution Simulation
           </div>
 
@@ -81,11 +81,11 @@ function SimulationContent({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-emerald-100">
+          <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-emerald-100">
             Dry run completed
           </span>
 
-          <span className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-300">
+          <span className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-slate-300">
             Execution disabled
           </span>
         </div>
@@ -411,7 +411,7 @@ export function WorkflowExecutionSimulationPanel({
   if (skipped) {
     return (
       <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-        <div className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-100">
+        <div className="text-xs font-semibold uppercase tracking-widest text-amber-100">
           Simulation skipped
         </div>
 

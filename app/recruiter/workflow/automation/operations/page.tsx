@@ -953,7 +953,7 @@ export default function WorkflowAutomationOperationsPage() {
         <section className="mt-6 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.1em] text-emerald-200">
+              <div className="text-xs font-semibold uppercase tracking-widest text-emerald-200">
                 Platform safety
               </div>
 
@@ -966,7 +966,7 @@ export default function WorkflowAutomationOperationsPage() {
               </p>
             </div>
 
-            <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-emerald-100">
+            <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-emerald-100">
               Read only
             </span>
           </div>

@@ -156,14 +156,14 @@ export default function WorkflowNotificationsPage() {
             <div className="flex flex-wrap gap-2">
               <WorkflowSlaBadge compact />
               <Link
-                className="rounded-md border border-cyan-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-cyan-100"
+                className="rounded-md border border-cyan-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-cyan-100"
                 href="/recruiter/workflow"
               >
                 Workflow
               </Link>
 
               <Link
-                className="rounded-md border border-violet-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-violet-100"
+                className="rounded-md border border-violet-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-violet-100"
                 href="/recruiter/workflow/copilot"
               >
                 Copilot
@@ -262,7 +262,7 @@ export default function WorkflowNotificationsPage() {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <span
-                            className={`rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] ${priorityTone(
+                            className={`rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-widest ${priorityTone(
                               item.priority,
                             )}`}
                           >
@@ -274,7 +274,7 @@ export default function WorkflowNotificationsPage() {
                           </h3>
                         </div>
 
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-cyan-200">
+                        <span className="text-[10px] font-semibold uppercase tracking-widest text-cyan-200">
                           {item.status}
                         </span>
                       </div>
@@ -320,7 +320,7 @@ export default function WorkflowNotificationsPage() {
                           {item.actionLabel}
                         </Link>
 
-                        <span className="text-[10px] uppercase tracking-[0.1em] text-slate-600">
+                        <span className="text-[10px] uppercase tracking-widest text-slate-600">
                           No automatic action
                         </span>
                       </div>

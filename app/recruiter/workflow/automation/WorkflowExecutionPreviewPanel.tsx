@@ -61,7 +61,7 @@ function ExecutionPreviewContent({
     <section className="mt-4 rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.1em] text-violet-200">
+          <div className="text-xs font-semibold uppercase tracking-widest text-violet-200">
             Execution Preview
           </div>
 
@@ -74,7 +74,7 @@ function ExecutionPreviewContent({
           </p>
         </div>
 
-        <span className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-100">
+        <span className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-amber-100">
           Not executed
         </span>
       </div>
@@ -337,7 +337,7 @@ export function WorkflowExecutionPreviewPanel({
   if (unmatched) {
     return (
       <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-        <div className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-100">
+        <div className="text-xs font-semibold uppercase tracking-widest text-amber-100">
           Execution preview unavailable
         </div>
 

@@ -72,7 +72,7 @@ export default function SearchCriteriaPanel({
                 update(criterion.id, { label: event.target.value })
               }
               rows={2}
-              className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm leading-5 text-white focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-900"
+              className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm leading-5 text-white focus:border-cyan-400 focus:outline-hidden focus:ring-2 focus:ring-cyan-900"
             />
             {criterion.source==="ai_suggestion"?<span className="mt-1 block text-[11px] text-violet-300">AI suggestion · editable and removable</span>:null}</div>
             <select
@@ -84,7 +84,7 @@ export default function SearchCriteriaPanel({
                     .value as CandidateSearchCriterion["importance"],
                 })
               }
-              className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white md:col-start-2"
+              className="rounded-sm border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white md:col-start-2"
             >
               <option value="most_important">Most important</option>
               <option value="important">Important</option>

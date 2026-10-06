@@ -265,6 +265,9 @@ jobs:
       - name: Spreadsheet export and lazy-client regressions
         run: npm run test:production-trust:dependencies
 
+      - name: DOCX dependency and CSS compiler compatibility
+        run: npm run test:dependency-compatibility
+
       - name: TypeScript typecheck
         run: npm run typecheck
 

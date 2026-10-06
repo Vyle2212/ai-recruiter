@@ -439,7 +439,7 @@ function RichNotes({ value, onChange }: { value: string; onChange: (value: strin
       contentEditable
       suppressContentEditableWarning
       onInput={(event) => onChange(event.currentTarget.innerText)}
-      className="min-h-[132px] rounded-2xl bg-[#05070A] p-4 text-sm leading-6 text-slate-200 outline-none ring-1 ring-slate-800/70 focus:ring-cyan-500/30"
+      className="min-h-[132px] rounded-2xl bg-[#05070A] p-4 text-sm leading-6 text-slate-200 outline-hidden ring-1 ring-slate-800/70 focus:ring-cyan-500/30"
     />
   );
 }
@@ -589,7 +589,7 @@ export function SubmissionGeneratorWorkspace() {
           </aside>
         </section>
 
-        <section className="rounded-[24px] bg-[#0B1118] p-5 ring-1 ring-slate-800/60"><div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-200">Client Email</div><textarea value={generatedEmail} onChange={(event) => setEmail(event.target.value)} className="mt-3 min-h-[260px] w-full resize-y rounded-2xl bg-[#05070A] p-4 text-sm leading-6 text-slate-200 outline-none ring-1 ring-slate-800/70 focus:ring-cyan-500/30" /></section>
+        <section className="rounded-[24px] bg-[#0B1118] p-5 ring-1 ring-slate-800/60"><div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-200">Client Email</div><textarea value={generatedEmail} onChange={(event) => setEmail(event.target.value)} className="mt-3 min-h-[260px] w-full resize-y rounded-2xl bg-[#05070A] p-4 text-sm leading-6 text-slate-200 outline-hidden ring-1 ring-slate-800/70 focus:ring-cyan-500/30" /></section>
       </div>
       {toast ? <div className="fixed bottom-5 right-5 rounded-full bg-cyan-400 px-4 py-2.5 text-xs font-semibold text-slate-950 shadow-lg">{toast}</div> : null}
     </main>

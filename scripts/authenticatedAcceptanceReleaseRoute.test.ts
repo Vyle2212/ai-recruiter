@@ -8,8 +8,7 @@ async function main() {
     id: process.env.ACCEPTANCE_ENVIRONMENT_ID,
     project: process.env.ACCEPTANCE_SUPABASE_PROJECT_REF,
     candidateUpload: process.env.CANDIDATE_CV_UPLOAD_ENABLED,
-    candidateConfirmation:
-      process.env.CANDIDATE_PROFILE_CONFIRMATION_ENABLED,
+    candidateConfirmation: process.env.CANDIDATE_PROFILE_CONFIRMATION_ENABLED,
   };
   const route = await import("../app/api/acceptance/release/route");
   delete process.env.ACCEPTANCE_TEST_MODE;

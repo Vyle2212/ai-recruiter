@@ -27,17 +27,17 @@ function Field({ label, field }: { label: string; field: Candidate360Field }) {
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <span
-          className={`rounded border px-2 py-1 text-xs ${tone(field.source)}`}
+          className={`rounded-sm border px-2 py-1 text-xs ${tone(field.source)}`}
         >
           {field.source.replace(/_/g, " ")}
         </span>
         <span
-          className={`rounded border px-2 py-1 text-xs ${tone(field.verificationStatus)}`}
+          className={`rounded-sm border px-2 py-1 text-xs ${tone(field.verificationStatus)}`}
         >
           {field.verificationStatus.replace(/_/g, " ")}
         </span>
         {field.confidence ? (
-          <span className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400">
+          <span className="rounded-sm border border-slate-700 px-2 py-1 text-xs text-slate-400">
             {field.confidence}% confidence
           </span>
         ) : null}
@@ -105,17 +105,17 @@ export default function Page({
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <span
-                    className={`rounded border px-2 py-1 text-xs ${tone(profile.workflowStatus)}`}
+                    className={`rounded-sm border px-2 py-1 text-xs ${tone(profile.workflowStatus)}`}
                   >
                     {profile.workflowStatus.replace(/_/g, " ")}
                   </span>
                   <span
-                    className={`rounded border px-2 py-1 text-xs ${tone(profile.readiness.readyForShortlist ? "verified" : "missing")}`}
+                    className={`rounded-sm border px-2 py-1 text-xs ${tone(profile.readiness.readyForShortlist ? "verified" : "missing")}`}
                   >
                     Ready {profile.readiness.readyForShortlist ? "yes" : "no"}
                   </span>
                   <span
-                    className={`rounded border px-2 py-1 text-xs ${tone(profile.readiness.searchable ? "verified" : "missing")}`}
+                    className={`rounded-sm border px-2 py-1 text-xs ${tone(profile.readiness.searchable ? "verified" : "missing")}`}
                   >
                     Searchable {profile.readiness.searchable ? "yes" : "no"}
                   </span>
@@ -125,26 +125,26 @@ export default function Page({
                 <RequestOriginalCvButton candidateId={profile.candidateId} />
                 <Link
                   href={`/candidate/self-confirm/${profile.candidateId}`}
-                  className="rounded bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950"
+                  className="rounded-sm bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950"
                 >
                   View self-confirm preview
                 </Link>
                 <Link
                   href={`/recruiter/candidate-compare?candidateIds=${encodeURIComponent(profile.candidateId)}`}
                   title="Add one or more candidates from Smart Shortlist to compare."
-                  className="rounded border border-cyan-500/40 px-4 py-2 text-sm text-cyan-100"
+                  className="rounded-sm border border-cyan-500/40 px-4 py-2 text-sm text-cyan-100"
                 >
                   Compare candidate
                 </Link>
                 <button
                   disabled
-                  className="rounded border border-slate-800 px-4 py-2 text-sm text-slate-600"
+                  className="rounded-sm border border-slate-800 px-4 py-2 text-sm text-slate-600"
                 >
                   Add to shortlist
                 </button>
                 <Link
                   href={`/recruiter/submission-generator?candidateId=${encodeURIComponent(profile.candidateId)}`}
-                  className="rounded border border-emerald-500/40 px-4 py-2 text-sm text-emerald-100"
+                  className="rounded-sm border border-emerald-500/40 px-4 py-2 text-sm text-emerald-100"
                 >
                   Generate submission draft
                 </Link>
@@ -228,7 +228,7 @@ export default function Page({
                 ].map(([label, count]) => (
                   <span
                     key={String(label)}
-                    className={`rounded border px-3 py-2 text-xs ${tone(String(label).toLowerCase())}`}
+                    className={`rounded-sm border px-3 py-2 text-xs ${tone(String(label).toLowerCase())}`}
                   >
                     {label}: {count}
                   </span>
@@ -297,7 +297,7 @@ export default function Page({
                     (item, index) => (
                       <span
                         key={`${item.name.value}-${index}`}
-                        className="rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-sm text-cyan-100"
+                        className="rounded-sm border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-sm text-cyan-100"
                       >
                         {String(item.name.value)}
                       </span>
@@ -334,7 +334,7 @@ export default function Page({
                   {profile.missingFields.map((item) => (
                     <span
                       key={item}
-                      className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-sm text-amber-100"
+                      className="rounded-sm border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-sm text-amber-100"
                     >
                       {item}
                     </span>

@@ -87,7 +87,9 @@ const acceptanceCleanup = fs.readFileSync(
   "utf8",
 );
 assert.ok(
-  acceptanceCleanup.includes("return `Synthetic ${suffix[0].toUpperCase()}${suffix.slice(1)}`;"),
+  acceptanceCleanup.includes(
+    "return `Synthetic ${suffix[0].toUpperCase()}${suffix.slice(1)}`;",
+  ),
   "run-owned upload candidates require an exact pseudonymous name marker",
 );
 assert.match(
@@ -106,8 +108,9 @@ for (const restrictedTable of [
   );
 }
 assert.ok(
-  acceptanceCleanup.indexOf("acceptance_original_cv_database_residue_detected") <
-    acceptanceCleanup.indexOf("bucket.remove(objectKeys)"),
+  acceptanceCleanup.indexOf(
+    "acceptance_original_cv_database_residue_detected",
+  ) < acceptanceCleanup.indexOf("bucket.remove(objectKeys)"),
   "database residue must be proven empty before original bytes are removed",
 );
 

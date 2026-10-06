@@ -132,7 +132,7 @@ export default function RepairReviewPage() {
             ))}
             <button onClick={() => setSearchableAfterRepair(searchableAfterRepair === "true" ? "all" : "true")} className={`rounded-md border px-3 py-2 text-sm font-semibold ${searchableAfterRepair === "true" ? "border-emerald-400 bg-emerald-500/15 text-emerald-100" : "border-slate-700 bg-[#070A0F] text-slate-300 hover:border-slate-500"}`}>Searchable After Repair</button>
           </div>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, title, company, module" className="h-10 min-w-0 rounded-md border border-slate-700 bg-[#05070A] px-3 text-sm text-slate-100 outline-none focus:border-cyan-400 md:w-96" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, title, company, module" className="h-10 min-w-0 rounded-md border border-slate-700 bg-[#05070A] px-3 text-sm text-slate-100 outline-hidden focus:border-cyan-400 md:w-96" />
         </div>
 
         {error ? <div className="mt-6 border border-red-500/30 bg-red-500/10 p-4 text-red-100">{error}</div> : null}

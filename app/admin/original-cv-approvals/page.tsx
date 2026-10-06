@@ -83,7 +83,7 @@ export default function OriginalCvApprovalsPage() {
         {message && (
           <p
             role="status"
-            className="mt-5 rounded border border-amber-500/40 p-3 text-sm"
+            className="mt-5 rounded-sm border border-amber-500/40 p-3 text-sm"
           >
             {message}
           </p>
@@ -125,14 +125,14 @@ export default function OriginalCvApprovalsPage() {
                     <button
                       disabled={busy !== null}
                       onClick={() => decide(item.id, "approve")}
-                      className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
+                      className="rounded-sm bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
                     >
                       Approve 7 days
                     </button>
                     <button
                       disabled={busy !== null}
                       onClick={() => decide(item.id, "deny")}
-                      className="rounded border border-slate-600 px-4 py-2 text-sm disabled:opacity-50"
+                      className="rounded-sm border border-slate-600 px-4 py-2 text-sm disabled:opacity-50"
                     >
                       Deny
                     </button>

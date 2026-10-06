@@ -178,12 +178,12 @@ function mergeRunOwnedOriginalCvObjectKeys(
         ownedOriginalCvObjectKey(authUserId, objectKey),
       ),
     );
-    if (
-      ownedLedgerKeys.size > MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY
-    )
+    if (ownedLedgerKeys.size > MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY)
       throw new Error("acceptance_original_cv_cleanup_bound_exceeded");
   }
-  const objectKeys = [...new Set([...discoveredObjectKeys, ...ledgerObjectKeys])];
+  const objectKeys = [
+    ...new Set([...discoveredObjectKeys, ...ledgerObjectKeys]),
+  ];
   if (objectKeys.length > maximum)
     throw new Error("acceptance_original_cv_cleanup_bound_exceeded");
   return objectKeys;
@@ -216,16 +216,16 @@ async function cleanupRunOwnedOriginalCvData(
   if (
     candidateDiscoveryError ||
     !Array.isArray(candidates) ||
-    (candidates || []).length >
-      MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY
+    (candidates || []).length > MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY
   )
     throw new Error("acceptance_original_cv_candidate_discovery_failed");
   const expectedName = syntheticUploadCandidateName(runHash);
   if (
     (candidates || []).some(
       (candidate) =>
-        ![expectedName, ACCEPTANCE_LIFECYCLE_CANDIDATE_NAME].includes(candidate.name) ||
-        !references.includes(String(candidate.source_file || "")),
+        ![expectedName, ACCEPTANCE_LIFECYCLE_CANDIDATE_NAME].includes(
+          candidate.name,
+        ) || !references.includes(String(candidate.source_file || "")),
     )
   )
     throw new Error("acceptance_original_cv_candidate_ownership_mismatch");
@@ -276,8 +276,7 @@ async function cleanupRunOwnedOriginalCvData(
     throw new Error("acceptance_original_cv_database_residue_detected");
   const bucket = client.storage.from(ORIGINAL_CV_BUCKET);
   const { error: removeError } = await bucket.remove(objectKeys);
-  if (removeError)
-    throw new Error("acceptance_original_cv_cleanup_failed");
+  if (removeError) throw new Error("acceptance_original_cv_cleanup_failed");
   for (const authUserId of authUserIds) {
     const { data: remaining, error: residueError } = await bucket.list(
       authUserId,
@@ -308,12 +307,22 @@ async function verifyAbsentChatFixtureReferences(
     ["candidate_chat_contact_consents", "user_profile_id", profileIds],
     ["candidate_chat_contact_consent_events", "user_profile_id", profileIds],
     ["chat_conversations", "candidate_id", [ACCEPTANCE_SYNTHETIC_CANDIDATE_ID]],
-    ["candidate_chat_contact_consents", "candidate_id", [ACCEPTANCE_SYNTHETIC_CANDIDATE_ID]],
-    ["candidate_chat_contact_consent_events", "candidate_id", [ACCEPTANCE_SYNTHETIC_CANDIDATE_ID]],
+    [
+      "candidate_chat_contact_consents",
+      "candidate_id",
+      [ACCEPTANCE_SYNTHETIC_CANDIDATE_ID],
+    ],
+    [
+      "candidate_chat_contact_consent_events",
+      "candidate_id",
+      [ACCEPTANCE_SYNTHETIC_CANDIDATE_ID],
+    ],
   ];
   for (const [table, column, ids] of probes) {
-    const result = await client.from(table)
-      .select("*", { count: "exact", head: true }).in(column, ids);
+    const result = await client
+      .from(table)
+      .select("*", { count: "exact", head: true })
+      .in(column, ids);
     if (result.error || result.count !== 0)
       throw new Error("acceptance_chat_fixture_references_unresolved");
   }
@@ -669,11 +678,18 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
       { p_run_id: config.runId },
     );
     if (chatCleanupError) {
-      if (chatCleanupError.message !== "acceptance_chat_cleanup_fixture_scope_missing")
+      if (
+        chatCleanupError.message !==
+        "acceptance_chat_cleanup_fixture_scope_missing"
+      )
         throw new Error("acceptance_chat_fixture_cleanup_failed");
       // No chat mutation is permitted when the candidate lease is gone.
       // Continue identity cleanup only after exact zero-reference readback.
-      await verifyAbsentChatFixtureReferences(client, plan.profileIds, config.runId);
+      await verifyAbsentChatFixtureReferences(
+        client,
+        plan.profileIds,
+        config.runId,
+      );
     }
   } else if (
     !(["42P01", "PGRST205"] as string[]).includes(chatProbe.error.code)
@@ -683,8 +699,7 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
   // Delete only objects below this run's synthetic auth-user UUID prefixes,
   // verify ownership for every exact key, and prove the prefixes are empty
   // before deleting the identities that establish run ownership.
-  const originalCvLedgerPath =
-    `${config.credentialBundlePath}.original-cv-ledger.jsonl`;
+  const originalCvLedgerPath = `${config.credentialBundlePath}.original-cv-ledger.jsonl`;
   const ledgerObjectKeys =
     await readRunOwnedOriginalCvLedger(originalCvLedgerPath);
   await cleanupRunOwnedOriginalCvData(

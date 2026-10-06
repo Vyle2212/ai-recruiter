@@ -313,7 +313,7 @@ export default function WorkflowAutomationApprovalHistoryPage() {
         <section className="mt-6 rounded-xl border border-slate-800 bg-[#090C11] p-4">
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px]">
             <input
-              className="rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-none focus:border-fuchsia-500"
+              className="rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-hidden focus:border-fuchsia-500"
               onChange={(
                 event,
               ) =>
@@ -327,7 +327,7 @@ export default function WorkflowAutomationApprovalHistoryPage() {
             />
 
             <select
-              className="rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-none"
+              className="rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-hidden"
               onChange={(
                 event,
               ) =>

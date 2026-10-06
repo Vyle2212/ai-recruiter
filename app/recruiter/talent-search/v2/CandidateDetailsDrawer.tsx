@@ -183,7 +183,7 @@ function ProjectSummary({ values }: { values: readonly string[] }) {
       </ul>
       {additional.length ? (
         <details className="mt-1">
-          <summary className="cursor-pointer text-xs font-semibold text-cyan-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300">
+          <summary className="cursor-pointer text-xs font-semibold text-cyan-300 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-cyan-300">
             Show more
           </summary>
           <ul className="mt-2 list-disc space-y-1 pl-5">
@@ -519,9 +519,9 @@ export default function CandidateDetailsDrawer({
         aria-modal="true"
         aria-label={`Candidate details for ${name}`}
         tabIndex={-1}
-        className="absolute inset-y-0 right-0 flex h-[100dvh] w-full flex-col border-l border-cyan-500/20 bg-[#0b1420] shadow-[-24px_0_80px_-32px_rgba(0,0,0,.85)] sm:w-[min(48vw,880px)]"
+        className="absolute inset-y-0 right-0 flex h-dvh w-full flex-col border-l border-cyan-500/20 bg-[#0b1420] shadow-[-24px_0_80px_-32px_rgba(0,0,0,.85)] sm:w-[min(48vw,880px)]"
       >
-        <header className="shrink-0 border-b border-slate-700/60 bg-gradient-to-br from-[#12253a] via-[#0e1b2b] to-[#0b1420] px-5 py-5">
+        <header className="shrink-0 border-b border-slate-700/60 bg-linear-to-br from-[#12253a] via-[#0e1b2b] to-[#0b1420] px-5 py-5">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <h2 className="flex min-w-0 items-center gap-3 text-2xl font-semibold tracking-tight text-white">
@@ -884,7 +884,7 @@ export default function CandidateDetailsDrawer({
                     )}
                     {diagnostic.requirements.length > 4 ? (
                       <details className="mt-4 border-t border-slate-700/60 pt-3">
-                        <summary className="cursor-pointer text-xs font-semibold text-cyan-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300">
+                        <summary className="cursor-pointer text-xs font-semibold text-cyan-200 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-cyan-300">
                           Show {diagnostic.requirements.length - 4} more
                           criteria
                         </summary>
@@ -1018,7 +1018,7 @@ export default function CandidateDetailsDrawer({
                     <button
                       type="button"
                       onClick={() => setRetryRevision((value) => value + 1)}
-                      className="rounded border border-cyan-800 px-3 py-2 text-xs text-cyan-200"
+                      className="rounded-sm border border-cyan-800 px-3 py-2 text-xs text-cyan-200"
                     >
                       Try again
                     </button>
@@ -1384,7 +1384,7 @@ export default function CandidateDetailsDrawer({
                     <button
                       type="button"
                       onClick={() => setRetryRevision((value) => value + 1)}
-                      className="rounded border border-cyan-800 px-3 py-2 text-xs text-cyan-200"
+                      className="rounded-sm border border-cyan-800 px-3 py-2 text-xs text-cyan-200"
                     >
                       Try again
                     </button>
@@ -1405,7 +1405,7 @@ export default function CandidateDetailsDrawer({
               <section
                 data-education-section="education"
                 tabIndex={-1}
-                className="outline-none"
+                className="outline-hidden"
               >
                 <h4 className="font-semibold text-white">
                   Formal education ({educationRecords.length})
@@ -1450,7 +1450,7 @@ export default function CandidateDetailsDrawer({
               <section
                 data-education-section="qualifications"
                 tabIndex={-1}
-                className="mt-6 border-t border-slate-800 pt-5 outline-none"
+                className="mt-6 border-t border-slate-800 pt-5 outline-hidden"
               >
                 <h4 className="font-semibold text-white">
                   Qualifications ({qualificationRecords.length})
@@ -1477,7 +1477,7 @@ export default function CandidateDetailsDrawer({
               <section
                 data-education-section="certifications"
                 tabIndex={-1}
-                className="mt-6 border-t border-slate-800 pt-5 outline-none"
+                className="mt-6 border-t border-slate-800 pt-5 outline-hidden"
               >
                 <h4 className="font-semibold text-white">
                   Certifications ({certificationRecords.length})
@@ -1519,7 +1519,7 @@ export default function CandidateDetailsDrawer({
               <section
                 data-education-section="training"
                 tabIndex={-1}
-                className="mt-6 border-t border-slate-800 pt-5 outline-none"
+                className="mt-6 border-t border-slate-800 pt-5 outline-hidden"
               >
                 <h4 className="font-semibold text-white">
                   Training and courses ({trainingRecords.length})
@@ -1613,7 +1613,7 @@ export default function CandidateDetailsDrawer({
               aria-pressed={shortlisted}
               disabled={!onShortlistToggle || shortlistPending}
               onClick={onShortlistToggle}
-              className="min-h-10 rounded-lg bg-cyan-300 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-cyan-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50"
+              className="min-h-10 rounded-lg bg-cyan-300 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-cyan-200 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50"
             >
               {shortlisted ? (
                 <BookmarkCheck
@@ -1637,7 +1637,7 @@ export default function CandidateDetailsDrawer({
               aria-label="Compare this candidate"
               disabled={!onCompare}
               onClick={onCompare}
-              className="min-h-10 rounded-lg border border-cyan-400/60 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-10 rounded-lg border border-cyan-400/60 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/20 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <GitCompareArrows
                 aria-hidden="true"

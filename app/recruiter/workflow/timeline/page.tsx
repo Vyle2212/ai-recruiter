@@ -98,7 +98,7 @@ function TimelineItem({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <span
-              className={`inline-flex rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] ${eventTone(
+              className={`inline-flex rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-widest ${eventTone(
                 item.eventType,
               )}`}
             >
@@ -172,7 +172,7 @@ function TimelineItem({
             Open Candidate360
           </Link>
 
-          <span className="text-[10px] uppercase tracking-[0.1em] text-slate-600">
+          <span className="text-[10px] uppercase tracking-widest text-slate-600">
             Read-only event
           </span>
         </div>
@@ -318,21 +318,21 @@ export default function WorkflowTimelinePage() {
 
             <div className="flex flex-wrap gap-2">
               <Link
-                className="rounded-md border border-cyan-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-cyan-100"
+                className="rounded-md border border-cyan-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-cyan-100"
                 href="/recruiter/workflow"
               >
                 Workflow
               </Link>
 
               <Link
-                className="rounded-md border border-amber-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-amber-100"
+                className="rounded-md border border-amber-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-amber-100"
                 href="/recruiter/workflow/sla"
               >
                 SLA
               </Link>
 
               <Link
-                className="rounded-md border border-violet-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-violet-100"
+                className="rounded-md border border-violet-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-violet-100"
                 href="/recruiter/workflow/analytics"
               >
                 Analytics
@@ -416,7 +416,7 @@ export default function WorkflowTimelinePage() {
             <section className={card}>
               <div className="grid gap-3 md:grid-cols-[1fr_220px]">
                 <input
-                  className="rounded-md border border-slate-700 bg-[#070A0F] px-3 py-2 text-sm text-slate-200 outline-none focus:border-cyan-500"
+                  className="rounded-md border border-slate-700 bg-[#070A0F] px-3 py-2 text-sm text-slate-200 outline-hidden focus:border-cyan-500"
                   onChange={(event) =>
                     setSearch(
                       event.target.value,

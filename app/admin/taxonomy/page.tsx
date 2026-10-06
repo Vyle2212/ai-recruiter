@@ -116,7 +116,7 @@ export default function AdminTaxonomyPage() {
         <div className="flex flex-wrap items-center gap-3">
           <button onClick={() => setType("sap")} className={`rounded-full border px-4 py-2 text-sm font-black ${type === "sap" ? "border-cyan-400 bg-cyan-950 text-cyan-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}>SAP Skills</button>
           <button onClick={() => setType("company")} className={`rounded-full border px-4 py-2 text-sm font-black ${type === "company" ? "border-cyan-400 bg-cyan-950 text-cyan-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}>Companies</button>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search taxonomy..." className="h-11 min-w-[260px] flex-1 rounded-lg border border-slate-700 bg-black px-3 text-sm font-semibold outline-none focus:border-cyan-400" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search taxonomy..." className="h-11 min-w-[260px] flex-1 rounded-lg border border-slate-700 bg-black px-3 text-sm font-semibold outline-hidden focus:border-cyan-400" />
         </div>
       </section>
 

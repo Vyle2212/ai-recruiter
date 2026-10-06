@@ -1883,7 +1883,7 @@ function DetailEvaluationWorkspace({ ranked, fullScreen = false, focus = "All", 
                   <section>
                     <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">Core Comparison</div>
                     <div className="mt-1 grid gap-1">
-                      {coreRows.map(([label, value]) => <div key={`${candidate.id}-core-${label}`} className="rounded-xl bg-[#05070A] px-2.5 py-1.5 ring-1 ring-slate-800/60"><div className="text-[8px] font-bold uppercase tracking-[0.1em] text-slate-500">{label}</div><div className="mt-0.5 whitespace-pre-line text-[10px] font-semibold leading-4 text-slate-200">{label === "Commercial Risk" ? <RiskBadge label={commercialRiskLabel(candidate)} /> : label === "Required Validation" ? <ValidationChips candidate={candidate} limit={2} /> : presentVisibleValue(value, "Pending Validation")}</div></div>)}
+                      {coreRows.map(([label, value]) => <div key={`${candidate.id}-core-${label}`} className="rounded-xl bg-[#05070A] px-2.5 py-1.5 ring-1 ring-slate-800/60"><div className="text-[8px] font-bold uppercase tracking-widest text-slate-500">{label}</div><div className="mt-0.5 whitespace-pre-line text-[10px] font-semibold leading-4 text-slate-200">{label === "Commercial Risk" ? <RiskBadge label={commercialRiskLabel(candidate)} /> : label === "Required Validation" ? <ValidationChips candidate={candidate} limit={2} /> : presentVisibleValue(value, "Pending Validation")}</div></div>)}
                     </div>
                   </section>
                   {!visibleSections.length && !showCommercial ? <div className="rounded-xl bg-[#05070A] px-3 py-2 text-[11px] font-semibold text-slate-500 ring-1 ring-slate-800/60">No unique evidence in this filter.</div> : null}
@@ -1900,7 +1900,7 @@ function DetailEvaluationWorkspace({ ranked, fullScreen = false, focus = "All", 
                     <div className="mt-1.5 grid grid-cols-2 gap-1.5">
                       {commercialRows.map(([label, value], itemIndex) => (
                         <div key={`${candidate.id}-commercial-${label}-${itemIndex}`} className="rounded-xl bg-[#05070A] px-2 py-1.5 ring-1 ring-slate-800/60">
-                          <div className="text-[8px] font-bold uppercase tracking-[0.1em] text-slate-500">{label}</div>
+                          <div className="text-[8px] font-bold uppercase tracking-widest text-slate-500">{label}</div>
                           <div className="mt-0.5 truncate text-[10px] font-semibold text-slate-200">{presentVisibleValue(value, "Pending Validation")}</div>
                         </div>
                       ))}
@@ -2089,18 +2089,18 @@ function ExecutiveComparisonMatrix({ ranked, focus, fullScreen = false, shortlis
         </div>
         {selectedCount >= 2 ? <button type="button" disabled={selectedCount > 5} onClick={onCompareSelected} className={(selectedCount <= 5 ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300" : "cursor-not-allowed bg-white/5 text-slate-500 ring-1 ring-slate-700/50") + " rounded-full px-4 py-2 text-[11px] font-black transition"}>Compare Selected ({selectedCount})</button> : null}
       </div>
-      <div className="sticky top-0 z-40 mb-3 grid gap-2 rounded-2xl bg-[#05070A]/95 p-2 ring-1 ring-slate-800/60 backdrop-blur">
+      <div className="sticky top-0 z-40 mb-3 grid gap-2 rounded-2xl bg-[#05070A]/95 p-2 ring-1 ring-slate-800/60 backdrop-blur-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Showing {displayCandidates.length} of {ranked.length}</div>
           <label className="flex items-center gap-2 text-[10px] font-semibold text-slate-400">Sort
-            <select value={activeSort} onChange={(event) => setActiveSort(event.target.value as MatrixSortKey)} className="rounded-full bg-[#101923] px-3 py-1.5 text-[10px] font-semibold text-cyan-100 outline-none ring-1 ring-slate-700/70">
+            <select value={activeSort} onChange={(event) => setActiveSort(event.target.value as MatrixSortKey)} className="rounded-full bg-[#101923] px-3 py-1.5 text-[10px] font-semibold text-cyan-100 outline-hidden ring-1 ring-slate-700/70">
               {MATRIX_SORTS.map((item) => <option key={`matrix-sort-${item.key}`} value={item.key}>{item.label}</option>)}
             </select>
           </label>
         </div>
         <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-          {MATRIX_FILTER_GROUPS.map((group) => <label key={`matrix-filter-group-${group.key}`} className="grid gap-1 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">{group.label}<select value={activeFilters[group.key]} onChange={(event) => setActiveFilters((current) => ({ ...current, [group.key]: event.target.value }))} className="min-w-0 rounded-xl bg-[#101923] px-2 py-1.5 text-[10px] font-semibold normal-case tracking-normal text-cyan-100 outline-none ring-1 ring-slate-800/70"><option value="all">All</option>{group.options.filter((option) => option.key !== "all").map((option) => <option key={`${group.key}-${option.key}`} value={option.key}>{option.label}</option>)}</select></label>)}
-          <label className="grid gap-1 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">Current Employer<select value={activeFilters.employer} onChange={(event) => setActiveFilters((current) => ({ ...current, employer: event.target.value }))} className="min-w-0 rounded-xl bg-[#101923] px-2 py-1.5 text-[10px] font-semibold normal-case tracking-normal text-cyan-100 outline-none ring-1 ring-slate-800/70"><option value="all">All</option>{employerOptions.map((company) => <option key={`matrix-employer-${company}`} value={company}>{company}</option>)}</select></label>
+          {MATRIX_FILTER_GROUPS.map((group) => <label key={`matrix-filter-group-${group.key}`} className="grid gap-1 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">{group.label}<select value={activeFilters[group.key]} onChange={(event) => setActiveFilters((current) => ({ ...current, [group.key]: event.target.value }))} className="min-w-0 rounded-xl bg-[#101923] px-2 py-1.5 text-[10px] font-semibold normal-case tracking-normal text-cyan-100 outline-hidden ring-1 ring-slate-800/70"><option value="all">All</option>{group.options.filter((option) => option.key !== "all").map((option) => <option key={`${group.key}-${option.key}`} value={option.key}>{option.label}</option>)}</select></label>)}
+          <label className="grid gap-1 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">Current Employer<select value={activeFilters.employer} onChange={(event) => setActiveFilters((current) => ({ ...current, employer: event.target.value }))} className="min-w-0 rounded-xl bg-[#101923] px-2 py-1.5 text-[10px] font-semibold normal-case tracking-normal text-cyan-100 outline-hidden ring-1 ring-slate-800/70"><option value="all">All</option>{employerOptions.map((company) => <option key={`matrix-employer-${company}`} value={company}>{company}</option>)}</select></label>
         </div>
         {hasActiveFilters ? <div className="flex flex-wrap items-center gap-1.5 pt-1">{activeFilterEntries.map(([group, value]) => <span key={`active-filter-${group}-${value}`} className="rounded-full bg-cyan-400/10 px-2 py-1 text-[10px] font-semibold text-cyan-100 ring-1 ring-cyan-500/20">{matrixFilterLabel(group, value)}</span>)}<button type="button" onClick={() => setActiveFilters(DEFAULT_MATRIX_FILTERS)} className="rounded-full bg-white/5 px-2.5 py-1 text-[10px] font-bold text-slate-300 ring-1 ring-slate-700/60 hover:text-white">Clear filters</button></div> : null}
       </div>
@@ -2130,7 +2130,7 @@ function ExecutiveComparisonMatrix({ ranked, focus, fullScreen = false, shortlis
                 if (columnKey === "validation") return <td key={cellKey} className={cellClass}><ValidationChips candidate={candidate} limit={2} /></td>;
                 return <td key={cellKey} className={cellClass}><button type="button" onClick={(event) => { event.stopPropagation(); isShortlisted ? onRemoveFromShortlist(candidate) : onMoveToShortlist(candidate); }} className={(isShortlisted ? "bg-emerald-500/15 text-emerald-100 ring-emerald-500/25 hover:bg-emerald-500/20" : "bg-cyan-400 text-slate-950 ring-cyan-500/20 hover:bg-cyan-300") + " rounded-full px-3 py-1.5 text-[10px] font-black ring-1 transition"}>{isShortlisted ? "Shortlisted" : "Add to Shortlist"}</button></td>;
               };
-              return <tr key={`executive-matrix-row-${rowKey}`} role="button" tabIndex={0} onClick={() => onOpenDrawer(candidate)} onKeyDown={(event) => { if (event.key === "Enter") onOpenDrawer(candidate); }} className={(selected ? "bg-cyan-500/[0.05]" : "") + " group cursor-pointer transition hover:bg-cyan-500/[0.13] hover:shadow-[inset_3px_0_0_rgba(34,211,238,0.48)]"}>{columns.map((column) => <Fragment key={`${rowKey}-${column.key}`}>{renderCell(column.key)}</Fragment>)}</tr>;
+              return <tr key={`executive-matrix-row-${rowKey}`} role="button" tabIndex={0} onClick={() => onOpenDrawer(candidate)} onKeyDown={(event) => { if (event.key === "Enter") onOpenDrawer(candidate); }} className={(selected ? "bg-cyan-500/5" : "") + " group cursor-pointer transition hover:bg-cyan-500/13 hover:shadow-[inset_3px_0_0_rgba(34,211,238,0.48)]"}>{columns.map((column) => <Fragment key={`${rowKey}-${column.key}`}>{renderCell(column.key)}</Fragment>)}</tr>;
             })}
           </tbody>
         </table>
@@ -2193,7 +2193,7 @@ function ComparisonMatrix({ ranked, mode = "detailed", fullScreen = false, activ
               const winners = rowWinners(row, ranked);
               const badge = winners.length === 1 ? rowBadgeLabel(row.label) : "";
               return (
-                <tr key={row.label} title={fullScreen ? "Investigation row: compare evidence and differentiators" : undefined} className="border-t border-slate-800/60 hover:bg-cyan-500/[0.08]">
+                <tr key={row.label} title={fullScreen ? "Investigation row: compare evidence and differentiators" : undefined} className="border-t border-slate-800/60 hover:bg-cyan-500/8">
                   <td className={"sticky left-0 z-20 bg-[#0B1118] px-2.5 " + (fullScreen ? "py-1.5 " : "py-2 ") + "text-[12px] font-semibold text-white shadow-[8px_0_16px_rgba(0,0,0,0.18)]"}>{row.label === "Commercial Risk" ? <div><div>{row.label}</div><div className="mt-1 flex flex-wrap gap-1">{commercialRiskSummary(ranked).map((item) => <span key={`risk-summary-${item.label}`} className="rounded-full bg-[#101923] px-2 py-0.5 text-[9px] font-semibold text-slate-300 ring-1 ring-slate-700/60">{item.label}: {item.text}</span>)}</div></div> : row.label}</td>
                   {ranked.map((candidate, index) => {
                     const cellValue = row.value(candidate, index, ranked);
@@ -2203,7 +2203,7 @@ function ComparisonMatrix({ ranked, mode = "detailed", fullScreen = false, activ
                                             <td key={`${candidate.id}-${row.label}-${index}`} className={matrixCellClass(row, winner, unavailable, fullScreen)}>
                         {row.label === "Commercial Risk" ? <MatrixCommercialChips candidate={candidate} ranked={ranked} /> : row.label === "Required Validation" ? <MatrixValidationChips candidate={candidate} /> : (
                           <div className="flex flex-col gap-1">
-                            {winner && badge ? <span className="w-fit rounded-full bg-amber-400/12 px-2 py-0.5 text-[8px] font-semibold uppercase tracking-[0.1em] text-amber-100 ring-1 ring-amber-400/30">{badge}</span> : null}
+                            {winner && badge ? <span className="w-fit rounded-full bg-amber-400/12 px-2 py-0.5 text-[8px] font-semibold uppercase tracking-widest text-amber-100 ring-1 ring-amber-400/30">{badge}</span> : null}
                             <span className={winner ? "font-bold text-white" : ""}>{presentVisibleValue(cellValue, "Pending Validation")}</span>
                           </div>
                         )}
@@ -2302,13 +2302,13 @@ function FullScreenCompareModal({
   if (!open || !mounted || !ranked.length) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[2147483647] h-screen w-screen overflow-hidden bg-[#02070b] text-white">
+    <div className="fixed inset-0 z-2147483647 h-screen w-screen overflow-hidden bg-[#02070b] text-white">
       <section className="flex h-screen w-screen flex-col overflow-hidden bg-[#02070b]">
         <header className="relative z-20 flex h-[56px] max-h-[64px] shrink-0 items-center justify-between gap-3 border-b border-slate-800/80 bg-[#02070b] px-4 pr-28 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
           <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-200"><Sparkles size={12} /> {comparePreset === 5 ? "Executive View" : `Top ${comparePreset} Executive Matrix`}</div>
           <div className="flex flex-wrap items-center gap-1.5">{(["All", "Only Differences", "Commercial", "Delivery", "Leadership", "Architecture", "Implementation"] as CompareFocusMode[]).map((item) => <button key={`focus-${item}`} type="button" onClick={() => onFocusChange(item)} className={(focus === item ? "bg-cyan-400 text-slate-950" : "bg-[#101923] text-slate-300 ring-1 ring-slate-800/70") + " rounded-full px-2.5 py-1 text-[10px] font-semibold"}>{item}</button>)}</div>
         </header>
-        <button type="button" onClick={onClose} className="fixed right-4 top-3 z-30 rounded-full bg-[#101923] px-3 py-1.5 text-xs font-bold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-none focus:ring-2 focus:ring-cyan-400">Close</button>
+        <button type="button" onClick={onClose} className="fixed right-4 top-3 z-30 rounded-full bg-[#101923] px-3 py-1.5 text-xs font-bold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-hidden focus:ring-2 focus:ring-cyan-400">Close</button>
         <div className="h-[calc(100vh-56px)] min-h-0 flex-1 overflow-hidden px-3 py-2 lg:px-4">
           <ExecutiveComparisonSurface ranked={ranked} comparePreset={comparePreset} focus={focus} fullScreen shortlistedIds={shortlistedIds} selectedIds={selectedIds} onToggleSelected={onToggleSelected} onCompareSelected={onCompareSelected} onMoveToShortlist={onMoveToShortlist} onRemoveFromShortlist={onRemoveFromShortlist} onOpenDrawer={onOpenDrawer} />
         </div>
@@ -3964,7 +3964,7 @@ function SubmissionGeneratorOverlay({ open, ranked, activeModule, notes, onClose
 
   if (!open || !mounted) return null;
   return createPortal(
-    <div className="fixed inset-0 z-[2147483647] h-screen w-screen overflow-hidden bg-[#02070b] text-white">
+    <div className="fixed inset-0 z-2147483647 h-screen w-screen overflow-hidden bg-[#02070b] text-white">
       <section className="flex h-screen flex-col overflow-hidden">
         <header className="flex h-[72px] shrink-0 items-center justify-between gap-4 border-b border-slate-800/80 bg-[#02070b] px-5 pr-24">
           <div className="min-w-0">
@@ -3973,7 +3973,7 @@ function SubmissionGeneratorOverlay({ open, ranked, activeModule, notes, onClose
           </div>
           <div className="hidden min-w-0 flex-1 truncate text-right text-[11px] font-semibold text-slate-400 lg:block">{clientContext}</div>
         </header>
-        <button type="button" onClick={onClose} className="fixed right-4 top-4 z-30 rounded-full bg-[#101923] px-3 py-1.5 text-xs font-bold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-none focus:ring-2 focus:ring-cyan-400">Close</button>
+        <button type="button" onClick={onClose} className="fixed right-4 top-4 z-30 rounded-full bg-[#101923] px-3 py-1.5 text-xs font-bold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-hidden focus:ring-2 focus:ring-cyan-400">Close</button>
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden p-4 xl:grid-cols-[minmax(0,1fr)_380px]">
           <section className="flex min-h-0 flex-col rounded-[24px] bg-[#0B1118] ring-1 ring-slate-800/60">
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-800/70 px-4 py-3">
@@ -3983,7 +3983,7 @@ function SubmissionGeneratorOverlay({ open, ranked, activeModule, notes, onClose
               </div>
               <div className="flex flex-wrap items-center gap-3">{SUBMISSION_WORKFLOWS.map((group) => <div key={`workflow-${group.label}`} className="flex flex-wrap items-center gap-1.5"><span className="px-1 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">{group.label}</span>{group.items.map((item) => <button key={`template-${group.label}-${item}`} type="button" onClick={() => setActiveTemplate(item)} className={(activeTemplate === item ? "bg-cyan-400 text-slate-950" : "bg-[#101923] text-slate-300 ring-1 ring-slate-800/70") + " rounded-full px-3 py-1.5 text-[10px] font-semibold transition"}>{item}</button>)}</div>)}</div>
             </div>
-            <textarea value={previewValue} onChange={(event) => setDrafts((current) => ({ ...current, [activeTemplate]: event.target.value }))} className="min-h-0 flex-1 resize-none bg-[#0B1118] p-5 text-sm leading-7 text-slate-200 outline-none placeholder:text-slate-600" />
+            <textarea value={previewValue} onChange={(event) => setDrafts((current) => ({ ...current, [activeTemplate]: event.target.value }))} className="min-h-0 flex-1 resize-none bg-[#0B1118] p-5 text-sm leading-7 text-slate-200 outline-hidden placeholder:text-slate-600" />
           </section>
           <aside className="flex min-h-0 flex-col gap-4 overflow-auto rounded-[24px] bg-[#0B1118] p-4 ring-1 ring-slate-800/60">
             <section className="rounded-2xl bg-[#101923] p-4 ring-1 ring-slate-800/65">
@@ -4006,9 +4006,9 @@ function SubmissionGeneratorOverlay({ open, ranked, activeModule, notes, onClose
             <section className="rounded-2xl bg-[#101923] p-4 ring-1 ring-slate-800/65">
               <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-200">Evidence Snapshot</div>
               <div className="mt-3 grid grid-cols-3 gap-2">
-                <div className="rounded-xl bg-[#05070A] px-2.5 py-1.5 ring-1 ring-slate-800/60"><div className="text-[8px] font-bold uppercase tracking-[0.1em] text-slate-500">Coverage</div><div className="mt-0.5 text-sm font-black text-white">{coverage.percent}%</div></div>
-                <div className="rounded-xl bg-[#05070A] px-2.5 py-1.5 ring-1 ring-slate-800/60"><div className="text-[8px] font-bold uppercase tracking-[0.1em] text-slate-500">Confidence</div><div className="mt-0.5 text-sm font-black text-white">{candidate ? submissionExecutiveConfidence(candidate, activeModule) + "%" : "--"}</div></div>
-                <div className="rounded-xl bg-[#05070A] px-2.5 py-1.5 ring-1 ring-slate-800/60"><div className="text-[8px] font-bold uppercase tracking-[0.1em] text-slate-500">Commercial</div><div className="mt-0.5 text-sm font-black text-white">{confidence ? confidence.score + "%" : "--"}</div></div>
+                <div className="rounded-xl bg-[#05070A] px-2.5 py-1.5 ring-1 ring-slate-800/60"><div className="text-[8px] font-bold uppercase tracking-widest text-slate-500">Coverage</div><div className="mt-0.5 text-sm font-black text-white">{coverage.percent}%</div></div>
+                <div className="rounded-xl bg-[#05070A] px-2.5 py-1.5 ring-1 ring-slate-800/60"><div className="text-[8px] font-bold uppercase tracking-widest text-slate-500">Confidence</div><div className="mt-0.5 text-sm font-black text-white">{candidate ? submissionExecutiveConfidence(candidate, activeModule) + "%" : "--"}</div></div>
+                <div className="rounded-xl bg-[#05070A] px-2.5 py-1.5 ring-1 ring-slate-800/60"><div className="text-[8px] font-bold uppercase tracking-widest text-slate-500">Commercial</div><div className="mt-0.5 text-sm font-black text-white">{confidence ? confidence.score + "%" : "--"}</div></div>
               </div>
               <div className="mt-4 border-t border-slate-800/60 pt-3">
                 <ExplainabilityList title="Matched" items={generatorCoverageExplain.matched.slice(0, 4)} />
@@ -4057,10 +4057,10 @@ function ExportActions({ ranked, currentSearchCount, activeModule, searchSession
       <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-200">Export</div>
       <div className="mt-4 flex flex-wrap gap-2.5">
         {exportBlockedCount ? <div className="basis-full rounded-xl border border-amber-500/25 bg-amber-950/10 px-3 py-2 text-xs font-semibold text-amber-100">Client exports include Ready candidates only. {exportBlockedCount} compared candidate{exportBlockedCount === 1 ? "" : "s"} blocked from client export.</div> : null}
-        <button type="button" aria-label="Export PDF" disabled={!canClientExport} onClick={() => { if (!canClientExport) { onNotify("No Ready candidates available for client PDF export"); return; } exportPdf(clientReadyRanked, currentSearchCount, notes, activeModule, { searchId: searchSessionId, job: activeModule ? `SAP ${normalizeModule(activeModule)}` : "Current Search", primaryModule: activeModule ? `SAP ${normalizeModule(activeModule)}` : "Active Search" }); onNotify(exportBlockedCount ? `PDF exported with ${clientReadyRanked.length} Ready candidate${clientReadyRanked.length === 1 ? "" : "s"}; ${exportBlockedCount} blocked` : "PDF exported"); }} className="inline-flex items-center gap-2 rounded-full bg-[#101923] px-4 py-2.5 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-none focus:ring-2 focus:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"><FileText size={14} />Export PDF</button>
-        <button type="button" aria-label="Export Excel" disabled={!canClientExport} onClick={() => { if (!canClientExport) { onNotify("No Ready candidates available for client Excel export"); return; } exportWorkbook(clientReadyRanked, currentSearchCount, notes, activeModule, { searchId: searchSessionId, job: activeModule ? `SAP ${normalizeModule(activeModule)}` : "Current Search", primaryModule: activeModule ? `SAP ${normalizeModule(activeModule)}` : "Active Search" }); onNotify(exportBlockedCount ? `Excel workbook exported with ${clientReadyRanked.length} Ready candidate${clientReadyRanked.length === 1 ? "" : "s"}; ${exportBlockedCount} blocked` : "Excel workbook exported"); }} className="inline-flex items-center gap-2 rounded-full bg-[#101923] px-4 py-2.5 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-none focus:ring-2 focus:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"><FileSpreadsheet size={14} />Export Excel</button>
-        <button type="button" aria-label="Copy summary" disabled={!canClientExport} onClick={() => copyText(clientSummaryText(clientReadyRanked), exportBlockedCount ? `Summary copied for Ready candidates only; ${exportBlockedCount} blocked` : "Summary copied")} className="inline-flex items-center gap-2 rounded-full bg-[#101923] px-4 py-2.5 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-none focus:ring-2 focus:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"><Copy size={14} />Copy Summary</button>
-        <button type="button" aria-label="Live Share Link" onClick={() => copyText(shareUrl, "Live share link copied")} className="inline-flex items-center gap-2 rounded-full bg-[#101923] px-4 py-2.5 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-none focus:ring-2 focus:ring-cyan-400"><Link2 size={14} />Live Share Link</button><button type="button" aria-label="Read-only client view" onClick={() => copyText(shareUrl + (shareUrl.includes("?") ? "&" : "?") + "viewOnly=1", "Read-only client view copied")} className="inline-flex items-center gap-2 rounded-full bg-[#101923] px-4 py-2.5 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-none focus:ring-2 focus:ring-cyan-400"><Link2 size={14} />Read-only View</button>
+        <button type="button" aria-label="Export PDF" disabled={!canClientExport} onClick={() => { if (!canClientExport) { onNotify("No Ready candidates available for client PDF export"); return; } exportPdf(clientReadyRanked, currentSearchCount, notes, activeModule, { searchId: searchSessionId, job: activeModule ? `SAP ${normalizeModule(activeModule)}` : "Current Search", primaryModule: activeModule ? `SAP ${normalizeModule(activeModule)}` : "Active Search" }); onNotify(exportBlockedCount ? `PDF exported with ${clientReadyRanked.length} Ready candidate${clientReadyRanked.length === 1 ? "" : "s"}; ${exportBlockedCount} blocked` : "PDF exported"); }} className="inline-flex items-center gap-2 rounded-full bg-[#101923] px-4 py-2.5 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-hidden focus:ring-2 focus:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"><FileText size={14} />Export PDF</button>
+        <button type="button" aria-label="Export Excel" disabled={!canClientExport} onClick={() => { if (!canClientExport) { onNotify("No Ready candidates available for client Excel export"); return; } exportWorkbook(clientReadyRanked, currentSearchCount, notes, activeModule, { searchId: searchSessionId, job: activeModule ? `SAP ${normalizeModule(activeModule)}` : "Current Search", primaryModule: activeModule ? `SAP ${normalizeModule(activeModule)}` : "Active Search" }); onNotify(exportBlockedCount ? `Excel workbook exported with ${clientReadyRanked.length} Ready candidate${clientReadyRanked.length === 1 ? "" : "s"}; ${exportBlockedCount} blocked` : "Excel workbook exported"); }} className="inline-flex items-center gap-2 rounded-full bg-[#101923] px-4 py-2.5 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-hidden focus:ring-2 focus:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"><FileSpreadsheet size={14} />Export Excel</button>
+        <button type="button" aria-label="Copy summary" disabled={!canClientExport} onClick={() => copyText(clientSummaryText(clientReadyRanked), exportBlockedCount ? `Summary copied for Ready candidates only; ${exportBlockedCount} blocked` : "Summary copied")} className="inline-flex items-center gap-2 rounded-full bg-[#101923] px-4 py-2.5 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-hidden focus:ring-2 focus:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"><Copy size={14} />Copy Summary</button>
+        <button type="button" aria-label="Live Share Link" onClick={() => copyText(shareUrl, "Live share link copied")} className="inline-flex items-center gap-2 rounded-full bg-[#101923] px-4 py-2.5 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-hidden focus:ring-2 focus:ring-cyan-400"><Link2 size={14} />Live Share Link</button><button type="button" aria-label="Read-only client view" onClick={() => copyText(shareUrl + (shareUrl.includes("?") ? "&" : "?") + "viewOnly=1", "Read-only client view copied")} className="inline-flex items-center gap-2 rounded-full bg-[#101923] px-4 py-2.5 text-xs font-semibold text-cyan-100 ring-1 ring-cyan-500/20 transition hover:bg-cyan-950/30 focus:outline-hidden focus:ring-2 focus:ring-cyan-400"><Link2 size={14} />Read-only View</button>
       </div>
     </section>
   );
@@ -4172,7 +4172,7 @@ function CandidateDrawer({ candidate, ranked, note, onNoteChange, onClose, short
   const drawerConfidence = submissionConfidence(candidate);
   const backup = ranked.find((item) => item.id !== candidate.id);
   return (
-    <div className="fixed inset-0 z-[70] bg-black/70" onClick={onClose}>
+    <div className="fixed inset-0 z-70 bg-black/70" onClick={onClose}>
       <aside className="ml-auto flex h-full w-full max-w-[500px] flex-col bg-[#070B10] text-white shadow-[0_24px_80px_rgba(0,0,0,0.55)] ring-1 ring-slate-800" onClick={(event) => event.stopPropagation()}>
         <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-800/70 bg-[#070B10] px-4 py-3">
           <div className="min-w-0">
@@ -4197,7 +4197,7 @@ function CandidateDrawer({ candidate, ranked, note, onNoteChange, onClose, short
             <div className="mt-2 grid grid-cols-2 gap-2">
               {snapshotFields.map(([label, value], fieldIndex) => (
                 <div key={`${candidate.id}-snapshot-${label}-${fieldIndex}`} className="rounded-xl bg-[#0B1118] px-2.5 py-2 ring-1 ring-slate-800/45">
-                  <div className="text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-500">{label}</div>
+                  <div className="text-[9px] font-semibold uppercase tracking-widest text-slate-500">{label}</div>
                   <div className="mt-0.5 text-[12px] font-semibold leading-4 text-slate-200">{value}</div>
                 </div>
               ))}
@@ -4233,7 +4233,7 @@ function CandidateDrawer({ candidate, ranked, note, onNoteChange, onClose, short
             <div className="mt-2 grid grid-cols-2 gap-2">
               {detailCoreComparisonRows(candidate, ranked, drawerIndex).filter(([label]) => label === "Commercial Risk" || label === "Required Validation").map(([label, value]) => (
                 <div key={`${candidate.id}-client-commercial-${label}`} className="rounded-xl bg-[#0B1118] px-2.5 py-2 ring-1 ring-slate-800/45">
-                  <div className="text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-500">{label}</div>
+                  <div className="text-[9px] font-semibold uppercase tracking-widest text-slate-500">{label}</div>
                   <div className="mt-0.5 text-[12px] font-semibold leading-4 text-slate-200">{label === "Commercial Risk" ? <RiskBadge label={commercialRiskLabel(candidate)} /> : <ValidationChips candidate={candidate} limit={2} />}</div>
                 </div>
               ))}
@@ -4251,7 +4251,7 @@ function CandidateDrawer({ candidate, ranked, note, onNoteChange, onClose, short
             <div className="mt-3 rounded-2xl bg-[#05070A] p-2 ring-1 ring-slate-800/55">
               <div className="mb-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">Internal Notes</div>
               <div className="mb-2 text-[10px] font-semibold text-slate-500">Hidden from client view.</div>
-              <textarea value={note} onChange={(event) => onNoteChange(event.target.value)} placeholder="Package, availability, notice, client fit, communication..." className="min-h-[72px] w-full resize-y rounded-xl border border-slate-800/60 bg-[#05070A] p-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/30" />
+              <textarea value={note} onChange={(event) => onNoteChange(event.target.value)} placeholder="Package, availability, notice, client fit, communication..." className="min-h-[72px] w-full resize-y rounded-xl border border-slate-800/60 bg-[#05070A] p-3 text-sm text-white outline-hidden placeholder:text-slate-600 focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/30" />
             </div>
           </section> : null}
 
@@ -4261,7 +4261,7 @@ function CandidateDrawer({ candidate, ranked, note, onNoteChange, onClose, short
             <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
               {actions.map((action, actionIndex) => {
                 const Icon = action.icon;
-                const base = "inline-flex min-h-9 items-center gap-2 rounded-xl px-2.5 py-2 text-[10px] font-bold transition focus:outline-none focus:ring-2 focus:ring-cyan-400";
+                const base = "inline-flex min-h-9 items-center gap-2 rounded-xl px-2.5 py-2 text-[10px] font-bold transition focus:outline-hidden focus:ring-2 focus:ring-cyan-400";
                 const visual = action.disabled ? "cursor-not-allowed bg-white/5 text-slate-500 ring-1 ring-slate-700/50 blur-[0.15px]" : action.intent === "primary" ? "bg-cyan-400 text-slate-950 ring-1 ring-cyan-500/20 hover:bg-cyan-300" : action.intent === "success" ? "bg-emerald-500/15 text-emerald-100 ring-1 ring-emerald-500/25 hover:bg-emerald-500/20" : "bg-[#05070A] text-cyan-100 ring-1 ring-cyan-500/20 hover:bg-cyan-950/30";
                 const body = <><Icon size={13} />{action.label}</>;
                 if (action.disabled) return <button key={`${candidate.id}-action-${action.label}-${actionIndex}`} type="button" disabled title={action.lockedCopy || "Requires subscription or credits"} className={base + " " + visual}>{body}</button>;
@@ -4278,7 +4278,7 @@ function CandidateDrawer({ candidate, ranked, note, onNoteChange, onClose, short
 }
 function ReplaceCandidateDialog({ incoming, ranked, onReplace, onClose }: { incoming: CandidateCompareSignal; ranked: CandidateCompareSignal[]; onReplace: (replaceId: string) => void; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-75 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
       <section className="w-full max-w-xl rounded-[24px] bg-[#0B1118] p-5 text-white ring-1 ring-cyan-500/20" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -4655,7 +4655,7 @@ export function CandidateCompareWorkspace() {
             </div>
             <div className="mt-2 flex items-center gap-2 rounded-2xl bg-[#05070A] px-3 py-2 ring-1 ring-slate-800/60">
               <Search size={16} className="text-slate-500" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search slate" className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-600" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search slate" className="w-full bg-transparent text-sm text-white outline-hidden placeholder:text-slate-600" />
             </div>
             <div className="mt-2 max-h-[640px] space-y-1.5 overflow-auto pr-1 xl:max-h-[calc(100vh-190px)]">
               {loading ? <div className="rounded-2xl bg-[#101923] p-3 text-sm text-slate-400">Loading candidates...</div> : null}
@@ -4703,7 +4703,7 @@ export function CandidateCompareWorkspace() {
       <FullScreenCompareModal open={fullScreenOpen && ranked.length >= 2} ranked={ranked} comparePreset={comparePreset} focus={compareFocus} onFocusChange={setCompareFocus} selectedIds={deepCompareIds} onToggleSelected={toggleDeepCompareCandidate} onCompareSelected={openDeepCompare} activeCandidateId={ranked[activeFullScreenIndex]?.id || ""} activeFullScreenIndex={activeFullScreenIndex} shortlistedIds={shortlistedIds} onMoveToShortlist={moveToShortlist} onRemoveFromShortlist={removeFromShortlist} onOpenDrawer={(candidate) => { setDrawerCandidateId(candidate.id); setFullScreenOpen(false); }} onClose={() => setFullScreenOpen(false)} />
       {drawerCandidate ? <CandidateDrawer candidate={drawerCandidate} ranked={ranked} note={notes[drawerCandidate.id] || ""} onNoteChange={(value) => updateNote(drawerCandidate.id, value)} shortlistedIds={shortlistedIds} onMoveToShortlist={moveToShortlist} onRemoveFromShortlist={removeFromShortlist} viewerRole={viewerRole} subscription={viewerRole === "client" && hasProfileAccess} hasProfileAccess={hasProfileAccess} canChat={viewerRole !== "client" || hasProfileAccess || chatCredits >= 1} chatCreditCost={1} onStartCandidateChat={(candidateId) => notify(`Chat started for ${candidateId}`)} onClose={() => setDrawerCandidateId("")} /> : null}
       {incomingReplaceCandidate ? <ReplaceCandidateDialog incoming={incomingReplaceCandidate} ranked={ranked} onReplace={applyReplacement} onClose={() => setReplaceCandidateId("")} /> : null}
-      {toast ? <div className="fixed bottom-5 right-5 z-[60] rounded-full bg-cyan-400 px-4 py-2.5 text-xs font-semibold text-slate-950 shadow-lg">{toast}</div> : null}
+      {toast ? <div className="fixed bottom-5 right-5 z-60 rounded-full bg-cyan-400 px-4 py-2.5 text-xs font-semibold text-slate-950 shadow-lg">{toast}</div> : null}
     </main>
   );
 }

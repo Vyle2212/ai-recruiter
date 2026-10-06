@@ -926,7 +926,7 @@ export function CompactCandidateCard({
         : "Not found in profile";
 
   return (
-    <article className="rounded-2xl border border-slate-700/60 bg-gradient-to-br from-slate-900 via-[#101c2a] to-slate-950 p-5 shadow-[0_12px_32px_-24px_rgba(0,0,0,.9)] transition duration-200 hover:border-cyan-500/45 hover:shadow-[0_18px_40px_-28px_rgba(34,211,238,.5)] focus-within:border-cyan-400/60">
+    <article className="rounded-2xl border border-slate-700/60 bg-linear-to-br from-slate-900 via-[#101c2a] to-slate-950 p-5 shadow-[0_12px_32px_-24px_rgba(0,0,0,.9)] transition duration-200 hover:border-cyan-500/45 hover:shadow-[0_18px_40px_-28px_rgba(34,211,238,.5)] focus-within:border-cyan-400/60">
       <div className="grid min-w-0 gap-5 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(19rem,.82fr)_auto] xl:items-start">
         <div className="min-w-0 xl:col-start-1 xl:row-start-1">
           <div className="flex items-center gap-2">
@@ -939,13 +939,13 @@ export function CompactCandidateCard({
                   onSelectedChange(event.currentTarget.checked)
                 }
                 aria-label={`Select ${identityHeading}`}
-                className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-300"
+                className="h-4 w-4 rounded-sm border-slate-600 bg-slate-900 text-cyan-300"
               />
             ) : null}
             <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full border border-slate-600/70 bg-slate-800/80 px-1 text-[11px] font-bold tabular-nums text-slate-300">
               #{rank}
             </span>
-            <h2 className="min-w-0 break-words text-xl font-semibold leading-7 tracking-tight text-white">
+            <h2 className="min-w-0 wrap-break-word text-xl font-semibold leading-7 tracking-tight text-white">
               {identityHeading}
             </h2>
             {anonymousCandidate ? (
@@ -1041,7 +1041,7 @@ export function CompactCandidateCard({
                 <button
                   type="button"
                   onClick={() => onOpenTab?.("Skills")}
-                  className="cursor-pointer px-1 text-[11px] font-medium text-cyan-300 hover:text-cyan-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300"
+                  className="cursor-pointer px-1 text-[11px] font-medium text-cyan-300 hover:text-cyan-200 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-cyan-300"
                 >
                   +{displayedSkills.length - strongestSkills.length} more
                 </button>
@@ -1284,7 +1284,7 @@ export function CompactCandidateCard({
               aria-pressed={shortlisted}
               disabled={!onShortlistToggle || shortlistPending}
               onClick={onShortlistToggle}
-              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-600 bg-slate-800/70 px-3 text-sm font-semibold text-slate-100 transition hover:border-cyan-400/60 hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-600 bg-slate-800/70 px-3 text-sm font-semibold text-slate-100 transition hover:border-cyan-400/60 hover:bg-slate-700 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
             >
               {shortlisted ? (
                 <BookmarkCheck aria-hidden="true" className="mr-1.5 h-4 w-4" />
@@ -1304,7 +1304,7 @@ export function CompactCandidateCard({
               onClick={onCompare}
               disabled={!onCompare}
               aria-label={`Compare ${identityHeading} with candidates in this search`}
-              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-cyan-400/60 bg-cyan-400/10 px-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 disabled:opacity-50"
+              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-cyan-400/60 bg-cyan-400/10 px-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/20 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 disabled:opacity-50"
             >
               <GitCompareArrows aria-hidden="true" className="mr-1.5 h-4 w-4" />
               Compare
@@ -1328,7 +1328,7 @@ export function CompactCandidateCard({
                 result.talentPool,
               ).catch(() => {});
             }}
-            className="inline-flex min-h-10 items-center justify-center rounded-lg bg-cyan-300 px-4 text-sm font-bold text-slate-950 transition hover:bg-cyan-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            className="inline-flex min-h-10 items-center justify-center rounded-lg bg-cyan-300 px-4 text-sm font-bold text-slate-950 transition hover:bg-cyan-200 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
             <Eye aria-hidden="true" className="mr-1.5 h-4 w-4" />
             Quick View
@@ -1373,7 +1373,7 @@ export function CompactCandidateCard({
                 <button
                   type="button"
                   onClick={() => onOpenTab?.("Experience")}
-                  className="mt-1 text-[11px] font-medium text-cyan-300 hover:text-cyan-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300"
+                  className="mt-1 text-[11px] font-medium text-cyan-300 hover:text-cyan-200 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-cyan-300"
                 >
                   View all experience
                 </button>
@@ -1411,7 +1411,7 @@ export function CompactCandidateCard({
                 <button
                   type="button"
                   onClick={() => onOpenTab?.("Projects")}
-                  className="mt-1 text-[11px] font-medium text-cyan-300 hover:text-cyan-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300"
+                  className="mt-1 text-[11px] font-medium text-cyan-300 hover:text-cyan-200 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-cyan-300"
                 >
                   View all projects
                 </button>
@@ -3160,7 +3160,7 @@ export default function CandidateSearchV2Client({
 
   return (
     <main className="min-h-screen bg-[#08111e] text-slate-100">
-      <section className="border-b border-cyan-500/15 bg-gradient-to-br from-[#122943] via-[#0b1b2e] to-[#08111e]">
+      <section className="border-b border-cyan-500/15 bg-linear-to-br from-[#122943] via-[#0b1b2e] to-[#08111e]">
         <div className="mx-auto max-w-7xl px-5 py-8">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -3179,7 +3179,7 @@ export default function CandidateSearchV2Client({
 
             <a
               href="/recruiter/dashboard"
-              className="rounded-lg border border-cyan-500/25 bg-cyan-400/5 px-4 py-2 text-sm font-semibold text-cyan-200 transition hover:border-cyan-400/60 hover:bg-cyan-400/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+              className="rounded-lg border border-cyan-500/25 bg-cyan-400/5 px-4 py-2 text-sm font-semibold text-cyan-200 transition hover:border-cyan-400/60 hover:bg-cyan-400/10 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
             >
               Back to Dashboard
             </a>
@@ -3234,7 +3234,7 @@ export default function CandidateSearchV2Client({
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Search criteria
                 </p>
-                <p className="mt-1 break-words text-sm font-semibold text-white">
+                <p className="mt-1 wrap-break-word text-sm font-semibold text-white">
                   {committedSnapshot.query}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-slate-300">
@@ -3279,7 +3279,7 @@ export default function CandidateSearchV2Client({
           className={
             guidedWorkspace === "review" || showCompactSearchSummary
               ? "hidden"
-              : "rounded-2xl border border-slate-700/60 bg-gradient-to-br from-[#132238] to-[#0d1726] p-5 shadow-[0_20px_50px_-36px_rgba(0,0,0,.9)]"
+              : "rounded-2xl border border-slate-700/60 bg-linear-to-br from-[#132238] to-[#0d1726] p-5 shadow-[0_20px_50px_-36px_rgba(0,0,0,.9)]"
           }
         >
           <div data-testid="search-v2-form-layout" className="space-y-4">
@@ -3327,7 +3327,7 @@ export default function CandidateSearchV2Client({
                     rows={2}
                     title={query}
                     placeholder="Senior SAP FICO consultant in Malaysia with implementation experience"
-                    className="mt-2 min-h-16 w-full min-w-0 resize-none overflow-hidden rounded-xl border border-slate-600 bg-[#091421] px-4 py-3 text-base leading-6 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
+                    className="mt-2 min-h-16 w-full min-w-0 resize-none overflow-hidden rounded-xl border border-slate-600 bg-[#091421] px-4 py-3 text-base leading-6 text-white outline-hidden transition placeholder:text-slate-500 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
                   />
                 </label>
                 {historyOpen && historySuggestions.length ? (
@@ -3410,7 +3410,7 @@ export default function CandidateSearchV2Client({
                       event.target.value as "any" | "relevant" | "strong",
                     )
                   }
-                  className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-cyan-500"
+                  className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-white outline-hidden focus:border-cyan-500"
                 >
                   <option value="any">Any</option>
                   <option value="relevant">Relevant</option>
@@ -3441,7 +3441,7 @@ export default function CandidateSearchV2Client({
                     setTalentPool(nextTalentPool);
                     setReviewCommitted(false);
                   }}
-                  className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-cyan-500"
+                  className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-white outline-hidden focus:border-cyan-500"
                 >
                   <option value="internal_profiles">SAP Talent Hub</option>
                   <option
@@ -3493,7 +3493,7 @@ export default function CandidateSearchV2Client({
                 aria-expanded={filtersOpen}
                 aria-controls="search-filter-panel"
                 onClick={() => setFiltersOpen((value) => !value)}
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-600 bg-slate-800/60 px-4 text-sm font-semibold text-slate-100 transition hover:border-cyan-400/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-600 bg-slate-800/60 px-4 text-sm font-semibold text-slate-100 transition hover:border-cyan-400/60 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
               >
                 <SlidersHorizontal aria-hidden="true" className="h-4 w-4" />
                 Filters ({activeFilterCount})
@@ -3501,7 +3501,7 @@ export default function CandidateSearchV2Client({
               <button
                 type="submit"
                 disabled={!query.trim()}
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-cyan-300 px-6 text-sm font-bold text-slate-950 outline-none transition hover:bg-cyan-200 focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-cyan-300 px-6 text-sm font-bold text-slate-950 outline-hidden transition hover:bg-cyan-200 focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Search aria-hidden="true" className="h-4 w-4" />
                 Understand & review
@@ -3683,7 +3683,7 @@ export default function CandidateSearchV2Client({
                       );
                     }}
                     placeholder="Required countries"
-                    className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-500"
+                    className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-hidden focus:border-cyan-500"
                   />
                   {effectiveLocations.length ? (
                     <span className="mt-1 block text-[11px] text-emerald-300">
@@ -3705,7 +3705,7 @@ export default function CandidateSearchV2Client({
                       );
                     }}
                     placeholder="Add required skills"
-                    className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-500"
+                    className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-hidden focus:border-cyan-500"
                   />
                 </label>
                 <label>
@@ -3721,7 +3721,7 @@ export default function CandidateSearchV2Client({
                       );
                     }}
                     placeholder="Add required languages"
-                    className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-500"
+                    className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-hidden focus:border-cyan-500"
                   />
                   {effectiveLanguages.length ? (
                     <span className="mt-1 block text-[11px] text-emerald-300">
@@ -3742,7 +3742,7 @@ export default function CandidateSearchV2Client({
                       );
                     }}
                     placeholder="Add modules"
-                    className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-500"
+                    className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-hidden focus:border-cyan-500"
                   />
                 </label>
               </div>
@@ -4460,7 +4460,7 @@ export default function CandidateSearchV2Client({
 
           <div
             aria-busy={loading}
-            className={`mt-4 min-h-[12rem] space-y-3 transition-opacity ${loading && response ? "opacity-70" : showingPreviousResults ? "opacity-45" : "opacity-100"}`}
+            className={`mt-4 min-h-48 space-y-3 transition-opacity ${loading && response ? "opacity-70" : showingPreviousResults ? "opacity-45" : "opacity-100"}`}
           >
             {results.map((result, index) => (
               <CompactCandidateCard

@@ -258,14 +258,14 @@ export default function RecruiterWorkflowCopilotPage() {
             <div className="flex flex-wrap gap-2">
               <WorkflowNotificationBadge compact />
               <Link
-                className="rounded-md border border-cyan-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-cyan-100"
+                className="rounded-md border border-cyan-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-cyan-100"
                 href="/recruiter/workflow"
               >
                 Workflow
               </Link>
 
               <Link
-                className="rounded-md border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-violet-100"
+                className="rounded-md border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-violet-100"
                 href="/recruiter/workflow/analytics"
               >
                 Analytics

@@ -43,14 +43,8 @@ async function main() {
     workflow,
     /acceptance_scope:[\s\S]*default: internal_only[\s\S]*options: \[internal_only, full_scope, cleanup_run37, cleanup_run40\]/,
   );
-  assert.match(
-    workflow,
-    /cleanup_run40\) run_id="ptf1c2-gh-37409506068-1"/,
-  );
-  assert.match(
-    workflow,
-    /cleanup_run37\) run_id="ptf1c2-gh-37236641902-1"/,
-  );
+  assert.match(workflow, /cleanup_run40\) run_id="ptf1c2-gh-37409506068-1"/);
+  assert.match(workflow, /cleanup_run37\) run_id="ptf1c2-gh-37236641902-1"/);
   assert.doesNotMatch(workflow, /^\s+external_mode:/m);
   assert.match(
     workflow,

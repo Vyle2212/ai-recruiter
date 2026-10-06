@@ -131,7 +131,7 @@ export default function MustRepairBeforeSearchPage() {
               <button key={entry.key} onClick={() => setPriority(entry.key)} className={`rounded-md border px-3 py-2 text-sm font-semibold ${priority === entry.key ? "border-cyan-400 bg-cyan-500/15 text-cyan-100" : "border-slate-700 bg-[#070A0F] text-slate-300 hover:border-slate-500"}`}>{entry.label}</button>
             ))}
           </div>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, title, company, module, risk" className="h-10 min-w-0 rounded-md border border-slate-700 bg-[#05070A] px-3 text-sm text-slate-100 outline-none focus:border-cyan-400 md:w-96" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, title, company, module, risk" className="h-10 min-w-0 rounded-md border border-slate-700 bg-[#05070A] px-3 text-sm text-slate-100 outline-hidden focus:border-cyan-400 md:w-96" />
         </div>
 
         {error ? <div className="mt-6 border border-red-500/30 bg-red-500/10 p-4 text-red-100">{error}</div> : null}

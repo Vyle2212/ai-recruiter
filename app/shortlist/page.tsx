@@ -167,7 +167,7 @@ export default function ShortlistPage() {
                             {candidate.aiRecommended ? <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-amber-100 ring-1 ring-amber-500/20">AI Recommended</span> : null}
                           </div>
                         </div>
-                        <select value={candidate.stage} onChange={(event) => updateStage(candidate.candidateId, event.target.value as ShortlistStage)} className="rounded-xl border border-slate-700/60 bg-[#05070A] px-2.5 py-2 text-xs font-bold text-white outline-none focus:border-cyan-400">
+                        <select value={candidate.stage} onChange={(event) => updateStage(candidate.candidateId, event.target.value as ShortlistStage)} className="rounded-xl border border-slate-700/60 bg-[#05070A] px-2.5 py-2 text-xs font-bold text-white outline-hidden focus:border-cyan-400">
                           {STAGES.map((stageOption) => <option key={stageOption} value={stageOption}>{stageOption}</option>)}
                         </select>
                       </div>

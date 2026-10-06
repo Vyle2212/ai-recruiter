@@ -129,7 +129,7 @@ function tableCells(row: HTMLTableRowElement) {
 
 function createCell(tagName: "td" | "th", text = "") {
   const cell = document.createElement(tagName) as HTMLTableCellElement;
-  cell.className = "border border-slate-700/70 px-2 py-1 align-top text-slate-100 outline-none focus:bg-cyan-500/10";
+  cell.className = "border border-slate-700/70 px-2 py-1 align-top text-slate-100 outline-hidden focus:bg-cyan-500/10";
   cell.contentEditable = "true";
   cell.tabIndex = 0;
   cell.textContent = text;
@@ -795,7 +795,7 @@ export function Candidate360NotebookEditor({
             setActiveCell(cell);
             if (!cell) toggleChecklistAtCaret();
           }}
-          className="c360-focus-ring min-h-20 whitespace-pre-wrap rounded-xl bg-transparent py-1 text-sm leading-6 text-white outline-none transition duration-200 focus:min-h-28 [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-slate-700/70 [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-slate-700/70 [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_th]:text-slate-300"
+          className="c360-focus-ring min-h-20 whitespace-pre-wrap rounded-xl bg-transparent py-1 text-sm leading-6 text-white outline-hidden transition duration-200 focus:min-h-28 [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-slate-700/70 [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-slate-700/70 [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_th]:text-slate-300"
           style={{
             direction: "ltr",
             unicodeBidi: "normal",

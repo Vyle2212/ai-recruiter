@@ -18,7 +18,7 @@ type PortalResponse = {
 
 const panel = "rounded-2xl border border-slate-800 bg-[#0B0F16] p-5";
 const input =
-  "mt-2 w-full rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm outline-none focus:border-cyan-400";
+  "mt-2 w-full rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm outline-hidden focus:border-cyan-400";
 
 function value(field: any) {
   return String(field?.value ?? "").trim();

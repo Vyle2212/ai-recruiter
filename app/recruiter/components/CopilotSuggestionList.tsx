@@ -109,7 +109,7 @@ function SuggestionCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <span
-            className={`inline-flex rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] ${tone.badge}`}
+            className={`inline-flex rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-widest ${tone.badge}`}
           >
             {item.priority}
           </span>
@@ -190,7 +190,7 @@ function SuggestionCard({
           {item.actionLabel}
         </Link>
 
-        <span className="text-[10px] uppercase tracking-[0.1em] text-slate-600">
+        <span className="text-[10px] uppercase tracking-widest text-slate-600">
           No automatic action
         </span>
       </div>
@@ -293,7 +293,7 @@ export function CopilotSuggestionList({
               {title}
             </h2>
 
-            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-emerald-100">
+            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[9px] font-semibold uppercase tracking-widest text-emerald-100">
               Human controlled
             </span>
           </div>
@@ -304,7 +304,7 @@ export function CopilotSuggestionList({
         </div>
 
         <Link
-          className="rounded-md border border-cyan-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-cyan-100 hover:bg-cyan-500/10"
+          className="rounded-md border border-cyan-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-cyan-100 hover:bg-cyan-500/10"
           href="/recruiter/workflow/copilot"
         >
           Open Copilot

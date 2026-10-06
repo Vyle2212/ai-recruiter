@@ -294,7 +294,7 @@ export default function WorkflowAutomationPage() {
 
             <div className="flex flex-wrap gap-2">
               <Link
-                className="rounded-md border border-cyan-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-cyan-100"
+                className="rounded-md border border-cyan-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-cyan-100"
                 href="/recruiter/workflow"
               >
                 Workflow
@@ -343,14 +343,14 @@ export default function WorkflowAutomationPage() {
             </Link>
 
               <Link
-                className="rounded-md border border-amber-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-amber-100"
+                className="rounded-md border border-amber-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-amber-100"
                 href="/recruiter/workflow/sla"
               >
                 SLA
               </Link>
 
               <Link
-                className="rounded-md border border-violet-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-violet-100"
+                className="rounded-md border border-violet-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-violet-100"
                 href="/recruiter/workflow/timeline"
               >
                 Timeline
@@ -485,7 +485,7 @@ export default function WorkflowAutomationPage() {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <span
-                            className={`rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] ${priorityTone(
+                            className={`rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-widest ${priorityTone(
                               item.priority,
                             )}`}
                           >
@@ -501,7 +501,7 @@ export default function WorkflowAutomationPage() {
                           </p>
                         </div>
 
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-200">
+                        <span className="text-[10px] font-semibold uppercase tracking-widest text-amber-200">
                           Recruiter approval required
                         </span>
                       </div>
@@ -615,7 +615,7 @@ export default function WorkflowAutomationPage() {
                           Review in Candidate360
                         </Link>
 
-                        <span className="text-[10px] uppercase tracking-[0.1em] text-slate-600">
+                        <span className="text-[10px] uppercase tracking-widest text-slate-600">
                           Preview only
                         </span>
                       </div>
@@ -648,7 +648,7 @@ export default function WorkflowAutomationPage() {
                       {rule.description}
                     </p>
 
-                    <div className="mt-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-200">
+                    <div className="mt-3 text-[10px] font-semibold uppercase tracking-widest text-amber-200">
                       Enabled · Preview only
                     </div>
                   </article>

@@ -142,7 +142,7 @@ function ProposalDetails({
       <article className="rounded-xl border border-slate-800 bg-[#090C11] p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.1em] text-cyan-300">
+            <div className="text-xs font-semibold uppercase tracking-widest text-cyan-300">
               Selected proposal
             </div>
 
@@ -157,20 +157,20 @@ function ProposalDetails({
 
           <div className="flex flex-wrap gap-2">
             <span
-              className={`rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] ${priorityTone(
+              className={`rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-widest ${priorityTone(
                 proposal.priority,
               )}`}
             >
               {proposal.priority}
             </span>
 
-            <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-cyan-100">
+            <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-cyan-100">
               {readable(
                 proposal.ruleId,
               )}
             </span>
 
-            <span className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-300">
+            <span className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-slate-300">
               Preview only
             </span>
           </div>
@@ -274,7 +274,7 @@ function ProposalDetails({
         <article className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.1em] text-emerald-200">
+              <div className="text-xs font-semibold uppercase tracking-widest text-emerald-200">
                 Dry-run result
               </div>
 
@@ -288,11 +288,11 @@ function ProposalDetails({
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-emerald-100">
+              <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-emerald-100">
                 Dry run
               </span>
 
-              <span className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-300">
+              <span className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-slate-300">
                 Execution disabled
               </span>
             </div>
@@ -880,13 +880,13 @@ export default function WorkflowAutomationSimulatorPage() {
 
         <section className="mt-6 grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
           <aside className="rounded-xl border border-slate-800 bg-[#090C11] p-4">
-            <div className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
+            <div className="text-xs font-semibold uppercase tracking-widest text-slate-500">
               Proposal explorer
             </div>
 
             <div className="mt-4 space-y-3">
               <input
-                className="w-full rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-none focus:border-cyan-500"
+                className="w-full rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-hidden focus:border-cyan-500"
                 onChange={(
                   event,
                 ) =>
@@ -901,7 +901,7 @@ export default function WorkflowAutomationSimulatorPage() {
 
               <div className="grid grid-cols-2 gap-2">
                 <select
-                  className="rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-none"
+                  className="rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-hidden"
                   onChange={(
                     event,
                   ) =>
@@ -934,7 +934,7 @@ export default function WorkflowAutomationSimulatorPage() {
                 </select>
 
                 <select
-                  className="rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-none"
+                  className="rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-hidden"
                   onChange={(
                     event,
                   ) =>
@@ -1030,7 +1030,7 @@ export default function WorkflowAutomationSimulatorPage() {
                       </div>
 
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <span className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[9px] uppercase text-slate-400">
+                        <span className="rounded-sm border border-slate-700 bg-slate-900 px-2 py-1 text-[9px] uppercase text-slate-400">
                           {readable(
                             proposal.currentStage,
                           )}

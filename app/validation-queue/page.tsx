@@ -150,7 +150,7 @@ export default function ValidationQueuePage() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search blocked candidates"
-            className="h-10 min-w-0 rounded-md border border-slate-700 bg-[#05070A] px-3 text-sm text-slate-100 outline-none focus:border-cyan-400 md:w-80"
+            className="h-10 min-w-0 rounded-md border border-slate-700 bg-[#05070A] px-3 text-sm text-slate-100 outline-hidden focus:border-cyan-400 md:w-80"
           />
         </div>
 

@@ -140,7 +140,7 @@ export default function ChatConversation({ conversationId, suggestionsEnabled }:
           {status === "ready" && messages.length === 0 && <p className="text-slate-400">No messages yet. Start the conversation below.</p>}
           {status === "ready" && messages.map(message => (
             <article key={message.id} className={`max-w-[85%] rounded-xl border px-4 py-3 ${message.sender_profile_id === viewerId ? "ml-auto border-cyan-600/40 bg-cyan-900/30" : "border-slate-700 bg-slate-800/70"}`}>
-              <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.body}</p>
+              <p className="whitespace-pre-wrap wrap-break-word text-sm leading-relaxed">{message.body}</p>
               <time className="mt-2 block text-xs text-slate-400" dateTime={message.created_at}>{new Date(message.created_at).toLocaleString()}</time>
             </article>
           ))}

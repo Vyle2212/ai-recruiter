@@ -141,14 +141,14 @@ export default function CandidateValidationPanel({ candidateId, initialState }: 
         <div className="space-y-3 rounded-xl border border-slate-800/50 bg-slate-950/20 p-4">
           <h3 className="text-sm font-bold text-white">Corrections</h3>
           <div className="grid gap-2 sm:grid-cols-2">
-            <input value={nameCorrection} onChange={(event) => setNameCorrection(event.target.value)} placeholder="Correct name" className="rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/60" />
+            <input value={nameCorrection} onChange={(event) => setNameCorrection(event.target.value)} placeholder="Correct name" className="rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-white outline-hidden focus:border-cyan-400/60" />
             <ActionButton label="Correct Name" disabled={!nameCorrection || savingAction === "correct-name"} onClick={() => runAction("correct-name", nameCorrection)} />
-            <input value={employerCorrection} onChange={(event) => setEmployerCorrection(event.target.value)} placeholder="Correct employer" className="rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/60" />
+            <input value={employerCorrection} onChange={(event) => setEmployerCorrection(event.target.value)} placeholder="Correct employer" className="rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-white outline-hidden focus:border-cyan-400/60" />
             <ActionButton label="Correct Employer" disabled={!employerCorrection || savingAction === "correct-employer"} onClick={() => runAction("correct-employer", employerCorrection)} />
-            <input value={sapYearsCorrection} onChange={(event) => setSapYearsCorrection(event.target.value)} placeholder="SAP years" inputMode="numeric" className="rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/60" />
-            <input value={duplicateOf} onChange={(event) => setDuplicateOf(event.target.value)} placeholder="Duplicate master id" className="rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/60" />
+            <input value={sapYearsCorrection} onChange={(event) => setSapYearsCorrection(event.target.value)} placeholder="SAP years" inputMode="numeric" className="rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-white outline-hidden focus:border-cyan-400/60" />
+            <input value={duplicateOf} onChange={(event) => setDuplicateOf(event.target.value)} placeholder="Duplicate master id" className="rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-white outline-hidden focus:border-cyan-400/60" />
           </div>
-          <input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Reason" className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/60" />
+          <input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Reason" className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-white outline-hidden focus:border-cyan-400/60" />
         </div>
       </div>
 

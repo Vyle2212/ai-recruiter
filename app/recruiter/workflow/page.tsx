@@ -136,7 +136,7 @@ export default function RecruiterWorkflowPage() {
                 </button>
               </div>
 
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search candidate, status, action, missing data" className="min-w-72 flex-1 rounded-md border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search candidate, status, action, missing data" className="min-w-72 flex-1 rounded-md border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-100 outline-hidden focus:border-cyan-400" />
             </div>
             <div className={viewMode === "board" ? "mt-5" : "hidden"}>
               <WorkflowKanbanBoard items={queue} />
