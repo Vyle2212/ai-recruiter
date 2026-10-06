@@ -1,6 +1,8 @@
 name: Production Trust Authenticated Acceptance
 run-name: >-
-  ${{ inputs.acceptance_scope == 'cleanup_run40'
+  ${{ inputs.acceptance_scope == 'cleanup_run42'
+      && 'Recover acceptance run 42 residue'
+      || inputs.acceptance_scope == 'cleanup_run40'
       && 'Recover acceptance run 40 residue'
       || inputs.acceptance_scope == 'cleanup_run37'
       && 'Recover acceptance run 37 residue'
@@ -20,7 +22,14 @@ on:
         required: true
         type: choice
         default: internal_only
-        options: [internal_only, full_scope, cleanup_run37, cleanup_run40]
+        options:
+          [
+            internal_only,
+            full_scope,
+            cleanup_run37,
+            cleanup_run40,
+            cleanup_run42,
+          ]
 
 permissions:
   contents: read
@@ -31,7 +40,7 @@ concurrency:
 
 jobs:
   authenticated-acceptance:
-    if: inputs.acceptance_scope != 'cleanup_run37' && inputs.acceptance_scope != 'cleanup_run40' && startsWith(github.ref_name, 'codex/authenticated-acceptance-')
+    if: inputs.acceptance_scope != 'cleanup_run42' && inputs.acceptance_scope != 'cleanup_run37' && inputs.acceptance_scope != 'cleanup_run40' && startsWith(github.ref_name, 'codex/authenticated-acceptance-')
     name: ${{ inputs.acceptance_scope == 'internal_only' && 'Exact-build internal Talent Hub acceptance' || 'Exact-build full-scope acceptance' }}
     runs-on: ubuntu-latest
     timeout-minutes: 55
@@ -186,7 +195,7 @@ jobs:
           retention-days: 7
 
   recover-run37:
-    if: (inputs.acceptance_scope == 'cleanup_run37' || inputs.acceptance_scope == 'cleanup_run40') && startsWith(github.ref_name, 'codex/authenticated-acceptance-')
+    if: (inputs.acceptance_scope == 'cleanup_run37' || inputs.acceptance_scope == 'cleanup_run40' || inputs.acceptance_scope == 'cleanup_run42') && startsWith(github.ref_name, 'codex/authenticated-acceptance-')
     name: Recover exact run-owned acceptance residue
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -220,7 +229,7 @@ jobs:
           test "${{ inputs.tested_sha }}" = "${{ github.sha }}"
           test "$(git rev-parse HEAD)" = "$ACCEPTANCE_EXPECTED_SHA"
           case "${{ inputs.acceptance_scope }}" in
-            cleanup_run37|cleanup_run40) ;;
+            cleanup_run37|cleanup_run40|cleanup_run42) ;;
             *) exit 1 ;;
           esac
           case "$ACCEPTANCE_BASE_URL" in https://*) ;; *) exit 1 ;; esac
@@ -240,6 +249,7 @@ jobs:
           case "${{ inputs.acceptance_scope }}" in
             cleanup_run37) run_id="ptf1c2-gh-37236641902-1" ;;
             cleanup_run40) run_id="ptf1c2-gh-37409506068-1" ;;
+            cleanup_run42) run_id="ptf1c2-gh-37439551708-1" ;;
             *) exit 1 ;;
           esac
           expires_at="$(date -u -d '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')"
