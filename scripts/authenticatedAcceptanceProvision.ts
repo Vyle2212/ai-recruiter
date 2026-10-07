@@ -668,6 +668,27 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
   );
   const plan = acceptanceCleanupPlan(entities);
   const profileIds = plan.profileIds;
+  if (profileIds.length) {
+    const auditProbe = await client
+      .from("recruiter_original_cv_access_events")
+      .select("id", { count: "exact", head: true })
+      .in("actor_profile_id", profileIds);
+    if (auditProbe.error || auditProbe.count === null)
+      throw new Error("acceptance_original_cv_audit_discovery_failed");
+    if (auditProbe.count > 0) {
+      const auditCleanup = await client.rpc("cleanup_acceptance_original_cv_run", {
+        p_run_id: config.runId,
+      });
+      if (auditCleanup.error || auditCleanup.data?.remainingAccessEvents !== 0)
+        throw new Error("acceptance_original_cv_audit_cleanup_failed");
+      const auditResidue = await client
+        .from("recruiter_original_cv_access_events")
+        .select("id", { count: "exact", head: true })
+        .in("actor_profile_id", profileIds);
+      if (auditResidue.error || auditResidue.count !== 0)
+        throw new Error("acceptance_original_cv_audit_residue_detected");
+    }
+  }
   const chatProbe = await client
     .from("chat_conversations")
     .select("id", { count: "exact", head: true })

@@ -821,6 +821,7 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
   test("candidate upload parses employer and project, confirms ownership and becomes searchable", async ({}, testInfo) => {
     const candidate = await authenticatedApi("candidate");
     const recruiter = await authenticatedApi("recruiter");
+    const admin = await authenticatedApi("admin");
     const database = acceptanceAdminClient();
     const owner = (await credentialBundle()).identities.candidate.authUserId;
     const fileName = "synthetic-candidate-lifecycle.txt";
@@ -912,6 +913,14 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
         searchable: false,
         confirmationRequired: true,
       });
+      // Read through the deployed application, including its immutable audit,
+      // rather than treating privileged Storage readback as API evidence.
+      const original = await admin.get(`/api/candidate360/${internalCandidateId}/resume`);
+      expect(original.status()).toBe(200);
+      expect(original.headers()["cache-control"]).toContain("private");
+      expect(original.headers()["cache-control"]).toContain("no-store");
+      expect(original.headers()["x-content-type-options"]).toBe("nosniff");
+      expect((await original.body()).equals(bytes)).toBe(true);
 
       const review = await candidate.get("/api/candidate/profile");
       expect(review.status()).toBe(200);
@@ -1020,6 +1029,7 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       await attachSanitized(testInfo, "candidate-cv-confirmation-search", {
         signedUpload: true,
         originalBytesPreserved: true,
+        originalBytesReadThroughAuthenticatedApi: true,
         parserEmployerClientSeparated: true,
         hiddenBeforeConfirmation: true,
         candidateConfirmed: true,
@@ -1028,6 +1038,7 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     } finally {
       await candidate.dispose();
       await recruiter.dispose();
+      await admin.dispose();
       // Workflow cleanup consumes the exact ledger reference and proves that
       // the candidate, review row and private bytes leave no run-owned residue.
     }

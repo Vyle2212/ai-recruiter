@@ -319,4 +319,7 @@ assert.match(
 execFileSync(process.execPath, ["scripts/originalCvResumeRoute.test.cjs"], {
   stdio: "inherit",
 });
+execFileSync(process.execPath, ["scripts/acceptanceOriginalCvCleanupContract.test.cjs"], {
+  stdio: "inherit",
+});
 console.log("originalCvReadAccess.test.ts passed");
