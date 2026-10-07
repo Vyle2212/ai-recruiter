@@ -46,7 +46,7 @@ const requiredTests = new Set([
   "synthetic client job share requires assigned support and can be revoked",
   "synthetic private CV upload preserves bytes and rejects digest mismatch",
   "candidate upload parses employer and project, confirms ownership and becomes searchable",
-  "original CV read denies recruiter without admin approval",
+  "original CV approval requires active subscription and revocation closes access",
   "synthetic candidate drawer remains private and preserves Experience/Projects semantics",
   "Search V2 shows Comparison beside Shortlist with separate employer and client periods",
   "candidate-detail caches are isolated by authenticated actor scope",

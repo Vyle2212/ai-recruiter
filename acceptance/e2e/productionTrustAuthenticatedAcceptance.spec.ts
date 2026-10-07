@@ -1,7 +1,5 @@
 import { createHash } from "node:crypto";
-import {
-  removeAcceptanceComparisonPack,
-} from "../../lib/acceptanceComparisonPackRuntime";
+import { removeAcceptanceComparisonPack } from "../../lib/acceptanceComparisonPackRuntime";
 import { acceptanceComparisonPackFixture } from "../../lib/acceptanceComparisonPackFixture";
 import { appendFile } from "node:fs/promises";
 import {
@@ -575,8 +573,13 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       ]),
     );
     const warmServerPhases: Record<string, number> = {};
-    for (const metric of (repeated.headers()["server-timing"] || "").split(",")) {
-      const parsed = /^\s*([a-zA-Z][a-zA-Z0-9_-]{0,40});dur=([0-9]+(?:\.[0-9]+)?)\s*$/.exec(metric);
+    for (const metric of (repeated.headers()["server-timing"] || "").split(
+      ",",
+    )) {
+      const parsed =
+        /^\s*([a-zA-Z][a-zA-Z0-9_-]{0,40});dur=([0-9]+(?:\.[0-9]+)?)\s*$/.exec(
+          metric,
+        );
       if (parsed && Number.isFinite(Number(parsed[2])))
         warmServerPhases[parsed[1]] = Number(parsed[2]);
     }
@@ -584,10 +587,23 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       latencyBudgetMs: SEARCH_V2_ACCEPTANCE_BUDGET_MS,
       warmSearchMs,
       serverPhases: warmServerPhases,
-      clientOverheadMs: Math.max(0, warmSearchMs - (warmServerPhases.handler || warmServerPhases.total || 0)),
+      clientOverheadMs: Math.max(
+        0,
+        warmSearchMs -
+          (warmServerPhases.handler || warmServerPhases.total || 0),
+      ),
     };
-    await attachSanitized(testInfo, "internal-search-warm-latency", warmDiagnostic);
-    console.log(JSON.stringify({ type: "acceptance_search_warm_latency", ...warmDiagnostic }));
+    await attachSanitized(
+      testInfo,
+      "internal-search-warm-latency",
+      warmDiagnostic,
+    );
+    console.log(
+      JSON.stringify({
+        type: "acceptance_search_warm_latency",
+        ...warmDiagnostic,
+      }),
+    );
     expect(
       warmSearchMs,
       `warm Search V2 response exceeded ${SEARCH_V2_ACCEPTANCE_BUDGET_MS}ms`,
@@ -915,7 +931,9 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       });
       // Read through the deployed application, including its immutable audit,
       // rather than treating privileged Storage readback as API evidence.
-      const original = await admin.get(`/api/candidate360/${internalCandidateId}/resume`);
+      const original = await admin.get(
+        `/api/candidate360/${internalCandidateId}/resume`,
+      );
       expect(original.status()).toBe(200);
       expect(original.headers()["cache-control"]).toContain("private");
       expect(original.headers()["cache-control"]).toContain("no-store");
@@ -1044,7 +1062,7 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     }
   });
 
-  test("original CV read denies recruiter without admin approval", async ({}, testInfo) => {
+  test("original CV approval requires active subscription and revocation closes access", async ({}, testInfo) => {
     const target = `/api/candidate360/${internalCandidateId}/resume`;
     const deny = async (response: APIResponse, status: number) => {
       expect(response.status()).toBe(status);
@@ -1056,22 +1074,88 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     };
     const anonymous = await anonymousAcceptanceApi();
     const recruiter = await authenticatedApi("recruiter");
+    const admin = await authenticatedApi("admin");
     const client = await authenticatedApi("client");
     const candidate = await authenticatedApi("candidate");
     try {
+      const bundle = await credentialBundle();
+      const clientId = String(bundle.identities.client.clientId || "");
+      const recruiterProfileId = String(
+        bundle.identities.recruiter.profileId || "",
+      );
+      expect(clientId).toMatch(
+        /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i,
+      );
+      expect(recruiterProfileId).toMatch(
+        /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i,
+      );
       await deny(await anonymous.get(target), 401);
       await deny(await recruiter.get(target), 403);
       await deny(await client.get(target), 403);
       await deny(await candidate.get(target), 403);
+      const expected = await admin.get(target);
+      expect(expected.status()).toBe(200);
+      const expectedBytes = await expected.body();
+      expect(expectedBytes.length).toBeGreaterThan(0);
+      const requested = await recruiter.post(
+        "/api/recruiter/original-cv-requests",
+        {
+          data: {
+            candidateId: internalCandidateId,
+            purpose: "client_support",
+            clientId,
+          },
+        },
+      );
+      expect(requested.status()).toBe(201);
+      const requestBody = await requested.json();
+      expect(requestBody.status).toBe("pending");
+      expect(requestBody.requestId).toMatch(
+        /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i,
+      );
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      const approved = await admin.post("/api/admin/original-cv-grants", {
+        data: {
+          action: "approve",
+          requestId: requestBody.requestId,
+          expiresAt,
+        },
+      });
+      expect(approved.status()).toBe(200);
+      expect(await approved.json()).toMatchObject({
+        approved: true,
+        expiresAt,
+      });
+      const allowed = await recruiter.get(target);
+      expect(allowed.status()).toBe(200);
+      expect(allowed.headers()["cache-control"]).toContain("private");
+      expect(allowed.headers()["cache-control"]).toContain("no-store");
+      expect((await allowed.body()).equals(expectedBytes)).toBe(true);
+      const revoked = await admin.post("/api/admin/original-cv-grants", {
+        data: {
+          action: "revoke",
+          candidateId: internalCandidateId,
+          recruiterProfileId,
+        },
+      });
+      expect(revoked.status()).toBe(200);
+      expect(await revoked.json()).toEqual({ revoked: true });
+      await deny(await recruiter.get(target), 403);
       await attachSanitized(testInfo, "original-cv-approval-boundary", {
         anonymous: 401,
         recruiterWithoutGrant: 403,
+        activeSubscriptionRequired: true,
+        adminApproved: true,
+        exactOriginalBytesRead: true,
+        revoked: true,
+        recruiterAfterRevocation: 403,
         client: 403,
         candidate: 403,
       });
     } finally {
       await anonymous.dispose();
       await recruiter.dispose();
+      await admin.dispose();
       await client.dispose();
       await candidate.dispose();
     }
@@ -1082,15 +1166,31 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
   }, testInfo) => {
     const detailApi = await authenticatedApi("recruiter");
     try {
-      const detailResponse = await detailApi.get(`${searchPath}/candidate-details/${internalCandidateId}`);
+      const detailResponse = await detailApi.get(
+        `${searchPath}/candidate-details/${internalCandidateId}`,
+      );
       expect(detailResponse.status()).toBe(200);
       const detail = await detailResponse.json();
       const projects = detail.enterpriseProfile?.projects || [];
-      const expectedClientPresent = projects.some((project: { client?: string }) => project.client === "PTF Synthetic Manufacturing Client");
-      const diagnostic = { projectCount: projects.length, expectedClientPresent };
+      const expectedClientPresent = projects.some(
+        (project: { client?: string }) =>
+          project.client === "PTF Synthetic Manufacturing Client",
+      );
+      const diagnostic = {
+        projectCount: projects.length,
+        expectedClientPresent,
+      };
       await attachSanitized(testInfo, "drawer-project-source", diagnostic);
-      console.log(JSON.stringify({ type: "acceptance_drawer_project_source", ...diagnostic }));
-      expect(expectedClientPresent, "candidate-detail API must preserve the synthetic project client before checking the drawer").toBe(true);
+      console.log(
+        JSON.stringify({
+          type: "acceptance_drawer_project_source",
+          ...diagnostic,
+        }),
+      );
+      expect(
+        expectedClientPresent,
+        "candidate-detail API must preserve the synthetic project client before checking the drawer",
+      ).toBe(true);
     } finally {
       await detailApi.dispose();
     }
@@ -1150,7 +1250,8 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       await expect(projectsTab).toHaveAttribute("aria-selected", "true");
       const projectsPanel = drawer.getByRole("tabpanel");
       await expect(projectsPanel).toHaveAttribute(
-        "aria-labelledby", "candidate-detail-projects-tab",
+        "aria-labelledby",
+        "candidate-detail-projects-tab",
       );
       await expect(
         projectsPanel
@@ -1160,13 +1261,20 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     } finally {
       const diagnostic = {
         projectsSelected: await projectsTab.getAttribute("aria-selected"),
-        panelLabel: await drawer.getByRole("tabpanel").getAttribute("aria-labelledby"),
-        expectedClientNodes: await drawer.getByText(
-          "PTF Synthetic Manufacturing Client", { exact: true },
-        ).count(),
+        panelLabel: await drawer
+          .getByRole("tabpanel")
+          .getAttribute("aria-labelledby"),
+        expectedClientNodes: await drawer
+          .getByText("PTF Synthetic Manufacturing Client", { exact: true })
+          .count(),
       };
       await attachSanitized(testInfo, "drawer-project-render", diagnostic);
-      console.log(JSON.stringify({ type: "acceptance_drawer_project_render", ...diagnostic }));
+      console.log(
+        JSON.stringify({
+          type: "acceptance_drawer_project_render",
+          ...diagnostic,
+        }),
+      );
       await page.screenshot({
         path: "artifacts/acceptance-evidence/private-candidate-drawer.png",
         fullPage: false,
@@ -1205,10 +1313,14 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     const fullPack = acceptanceComparisonPackFixture(packExpected.runId);
     const packSelections: { candidateId: string; jobId: string }[] = [];
     const comparisonStartedAt = performance.now();
-    const comparisonPhase = (phase: string) => console.log(JSON.stringify({
-      type: "acceptance_comparison_phase", phase,
-      elapsedMs: Math.ceil(performance.now() - comparisonStartedAt),
-    }));
+    const comparisonPhase = (phase: string) =>
+      console.log(
+        JSON.stringify({
+          type: "acceptance_comparison_phase",
+          phase,
+          elapsedMs: Math.ceil(performance.now() - comparisonStartedAt),
+        }),
+      );
     try {
       comparisonPhase("single-profile-api");
       const saved = await shortlist.post("/api/recruiter/search-v2/shortlist", {
@@ -1377,7 +1489,9 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
             (row: { candidateId: string }) => row.candidateId,
           );
           expect(new Set(scopedIds).size).toBe(expectedCount);
-          expect(scopedIds.every((id: string) => expectedIds.has(id))).toBe(true);
+          expect(scopedIds.every((id: string) => expectedIds.has(id))).toBe(
+            true,
+          );
         }
       }
       comparisonPhase("full-pack-ui");

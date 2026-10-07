@@ -406,6 +406,17 @@ async function createAuthUser(
 }
 
 async function provision(config: SafeConfig, client: SupabaseClient) {
+  const cleanupProbe = await client.rpc(
+    "cleanup_acceptance_original_cv_approval_run",
+    { p_run_id: "invalid" },
+  );
+  if (
+    !cleanupProbe.error ||
+    !cleanupProbe.error.message.includes(
+      "acceptance_original_cv_approval_cleanup_run_invalid",
+    )
+  )
+    throw new Error("acceptance_original_cv_approval_cleanup_unavailable");
   const { error: runError } = await client.from("acceptance_test_runs").insert({
     run_id: config.runId,
     synthetic_namespace: config.syntheticNamespace,
@@ -453,6 +464,8 @@ async function provision(config: SafeConfig, client: SupabaseClient) {
   let syntheticRecruiterProfileId: string | null = null;
   for (const definition of ACCEPTANCE_IDENTITY_CASES) {
     const auth = await createAuthUser(client, config, definition.key);
+    let profileId: string | undefined;
+    let clientId: string | undefined;
     if (definition.profile) {
       const profileShape = {
         auth_user_id: auth.authUserId,
@@ -479,6 +492,10 @@ async function provision(config: SafeConfig, client: SupabaseClient) {
         .single();
       if (profileError || !profile?.id)
         throw new Error("acceptance_profile_create_failed");
+      profileId = String(profile.id);
+      clientId = profileShape.client_id
+        ? String(profileShape.client_id)
+        : undefined;
       await recordEntity(client, config.runId, {
         entity_type: "user_profile",
         entity_id: String(profile.id),
@@ -504,6 +521,8 @@ async function provision(config: SafeConfig, client: SupabaseClient) {
     }
     identities[definition.key as AcceptanceIdentityKey] = {
       ...auth,
+      ...(profileId ? { profileId } : {}),
+      ...(clientId ? { clientId } : {}),
       role: definition.role,
       status: definition.status,
     };
@@ -676,9 +695,12 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
     if (auditProbe.error || auditProbe.count === null)
       throw new Error("acceptance_original_cv_audit_discovery_failed");
     if (auditProbe.count > 0) {
-      const auditCleanup = await client.rpc("cleanup_acceptance_original_cv_run", {
-        p_run_id: config.runId,
-      });
+      const auditCleanup = await client.rpc(
+        "cleanup_acceptance_original_cv_run",
+        {
+          p_run_id: config.runId,
+        },
+      );
       if (auditCleanup.error || auditCleanup.data?.remainingAccessEvents !== 0)
         throw new Error("acceptance_original_cv_audit_cleanup_failed");
       const auditResidue = await client
@@ -688,6 +710,15 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
       if (auditResidue.error || auditResidue.count !== 0)
         throw new Error("acceptance_original_cv_audit_residue_detected");
     }
+    const approvalCleanup = await client.rpc(
+      "cleanup_acceptance_original_cv_approval_run",
+      { p_run_id: config.runId },
+    );
+    if (
+      approvalCleanup.error ||
+      approvalCleanup.data?.remainingApprovalRows !== 0
+    )
+      throw new Error("acceptance_original_cv_approval_cleanup_failed");
   }
   const chatProbe = await client
     .from("chat_conversations")
