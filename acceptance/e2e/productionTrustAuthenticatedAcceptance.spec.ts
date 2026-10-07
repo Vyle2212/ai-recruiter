@@ -1144,16 +1144,34 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     await expect(
       drawer.getByText("PTF Synthetic Manufacturing Client", { exact: true }),
     ).toHaveCount(0);
-    await drawer.getByRole("tab", { name: /Projects/ }).click();
-    await expect(
-      drawer
-        .getByText("PTF Synthetic Manufacturing Client", { exact: true })
-        .first(),
-    ).toBeVisible();
-    await page.screenshot({
-      path: "artifacts/acceptance-evidence/private-candidate-drawer.png",
-      fullPage: false,
-    });
+    const projectsTab = drawer.getByRole("tab", { name: /^Projects(?:,|$)/ });
+    await projectsTab.click();
+    try {
+      await expect(projectsTab).toHaveAttribute("aria-selected", "true");
+      const projectsPanel = drawer.getByRole("tabpanel");
+      await expect(projectsPanel).toHaveAttribute(
+        "aria-labelledby", "candidate-detail-projects-tab",
+      );
+      await expect(
+        projectsPanel
+          .getByText("PTF Synthetic Manufacturing Client", { exact: true })
+          .first(),
+      ).toBeVisible();
+    } finally {
+      const diagnostic = {
+        projectsSelected: await projectsTab.getAttribute("aria-selected"),
+        panelLabel: await drawer.getByRole("tabpanel").getAttribute("aria-labelledby"),
+        expectedClientNodes: await drawer.getByText(
+          "PTF Synthetic Manufacturing Client", { exact: true },
+        ).count(),
+      };
+      await attachSanitized(testInfo, "drawer-project-render", diagnostic);
+      console.log(JSON.stringify({ type: "acceptance_drawer_project_render", ...diagnostic }));
+      await page.screenshot({
+        path: "artifacts/acceptance-evidence/private-candidate-drawer.png",
+        fullPage: false,
+      });
+    }
   });
 
   test("Search V2 shows Comparison beside Shortlist with separate employer and client periods", async ({
