@@ -14,10 +14,12 @@ export function recruiterSearchProfilePrefetch(
   return {
     async getUser() {
       const freshUser = adapter.getUser();
-      await Promise.all([
-        freshUser,
-        verifiedSubject().then((subject) => {
-          if (subject) {
+      let acceptingHint = true;
+      // Claims are an optional latency hint, never a prerequisite for fresh Auth.
+      // Ignore late hints so they cannot start an unused profile read afterward.
+      try {
+        void verifiedSubject().then((subject) => {
+          if (acceptingHint && subject) {
             prefetched = {
               subject,
               result: adapter.getProfile(subject).catch(() => ({
@@ -25,9 +27,15 @@ export function recruiterSearchProfilePrefetch(
               })),
             };
           }
-        }).catch(() => {}),
-      ]);
-      return freshUser;
+        }).catch(() => {});
+      } catch {
+        // A synchronous claims failure uses the original fresh Auth path too.
+      }
+      try {
+        return await freshUser;
+      } finally {
+        acceptingHint = false;
+      }
     },
     getProfile(subject) {
       return prefetched?.subject === subject
