@@ -202,43 +202,160 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     expect((await admin.get(reporting)).status()).toBe(200);
     expect((await admin.get(review)).status()).toBe(200);
 
-    // Acceptance keeps chat off. Prove every entry point fails closed for
-    // authenticated roles before any conversation, message or AI draft exists.
-    const conversation = "00000000-0000-4000-8000-000000000001";
-    const chatOutcomes: Record<string, number> = {};
-    for (const role of ["admin", "recruiter", "client", "candidate"] as const) {
-      const api = await authenticatedApi(role);
-      try {
-        for (const path of [
-          "/api/chat/conversations",
-          "/api/chat/client-recruiter-conversations",
-          "/api/chat/recruiter-candidate-conversations",
-          "/api/chat/internal-conversations",
-          `/api/chat/conversations/${conversation}/messages`,
-          `/api/chat/conversations/${conversation}/receipts`,
-          `/api/chat/conversations/${conversation}/suggestion`,
-        ]) {
-          const response = await api.post(path, { data: {} });
-          expect(response.status()).toBe(404);
-          expect(response.headers()["cache-control"]).toContain("private");
-          expect(response.headers()["cache-control"]).toContain("no-store");
-          expect(await response.json()).toEqual({ error: "not_found" });
-          chatOutcomes[`${role}:POST:${path}`] = response.status();
+    const releaseApi = await anonymousAcceptanceApi();
+    const releaseResponse = await releaseApi.get("/api/acceptance/release");
+    expect(releaseResponse.status()).toBe(200);
+    const chatRelease = await releaseResponse.json();
+    await releaseApi.dispose();
+    expect(typeof chatRelease.chatEnabled).toBe("boolean");
+    if (chatRelease.chatEnabled) {
+      const expectChatError = async (response: APIResponse, status: number) => {
+        expect(response.status()).toBe(status);
+        expect(response.headers()["cache-control"]).toContain("private");
+        expect(response.headers()["cache-control"]).toContain("no-store");
+        const body = await response.json();
+        expect(Object.keys(body)).toEqual(["error"]);
+        expect(typeof body.error).toBe("string");
+      };
+      const bundle = await credentialBundle();
+      const adminProfileId = bundle.identities.admin.profileId;
+      expect(adminProfileId).toMatch(/^[a-f0-9-]{36}$/);
+      const created = await recruiter.post("/api/chat/internal-conversations", {
+        data: { adminProfileId },
+      });
+      expect(created.status()).toBe(200);
+      const { conversationId } = await created.json();
+      expect(conversationId).toMatch(/^[a-f0-9-]{36}$/);
+      const messagesPath = `/api/chat/conversations/${conversationId}/messages`;
+      const receiptsPath = `/api/chat/conversations/${conversationId}/receipts`;
+      const payload = {
+        clientMessageId: crypto.randomUUID(),
+        text: "Synthetic acceptance recruiter message",
+      };
+      const sent = await recruiter.post(messagesPath, { data: payload });
+      expect(sent.status()).toBe(201);
+      const original = (await sent.json()).message;
+      const retried = await recruiter.post(messagesPath, { data: payload });
+      expect(retried.status()).toBe(200);
+      expect((await retried.json()).message.id).toBe(original.id);
+      await expectChatError(
+        await recruiter.post(messagesPath, {
+          data: { ...payload, text: "Synthetic changed content" },
+        }),
+        409,
+      );
+      const inbox = await admin.get(messagesPath);
+      expect(inbox.status()).toBe(200);
+      const received = (await inbox.json()).messages;
+      expect(
+        received.filter(
+          (message: { id: string }) => message.id === original.id,
+        ),
+      ).toHaveLength(1);
+      expect(
+        received.find((message: { id: string }) => message.id === original.id)
+          ?.body,
+      ).toBe(payload.text);
+      const reply = await admin.post(messagesPath, {
+        data: {
+          clientMessageId: crypto.randomUUID(),
+          text: "Synthetic acceptance admin reply",
+        },
+      });
+      expect(reply.status()).toBe(201);
+      const replyId = (await reply.json()).message.id;
+      const recruiterInbox = await recruiter.get(messagesPath);
+      expect(recruiterInbox.status()).toBe(200);
+      expect(
+        (await recruiterInbox.json()).messages.some(
+          (message: { id: string }) => message.id === replyId,
+        ),
+      ).toBe(true);
+      const read = await admin.post(receiptsPath, { data: {} });
+      expect(read.status()).toBe(200);
+      expect((await read.json()).markedRead).toBeGreaterThanOrEqual(1);
+      const unread = await admin.get(receiptsPath);
+      expect(unread.status()).toBe(200);
+      expect((await unread.json()).unreadCount).toBe(0);
+      for (const role of [
+        "client",
+        "candidate",
+        "inactive_recruiter",
+        "recruiter_manager",
+      ] as const) {
+        const outsider = await authenticatedApi(role);
+        try {
+          const denied = await outsider.get(messagesPath);
+          expect([403, 404]).toContain(denied.status());
+          await expectChatError(denied, denied.status());
+          const deniedSend = await outsider.post(messagesPath, {
+            data: {
+              clientMessageId: crypto.randomUUID(),
+              text: "Synthetic denied message",
+            },
+          });
+          expect([403, 404]).toContain(deniedSend.status());
+          await expectChatError(deniedSend, deniedSend.status());
+        } finally {
+          await outsider.dispose();
         }
-        for (const resource of ["messages", "receipts"]) {
-          const path = `/api/chat/conversations/${conversation}/${resource}`;
-          const response = await api.get(path);
-          expect(response.status()).toBe(404);
-          expect(response.headers()["cache-control"]).toContain("private");
-          expect(response.headers()["cache-control"]).toContain("no-store");
-          expect(await response.json()).toEqual({ error: "not_found" });
-          chatOutcomes[`${role}:GET:${path}`] = response.status();
-        }
-      } finally {
-        await api.dispose();
       }
+      await attachSanitized(testInfo, "chat-internal-live", {
+        channel: "recruiter_admin",
+        twoWay: true,
+        retrySingleMessage: true,
+        changedContentDenied: true,
+        receipts: true,
+        outsidersDenied: true,
+      });
+    } else {
+      // Acceptance keeps chat off. Prove every entry point fails closed for
+      // authenticated roles before any conversation, message or AI draft exists.
+      const conversation = "00000000-0000-4000-8000-000000000001";
+      const chatOutcomes: Record<string, number> = {};
+      for (const role of [
+        "admin",
+        "recruiter",
+        "client",
+        "candidate",
+      ] as const) {
+        const api = await authenticatedApi(role);
+        try {
+          for (const path of [
+            "/api/chat/conversations",
+            "/api/chat/client-recruiter-conversations",
+            "/api/chat/recruiter-candidate-conversations",
+            "/api/chat/internal-conversations",
+            `/api/chat/conversations/${conversation}/messages`,
+            `/api/chat/conversations/${conversation}/receipts`,
+            `/api/chat/conversations/${conversation}/suggestion`,
+          ]) {
+            const response = await api.post(path, { data: {} });
+            expect(response.status()).toBe(404);
+            expect(response.headers()["cache-control"]).toContain("private");
+            expect(response.headers()["cache-control"]).toContain("no-store");
+            expect(await response.json()).toEqual({ error: "not_found" });
+            chatOutcomes[`${role}:POST:${path}`] = response.status();
+          }
+          for (const resource of ["messages", "receipts"]) {
+            const path = `/api/chat/conversations/${conversation}/${resource}`;
+            const response = await api.get(path);
+            expect(response.status()).toBe(404);
+            expect(response.headers()["cache-control"]).toContain("private");
+            expect(response.headers()["cache-control"]).toContain("no-store");
+            expect(await response.json()).toEqual({ error: "not_found" });
+            chatOutcomes[`${role}:GET:${path}`] = response.status();
+          }
+        } finally {
+          await api.dispose();
+        }
+      }
+      await attachSanitized(
+        testInfo,
+        "chat-disabled-role-matrix",
+        chatOutcomes,
+      );
     }
-    await attachSanitized(testInfo, "chat-disabled-role-matrix", chatOutcomes);
 
     await attachSanitized(testInfo, "permission-matrix", {
       recruiter: { reporting: 403, dataQualityReview: 403 },

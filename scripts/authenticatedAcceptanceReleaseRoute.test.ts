@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 async function main() {
   const previous = {
+    chat: process.env.CHAT_ENABLED,
     mode: process.env.ACCEPTANCE_TEST_MODE,
     environment: process.env.APP_ENV,
     sha: process.env.ACCEPTANCE_DEPLOYED_SHA,
@@ -24,6 +25,9 @@ async function main() {
   process.env.ACCEPTANCE_SUPABASE_PROJECT_REF = "synthetic-project-ref";
   process.env.CANDIDATE_CV_UPLOAD_ENABLED = "true";
   process.env.CANDIDATE_PROFILE_CONFIRMATION_ENABLED = "true";
+  delete process.env.CHAT_ENABLED;
+  assert.equal((await (await route.GET()).json()).chatEnabled, false);
+  process.env.CHAT_ENABLED = "true";
   const response = await route.GET();
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("cache-control"), "private, no-store");
@@ -34,24 +38,27 @@ async function main() {
   assert.equal(body.externalProviderConfigured, false);
   assert.equal(body.candidateCvUploadEnabled, true);
   assert.equal(body.candidateProfileConfirmationEnabled, true);
+  assert.equal(body.chatEnabled, true);
   assert.equal(body.classification, "acceptance");
   assert.match(body.environmentHash, /^[a-f0-9]{16}$/);
   assert.match(body.projectRefHash, /^[a-f0-9]{16}$/);
   for (const [key, value] of Object.entries(previous)) {
     const envKey =
-      key === "mode"
-        ? "ACCEPTANCE_TEST_MODE"
-        : key === "environment"
-          ? "APP_ENV"
-          : key === "sha"
-            ? "ACCEPTANCE_DEPLOYED_SHA"
-            : key === "id"
-              ? "ACCEPTANCE_ENVIRONMENT_ID"
-              : key === "project"
-                ? "ACCEPTANCE_SUPABASE_PROJECT_REF"
-                : key === "candidateUpload"
-                  ? "CANDIDATE_CV_UPLOAD_ENABLED"
-                  : "CANDIDATE_PROFILE_CONFIRMATION_ENABLED";
+      key === "chat"
+        ? "CHAT_ENABLED"
+        : key === "mode"
+          ? "ACCEPTANCE_TEST_MODE"
+          : key === "environment"
+            ? "APP_ENV"
+            : key === "sha"
+              ? "ACCEPTANCE_DEPLOYED_SHA"
+              : key === "id"
+                ? "ACCEPTANCE_ENVIRONMENT_ID"
+                : key === "project"
+                  ? "ACCEPTANCE_SUPABASE_PROJECT_REF"
+                  : key === "candidateUpload"
+                    ? "CANDIDATE_CV_UPLOAD_ENABLED"
+                    : "CANDIDATE_PROFILE_CONFIRMATION_ENABLED";
     if (value === undefined) delete process.env[envKey];
     else process.env[envKey] = value;
   }

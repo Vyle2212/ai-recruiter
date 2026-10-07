@@ -74,6 +74,7 @@ export async function GET() {
         process.env.CANDIDATE_CV_UPLOAD_ENABLED === "true",
       candidateProfileConfirmationEnabled:
         process.env.CANDIDATE_PROFILE_CONFIRMATION_ENABLED === "true",
+      chatEnabled: process.env.CHAT_ENABLED === "true",
       externalTalentEnabled:
         process.env.EXTERNAL_TALENT_SEARCH_ENABLED === "true",
       externalProviderConfigured:
