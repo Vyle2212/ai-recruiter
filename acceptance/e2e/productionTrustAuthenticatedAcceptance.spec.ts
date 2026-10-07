@@ -308,6 +308,131 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
         receipts: true,
         outsidersDenied: true,
       });
+      const clientChat = await authenticatedApi("client");
+      try {
+        const runHash = pseudonymousAcceptanceIdentifier(
+          acceptanceRequired("ACCEPTANCE_RUN_ID"),
+        );
+        const { data: chatJob, error: chatJobError } =
+          await acceptanceAdminClient()
+            .from("jobs")
+            .select("id")
+            .eq("title", `PTF synthetic job ${runHash}`)
+            .single();
+        expect(chatJobError).toBeNull();
+        expect(chatJob?.id).toBeTruthy();
+        const clientCreated = await clientChat.post(
+          "/api/chat/client-recruiter-conversations",
+          {
+            data: {
+              recruiterProfileId: bundle.identities.recruiter.profileId,
+              jobId: chatJob!.id,
+            },
+          },
+        );
+        expect(clientCreated.status()).toBe(200);
+        const clientConversationId = (await clientCreated.json())
+          .conversationId;
+        expect(clientConversationId).toMatch(/^[a-f0-9-]{36}$/);
+        expect(clientConversationId).not.toBe(conversationId);
+        const clientMessages = `/api/chat/conversations/${clientConversationId}/messages`;
+        const clientReceipts = `/api/chat/conversations/${clientConversationId}/receipts`;
+        const clientPayload = {
+          clientMessageId: crypto.randomUUID(),
+          text: "Synthetic acceptance client job message",
+        };
+        const clientSent = await clientChat.post(clientMessages, {
+          data: clientPayload,
+        });
+        expect(clientSent.status()).toBe(201);
+        const clientMessageId = (await clientSent.json()).message.id;
+        const clientRetry = await clientChat.post(clientMessages, {
+          data: clientPayload,
+        });
+        expect(clientRetry.status()).toBe(200);
+        expect((await clientRetry.json()).message.id).toBe(clientMessageId);
+        await expectChatError(
+          await clientChat.post(clientMessages, {
+            data: {
+              ...clientPayload,
+              text: "Synthetic changed client message",
+            },
+          }),
+          409,
+        );
+        const recruiterRead = await recruiter.get(clientMessages);
+        expect(recruiterRead.status()).toBe(200);
+        const clientReceived = (await recruiterRead.json()).messages;
+        expect(
+          clientReceived.filter(
+            (message: { id: string }) => message.id === clientMessageId,
+          ),
+        ).toHaveLength(1);
+        expect(
+          clientReceived.find(
+            (message: { id: string }) => message.id === clientMessageId,
+          )?.body,
+        ).toBe(clientPayload.text);
+        const recruiterReply = await recruiter.post(clientMessages, {
+          data: {
+            clientMessageId: crypto.randomUUID(),
+            text: "Synthetic acceptance recruiter job reply",
+          },
+        });
+        expect(recruiterReply.status()).toBe(201);
+        const recruiterReplyId = (await recruiterReply.json()).message.id;
+        const clientInbox = await clientChat.get(clientMessages);
+        expect(clientInbox.status()).toBe(200);
+        expect(
+          (await clientInbox.json()).messages.some(
+            (message: { id: string }) => message.id === recruiterReplyId,
+          ),
+        ).toBe(true);
+        const clientRead = await clientChat.post(clientReceipts, { data: {} });
+        expect(clientRead.status()).toBe(200);
+        expect((await clientRead.json()).markedRead).toBeGreaterThanOrEqual(1);
+        const clientUnread = await clientChat.get(clientReceipts);
+        expect(clientUnread.status()).toBe(200);
+        expect((await clientUnread.json()).unreadCount).toBe(0);
+        for (const role of [
+          "admin",
+          "candidate",
+          "inactive_recruiter",
+          "recruiter_manager",
+        ] as const) {
+          const outsider = await authenticatedApi(role);
+          try {
+            for (const denied of [
+              await outsider.get(clientMessages),
+              await outsider.post(clientMessages, {
+                data: {
+                  clientMessageId: crypto.randomUUID(),
+                  text: "Synthetic denied client job message",
+                },
+              }),
+              await outsider.get(clientReceipts),
+              await outsider.post(clientReceipts, { data: {} }),
+            ]) {
+              expect([403, 404]).toContain(denied.status());
+              await expectChatError(denied, denied.status());
+            }
+          } finally {
+            await outsider.dispose();
+          }
+        }
+        await attachSanitized(testInfo, "chat-client-recruiter-live", {
+          channel: "client_recruiter",
+          jobScoped: true,
+          activeSubscriptionFixture: true,
+          twoWay: true,
+          retrySingleMessage: true,
+          changedContentDenied: true,
+          receipts: true,
+          outsidersDenied: true,
+        });
+      } finally {
+        await clientChat.dispose();
+      }
     } else {
       // Acceptance keeps chat off. Prove every entry point fails closed for
       // authenticated roles before any conversation, message or AI draft exists.
