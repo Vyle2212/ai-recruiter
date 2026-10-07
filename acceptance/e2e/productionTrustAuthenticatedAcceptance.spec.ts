@@ -202,6 +202,44 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     expect((await admin.get(reporting)).status()).toBe(200);
     expect((await admin.get(review)).status()).toBe(200);
 
+    // Acceptance keeps chat off. Prove every entry point fails closed for
+    // authenticated roles before any conversation, message or AI draft exists.
+    const conversation = "00000000-0000-4000-8000-000000000001";
+    const chatOutcomes: Record<string, number> = {};
+    for (const role of ["admin", "recruiter", "client", "candidate"] as const) {
+      const api = await authenticatedApi(role);
+      try {
+        for (const path of [
+          "/api/chat/conversations",
+          "/api/chat/client-recruiter-conversations",
+          "/api/chat/recruiter-candidate-conversations",
+          "/api/chat/internal-conversations",
+          `/api/chat/conversations/${conversation}/messages`,
+          `/api/chat/conversations/${conversation}/receipts`,
+          `/api/chat/conversations/${conversation}/suggestion`,
+        ]) {
+          const response = await api.post(path, { data: {} });
+          expect(response.status()).toBe(404);
+          expect(response.headers()["cache-control"]).toContain("private");
+          expect(response.headers()["cache-control"]).toContain("no-store");
+          expect(await response.json()).toEqual({ error: "not_found" });
+          chatOutcomes[`${role}:POST:${path}`] = response.status();
+        }
+        for (const resource of ["messages", "receipts"]) {
+          const path = `/api/chat/conversations/${conversation}/${resource}`;
+          const response = await api.get(path);
+          expect(response.status()).toBe(404);
+          expect(response.headers()["cache-control"]).toContain("private");
+          expect(response.headers()["cache-control"]).toContain("no-store");
+          expect(await response.json()).toEqual({ error: "not_found" });
+          chatOutcomes[`${role}:GET:${path}`] = response.status();
+        }
+      } finally {
+        await api.dispose();
+      }
+    }
+    await attachSanitized(testInfo, "chat-disabled-role-matrix", chatOutcomes);
+
     await attachSanitized(testInfo, "permission-matrix", {
       recruiter: { reporting: 403, dataQualityReview: 403 },
       recruiterManager: {
