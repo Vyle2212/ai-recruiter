@@ -375,9 +375,11 @@ export async function POST(request: NextRequest) {
 
 async function authorizedSearchPost(
   request: NextRequest,
-  authorization: Extract<Awaited<ReturnType<typeof requireRecruiterSearchAuthorization>>, { allowed: true }>,
+  authorization: Extract<
+    Awaited<ReturnType<typeof requireRecruiterSearchAuthorization>>,
+    { allowed: true }
+  >,
 ) {
-
   try {
     const startedAt = performance.now();
     const requestCorrelationId =
