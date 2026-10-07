@@ -1,7 +1,7 @@
 import path from "node:path";
 import { createRequire } from "node:module";
 import { extractCanonicalEmploymentFromResume } from "./candidate360Employment";
-import { CvSourceError, googlePdfOcr } from "./cvPdfOcr";
+import { CvSourceError, configuredPdfOcr } from "./cvPdfOcr";
 import { createCvPdfRenderer } from "./pdfTextLayout";
 
 const require = createRequire(import.meta.url);
@@ -105,7 +105,7 @@ export async function extractCvPdf(
       (_, index) => index + 1,
     );
     const runOcr: NonNullable<PdfExtractionOptions["ocr"]> =
-      options.ocr || googlePdfOcr;
+      options.ocr || configuredPdfOcr;
     const text = await runOcr(
       buffer,
       document.numPages,

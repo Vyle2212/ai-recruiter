@@ -2,11 +2,98 @@ import assert from "node:assert/strict";
 import {
   ocrPdfPages,
   googlePdfOcr,
+  configuredPdfOcr,
   CvSourceError,
   type PdfOcrClient,
 } from "../lib/cvPdfOcr";
 import { pdfOcrReason } from "../lib/cvPdfExtraction";
 async function main() {
+  const envKeys = [
+    "CV_OCR_PROVIDER",
+    "PADDLE_OCR_URL",
+    "PADDLE_OCR_TOKEN",
+  ] as const;
+  const saved = envKeys.map((key) => process.env[key]);
+  const originalFetch = globalThis.fetch;
+  try {
+    process.env.CV_OCR_PROVIDER = "paddle";
+    delete process.env.PADDLE_OCR_URL;
+    delete process.env.PADDLE_OCR_TOKEN;
+    await assert.rejects(
+      configuredPdfOcr(Buffer.from("%PDF-test"), 2),
+      (e) => e instanceof CvSourceError && e.code === "OCR_NOT_CONFIGURED",
+    );
+    process.env.PADDLE_OCR_URL = "https://owned-worker.example/ocr/pdf";
+    process.env.PADDLE_OCR_TOKEN = "synthetic-test-token-not-a-secret";
+    let mode = "valid";
+    globalThis.fetch = async (_url, init) => {
+      assert.equal(init?.redirect, "error");
+      assert.equal(init?.cache, "no-store");
+      const headers = new Headers(init?.headers);
+      assert.equal(
+        headers.get("authorization"),
+        "Bearer synthetic-test-token-not-a-secret",
+      );
+      assert.equal(headers.get("x-ocr-pages"), "1,2");
+      assert.equal(
+        Buffer.from(init?.body as Uint8Array).toString(),
+        "%PDF-test",
+      );
+      if (mode === "timeout")
+        throw new DOMException("synthetic", "TimeoutError");
+      if (mode === "unavailable")
+        return new Response("private error", { status: 503 });
+      const pages = [
+        { page: 2, text: "SAP project implementation second page" },
+        { page: 1, text: "SAP consultant employment first page" },
+      ];
+      if (mode === "duplicate") pages[0].page = 1;
+      if (mode === "missing") pages.pop();
+      if (mode === "short") pages[0].text = "SAP";
+      return Response.json({
+        engine: "paddleocr",
+        totalPages: 2,
+        sha256: mode === "digest" ? "wrong" : headers.get("x-document-sha256"),
+        pages,
+      });
+    };
+    assert.equal(
+      await configuredPdfOcr(Buffer.from("%PDF-test"), 2, [1, 2]),
+      "SAP consultant employment first page\n\nSAP project implementation second page",
+    );
+    for (const [scenario, code] of [
+      ["digest", "OCR_INCOMPLETE"],
+      ["duplicate", "OCR_INCOMPLETE"],
+      ["missing", "OCR_INCOMPLETE"],
+      ["short", "OCR_REVIEW_REQUIRED"],
+      ["unavailable", "OCR_SERVICE_FAILED"],
+      ["timeout", "OCR_TIMEOUT"],
+    ]) {
+      mode = scenario;
+      await assert.rejects(
+        configuredPdfOcr(Buffer.from("%PDF-test"), 2, [1, 2]),
+        (e) => e instanceof CvSourceError && e.code === code,
+      );
+    }
+    process.env.PADDLE_OCR_URL = "http://owned-worker.example/ocr/pdf";
+    await assert.rejects(
+      configuredPdfOcr(Buffer.from("%PDF-test"), 2),
+      (e) =>
+        e instanceof CvSourceError && e.code === "OCR_CONFIGURATION_INVALID",
+    );
+    process.env.CV_OCR_PROVIDER = "unknown";
+    await assert.rejects(
+      configuredPdfOcr(Buffer.from("%PDF-test"), 2),
+      (e) =>
+        e instanceof CvSourceError && e.code === "OCR_CONFIGURATION_INVALID",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    envKeys.forEach((key, i) => {
+      if (saved[i] === undefined) delete process.env[key];
+      else process.env[key] = saved[i];
+    });
+  }
   const calls: number[][] = [];
   const client: PdfOcrClient = {
     async batchAnnotateFiles(req, options) {

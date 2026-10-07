@@ -130,6 +130,30 @@ export async function ocrPdfPages(
   return texts.join("\n\n");
 }
 
+export async function configuredPdfOcr(
+  buffer: Buffer,
+  pageCount: number,
+  pagesRequiringOcrText: number[] = [],
+): Promise<string> {
+  const provider = process.env.CV_OCR_PROVIDER || "google";
+  if (provider === "paddle") {
+    const { createPaddlePdfOcrClient } = await import("./cvPaddleOcr");
+    return ocrPdfPages(
+      buffer,
+      pageCount,
+      createPaddlePdfOcrClient(),
+      45000,
+      pagesRequiringOcrText,
+    );
+  }
+  if (provider !== "google")
+    throw new CvSourceError(
+      "OCR_CONFIGURATION_INVALID",
+      "Unknown document OCR provider.",
+    );
+  return googlePdfOcr(buffer, pageCount, pagesRequiringOcrText);
+}
+
 export async function googlePdfOcr(
   buffer: Buffer,
   pageCount: number,
