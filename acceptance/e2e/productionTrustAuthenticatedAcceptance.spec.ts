@@ -182,6 +182,9 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
   });
 
   test("permission matrix denies privilege escalation and permits mapped roles", async ({}, testInfo) => {
+    // Two live chat channels now share this bounded sequential permission matrix.
+    // Keep the independent Search latency budget and every authorization assertion.
+    test.setTimeout(180_000);
     const recruiter = await authenticatedApi("recruiter");
     const manager = await authenticatedApi("recruiter_manager");
     const admin = await authenticatedApi("admin");
@@ -308,6 +311,12 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
         receipts: true,
         outsidersDenied: true,
       });
+      console.log(
+        JSON.stringify({
+          type: "acceptance_chat_stage",
+          stage: "recruiter_admin_complete",
+        }),
+      );
       const clientChat = await authenticatedApi("client");
       try {
         const runHash = pseudonymousAcceptanceIdentifier(
@@ -335,6 +344,12 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
           .conversationId;
         expect(clientConversationId).toMatch(/^[a-f0-9-]{36}$/);
         expect(clientConversationId).not.toBe(conversationId);
+        console.log(
+          JSON.stringify({
+            type: "acceptance_chat_stage",
+            stage: "client_recruiter_created",
+          }),
+        );
         const clientMessages = `/api/chat/conversations/${clientConversationId}/messages`;
         const clientReceipts = `/api/chat/conversations/${clientConversationId}/receipts`;
         const clientPayload = {
@@ -394,6 +409,12 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
         const clientUnread = await clientChat.get(clientReceipts);
         expect(clientUnread.status()).toBe(200);
         expect((await clientUnread.json()).unreadCount).toBe(0);
+        console.log(
+          JSON.stringify({
+            type: "acceptance_chat_stage",
+            stage: "client_recruiter_messages_receipts_complete",
+          }),
+        );
         for (const role of [
           "admin",
           "candidate",
@@ -420,6 +441,12 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
             await outsider.dispose();
           }
         }
+        console.log(
+          JSON.stringify({
+            type: "acceptance_chat_stage",
+            stage: "client_recruiter_outsiders_complete",
+          }),
+        );
         await attachSanitized(testInfo, "chat-client-recruiter-live", {
           channel: "client_recruiter",
           jobScoped: true,
