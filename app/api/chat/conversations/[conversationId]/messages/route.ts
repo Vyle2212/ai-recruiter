@@ -70,7 +70,19 @@ export async function POST(request: Request, context: Params) {
     body: body.text.trim(),
   }).select("id,conversation_id,sender_profile_id,client_message_id,message_type,body,created_at").single();
   if (error) {
-    if (error.code === "23505") return reply({ error: "duplicate_message_id" }, 409);
+    if (error.code === "23505") {
+      // Re-authorized above: acknowledge only this actor's exact original message.
+      const { data: existing, error: readError } = await db.from("chat_messages")
+        .select("id,conversation_id,sender_profile_id,client_message_id,message_type,body,created_at")
+        .eq("conversation_id", permission.conversationId)
+        .eq("sender_profile_id", permission.profileId)
+        .eq("client_message_id", body.clientMessageId)
+        .maybeSingle();
+      if (readError) return reply({ error: "chat_store_unavailable" }, 503);
+      if (existing?.message_type === "user" && existing.body === body.text.trim())
+        return reply({ message: existing }, 200);
+      return reply({ error: "duplicate_message_id" }, 409);
+    }
     if (error.code === "23503" || error.code === "P0001")
       return reply({ error: "conversation_not_available" }, 403);
     return reply({ error: "chat_store_unavailable" }, 503);

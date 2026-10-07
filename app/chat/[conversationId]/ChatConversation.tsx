@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { prepareChatMessageRetry, type PendingChatMessage } from "@/lib/chatMessageRetry";
 
 type Message = {
   id: string;
@@ -19,6 +20,8 @@ export default function ChatConversation({ conversationId, suggestionsEnabled }:
   const [unreadCount, setUnreadCount] = useState<number | null>(null);
   const [markingRead, setMarkingRead] = useState(false);
   const [error, setError] = useState("");
+  const pendingMessage = useRef<PendingChatMessage | null>(null);
+  const sendInFlight = useRef(false);
   const endpoint = `/api/chat/conversations/${encodeURIComponent(conversationId)}/messages`;
   const receiptsEndpoint = `/api/chat/conversations/${encodeURIComponent(conversationId)}/receipts`;
 
@@ -99,11 +102,14 @@ export default function ChatConversation({ conversationId, suggestionsEnabled }:
   async function send(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = draft.trim();
-    if (!text || sending || status !== "ready") return;
+    if (!text || sendInFlight.current || status !== "ready") return;
+    sendInFlight.current = true;
     setSending(true);
     setError("");
     try {
-      const body = JSON.stringify({ clientMessageId: crypto.randomUUID(), text });
+      const pending = prepareChatMessageRetry(pendingMessage.current, conversationId, text, () => crypto.randomUUID());
+      pendingMessage.current = pending;
+      const body = JSON.stringify({ clientMessageId: pending.clientMessageId, text });
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -114,11 +120,13 @@ export default function ChatConversation({ conversationId, suggestionsEnabled }:
         return;
       }
       if (!response.ok) throw new Error("Message could not be sent. Please retry.");
-      setDraft("");
+      if (pendingMessage.current === pending) pendingMessage.current = null;
+      setDraft(current => current.trim() === text ? "" : current);
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Message could not be sent.");
     } finally {
+      sendInFlight.current = false;
       setSending(false);
     }
   }
