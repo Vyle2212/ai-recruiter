@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { originalCvReadGrant } from "../lib/originalCvAccess";
 import {
@@ -315,4 +316,7 @@ assert.match(
   proxy,
   /clientShareApi\) \{\s*return updateClientShareApiSession\(request\)/,
 );
+execFileSync(process.execPath, ["scripts/originalCvResumeRoute.test.cjs"], {
+  stdio: "inherit",
+});
 console.log("originalCvReadAccess.test.ts passed");
