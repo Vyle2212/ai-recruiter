@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import Module from "node:module";
 import { NextRequest } from "next/server";
@@ -487,6 +488,7 @@ async function main() {
   authRuntime.setRecruiterSearchAuthorizationResolverForTests(null);
   providerRuntime.setExternalTalentProviderForTests(null);
   runtime._load = originalLoad;
+  execFileSync(process.execPath, ["--import", "tsx", "scripts/searchProfilePrefetch.test.ts"], { stdio: "inherit" });
   console.log("Search V2 authorization boundary regressions passed.");
 }
 
