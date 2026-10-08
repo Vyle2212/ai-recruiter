@@ -1,4 +1,6 @@
-import { createClient } from "@/utils/supabase/server";
+import { createCandidateRegistrationClient } from "@/utils/supabase/registration";
+import { cookies } from "next/headers";
+import { candidateRegistrationCookies } from "@/lib/candidateRegistrationCookies";
 import { candidateRegistrationOutcome } from "@/lib/candidateRegistrationOutcome";
 import {
   candidateRegistrationConfiguration,
@@ -22,10 +24,15 @@ export async function POST(request: Request) {
       { error: "candidate_registration_invalid" },
       { status: 400, headers: candidateRegistrationPrivateHeaders },
     );
+  const stagedCookies = candidateRegistrationCookies();
   const outcome = await candidateRegistrationOutcome(async () => {
     // SSR stores the PKCE verifier in cookies for the confirmation callback.
     // Client construction is inside the error boundary; no provider detail leaks.
-    const auth = await createClient();
+    const auth = createCandidateRegistrationClient(
+      configuration.supabaseUrl,
+      configuration.publishableKey,
+      stagedCookies,
+    );
     return auth.auth.signUp({
       email: input.email,
       password: input.password,
@@ -36,6 +43,10 @@ export async function POST(request: Request) {
       },
     });
   });
+  const cookieStore = await cookies();
+  stagedCookies.commit(outcome, ({ name, value, options }) =>
+    cookieStore.set(name, value, options),
+  );
   return Response.json(outcome.body, {
     status: outcome.status,
     headers: candidateRegistrationPrivateHeaders,
