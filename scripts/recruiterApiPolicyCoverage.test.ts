@@ -73,7 +73,10 @@ const routeMethods = auditedFiles.flatMap((file) => {
   }));
 });
 
-const explicitPublicMethods = new Set(["GET /api/acceptance/release"]);
+const explicitPublicMethods = new Set([
+  "GET /api/acceptance/release",
+  "POST /api/auth/candidate/register",
+]);
 const allRouteMethods = files.flatMap((file) => {
   const source = readFileSync(file, "utf8");
   const route =
@@ -111,6 +114,23 @@ assert.match(
   acceptanceReleaseSource,
   /ACCEPTANCE_TEST_MODE\s*!==\s*["']true["']/,
 );
+
+const candidateRegistrationSource = readFileSync(
+  path.join(root, "auth/candidate/register/route.ts"),
+  "utf8",
+);
+const candidateRegistrationRuntimeSource = readFileSync(
+  path.join(process.cwd(), "lib/candidateRegistrationRuntime.ts"),
+  "utf8",
+);
+assert.match(candidateRegistrationSource, /candidateRegistrationConfiguration\(/);
+assert.match(candidateRegistrationSource, /if\s*\(!configuration\.enabled\)/);
+assert.match(
+  candidateRegistrationRuntimeSource,
+  /request\.headers\.get\(["']origin["']\)/,
+);
+assert.match(candidateRegistrationSource, /captchaToken/);
+assert.doesNotMatch(candidateRegistrationSource, /SUPABASE_SERVICE_ROLE/);
 
 const recruiterFiles = auditedFiles.filter((file) =>
   path.relative(root, file).split(path.sep).join("/").startsWith("recruiter/"),

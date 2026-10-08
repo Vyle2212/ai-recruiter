@@ -52,6 +52,25 @@ export function candidateRegistrationResultUrl(
   return url;
 }
 
+export function candidateRegistrationUiConfiguration(
+  env: Record<string, string | undefined> = process.env,
+) {
+  const callback = candidateRegistrationCallback(
+    env.CANDIDATE_REGISTRATION_ORIGIN || "",
+  );
+  const siteKey = env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() || "";
+  if (
+    env.CANDIDATE_REGISTRATION_ENABLED !== "true" ||
+    !callback ||
+    !env.NEXT_PUBLIC_SUPABASE_URL?.startsWith("https://") ||
+    !env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
+    !env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
+    !/^[A-Za-z0-9_-]{3,256}$/.test(siteKey)
+  )
+    return { enabled: false as const };
+  return { enabled: true as const, turnstileSiteKey: siteKey };
+}
+
 export function candidateRegistrationConfiguration(
   request: Request,
   env: Record<string, string | undefined> = process.env,

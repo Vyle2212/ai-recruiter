@@ -3,6 +3,7 @@ import {
   candidateRegistrationCallbackConfiguration,
   candidateRegistrationConfiguration,
   candidateRegistrationResultUrl,
+  candidateRegistrationUiConfiguration,
   readCandidateRegistrationInput,
 } from "../lib/candidateRegistrationRuntime";
 
@@ -97,6 +98,21 @@ assert.equal(
 assert.equal(
   candidateRegistrationResultUrl(origin, "review_required").href,
   `${origin}/auth/signup?status=review_required`,
+);
+assert.equal(candidateRegistrationUiConfiguration(env).enabled, false);
+assert.equal(
+  candidateRegistrationUiConfiguration({
+    ...env,
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: "synthetic-site-key",
+  }).enabled,
+  true,
+);
+assert.equal(
+  candidateRegistrationUiConfiguration({
+    ...env,
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: "invalid site key",
+  }).enabled,
+  false,
 );
 async function main() {
   assert.equal(
