@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   candidateConfirmationCode,
+  provisionCandidateRegistration,
   verifyCandidateConfirmation,
 } from "../lib/candidateRegistrationCallback";
 
@@ -23,7 +24,9 @@ async function main() {
   }
   const user = {
     id: "00000000-0000-4000-8000-000000000001",
+    email: "Candidate@Example.invalid",
     email_confirmed_at: "2026-10-08T00:00:00Z",
+    user_metadata: { registration_full_name: "Synthetic Candidate" },
   };
   let reads = 0;
   const auth = {
@@ -36,6 +39,8 @@ async function main() {
   assert.deepEqual(await verifyCandidateConfirmation(code, auth), {
     verified: true,
     userId: user.id,
+    email: "candidate@example.invalid",
+    fullName: "Synthetic Candidate",
   });
   assert.equal(reads, 1);
   for (const invalid of [
@@ -43,6 +48,9 @@ async function main() {
     { ...user, email_confirmed_at: null },
     { ...user, is_anonymous: true },
     { ...user, id: "forged" },
+    { ...user, email: "invalid" },
+    { ...user, user_metadata: { registration_full_name: "" } },
+    { ...user, user_metadata: { registration_full_name: "bad\nname" } },
     { ...user, email_confirmed_at: "invalid" },
   ]) {
     assert.deepEqual(
@@ -60,6 +68,48 @@ async function main() {
     }),
     { verified: false },
   );
+  const identity = {
+    userId: user.id,
+    email: "candidate@example.invalid",
+    fullName: "Synthetic Candidate",
+  };
+  let captured: unknown;
+  assert.equal(
+    await provisionCandidateRegistration(identity, async (args) => {
+      captured = args;
+      return { data: { status: "created" }, error: null };
+    }),
+    "ready",
+  );
+  assert.deepEqual(captured, {
+    p_auth_user_id: identity.userId,
+    p_email: identity.email,
+    p_full_name: identity.fullName,
+  });
+  for (const status of ["already_owned", "created"])
+    assert.equal(
+      await provisionCandidateRegistration(identity, async () => ({
+        data: { status },
+        error: null,
+      })),
+      "ready",
+    );
+  assert.equal(
+    await provisionCandidateRegistration(identity, async () => ({
+      data: { status: "identity_review_required" },
+      error: null,
+    })),
+    "review_required",
+  );
+  for (const result of [
+    { data: { status: "retry_required" }, error: null },
+    { data: { status: "forged" }, error: null },
+    { data: null, error: "private" },
+  ])
+    assert.equal(
+      await provisionCandidateRegistration(identity, async () => result),
+      "temporarily_unavailable",
+    );
   assert.equal(reads, 1);
   assert.deepEqual(
     await verifyCandidateConfirmation(code, {

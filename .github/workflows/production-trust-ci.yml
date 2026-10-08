@@ -146,6 +146,12 @@ jobs:
         run: |
           npm run test:production-trust:authorization
           node --import tsx scripts/productionAuthConfiguration.test.ts
+          node --import tsx scripts/candidateRegistrationRequest.test.ts
+          node --import tsx scripts/candidateRegistrationRuntime.test.ts
+          node --import tsx scripts/candidateRegistrationOutcome.test.ts
+          node --import tsx scripts/candidateRegistrationCallback.test.ts
+          node --import tsx scripts/candidateRegistrationOwnership.test.ts
+          node --import tsx scripts/candidateRegistrationProvisionContract.test.ts
           node --import tsx scripts/chatAuthorizationCore.test.ts
           node --import tsx scripts/candidateChatConsentBoundary.test.ts
           node --import tsx scripts/chatConversationStoreContract.test.ts
