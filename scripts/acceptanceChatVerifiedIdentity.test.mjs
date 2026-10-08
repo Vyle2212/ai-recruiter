@@ -12,12 +12,10 @@ create table public.acceptance_environment_markers(singleton boolean,project_ref
 insert into public.acceptance_environment_markers values(true,'iujucosewivndjpcjbuz','acceptance',true,'production-trust-authenticated-acceptance-v2');
 insert into auth.users values('00000000-0000-0000-0000-000000000001',null),('00000000-0000-0000-0000-000000000002',now());`);
 // Public function definitions only, captured read-only; no user rows/secrets.
-await db.exec(
-  fs.readFileSync(
-    "scripts/fixtures/acceptanceChatVerifiedIdentityBaseline.sql",
-    "utf8",
-  ),
+const { default: baseline } = await import(
+  "./fixtures/acceptanceChatVerifiedIdentityBaseline.cjs"
 );
+for (const { definition } of baseline) await db.exec(definition);
 const sql = fs.readFileSync(
   "supabase/acceptance/006_acceptance_chat_verified_identity.sql",
   "utf8",
