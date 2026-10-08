@@ -34,6 +34,8 @@ async function main() {
     externalProviderConfigured: false,
     candidateCvUploadEnabled: true,
     candidateProfileConfirmationEnabled: true,
+    candidateRegistrationEnabled: false,
+    candidateRegistrationAppConfigured: false,
   };
 
   const direct = acceptanceRequestHeaders("/api/acceptance/release", config);
@@ -78,6 +80,32 @@ async function main() {
     () =>
       fetchAcceptanceReleaseEvidence(
         async () => Response.json({ ...release, commitSha: "c".repeat(40) }),
+        config,
+        expected,
+      ),
+    /identity_mismatch/,
+  );
+  await assert.rejects(
+    () =>
+      fetchAcceptanceReleaseEvidence(
+        async () =>
+          Response.json({
+            ...release,
+            candidateRegistrationAppConfigured: true,
+          }),
+        config,
+        expected,
+      ),
+    /identity_mismatch/,
+  );
+  await assert.rejects(
+    () =>
+      fetchAcceptanceReleaseEvidence(
+        async () =>
+          Response.json({
+            ...release,
+            candidateRegistrationAppConfigured: undefined,
+          }),
         config,
         expected,
       ),

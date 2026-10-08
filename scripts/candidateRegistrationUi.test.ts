@@ -26,5 +26,13 @@ assert.match(page, /candidateRegistrationUiConfiguration\(\)/);
 assert.match(page, /registration\.enabled/);
 assert.match(page, /CandidateRegistrationForm/);
 assert.match(page, /DisabledForm/);
+assert.match(page, /status in callbackMessages/);
+assert.match(page, /invalid:/);
+assert.match(page, /review_required:/);
+assert.match(page, /temporarily_unavailable:/);
+assert.doesNotMatch(
+  page,
+  /searchParams[\s\S]*redirect|searchParams[\s\S]*href/,
+);
 
 console.log("Candidate registration UI contract PASS (synthetic, default OFF)");

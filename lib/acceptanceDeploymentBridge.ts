@@ -107,6 +107,8 @@ type ReleaseEvidence = {
   externalProviderConfigured?: unknown;
   candidateCvUploadEnabled?: unknown;
   candidateProfileConfirmationEnabled?: unknown;
+  candidateRegistrationEnabled?: unknown;
+  candidateRegistrationAppConfigured?: unknown;
 };
 
 export async function fetchAcceptanceReleaseEvidence(
@@ -145,6 +147,10 @@ export async function fetchAcceptanceReleaseEvidence(
     body.buildId.length > 0 &&
     typeof body.candidateCvUploadEnabled === "boolean" &&
     typeof body.candidateProfileConfirmationEnabled === "boolean" &&
+    typeof body.candidateRegistrationEnabled === "boolean" &&
+    typeof body.candidateRegistrationAppConfigured === "boolean" &&
+    (body.candidateRegistrationAppConfigured !== true ||
+      body.candidateRegistrationEnabled === true) &&
     (expected.externalMode !== "required" ||
       (body.externalTalentEnabled === true &&
         body.externalProviderConfigured === true)) &&
@@ -166,6 +172,9 @@ export async function fetchAcceptanceReleaseEvidence(
     candidateCvUploadEnabled: body.candidateCvUploadEnabled === true,
     candidateProfileConfirmationEnabled:
       body.candidateProfileConfirmationEnabled === true,
+    candidateRegistrationEnabled: body.candidateRegistrationEnabled === true,
+    candidateRegistrationAppConfigured:
+      body.candidateRegistrationAppConfigured === true,
   };
 }
 

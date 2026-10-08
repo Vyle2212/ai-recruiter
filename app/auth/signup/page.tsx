@@ -3,8 +3,25 @@ import CandidateRegistrationForm from "./CandidateRegistrationForm";
 import { buildAuthFormPreview } from "../../../lib/loginUiPreview";
 import { candidateRegistrationUiConfiguration } from "../../../lib/candidateRegistrationRuntime";
 
-export default function SignupPage() {
+const callbackMessages = {
+  invalid: "The verification link is invalid or has expired.",
+  review_required:
+    "Your verified identity needs manual review before profile access.",
+  temporarily_unavailable:
+    "Verification is temporarily unavailable. Please try the link again later.",
+} as const;
+
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const registration = candidateRegistrationUiConfiguration();
+  const status = (await searchParams).status;
+  const callbackMessage =
+    typeof status === "string" && status in callbackMessages
+      ? callbackMessages[status as keyof typeof callbackMessages]
+      : null;
   return (
     <main className="min-h-screen bg-[#05070A] text-slate-100">
       <AuthHeader
@@ -24,6 +41,14 @@ export default function SignupPage() {
           Verify your email before profile access. Existing imported profiles
           are never claimed automatically.
         </p>
+        {callbackMessage ? (
+          <p
+            className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-100"
+            role="status"
+          >
+            {callbackMessage}
+          </p>
+        ) : null}
         <AuthLinks />
       </div>
     </main>

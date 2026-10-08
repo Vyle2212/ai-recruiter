@@ -239,6 +239,10 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
     );
     expect(release.buildId).toMatch(/^[A-Za-z0-9_-]{8,}$/);
     expect(release.environmentHash).toMatch(/^[a-f0-9]{16}$/);
+    expect(typeof release.candidateRegistrationEnabled).toBe("boolean");
+    expect(typeof release.candidateRegistrationAppConfigured).toBe("boolean");
+    if (release.candidateRegistrationAppConfigured)
+      expect(release.candidateRegistrationEnabled).toBe(true);
     await attachSanitized(testInfo, "release-identity", release);
     await request.dispose();
   });

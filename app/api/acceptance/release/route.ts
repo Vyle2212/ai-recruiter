@@ -6,6 +6,7 @@ import {
   AUTHENTICATED_ACCEPTANCE_HARNESS_VERSION,
   pseudonymousAcceptanceIdentifier,
 } from "../../../../lib/acceptanceEnvironmentSafety";
+import { candidateRegistrationUiConfiguration } from "../../../../lib/candidateRegistrationRuntime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,6 +56,11 @@ export async function GET() {
       { status: 503, headers },
     );
 
+  const candidateRegistrationEnabled =
+    process.env.CANDIDATE_REGISTRATION_ENABLED === "true";
+  const candidateRegistrationAppConfigured =
+    candidateRegistrationUiConfiguration().enabled;
+
   return Response.json(
     {
       schemaVersion: "acceptance-release-evidence-v3",
@@ -75,6 +81,8 @@ export async function GET() {
       candidateProfileConfirmationEnabled:
         process.env.CANDIDATE_PROFILE_CONFIRMATION_ENABLED === "true",
       chatEnabled: process.env.CHAT_ENABLED === "true",
+      candidateRegistrationEnabled,
+      candidateRegistrationAppConfigured,
       externalTalentEnabled:
         process.env.EXTERNAL_TALENT_SEARCH_ENABLED === "true",
       externalProviderConfigured:
