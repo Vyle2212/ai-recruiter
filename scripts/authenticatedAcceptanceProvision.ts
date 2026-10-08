@@ -21,6 +21,7 @@ import {
   type AcceptanceCredentialBundle,
   type AcceptanceIdentityKey,
 } from "../lib/acceptanceSyntheticIdentityContract";
+import { verifyAcceptanceAuthConfirmation } from "../lib/acceptanceAuthConfirmation";
 import { acceptanceCleanupPlan } from "../lib/acceptanceCleanupPlan";
 import { ACCEPTANCE_SYNTHETIC_CANDIDATE_ID } from "../lib/acceptanceSyntheticCandidateFixture";
 import {
@@ -385,7 +386,7 @@ async function createAuthUser(
   const { data, error } = await client.auth.admin.createUser({
     email: generatedEmail,
     password: generatedPassword,
-    email_confirm: true,
+    email_confirm: caseKey !== "candidate",
     user_metadata: {
       synthetic: true,
       acceptance_run_hash: pseudonymousAcceptanceIdentifier(config.runId),
@@ -398,6 +399,21 @@ async function createAuthUser(
     entity_type: "auth_user",
     entity_id: data.user.id,
   });
+  if (caseKey === "candidate") {
+    await verifyAcceptanceAuthConfirmation(
+      client.auth.admin,
+      data.user.id,
+      pseudonymousAcceptanceIdentifier(config.runId),
+    );
+    console.log(
+      JSON.stringify({
+        ok: true,
+        action: "candidate-auth-confirmation",
+        unconfirmedReadback: true,
+        confirmedReadback: true,
+      }),
+    );
+  }
   return {
     email: generatedEmail,
     password: generatedPassword,
