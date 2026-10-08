@@ -7,6 +7,32 @@ export const candidateRegistrationPrivateHeaders = {
   "Cache-Control": "private, no-store",
 } as const;
 
+function candidateRegistrationSupabaseConfiguration(
+  env: Record<string, string | undefined>,
+) {
+  const projectRef =
+    env.CANDIDATE_REGISTRATION_SUPABASE_PROJECT_REF?.trim() || "";
+  const configuredUrl = env.NEXT_PUBLIC_SUPABASE_URL?.trim() || "";
+  if (!/^[a-z0-9]{20}$/.test(projectRef)) return null;
+  try {
+    const url = new URL(configuredUrl);
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      url.port ||
+      url.pathname !== "/" ||
+      url.search ||
+      url.hash ||
+      url.hostname !== `${projectRef}.supabase.co`
+    )
+      return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
 export function candidateRegistrationCallbackConfiguration(
   request: Request,
   env: Record<string, string | undefined> = process.env,
@@ -19,7 +45,7 @@ export function candidateRegistrationCallbackConfiguration(
   if (
     !callback ||
     !env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
-    !env.NEXT_PUBLIC_SUPABASE_URL?.startsWith("https://") ||
+    !candidateRegistrationSupabaseConfiguration(env) ||
     !env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
   )
     return {
@@ -62,7 +88,7 @@ export function candidateRegistrationUiConfiguration(
   if (
     env.CANDIDATE_REGISTRATION_ENABLED !== "true" ||
     !callback ||
-    !env.NEXT_PUBLIC_SUPABASE_URL?.startsWith("https://") ||
+    !candidateRegistrationSupabaseConfiguration(env) ||
     !env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
     !env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
     !/^[A-Za-z0-9_-]{3,256}$/.test(siteKey)
@@ -109,10 +135,8 @@ export function candidateRegistrationConfiguration(
       status: 413 as const,
       code: "candidate_registration_request_too_large",
     };
-  if (
-    !env.NEXT_PUBLIC_SUPABASE_URL?.startsWith("https://") ||
-    !env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
-  )
+  const supabaseUrl = candidateRegistrationSupabaseConfiguration(env);
+  if (!supabaseUrl || !env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim())
     return {
       enabled: false as const,
       status: 503 as const,
@@ -121,7 +145,7 @@ export function candidateRegistrationConfiguration(
   return {
     enabled: true as const,
     callback: configuredCallback,
-    supabaseUrl: env.NEXT_PUBLIC_SUPABASE_URL,
+    supabaseUrl,
     publishableKey: env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   };
 }

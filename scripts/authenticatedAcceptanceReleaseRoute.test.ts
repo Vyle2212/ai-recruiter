@@ -12,6 +12,8 @@ async function main() {
     candidateConfirmation: process.env.CANDIDATE_PROFILE_CONFIRMATION_ENABLED,
     registration: process.env.CANDIDATE_REGISTRATION_ENABLED,
     registrationOrigin: process.env.CANDIDATE_REGISTRATION_ORIGIN,
+    registrationProject:
+      process.env.CANDIDATE_REGISTRATION_SUPABASE_PROJECT_REF,
     turnstile: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY,
     publicUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
     anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -54,7 +56,10 @@ async function main() {
   process.env.CANDIDATE_REGISTRATION_ENABLED = "true";
   process.env.CANDIDATE_REGISTRATION_ORIGIN = "https://acceptance.example.test";
   process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "synthetic_site_key";
-  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://synthetic.supabase.co";
+  process.env.CANDIDATE_REGISTRATION_SUPABASE_PROJECT_REF =
+    "abcdefghijklmnopqrst";
+  process.env.NEXT_PUBLIC_SUPABASE_URL =
+    "https://abcdefghijklmnopqrst.supabase.co";
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "synthetic-public-key";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "synthetic-service-key";
   const configured = await (await route.GET()).json();
@@ -82,13 +87,15 @@ async function main() {
                         ? "CANDIDATE_REGISTRATION_ENABLED"
                         : key === "registrationOrigin"
                           ? "CANDIDATE_REGISTRATION_ORIGIN"
-                          : key === "turnstile"
-                            ? "NEXT_PUBLIC_TURNSTILE_SITE_KEY"
-                            : key === "publicUrl"
-                              ? "NEXT_PUBLIC_SUPABASE_URL"
-                              : key === "anonKey"
-                                ? "NEXT_PUBLIC_SUPABASE_ANON_KEY"
-                                : "SUPABASE_SERVICE_ROLE_KEY";
+                          : key === "registrationProject"
+                            ? "CANDIDATE_REGISTRATION_SUPABASE_PROJECT_REF"
+                            : key === "turnstile"
+                              ? "NEXT_PUBLIC_TURNSTILE_SITE_KEY"
+                              : key === "publicUrl"
+                                ? "NEXT_PUBLIC_SUPABASE_URL"
+                                : key === "anonKey"
+                                  ? "NEXT_PUBLIC_SUPABASE_ANON_KEY"
+                                  : "SUPABASE_SERVICE_ROLE_KEY";
     if (value === undefined) delete process.env[envKey];
     else process.env[envKey] = value;
   }

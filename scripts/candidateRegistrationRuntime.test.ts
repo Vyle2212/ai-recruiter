@@ -17,7 +17,8 @@ const body = JSON.stringify({
 const env = {
   CANDIDATE_REGISTRATION_ENABLED: "true",
   CANDIDATE_REGISTRATION_ORIGIN: origin,
-  NEXT_PUBLIC_SUPABASE_URL: "https://project.example.invalid",
+  CANDIDATE_REGISTRATION_SUPABASE_PROJECT_REF: "abcdefghijklmnopqrst",
+  NEXT_PUBLIC_SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co",
   NEXT_PUBLIC_SUPABASE_ANON_KEY: "synthetic-publishable-value",
   SUPABASE_SERVICE_ROLE_KEY: "synthetic-server-only-value",
 };
@@ -75,6 +76,21 @@ assert.equal(
   "candidate_registration_request_too_large",
 );
 assert.equal(candidateRegistrationConfiguration(request(), env).enabled, true);
+for (const invalidSupabase of [
+  { CANDIDATE_REGISTRATION_SUPABASE_PROJECT_REF: undefined },
+  { CANDIDATE_REGISTRATION_SUPABASE_PROJECT_REF: "qrstuvwxyzabcdefghij" },
+  { NEXT_PUBLIC_SUPABASE_URL: "https://qrstuvwxyzabcdefghij.supabase.co" },
+  { NEXT_PUBLIC_SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co/path" },
+  { NEXT_PUBLIC_SUPABASE_URL: "http://abcdefghijklmnopqrst.supabase.co" },
+]) {
+  assert.equal(
+    candidateRegistrationConfiguration(request(), {
+      ...env,
+      ...invalidSupabase,
+    }).code,
+    "candidate_registration_not_configured",
+  );
+}
 const callbackRequest = new Request(`${origin}/auth/candidate/callback?code=x`);
 assert.equal(
   candidateRegistrationCallbackConfiguration(callbackRequest, {}).code,
