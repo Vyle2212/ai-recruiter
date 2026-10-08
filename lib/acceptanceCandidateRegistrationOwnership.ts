@@ -35,9 +35,23 @@ export function acceptanceRegistrationEmail(baseEmail: string, run: string) {
   return `${email.local}+ptf1c2-${runHash(run)}@${email.domain}`;
 }
 
-export function acceptanceRegistrationEmailOwned(email: string, run: string) {
+export function acceptanceRegistrationEmailOwned(
+  email: string,
+  run: string,
+  captureEmail?: string,
+) {
   const parsed = splitEmail(email);
-  return Boolean(parsed?.local.endsWith(`+ptf1c2-${runHash(run)}`));
+  // A public run marker and editable metadata are not deletion authority.
+  // Bind discovery to the exact operator-configured capture mailbox too.
+  if (!captureEmail || !parsed) return false;
+  try {
+    return (
+      `${parsed.local}@${parsed.domain}` ===
+      acceptanceRegistrationEmail(captureEmail, run)
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function acceptanceRegistrationAuthIdentityOwned(
@@ -47,6 +61,7 @@ export function acceptanceRegistrationAuthIdentityOwned(
     user_metadata?: unknown;
   },
   run: string,
+  captureEmail?: string,
 ) {
   const metadata =
     user.user_metadata && typeof user.user_metadata === "object"
@@ -54,7 +69,7 @@ export function acceptanceRegistrationAuthIdentityOwned(
       : {};
   return (
     typeof user.email === "string" &&
-    acceptanceRegistrationEmailOwned(user.email, run) &&
+    acceptanceRegistrationEmailOwned(user.email, run, captureEmail) &&
     metadata.registration_full_name === acceptanceRegistrationFullName(run)
   );
 }
@@ -66,9 +81,10 @@ export function acceptanceRegistrationAuthOwned(
     user_metadata?: unknown;
   },
   run: string,
+  captureEmail?: string,
 ) {
   return (
-    acceptanceRegistrationAuthIdentityOwned(user, run) &&
+    acceptanceRegistrationAuthIdentityOwned(user, run, captureEmail) &&
     typeof user.email_confirmed_at === "string" &&
     user.email_confirmed_at.length > 0
   );
@@ -85,17 +101,20 @@ export function acceptanceRegistrationProfileOwned(
   },
   run: string,
   authUserIds: readonly string[],
+  captureEmail?: string,
 ) {
   return (
     typeof profile.auth_user_id === "string" &&
     authUserIds.includes(profile.auth_user_id) &&
     typeof profile.email === "string" &&
-    acceptanceRegistrationEmailOwned(profile.email, run) &&
+    acceptanceRegistrationEmailOwned(profile.email, run, captureEmail) &&
     profile.full_name === acceptanceRegistrationFullName(run) &&
     profile.role === "candidate" &&
     profile.status === "active" &&
     typeof profile.candidate_id === "string" &&
-    /^[0-9a-f-]{36}$/i.test(profile.candidate_id)
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      profile.candidate_id,
+    )
   );
 }
 
@@ -109,6 +128,7 @@ export function acceptanceRegistrationCandidateOwned(
     profile_confirmation_status?: unknown;
   },
   run: string,
+  captureEmail?: string,
 ) {
   const source =
     candidate.profile_source_state &&
@@ -117,7 +137,7 @@ export function acceptanceRegistrationCandidateOwned(
       : {};
   return (
     typeof candidate.email === "string" &&
-    acceptanceRegistrationEmailOwned(candidate.email, run) &&
+    acceptanceRegistrationEmailOwned(candidate.email, run, captureEmail) &&
     typeof candidate.normalized_email === "string" &&
     candidate.normalized_email.trim().toLowerCase() ===
       candidate.email.trim().toLowerCase() &&

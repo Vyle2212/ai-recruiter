@@ -11,12 +11,25 @@ import {
 } from "../lib/acceptanceCandidateRegistrationOwnership";
 
 const run = "0123456789abcdef";
+const captureEmail = "capture@example.invalid";
 const fullName = acceptanceRegistrationFullName(run);
 const email = acceptanceRegistrationEmail("capture@example.invalid", run);
 
 assert.equal(fullName, "PTF public signup 0123456789abcdef");
 assert.equal(email, "capture+ptf1c2-0123456789abcdef@example.invalid");
-assert.equal(acceptanceRegistrationEmailOwned(email.toUpperCase(), run), true);
+assert.equal(
+  acceptanceRegistrationEmailOwned(email.toUpperCase(), run, captureEmail),
+  true,
+);
+assert.equal(acceptanceRegistrationEmailOwned(email, run), false);
+for (const other of [
+  "other@example.invalid",
+  "capture@other.invalid",
+  "invalid",
+  "capture+tag@example.invalid",
+]) {
+  assert.equal(acceptanceRegistrationEmailOwned(email, run, other), false);
+}
 assert.equal(
   acceptanceRegistrationEmailOwned(
     "capture+ptf1c2-0123456789abcdef-extra@example.invalid",
@@ -40,23 +53,33 @@ const auth = {
   email_confirmed_at: "2026-10-08T00:00:00.000Z",
   user_metadata: { registration_full_name: fullName },
 };
-assert.equal(acceptanceRegistrationAuthOwned(auth, run), true);
-assert.equal(acceptanceRegistrationAuthIdentityOwned(auth, run), true);
+assert.equal(acceptanceRegistrationAuthOwned(auth, run, captureEmail), true);
+assert.equal(
+  acceptanceRegistrationAuthIdentityOwned(auth, run, captureEmail),
+  true,
+);
+assert.equal(acceptanceRegistrationAuthIdentityOwned(auth, run), false);
 assert.equal(
   acceptanceRegistrationAuthOwned(
     { ...auth, user_metadata: { registration_full_name: "Different" } },
     run,
+    captureEmail,
   ),
   false,
 );
 assert.equal(
-  acceptanceRegistrationAuthOwned({ ...auth, email_confirmed_at: null }, run),
+  acceptanceRegistrationAuthOwned(
+    { ...auth, email_confirmed_at: null },
+    run,
+    captureEmail,
+  ),
   false,
 );
 assert.equal(
   acceptanceRegistrationAuthIdentityOwned(
     { ...auth, email_confirmed_at: null },
     run,
+    captureEmail,
   ),
   true,
 );
@@ -70,7 +93,7 @@ const profile = {
   candidate_id: candidateId,
 };
 assert.equal(
-  acceptanceRegistrationProfileOwned(profile, run, [authUserId]),
+  acceptanceRegistrationProfileOwned(profile, run, [authUserId], captureEmail),
   true,
 );
 assert.equal(
@@ -94,11 +117,29 @@ const candidate = {
   profile_confirmation_status: "not_claimed",
   profile_source_state: { origin: "candidate_signup", field_sources: {} },
 };
-assert.equal(acceptanceRegistrationCandidateOwned(candidate, run), true);
+assert.equal(
+  acceptanceRegistrationCandidateOwned(candidate, run, captureEmail),
+  true,
+);
+assert.equal(acceptanceRegistrationCandidateOwned(candidate, run), false);
+assert.equal(
+  acceptanceRegistrationProfileOwned(profile, run, [authUserId]),
+  false,
+);
+assert.equal(
+  acceptanceRegistrationProfileOwned(
+    { ...profile, candidate_id: "------------------------------------" },
+    run,
+    [authUserId],
+    captureEmail,
+  ),
+  false,
+);
 assert.equal(
   acceptanceRegistrationCandidateOwned(
     { ...candidate, profile_source_state: { origin: "admin_upload" } },
     run,
+    captureEmail,
   ),
   false,
 );
@@ -106,6 +147,7 @@ assert.equal(
   acceptanceRegistrationCandidateOwned(
     { ...candidate, profile_confirmation_status: "candidate_confirmed" },
     run,
+    captureEmail,
   ),
   false,
 );

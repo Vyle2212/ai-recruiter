@@ -684,6 +684,8 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
   const runHash = pseudonymousAcceptanceIdentifier(config.runId);
   const syntheticEmailSuffix = `+${runHash}@acceptance.invalid`;
   const registrationFullName = acceptanceRegistrationFullName(runHash);
+  const registrationCaptureEmail =
+    process.env.ACCEPTANCE_REGISTRATION_CAPTURE_EMAIL;
   const syntheticOrganizationName = `PTF synthetic organization ${runHash}`;
   const syntheticClientOrganizationName = `PTF synthetic client organization ${runHash}`;
   const { data: discoveredProfiles, error: profileDiscoveryError } =
@@ -733,7 +735,11 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
         (user) =>
           (user.user_metadata?.synthetic === true &&
             user.user_metadata?.acceptance_run_hash === runHash) ||
-          acceptanceRegistrationAuthIdentityOwned(user, runHash),
+          acceptanceRegistrationAuthIdentityOwned(
+            user,
+            runHash,
+            registrationCaptureEmail,
+          ),
       )
       .map((user) => ({
         entity_type: "auth_user" as const,
@@ -753,7 +759,12 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
   const profileIds = plan.profileIds;
   const registrationProfiles = (discoveredRegistrationProfiles || []).filter(
     (profile) =>
-      acceptanceRegistrationProfileOwned(profile, runHash, plan.authUserIds),
+      acceptanceRegistrationProfileOwned(
+        profile,
+        runHash,
+        plan.authUserIds,
+        registrationCaptureEmail,
+      ),
   );
   if (
     registrationProfiles.length !==
@@ -777,7 +788,11 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
         new Set(registrationCandidateIds).size ||
       (registrationCandidates || []).some(
         (candidate) =>
-          !acceptanceRegistrationCandidateOwned(candidate, runHash),
+          !acceptanceRegistrationCandidateOwned(
+            candidate,
+            runHash,
+            registrationCaptureEmail,
+          ),
       )
     )
       throw new Error("acceptance_registration_candidate_ownership_mismatch");
