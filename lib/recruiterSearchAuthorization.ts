@@ -87,8 +87,11 @@ async function productionAdapter(permission: RecruiterSearchPermission): Promise
   };
   if (permission !== "search:read") return adapter;
   return recruiterSearchProfilePrefetch(adapter, async () => {
-    const { data, error } = await client.auth.getClaims();
-    const subject = data?.claims?.sub;
+    // The cookie-backed session is only a speculative I/O hint. The helper
+    // reuses its RLS-bound profile read only when fresh getUser returns the
+    // exact same subject, so session data never authorizes the request.
+    const { data, error } = await client.auth.getSession();
+    const subject = data.session?.user?.id;
     return !error && typeof subject === "string" &&
       /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(subject)
       ? subject : null;
