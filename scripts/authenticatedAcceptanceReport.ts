@@ -25,6 +25,8 @@ const roleTests = new Set([
   "browser route guard enforces the same role boundary",
   "four authenticated role dashboards load within their own scope",
   "permission matrix denies privilege escalation and permits mapped roles",
+  "synthetic client candidate chat enforces consent subscription and participant scope",
+  "synthetic recruiter candidate chat enforces consent subscription and participant scope",
   "controlled reversible role mutations match policy",
 ]);
 // Keep the report tied to the actual acceptance contract. A count alone can
@@ -36,6 +38,8 @@ const requiredTests = new Set([
   "browser route guard enforces the same role boundary",
   "four authenticated role dashboards load within their own scope",
   "permission matrix denies privilege escalation and permits mapped roles",
+  "synthetic client candidate chat enforces consent subscription and participant scope",
+  "synthetic recruiter candidate chat enforces consent subscription and participant scope",
   "write-request boundaries reject CSRF, type, size and action mismatch",
   "controlled reversible role mutations match policy",
   "real recruiter login, private page, logout and browser back remain safe",

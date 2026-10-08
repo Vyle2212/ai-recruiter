@@ -36,6 +36,194 @@ const externalMode = parseAcceptanceExternalMode(
 );
 const internalCandidateId = ACCEPTANCE_SYNTHETIC_CANDIDATE_ID;
 
+async function verifyCandidateChat(
+  channel: "client_candidate" | "recruiter_candidate",
+  testInfo: Parameters<typeof attachSanitized>[0],
+) {
+  const candidate = await authenticatedApi("candidate");
+  const sender = await authenticatedApi(
+    channel === "client_candidate" ? "client" : "recruiter",
+  );
+  const bundle = await credentialBundle();
+  const clientId = bundle.identities.client.clientId;
+  expect(clientId).toMatch(/^[a-f0-9-]{36}$/);
+  const endpoint =
+    channel === "client_candidate"
+      ? "/api/chat/conversations"
+      : "/api/chat/recruiter-candidate-conversations";
+  const scope =
+    channel === "client_candidate"
+      ? { candidateId: internalCandidateId }
+      : { candidateId: internalCandidateId, clientId };
+  const db = acceptanceAdminClient();
+  const denied = async (response: APIResponse) => {
+    expect([403, 404]).toContain(response.status());
+    expect(response.headers()["cache-control"]).toContain("private");
+    expect(response.headers()["cache-control"]).toContain("no-store");
+    expect(Object.keys(await response.json())).toEqual(["error"]);
+  };
+  const consent = async (value: boolean) => {
+    const response = await candidate.post("/api/candidate/chat-consent", {
+      data: { consent: value },
+    });
+    expect(response.status()).toBe(200);
+    expect((await response.json()).consent).toBe(value);
+  };
+  try {
+    const release = await anonymousAcceptanceApi();
+    try {
+      const response = await release.get("/api/acceptance/release");
+      expect(response.status()).toBe(200);
+      expect((await response.json()).chatEnabled).toBe(true);
+    } finally {
+      await release.dispose();
+    }
+    // Change only this run-owned entitlement to an unrelated active plan feature.
+    // This proves chat is not gated by recruiter_support or candidate_chat.
+    const activePlan = await db
+      .from("client_feature_entitlements")
+      .update({ feature: "unlimited_search" })
+      .eq("client_id", clientId!);
+    expect(activePlan.error).toBeNull();
+    await consent(false);
+    await denied(await sender.post(endpoint, { data: scope }));
+    await consent(true);
+    const created = await sender.post(endpoint, { data: scope });
+    expect(created.status()).toBe(200);
+    const conversationId = (await created.json()).conversationId;
+    expect(conversationId).toMatch(/^[a-f0-9-]{36}$/);
+    const messages = `/api/chat/conversations/${conversationId}/messages`;
+    const receipts = `/api/chat/conversations/${conversationId}/receipts`;
+    const payload = {
+      clientMessageId: crypto.randomUUID(),
+      text: "Synthetic acceptance candidate contact",
+    };
+    const sent = await sender.post(messages, { data: payload });
+    expect(sent.status()).toBe(201);
+    const messageId = (await sent.json()).message.id;
+    const retry = await sender.post(messages, { data: payload });
+    expect(retry.status()).toBe(200);
+    expect((await retry.json()).message.id).toBe(messageId);
+    const changed = await sender.post(messages, {
+      data: { ...payload, text: "Synthetic changed contact" },
+    });
+    expect(changed.status()).toBe(409);
+    expect(changed.headers()["cache-control"]).toContain("private");
+    expect(changed.headers()["cache-control"]).toContain("no-store");
+    expect(Object.keys(await changed.json())).toEqual(["error"]);
+    const inbox = await candidate.get(messages);
+    expect(inbox.status()).toBe(200);
+    const received = (await inbox.json()).messages.filter(
+      (m: { id: string }) => m.id === messageId,
+    );
+    expect(received).toHaveLength(1);
+    expect(received[0].body).toBe(payload.text);
+    const reply = await candidate.post(messages, {
+      data: {
+        clientMessageId: crypto.randomUUID(),
+        text: "Synthetic acceptance candidate reply",
+      },
+    });
+    expect(reply.status()).toBe(201);
+    const replyId = (await reply.json()).message.id;
+    const senderInbox = await sender.get(messages);
+    expect(senderInbox.status()).toBe(200);
+    expect(
+      (await senderInbox.json()).messages.some(
+        (m: { id: string }) => m.id === replyId,
+      ),
+    ).toBe(true);
+    for (const participant of [sender, candidate]) {
+      const read = await participant.post(receipts, { data: {} });
+      expect(read.status()).toBe(200);
+      expect((await read.json()).markedRead).toBeGreaterThanOrEqual(1);
+      const unread = await participant.get(receipts);
+      expect(unread.status()).toBe(200);
+      expect((await unread.json()).unreadCount).toBe(0);
+    }
+    for (const role of [
+      "admin",
+      "inactive_recruiter",
+      "recruiter_manager",
+      channel === "client_candidate" ? "recruiter" : "client",
+    ] as const) {
+      const outsider = await authenticatedApi(role);
+      try {
+        await denied(await outsider.get(messages));
+        await denied(
+          await outsider.post(messages, {
+            data: {
+              clientMessageId: crypto.randomUUID(),
+              text: "Synthetic denied contact",
+            },
+          }),
+        );
+        await denied(await outsider.get(receipts));
+        await denied(await outsider.post(receipts, { data: {} }));
+      } finally {
+        await outsider.dispose();
+      }
+    }
+    await consent(false);
+    for (const participant of [sender, candidate]) {
+      await denied(await participant.get(messages));
+      await denied(
+        await participant.post(messages, {
+          data: {
+            clientMessageId: crypto.randomUUID(),
+            text: "Synthetic revoked contact",
+          },
+        }),
+      );
+      await denied(await participant.get(receipts));
+    }
+    await consent(true);
+    const suspended = await db
+      .from("client_feature_entitlements")
+      .update({ status: "revoked" })
+      .eq("client_id", clientId!);
+    expect(suspended.error).toBeNull();
+    await denied(await sender.post(endpoint, { data: scope }));
+    await denied(await sender.get(messages));
+    await denied(
+      await candidate.post(messages, {
+        data: {
+          clientMessageId: crypto.randomUUID(),
+          text: "Synthetic inactive subscription contact",
+        },
+      }),
+    );
+    await attachSanitized(testInfo, `chat-${channel}-live`, {
+      channel,
+      twoWay: true,
+      retrySingleMessage: true,
+      changedContentDenied: true,
+      receipts: true,
+      outsidersDenied: true,
+      consentRevocationDenied: true,
+      inactiveSubscriptionDenied: true,
+    });
+    console.log(
+      JSON.stringify({
+        type: "acceptance_chat_stage",
+        stage: `${channel}_complete`,
+      }),
+    );
+  } finally {
+    try {
+      const restored = await db
+        .from("client_feature_entitlements")
+        .update({ status: "active", feature: "recruiter_support" })
+        .eq("client_id", clientId!);
+      expect(restored.error).toBeNull();
+      await consent(false);
+    } finally {
+      await sender.dispose();
+      await candidate.dispose();
+    }
+  }
+}
+
 test.describe("Production Trust Foundation authenticated acceptance", () => {
   test.beforeEach(async ({ context }) => {
     await installAcceptanceBrowserBridge(context);
@@ -179,6 +367,16 @@ test.describe("Production Trust Foundation authenticated acceptance", () => {
       }
     }
     await attachSanitized(testInfo, "four-role-dashboards", outcomes);
+  });
+
+  test("synthetic client candidate chat enforces consent subscription and participant scope", async ({}, testInfo) => {
+    test.setTimeout(180_000);
+    await verifyCandidateChat("client_candidate", testInfo);
+  });
+
+  test("synthetic recruiter candidate chat enforces consent subscription and participant scope", async ({}, testInfo) => {
+    test.setTimeout(180_000);
+    await verifyCandidateChat("recruiter_candidate", testInfo);
   });
 
   test("permission matrix denies privilege escalation and permits mapped roles", async ({}, testInfo) => {
