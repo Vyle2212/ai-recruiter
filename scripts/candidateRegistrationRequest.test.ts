@@ -50,9 +50,12 @@ assert.equal(
   candidateRegistrationCallback("https://acceptance.example.invalid"),
   "https://acceptance.example.invalid/auth/candidate/callback",
 );
+const credentialOrigin = new URL("https://example.invalid");
+credentialOrigin.username = "synthetic-user";
+credentialOrigin.password = "synthetic-pass";
 for (const origin of [
   "http://example.invalid",
-  "https://user:pass@example.invalid",
+  credentialOrigin.href,
   "https://example.invalid/redirect",
   "https://example.invalid?next=evil",
   "https://example.invalid#token",
