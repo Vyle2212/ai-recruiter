@@ -23,6 +23,12 @@ import {
 } from "../lib/acceptanceSyntheticIdentityContract";
 import { verifyAcceptanceAuthConfirmation } from "../lib/acceptanceAuthConfirmation";
 import { acceptanceCleanupPlan } from "../lib/acceptanceCleanupPlan";
+import {
+  acceptanceRegistrationAuthIdentityOwned,
+  acceptanceRegistrationCandidateOwned,
+  acceptanceRegistrationFullName,
+  acceptanceRegistrationProfileOwned,
+} from "../lib/acceptanceCandidateRegistrationOwnership";
 import { ACCEPTANCE_SYNTHETIC_CANDIDATE_ID } from "../lib/acceptanceSyntheticCandidateFixture";
 import {
   ORIGINAL_CV_BUCKET,
@@ -677,13 +683,21 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
   if (error) throw new Error("acceptance_entity_ledger_read_failed");
   const runHash = pseudonymousAcceptanceIdentifier(config.runId);
   const syntheticEmailSuffix = `+${runHash}@acceptance.invalid`;
+  const registrationFullName = acceptanceRegistrationFullName(runHash);
   const syntheticOrganizationName = `PTF synthetic organization ${runHash}`;
   const syntheticClientOrganizationName = `PTF synthetic client organization ${runHash}`;
   const { data: discoveredProfiles, error: profileDiscoveryError } =
     await client
       .from("user_profiles")
-      .select("id")
+      .select("id,auth_user_id,email,full_name,role,status,candidate_id")
       .like("email", `%${syntheticEmailSuffix}`);
+  const {
+    data: discoveredRegistrationProfiles,
+    error: registrationProfileDiscoveryError,
+  } = await client
+    .from("user_profiles")
+    .select("id,auth_user_id,email,full_name,role,status,candidate_id")
+    .eq("full_name", registrationFullName);
   const { data: discoveredOrganizations, error: organizationDiscoveryError } =
     await client
       .from("organizations")
@@ -691,10 +705,22 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
       .in("name", [syntheticOrganizationName, syntheticClientOrganizationName]);
   const { data: authPage, error: authDiscoveryError } =
     await client.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  if (profileDiscoveryError || organizationDiscoveryError || authDiscoveryError)
+  if (
+    profileDiscoveryError ||
+    registrationProfileDiscoveryError ||
+    organizationDiscoveryError ||
+    authDiscoveryError
+  )
     throw new Error("acceptance_partial_provision_discovery_failed");
+  const allDiscoveredProfiles = [
+    ...(discoveredProfiles || []),
+    ...(discoveredRegistrationProfiles || []),
+  ].filter(
+    (profile, index, all) =>
+      index === all.findIndex((candidate) => candidate.id === profile.id),
+  );
   const discovered: Entity[] = [
-    ...(discoveredProfiles || []).map((item) => ({
+    ...allDiscoveredProfiles.map((item) => ({
       entity_type: "user_profile" as const,
       entity_id: String(item.id),
     })),
@@ -705,8 +731,9 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
     ...(authPage.users || [])
       .filter(
         (user) =>
-          user.user_metadata?.synthetic === true &&
-          user.user_metadata?.acceptance_run_hash === runHash,
+          (user.user_metadata?.synthetic === true &&
+            user.user_metadata?.acceptance_run_hash === runHash) ||
+          acceptanceRegistrationAuthIdentityOwned(user, runHash),
       )
       .map((user) => ({
         entity_type: "auth_user" as const,
@@ -724,6 +751,37 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
   );
   const plan = acceptanceCleanupPlan(entities);
   const profileIds = plan.profileIds;
+  const registrationProfiles = (discoveredRegistrationProfiles || []).filter(
+    (profile) =>
+      acceptanceRegistrationProfileOwned(profile, runHash, plan.authUserIds),
+  );
+  if (
+    registrationProfiles.length !==
+    (discoveredRegistrationProfiles || []).length
+  )
+    throw new Error("acceptance_registration_profile_ownership_mismatch");
+  const registrationCandidateIds = registrationProfiles.map((profile) =>
+    String(profile.candidate_id),
+  );
+  if (registrationCandidateIds.length) {
+    const { data: registrationCandidates, error: candidateDiscoveryError } =
+      await client
+        .from("candidates")
+        .select(
+          "id,email,normalized_email,name,status,profile_source_state,profile_confirmation_status",
+        )
+        .in("id", registrationCandidateIds);
+    if (
+      candidateDiscoveryError ||
+      (registrationCandidates || []).length !==
+        new Set(registrationCandidateIds).size ||
+      (registrationCandidates || []).some(
+        (candidate) =>
+          !acceptanceRegistrationCandidateOwned(candidate, runHash),
+      )
+    )
+      throw new Error("acceptance_registration_candidate_ownership_mismatch");
+  }
   if (profileIds.length) {
     const auditProbe = await client
       .from("recruiter_original_cv_access_events")
@@ -855,18 +913,22 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
     if (residueError || count !== 0)
       throw new Error("acceptance_job_fixture_residue_detected");
   }
+  const candidateAccountIds = [
+    ACCEPTANCE_SYNTHETIC_CANDIDATE_ID,
+    ...registrationCandidateIds,
+  ];
   if (profileIds.length) {
     const { error: accountDeleteError } = await client
       .from("candidate_accounts")
       .delete()
-      .eq("candidate_id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID)
+      .in("candidate_id", candidateAccountIds)
       .in("user_profile_id", profileIds);
     if (accountDeleteError)
       throw new Error("acceptance_candidate_account_cleanup_failed");
     const { count: accountResidue, error: accountResidueError } = await client
       .from("candidate_accounts")
       .select("id", { count: "exact", head: true })
-      .eq("candidate_id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID)
+      .in("candidate_id", candidateAccountIds)
       .in("user_profile_id", profileIds);
     if (accountResidueError || accountResidue !== 0)
       throw new Error("acceptance_candidate_account_residue_detected");
@@ -877,6 +939,20 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
       .delete()
       .in("id", profileIds);
     if (deleteError) throw new Error("acceptance_profile_cleanup_failed");
+  }
+  if (registrationCandidateIds.length) {
+    const { error: deleteError } = await client
+      .from("candidates")
+      .delete()
+      .in("id", registrationCandidateIds);
+    if (deleteError)
+      throw new Error("acceptance_registration_candidate_cleanup_failed");
+    const { count, error } = await client
+      .from("candidates")
+      .select("id", { count: "exact", head: true })
+      .in("id", registrationCandidateIds);
+    if (error || count !== 0)
+      throw new Error("acceptance_registration_candidate_residue_detected");
   }
   for (const userId of plan.authUserIds) {
     const { error: deleteError } = await client.auth.admin.deleteUser(userId);
