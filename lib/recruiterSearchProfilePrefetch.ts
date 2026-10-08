@@ -1,11 +1,12 @@
 import type { RecruiterSearchAuthAdapter } from "./recruiterSearchAuthorizationCore";
 
-/** Request-local overlap only. The fresh getUser result still controls identity;
- * verified claims are used solely to start the RLS-bound profile read earlier.
+/** Request-local overlap only. The subject hint may be stale or untrusted and
+ * is used solely to start an RLS-bound profile read earlier. Fresh getUser
+ * controls identity, revocation, and exact reuse of the prefetched result.
  */
 export function recruiterSearchProfilePrefetch(
   adapter: RecruiterSearchAuthAdapter,
-  verifiedSubject: () => Promise<string | null>,
+  profileSubjectHint: () => Promise<string | null>,
 ): RecruiterSearchAuthAdapter {
   let prefetched: {
     subject: string;
@@ -18,7 +19,7 @@ export function recruiterSearchProfilePrefetch(
       // Claims are an optional latency hint, never a prerequisite for fresh Auth.
       // Ignore late hints so they cannot start an unused profile read afterward.
       try {
-        void verifiedSubject().then((subject) => {
+        void profileSubjectHint().then((subject) => {
           if (acceptingHint && subject) {
             prefetched = {
               subject,
