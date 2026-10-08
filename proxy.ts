@@ -23,6 +23,9 @@ export async function proxy(request: NextRequest) {
   const clientShareApi =
     request.nextUrl.pathname === "/api/client/recruiter-shares";
   const chatApi = request.nextUrl.pathname.startsWith("/api/chat/");
+  const candidateRegistrationApi =
+    request.method === "POST" &&
+    request.nextUrl.pathname === "/api/auth/candidate/register";
   if (chatApi && process.env.CHAT_ENABLED !== "true")
     return NextResponse.json(
       { error: "not_found" },
@@ -64,6 +67,12 @@ export async function proxy(request: NextRequest) {
 
   if (chatApi) {
     return updateChatApiSession(request);
+  }
+
+  // Registration is the only public write during Auth cutover. Its handler
+  // repeats default-off, exact-origin, size, JSON, CAPTCHA and provider checks.
+  if (candidateRegistrationApi) {
+    return NextResponse.next();
   }
 
   if (

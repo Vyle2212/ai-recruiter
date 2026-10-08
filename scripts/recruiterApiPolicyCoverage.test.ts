@@ -123,7 +123,10 @@ const candidateRegistrationRuntimeSource = readFileSync(
   path.join(process.cwd(), "lib/candidateRegistrationRuntime.ts"),
   "utf8",
 );
-assert.match(candidateRegistrationSource, /candidateRegistrationConfiguration\(/);
+assert.match(
+  candidateRegistrationSource,
+  /candidateRegistrationConfiguration\(/,
+);
 assert.match(candidateRegistrationSource, /if\s*\(!configuration\.enabled\)/);
 assert.match(
   candidateRegistrationRuntimeSource,
@@ -228,6 +231,14 @@ const proxySource = readFileSync(path.join(process.cwd(), "proxy.ts"), "utf8");
 assert.match(proxySource, /recruiterApiPolicyForRequest/);
 assert.match(proxySource, /updateClientShareApiSession/);
 assert.match(proxySource, /updateChatApiSession/);
+assert.match(
+  proxySource,
+  /request\.method\s*===\s*["']POST["'][\s\S]*\/api\/auth\/candidate\/register/,
+);
+assert.match(
+  proxySource,
+  /if\s*\(candidateRegistrationApi\)\s*\{\s*return NextResponse\.next\(\);\s*\}/,
+);
 assert.ok(
   proxySource.includes('"/((?!_next/static|_next/image|favicon.ico).*)"'),
   "Proxy must cover API and public routes during the production cutover",
