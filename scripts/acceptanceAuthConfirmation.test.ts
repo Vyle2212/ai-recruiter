@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { verifyAcceptanceAuthConfirmation } from "../lib/acceptanceAuthConfirmation";
+import {
+  verifyAcceptanceAuthConfirmation,
+  type AcceptancePreconfirmationProjectionGate,
+} from "../lib/acceptanceAuthConfirmation";
 
 type Admin = Parameters<typeof verifyAcceptanceAuthConfirmation>[0];
 async function scenario(mode: string) {
@@ -43,12 +46,48 @@ async function scenario(mode: string) {
       };
     },
   } as unknown as Admin;
+  const projectionCalls: string[] = [];
+  const projectionGate: AcceptancePreconfirmationProjectionGate = {
+    setConsent: async (consent) => {
+      projectionCalls.push(consent ? "consent-on" : "consent-off");
+      return {
+        error:
+          (mode === "consent-prepare-error" && consent) ||
+          (mode === "consent-reset-error" && !consent)
+            ? new Error("private error")
+            : null,
+      };
+    },
+    attemptConversation: async () => {
+      projectionCalls.push("conversation");
+      return mode === "projection-open"
+        ? { data: "unexpected-conversation", error: null }
+        : mode === "projection-other-error"
+          ? { error: new Error("private error") }
+          : { error: new Error("chat_scope_not_available") };
+    },
+  };
   if (mode === "pass") {
-    await verifyAcceptanceAuthConfirmation(admin, user.id, "owned-run");
+    await verifyAcceptanceAuthConfirmation(
+      admin,
+      user.id,
+      "owned-run",
+      projectionGate,
+    );
     assert.deepEqual(calls, ["read", "confirm", "read"]);
+    assert.deepEqual(projectionCalls, [
+      "consent-on",
+      "conversation",
+      "consent-off",
+    ]);
   } else {
     await assert.rejects(
-      verifyAcceptanceAuthConfirmation(admin, user.id, "owned-run"),
+      verifyAcceptanceAuthConfirmation(
+        admin,
+        user.id,
+        "owned-run",
+        projectionGate,
+      ),
       /^Error: acceptance_auth_/,
     );
     if (
@@ -58,6 +97,26 @@ async function scenario(mode: string) {
     )
       assert.deepEqual(calls, ["read"]);
     if (mode === "update-error") assert.deepEqual(calls, ["read", "confirm"]);
+    if (["projection-open", "projection-other-error"].includes(mode)) {
+      assert.deepEqual(calls, ["read"]);
+      assert.deepEqual(projectionCalls, [
+        "consent-on",
+        "conversation",
+        "consent-off",
+      ]);
+    }
+    if (mode === "consent-prepare-error") {
+      assert.deepEqual(calls, ["read"]);
+      assert.deepEqual(projectionCalls, ["consent-on"]);
+    }
+    if (mode === "consent-reset-error") {
+      assert.deepEqual(calls, ["read"]);
+      assert.deepEqual(projectionCalls, [
+        "consent-on",
+        "conversation",
+        "consent-off",
+      ]);
+    }
   }
 }
 async function main() {
@@ -69,6 +128,10 @@ async function main() {
     "read-error",
     "update-error",
     "unchanged",
+    "projection-open",
+    "projection-other-error",
+    "consent-prepare-error",
+    "consent-reset-error",
   ])
     await scenario(mode);
   console.log(

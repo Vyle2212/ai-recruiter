@@ -399,21 +399,6 @@ async function createAuthUser(
     entity_type: "auth_user",
     entity_id: data.user.id,
   });
-  if (caseKey === "candidate") {
-    await verifyAcceptanceAuthConfirmation(
-      client.auth.admin,
-      data.user.id,
-      pseudonymousAcceptanceIdentifier(config.runId),
-    );
-    console.log(
-      JSON.stringify({
-        ok: true,
-        action: "candidate-auth-confirmation",
-        unconfirmedReadback: true,
-        confirmedReadback: true,
-      }),
-    );
-  }
   return {
     email: generatedEmail,
     password: generatedPassword,
@@ -625,6 +610,42 @@ async function provision(config: SafeConfig, client: SupabaseClient) {
   const relationResults = await Promise.all(relations);
   if (relationResults.some((result) => result.error))
     throw new Error("acceptance_job_fixture_relations_failed");
+
+  const candidate = identities.candidate;
+  if (!candidate?.profileId)
+    throw new Error("acceptance_candidate_confirmation_fixture_missing");
+  await verifyAcceptanceAuthConfirmation(
+    client.auth.admin,
+    candidate.authUserId,
+    runHash,
+    {
+      setConsent: async (consent) =>
+        client.from("candidate_chat_contact_consents").upsert(
+          {
+            candidate_id: ACCEPTANCE_SYNTHETIC_CANDIDATE_ID,
+            user_profile_id: candidate.profileId,
+            consent,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "candidate_id" },
+        ),
+      attemptConversation: async () =>
+        client.rpc("create_recruiter_candidate_chat_conversation", {
+          p_recruiter_profile_id: recruiterProfileId,
+          p_candidate_id: ACCEPTANCE_SYNTHETIC_CANDIDATE_ID,
+          p_client_id: clientScope.clientId,
+        }),
+    },
+  );
+  console.log(
+    JSON.stringify({
+      ok: true,
+      action: "candidate-auth-confirmation",
+      unconfirmedReadback: true,
+      preconfirmationProjectionDenied: true,
+      confirmedReadback: true,
+    }),
+  );
 
   const bundle: AcceptanceCredentialBundle = {
     schemaVersion: AUTHENTICATED_ACCEPTANCE_HARNESS_VERSION,

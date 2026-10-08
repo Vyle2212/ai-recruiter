@@ -90,6 +90,14 @@ async function main() {
     "utf8",
   );
   assert.match(provision, /acceptance_run_hash/);
+  assert.match(
+    provision,
+    /create_recruiter_candidate_chat_conversation[\s\S]*preconfirmationProjectionDenied: true/,
+  );
+  assert.match(
+    provision,
+    /verifyAcceptanceAuthConfirmation[\s\S]*setConsent: async \(consent\)/,
+  );
   assert.match(provision, /acceptance_partial_provision_discovery_failed/);
   assert.match(provision, /acceptance_identity_table_residue_detected/);
   assert.doesNotMatch(
