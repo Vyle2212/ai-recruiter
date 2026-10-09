@@ -1,5 +1,4 @@
 import type { Candidate360Profile } from "./candidate360Types";
-import { candidateLanguagesForStorage } from "./candidateLanguageEvidence";
 import { careerMonthIndex } from "./candidateCareerExperience";
 import { careerDateIsCurrent } from "./careerDateEvidence";
 import { buildCandidateSearchIndexRow } from "./candidateSearchIndex";
@@ -166,9 +165,9 @@ export function buildCandidateProfileConfirmation(params: {
     projects: canonicalProjects(fields.projectExperience),
     education: canonicalEducation(fields.education),
     certifications: canonicalCertifications(fields.certifications),
-    languages: candidateLanguagesForStorage(
-      canonicalLanguages(fields.languages),
-    ),
+    // The confirmation RPC validates records before PostgreSQL converts them
+    // into the existing text[] column. Do not pre-encode its JSON contract.
+    languages: canonicalLanguages(fields.languages),
   };
   const projectedCandidate = {
     ...params.currentCandidate,

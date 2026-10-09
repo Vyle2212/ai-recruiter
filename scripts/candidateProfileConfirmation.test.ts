@@ -122,6 +122,11 @@ assert.equal(
   "parser month names and Present must be confirmable without manual date edits",
 );
 if (namedDates.accepted) {
+  assert.deepEqual(
+    namedDates.candidatePayload.languages,
+    [{ language: "English", proficiency: "Professional" }],
+    "confirmation RPC requires language records before converting to text[] storage",
+  );
   assert.equal(namedDates.candidatePayload.experience[0].start_date, "2025-09");
   assert.equal(namedDates.candidatePayload.experience[0].end_date, null);
   assert.equal(namedDates.candidatePayload.experience[1].end_date, "2025-09");
