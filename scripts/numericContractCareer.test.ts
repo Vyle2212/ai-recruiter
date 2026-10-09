@@ -122,7 +122,7 @@ cache.set(
 const result = normalizeActualCandidateSchema(raw);
 assert.notEqual(result, obsolete);
 assert.equal(result.enterpriseProfile.employmentTimeline.length, 1);
-const expectedKey = `${CANDIDATE_CANONICAL_VERSION}:${CANDIDATE_DETAIL_PROJECTION_VERSION}:${CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION}:${CANDIDATE_PROJECT_EXTRACTOR_VERSION}:${raw.id}:${raw.updated_at}`;
+const expectedKey = `${CANDIDATE_CANONICAL_VERSION}:${CANDIDATE_DETAIL_PROJECTION_VERSION}:${CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION}:${CANDIDATE_PROJECT_EXTRACTOR_VERSION}:${raw.id}:${raw.updated_at}:${Object.keys(raw).sort().join(",")}`;
 assert.equal(cache.get(expectedKey), result);
 assert.equal(normalizeActualCandidateSchema(raw), result);
 cache.clear();
