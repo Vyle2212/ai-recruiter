@@ -80,6 +80,11 @@ export default async function LoginPage({
 
         <StagingRuntimeSignInForm
           acceptance={acceptance}
+          captchaSiteKey={
+            acceptance
+              ? process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim()
+              : undefined
+          }
           redirectOnSuccess
           requestedNext={requestedNext}
         />

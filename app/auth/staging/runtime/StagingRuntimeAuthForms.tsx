@@ -1,6 +1,13 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import Script from "next/script";
+import {
+  useActionState,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { resolvePostLoginRoute } from "../../../../lib/stagingAuthRedirect";
 
@@ -31,10 +38,12 @@ export function StagingRuntimeSignInForm({
   acceptance = false,
   redirectOnSuccess = false,
   requestedNext,
+  captchaSiteKey,
 }: {
   acceptance?: boolean;
   redirectOnSuccess?: boolean;
   requestedNext?: string | null;
+  captchaSiteKey?: string;
 } = {}) {
   const router = useRouter();
   const [state, action, pending] = useActionState(
@@ -43,6 +52,40 @@ export function StagingRuntimeSignInForm({
   );
 
   const formRef = useRef<HTMLFormElement>(null);
+  const captchaRef = useRef<HTMLDivElement>(null);
+  const widgetRef = useRef<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const captchaRequired = acceptance;
+  const renderCaptcha = useCallback(() => {
+    if (
+      !captchaSiteKey ||
+      !captchaRef.current ||
+      !window.turnstile ||
+      widgetRef.current
+    )
+      return;
+    widgetRef.current = window.turnstile.render(captchaRef.current, {
+      sitekey: captchaSiteKey,
+      theme: "dark",
+      callback: setCaptchaToken,
+      "expired-callback": () => setCaptchaToken(""),
+      "error-callback": () => setCaptchaToken(""),
+    });
+  }, [captchaSiteKey]);
+  useEffect(() => {
+    renderCaptcha();
+    return () => {
+      if (widgetRef.current && window.turnstile)
+        window.turnstile.remove(widgetRef.current);
+      widgetRef.current = null;
+    };
+  }, [renderCaptcha]);
+  useEffect(() => {
+    if (!state.realActionExecuted) return;
+    setCaptchaToken("");
+    if (widgetRef.current && window.turnstile)
+      window.turnstile.reset(widgetRef.current);
+  }, [state]);
 
   useEffect(() => {
     if (!state.ok) return;
@@ -64,6 +107,14 @@ export function StagingRuntimeSignInForm({
           : "Staging runtime only. Credentials are submitted to the approved Supabase staging project only when the execution gate is fully approved."}
       </div>
 
+      {captchaRequired && captchaSiteKey && (
+        <Script
+          id="acceptance-login-turnstile"
+          src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+          strategy="afterInteractive"
+          onReady={renderCaptcha}
+        />
+      )}
       <form action={action} ref={formRef}>
         <label className="block text-sm">
           Email
@@ -87,7 +138,25 @@ export function StagingRuntimeSignInForm({
           />
         </label>
 
-        <button className={button} disabled={pending}>
+        {captchaRequired && (
+          <>
+            <div
+              className="mt-4"
+              ref={captchaRef}
+              aria-label="Bot protection challenge"
+            />
+            <input type="hidden" name="captchaToken" value={captchaToken} />
+            {!captchaSiteKey && (
+              <p role="alert">
+                Sign-in verification is temporarily unavailable.
+              </p>
+            )}
+          </>
+        )}
+        <button
+          className={button}
+          disabled={pending || (captchaRequired && !captchaToken)}
+        >
           {pending
             ? "Signing inâ€¦"
             : acceptance

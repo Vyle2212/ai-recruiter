@@ -18,6 +18,7 @@ type ProfileRow = {
 };
 
 type MockOptions = {
+  expectedCaptchaToken?: string;
   profile?: ProfileRow | null;
   authUserId?: string;
   email?: string;
@@ -96,6 +97,7 @@ function createMockClient(options: MockOptions = {}) {
 
       async signInWithPassword(_input) {
         counters.signIn += 1;
+        if (options.expectedCaptchaToken) assert.equal(_input.options?.captchaToken, options.expectedCaptchaToken);
 
         return {
           data: {
@@ -334,6 +336,7 @@ async function testSessionAndRefreshDoNotExposeTokens() {
 async function testSuccessfulSignInAndSensitiveRedaction() {
   const mock = createMockClient({
     email: "sensitive.admin@example.invalid",
+    expectedCaptchaToken: "private-captcha-token",
   });
 
   const adapter =
@@ -348,6 +351,7 @@ async function testSuccessfulSignInAndSensitiveRedaction() {
   const result = await adapter.signIn({
     email: mock.email,
     password,
+    captchaToken: "private-captcha-token",
   });
 
   assert.equal(result.ok, true);
@@ -360,6 +364,7 @@ async function testSuccessfulSignInAndSensitiveRedaction() {
   const serialized = JSON.stringify(result);
 
   assert(!serialized.includes(password));
+  assert(!serialized.includes("private-captcha-token"));
   assert(!serialized.includes(mock.email));
   assert.equal(
     result.data?.identity?.emailMasked,

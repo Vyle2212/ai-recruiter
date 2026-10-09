@@ -15,6 +15,7 @@ export async function stagingRuntimeSignInAction(
     operation: "sign_in",
     email: value(formData, "email"),
     password: value(formData, "password"),
+    captchaToken: value(formData, "captchaToken"),
   });
 }
 

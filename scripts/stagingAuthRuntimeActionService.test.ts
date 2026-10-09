@@ -165,6 +165,11 @@ function adapter(): StagingAuthRuntimeAdapter {
 
 async function main() {
   const runtimeAdapter = adapter();
+  const originalSignIn = runtimeAdapter.signIn;
+  runtimeAdapter.signIn = async (input) => {
+    assert.equal(input.captchaToken, "private-captcha-token");
+    return originalSignIn(input);
+  };
 
   const password = "do-not-return-password";
   const email = "admin.user@example.invalid";
@@ -175,6 +180,7 @@ async function main() {
       operation: "sign_in",
       email,
       password,
+      captchaToken: "private-captcha-token",
     },
   );
 
@@ -189,6 +195,7 @@ async function main() {
   const serialized = JSON.stringify(signIn);
 
   assert(!serialized.includes(password));
+  assert(!serialized.includes("private-captcha-token"));
   assert(!serialized.includes(email));
   assert.doesNotMatch(
     serialized,

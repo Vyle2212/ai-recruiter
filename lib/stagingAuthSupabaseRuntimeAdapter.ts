@@ -56,6 +56,7 @@ export type SupabaseStagingAuthClient = {
     signInWithPassword(input: {
       email: string;
       password: string;
+      options?: { captchaToken?: string };
     }): Promise<
       SupabaseAuthResponse<{
         user: SupabaseUserLike | null;
@@ -445,6 +446,7 @@ export function createSupabaseStagingRuntimeAdapter(
           await client.auth.signInWithPassword({
             email: input.email,
             password: input.password,
+            ...(input.captchaToken ? { options: { captchaToken: input.captchaToken } } : {}),
           });
 
         if (error || !data.session || !data.user) {
