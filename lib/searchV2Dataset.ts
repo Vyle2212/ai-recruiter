@@ -335,7 +335,7 @@ async function loadCandidateSource(forceRemote = false, signal?: AbortSignal) {
       const sourceQuery = supabase
         .from("candidates")
         .select(
-          "id,title,current_title,current_company,headline,summary,current_location,raw_text,resume_text,updated_at,name,email,phone,linkedin_url,location,country,cv_hash,experience,education,skills,sap_modules,primary_module,module_authorities,secondary_modules,languages,language_skills,extraction_confidence,profile_quality_score,confidence,work_authorization,visa_status,relocation,relocation_willingness,availability_timeline,notice_period_days",
+          "id,title,current_title,current_company,headline,summary,current_location,raw_text,resume_text,updated_at,name,email,phone,linkedin_url,location,country,cv_hash,experience,projects,education,certifications,skills,sap_modules,primary_module,module_authorities,secondary_modules,languages,language_skills,extraction_confidence,profile_quality_score,confidence,work_authorization,visa_status,relocation,relocation_willingness,availability_timeline,notice_period_days",
         )
         .in("id", ids);
       return signal ? sourceQuery.abortSignal(signal) : sourceQuery;
@@ -552,6 +552,7 @@ async function loadCandidateSource(forceRemote = false, signal?: AbortSignal) {
     document.lifecycleEvidence = lifecycleEvidence;
     document.linkedInProfileUrl = supportedLinkedInProfileUrl(
       sourceRecord?.linkedin_url,
+      sourceRecord?.raw_text || sourceRecord?.resume_text,
     );
     // A profile URL is not source provenance. The current production projection
     // has no authoritative LinkedIn-derived source marker, so fail closed.
@@ -782,7 +783,7 @@ async function loadCandidateSourceByIdentityToken(
   const sourceQuery = supabase
     .from("candidates")
     .select(
-      "id,title,current_title,current_company,headline,summary,current_location,raw_text,resume_text,updated_at,name,email,phone,linkedin_url,location,country,cv_hash,experience,education,skills,sap_modules,primary_module,module_authorities,secondary_modules,languages,language_skills,extraction_confidence,profile_quality_score,confidence,work_authorization,visa_status,relocation,relocation_willingness,availability_timeline,notice_period_days",
+      "id,title,current_title,current_company,headline,summary,current_location,raw_text,resume_text,updated_at,name,email,phone,linkedin_url,location,country,cv_hash,experience,projects,education,certifications,skills,sap_modules,primary_module,module_authorities,secondary_modules,languages,language_skills,extraction_confidence,profile_quality_score,confidence,work_authorization,visa_status,relocation,relocation_willingness,availability_timeline,notice_period_days",
     )
     .in("id", candidateIds);
   const sourceResponse = await (signal
@@ -880,6 +881,7 @@ async function loadCandidateSourceByIdentityToken(
     );
     document.linkedInProfileUrl = supportedLinkedInProfileUrl(
       sourceRecord?.linkedin_url,
+      sourceRecord?.raw_text || sourceRecord?.resume_text,
     );
     document.talentPool = "internal_profiles";
     return [document];

@@ -47,7 +47,7 @@ async function authorize(request: Request) {
   return requireRecruiterApiRouteAuthorization({ request });
 }
 
-export async function GET(request: Request) {
+async function readShortlist(request: Request) {
   const auth = await authorize(request);
   if (!auth.allowed) return auth.response;
   const url = new URL(request.url);
@@ -221,9 +221,20 @@ async function mutate(request: Request, method: "POST" | "DELETE") {
   }
 }
 
+async function timedShortlist(operation: () => Promise<Response>) {
+  const startedAt = performance.now();
+  const response = await operation();
+  const durationMs = performance.now() - startedAt;
+  response.headers.append("Server-Timing", `shortlist;dur=${durationMs.toFixed(1)}`);
+  console.info("[shortlist] request timing", JSON.stringify({ handlerMs: Math.round(durationMs) }));
+  return response;
+}
+export async function GET(request: Request) {
+  return timedShortlist(() => readShortlist(request));
+}
 export async function POST(request: Request) {
-  return mutate(request, "POST");
+  return timedShortlist(() => mutate(request, "POST"));
 }
 export async function DELETE(request: Request) {
-  return mutate(request, "DELETE");
+  return timedShortlist(() => mutate(request, "DELETE"));
 }

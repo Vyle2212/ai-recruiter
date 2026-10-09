@@ -85,7 +85,6 @@ async function productionAdapter(permission: RecruiterSearchPermission): Promise
       };
     },
   };
-  if (permission !== "search:read") return adapter;
   return recruiterSearchProfilePrefetch(adapter, async () => {
     // The cookie-backed session is only a speculative I/O hint. The helper
     // reuses its RLS-bound profile read only when fresh getUser returns the

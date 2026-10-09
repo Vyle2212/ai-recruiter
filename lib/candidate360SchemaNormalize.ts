@@ -27,7 +27,7 @@ export type CandidateSchemaRecord = Record<string, unknown>;
 export const CANDIDATE_CANONICAL_VERSION =
   "candidate-canonical-v63-original-layout";
 export const CANDIDATE_DETAIL_PROJECTION_VERSION =
-  "candidate-detail-v24-exact-project-identity";
+  "candidate-detail-v25-source-projection-isolation";
 export const CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION =
   `${CANDIDATE_EMPLOYMENT_TIMELINE_VERSION}:sap-sales-distribution-v2`;
 export const CANDIDATE_PROJECT_EXTRACTOR_VERSION =
@@ -5105,7 +5105,7 @@ export function normalizeActualCandidateSchema(
   // fixtures and ad-hoc objects deliberately bypass this process cache.
   const cacheKey =
     candidateId && updatedAt
-      ? `${CANDIDATE_CANONICAL_VERSION}:${CANDIDATE_DETAIL_PROJECTION_VERSION}:${CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION}:${CANDIDATE_PROJECT_EXTRACTOR_VERSION}:${candidateId}:${updatedAt}`
+      ? `${CANDIDATE_CANONICAL_VERSION}:${CANDIDATE_DETAIL_PROJECTION_VERSION}:${CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION}:${CANDIDATE_PROJECT_EXTRACTOR_VERSION}:${candidateId}:${updatedAt}:${Object.keys(raw).sort().join(",")}`
       : null;
   const cached = cacheKey ? normalizedProjectionCache.get(cacheKey) : null;
   if (cached) return cached;

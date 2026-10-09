@@ -1,4 +1,5 @@
 import "server-only";
+import { recruiterSearchProfilePrefetch } from "./recruiterSearchProfilePrefetch";
 
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
@@ -89,7 +90,7 @@ async function productionAuthorization(
   return authorizeRecruiterApiAccess({
     permission: policy.requiredPermission,
     routePolicyId: policy.id,
-    adapter: {
+    adapter: recruiterSearchProfilePrefetch({
       async getUser() {
         const {
           data: { user },
@@ -119,7 +120,11 @@ async function productionAuthorization(
           error,
         };
       },
-    },
+    }, async () => {
+      const { data, error } = await client.auth.getSession();
+      const subject = data.session?.user?.id;
+      return !error && typeof subject === "string" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(subject) ? subject : null;
+    }),
     log(fields) {
       audit(request, policy, { decision: "denied", ...fields });
     },

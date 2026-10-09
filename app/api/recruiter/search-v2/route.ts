@@ -364,6 +364,7 @@ export async function POST(request: NextRequest) {
 
   const authorizationMs = performance.now() - routeStartedAt;
   const response = await authorizedSearchPost(request, authorization);
+  console.info("[search-v2] request timing", JSON.stringify({ authorizationMs: Math.round(authorizationMs), handlerMs: Math.round(performance.now() - routeStartedAt) }));
   // Numeric timings expose no actor or credential information. Existing total
   // starts after authorization, so retain it and report the full handler too.
   response.headers.append(

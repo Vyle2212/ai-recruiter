@@ -1887,7 +1887,6 @@ export default function CandidateSearchV2Client({
     shortlistContextReady,
     shortlistJobId,
     shortlistResultIds,
-    shortlistRevision,
   ]);
 
   async function toggleShortlist(candidateId: string) {
@@ -1899,6 +1898,13 @@ export default function CandidateSearchV2Client({
     )
       return;
     setShortlistPendingIds((current) => new Set(current).add(candidateId));
+    setShortlistedIds((current) => {
+      const next = new Set(current);
+      if (wasSaved) next.delete(candidateId);
+      else next.add(candidateId);
+      return next;
+    });
+    setShortlistCount((current) => Math.max(0, current + (wasSaved ? -1 : 1)));
     try {
       const reply = await fetch("/api/recruiter/search-v2/shortlist", {
         method: wasSaved ? "DELETE" : "POST",
@@ -1915,17 +1921,15 @@ export default function CandidateSearchV2Client({
         throw new Error("Shortlist could not be updated. Please retry.");
       }
       setShortlistError("");
-      setShortlistedIds((current) => {
-        const next = new Set(current);
-        if (wasSaved) next.delete(candidateId);
-        else next.add(candidateId);
-        return next;
-      });
-      setShortlistCount((current) =>
-        Math.max(0, current + (wasSaved ? -1 : 1)),
-      );
       setShortlistRevision((current) => current + 1);
     } catch (error) {
+      setShortlistedIds((current) => {
+        const next = new Set(current);
+        if (wasSaved) next.add(candidateId);
+        else next.delete(candidateId);
+        return next;
+      });
+      setShortlistCount((current) => Math.max(0, current + (wasSaved ? 1 : -1)));
       setShortlistError(
         error instanceof Error
           ? error.message

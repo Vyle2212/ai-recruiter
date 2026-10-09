@@ -1,3 +1,6 @@
+import { supportedLinkedInProfileUrl } from "../lib/linkedinProfileUrl";
+import { buildSearchV2RecruiterCandidateDetail } from "../lib/searchV2CandidateDetailContract";
+import { buildCandidateSearchV2ProfilePreview } from "../lib/candidateSearchV2ProfilePreview";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
@@ -160,6 +163,83 @@ async function main() {
       ["Bahasa Indonesia", "Native"],
       ["English", "Fluent"],
     ],
+  );
+  const projects = Array.from({ length: 7 }, (_, index) => ({
+    project: [
+      "SAP HCM Greenfield",
+      "SAP Finance Rollout",
+      "SAP Insurance AMS",
+      "SAP Plantation Support",
+      "SAP Port Transformation",
+      "SAP Treasury Automation",
+      "SAP Paper Brownfield",
+    ][index],
+    client: [
+      "North River Telecom",
+      "Blue Ocean Insurance",
+      "Green Forest Plantation",
+      "Harbor Port Services",
+      "City Road Operator",
+      "Mountain Auto Group",
+      "Paper Manufacturing Group",
+    ][index],
+    role: "SAP FICO Consultant",
+    start_date: "",
+    end_date: null,
+  }));
+  const sharedIdentity = {
+    id: "project-parity-fixture",
+    name: "Alex Smith",
+    updated_at: "2026-10-09T00:00:00Z",
+  };
+  assert.equal(
+    normalizeActualCandidateSchema(sharedIdentity).enterpriseProfile.projects
+      .length,
+    0,
+  );
+  const projectCanonical = normalizeActualCandidateSchema({
+    ...sharedIdentity,
+    projects,
+  });
+  const projectProfile = buildCandidate360Profile(
+    normalizeForTest(projectCanonical),
+  );
+  assert.equal(
+    buildSearchV2RecruiterCandidateDetail(projectProfile).enterpriseProfile
+      .projects.length,
+    7,
+    "a limited search projection must not poison full profile cache",
+  );
+  assert.equal(
+    buildCandidateSearchV2ProfilePreview(projectProfile.canonicalOverview!)
+      .projectCount,
+    7,
+  );
+  assert.ok(
+    projectProfile.enterpriseProfile.projects.every(
+      (project) => !project.start && !project.end && !project.employer,
+    ),
+  );
+  assert.equal(
+    supportedLinkedInProfileUrl(
+      "https://www.linkedin.com/in/alex-",
+      "https://www.linkedin.com/in/alex-\nsmith/\nSKILLS",
+    ),
+    "https://www.linkedin.com/in/alex-smith",
+  );
+  assert.equal(
+    supportedLinkedInProfileUrl(
+      "https://www.linkedin.com/in/alex-",
+      "https://www.linkedin.com/in/alex-\nSKILLS",
+    ),
+    null,
+  );
+  assert.equal(
+    supportedLinkedInProfileUrl(
+      "https://www.linkedin.com/in/verified",
+      "https://www.linkedin.com/in/alex-\nsmith/",
+    ),
+    "https://www.linkedin.com/in/verified",
   );
   assert.deepEqual(candidateLanguagesForStorage(["English"]), ["English"]);
   assert.ok(!JSON.stringify(profile.languages).includes("[object Object]"));
