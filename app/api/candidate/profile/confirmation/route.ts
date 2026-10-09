@@ -114,6 +114,7 @@ export async function POST(request: NextRequest) {
       profileStatus: "candidate_confirmed",
       searchable: true,
       confirmedAt: applied.data.candidate_confirmed_at,
+      version: applied.data.updated_at,
     },
     { headers },
   );

@@ -107,6 +107,19 @@ async function main() {
     normalizeForTest({ ...persisted, ...canonical }),
   );
   assert.equal(profile.displayName.value, "Alex Smith");
+  const confirmedWithoutPhone = buildCandidate360Profile(
+    normalizeForTest({
+      ...persisted,
+      ...canonical,
+      phone: null,
+      profile_source_state: { field_sources: { phone: "candidate_confirmed" } },
+    }),
+  );
+  assert.equal(
+    confirmedWithoutPhone.contactInfo.phone.value,
+    "",
+    "provenance must not become a phone number",
+  );
   assert.deepEqual(
     profile.languages.map((entry: any) => [
       entry.language.value,

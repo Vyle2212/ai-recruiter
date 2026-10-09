@@ -387,7 +387,7 @@ export default function CandidatePortalClient({
     setError("");
     setMessage("");
     try {
-      await json(
+      const confirmed = await json(
         await fetch("/api/candidate/profile/confirmation", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -402,7 +402,18 @@ export default function CandidatePortalClient({
         }),
       );
       setMessage("Profile confirmed and released to recruiter search.");
-      await load();
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              version: confirmed.version,
+              profileStatus: confirmed.profileStatus,
+              searchable: confirmed.searchable === true,
+              confirmationRequired: false,
+              missingRequiredFields: [],
+            }
+          : current,
+      );
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "Confirmation failed.",

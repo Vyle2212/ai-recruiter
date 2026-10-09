@@ -134,7 +134,18 @@ function deepFindValue(root: unknown, keys: string[]): CandidateValue {
       }
     }
 
-    for (const value of Object.values(parsedValue)) {
+    for (const [key, value] of Object.entries(parsedValue)) {
+      // Provenance labels describe fields; they are never candidate values.
+      if (
+        [
+          "profile_source_state",
+          "field_sources",
+          "field_metadata",
+          "candidate360_fields",
+          "confirmed_fields",
+        ].includes(key)
+      )
+        continue;
       queue.push({
         value,
         depth: item.depth + 1,
