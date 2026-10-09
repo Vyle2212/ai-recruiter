@@ -109,6 +109,8 @@ export function fixtureRemovalAllowed(input: {
   registry: AcceptanceSyntheticRegistryRecord | null;
   expected: AcceptanceFixtureLeaseExpectation;
   protectedExpiredCleanup?: boolean;
+  protectedOrphanCleanup?: boolean;
+  orphanCandidateVerified?: boolean;
 }) {
   if (input.state === "available") return { allowed: true, idempotent: true };
   if (
@@ -119,6 +121,13 @@ export function fixtureRemovalAllowed(input: {
   if (
     input.state === "foreign_expired" &&
     input.protectedExpiredCleanup === true
+  )
+    return { allowed: true, idempotent: false };
+  if (
+    input.state === "orphan_candidate" &&
+    input.registry === null &&
+    input.protectedOrphanCleanup === true &&
+    input.orphanCandidateVerified === true
   )
     return { allowed: true, idempotent: false };
   return { allowed: false, idempotent: false };

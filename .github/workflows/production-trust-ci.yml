@@ -192,6 +192,8 @@ jobs:
           NODE_OPTIONS: --conditions=react-server
         run: |
           npm run test:acceptance:harness
+          node scripts/authenticatedAcceptanceOriginalCvCleanup.test.cjs
+          node scripts/acceptanceMissingChatFixtureCleanup.test.cjs
           node scripts/acceptanceOriginalCvApprovalCleanupContract.test.cjs
           node scripts/acceptanceAbsentApprovalFixture.test.cjs
           node --import tsx scripts/searchV2AcceptanceLatencyContract.test.ts

@@ -38,6 +38,7 @@
         "acceptance:synthetic:availability": "tsx scripts/authenticatedAcceptanceSyntheticFixture.ts availability",
         "acceptance:synthetic:verify": "tsx scripts/authenticatedAcceptanceSyntheticFixture.ts verify",
         "acceptance:synthetic:remove": "tsx scripts/authenticatedAcceptanceSyntheticFixture.ts remove",
+        "acceptance:synthetic:recover-orphan": "tsx scripts/authenticatedAcceptanceSyntheticFixture.ts remove-protected-orphan",
         "acceptance:synthetic:residue": "tsx scripts/authenticatedAcceptanceSyntheticFixture.ts residue-verify",
         "acceptance:provision": "tsx scripts/authenticatedAcceptanceProvision.ts provision",
         "acceptance:cleanup": "tsx scripts/authenticatedAcceptanceProvision.ts cleanup",

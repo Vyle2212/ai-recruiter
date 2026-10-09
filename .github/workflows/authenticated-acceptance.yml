@@ -264,6 +264,7 @@ jobs:
       - name: Verify fail-closed cleanup recovery regressions
         run: |
           node scripts/authenticatedAcceptanceOriginalCvCleanup.test.cjs
+          node scripts/acceptanceMissingChatFixtureCleanup.test.cjs
           node scripts/acceptanceAbsentApprovalFixture.test.cjs
       - name: Bind only the failed run's synthetic namespace
         shell: bash
@@ -293,7 +294,12 @@ jobs:
         run: npm run acceptance:cleanup:verify
       - name: Remove any remaining exact-run search fixture
         if: always()
-        run: npm run acceptance:synthetic:remove
+        shell: bash
+        run: |
+          case "${{ inputs.acceptance_scope }}" in
+            cleanup_run66) npm run acceptance:synthetic:recover-orphan ;;
+            *) npm run acceptance:synthetic:remove ;;
+          esac
       - name: Verify zero exact-run residue
         if: always()
         run: npm run acceptance:synthetic:residue

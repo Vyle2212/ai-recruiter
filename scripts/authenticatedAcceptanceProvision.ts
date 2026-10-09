@@ -360,6 +360,95 @@ async function verifyAbsentChatFixtureReferences(
   }
 }
 
+async function cleanupAbsentChatFixtureReferences(
+  client: SupabaseClient,
+  profileIds: string[],
+  runId: string,
+) {
+  const fixture = await client
+    .from("acceptance_synthetic_candidates")
+    .select("candidate_id", { count: "exact", head: true })
+    .eq("owner_run_id", runId);
+  if (fixture.error || fixture.count !== 0 || profileIds.length === 0)
+    throw new Error("acceptance_chat_fixture_scope_unresolved");
+  const probes: [string, string, string[]][] = [
+    ["chat_conversations", "created_by_profile_id", profileIds],
+    ["chat_conversations", "recipient_profile_id", profileIds],
+    ["chat_conversation_participants", "user_profile_id", profileIds],
+    ["chat_messages", "sender_profile_id", profileIds],
+    ["chat_message_events", "actor_profile_id", profileIds],
+    ["chat_conversations", "candidate_id", [ACCEPTANCE_SYNTHETIC_CANDIDATE_ID]],
+  ];
+  for (const [table, column, ids] of probes) {
+    const result = await client
+      .from(table)
+      .select("*", { count: "exact", head: true })
+      .in(column, ids);
+    if (result.error || result.count !== 0)
+      throw new Error("acceptance_chat_fixture_references_unresolved");
+  }
+  // A previous always-run fixture step can remove the lease before identity
+  // cleanup. Consent rows are still safely attributable only when both sides
+  // of every remaining row are the fixed candidate and one of this run's
+  // ledger-owned profiles. Prove the two sets are identical before deleting.
+  for (const table of [
+    "candidate_chat_contact_consent_events",
+    "candidate_chat_contact_consents",
+  ]) {
+    const [byProfile, byCandidate, intersection] = await Promise.all([
+      client
+        .from(table)
+        .select("*", { count: "exact", head: true })
+        .in("user_profile_id", profileIds),
+      client
+        .from(table)
+        .select("*", { count: "exact", head: true })
+        .eq("candidate_id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID),
+      client
+        .from(table)
+        .select("*", { count: "exact", head: true })
+        .eq("candidate_id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID)
+        .in("user_profile_id", profileIds),
+    ]);
+    if (
+      byProfile.error ||
+      byCandidate.error ||
+      intersection.error ||
+      byProfile.count === null ||
+      byCandidate.count === null ||
+      intersection.count === null ||
+      byProfile.count !== intersection.count ||
+      byCandidate.count !== intersection.count
+    )
+      throw new Error("acceptance_chat_fixture_references_unresolved");
+    if (intersection.count > 0) {
+      const { error } = await client
+        .from(table)
+        .delete()
+        .eq("candidate_id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID)
+        .in("user_profile_id", profileIds);
+      if (error) throw new Error("acceptance_chat_fixture_cleanup_failed");
+    }
+    const [profileResidue, candidateResidue] = await Promise.all([
+      client
+        .from(table)
+        .select("*", { count: "exact", head: true })
+        .in("user_profile_id", profileIds),
+      client
+        .from(table)
+        .select("*", { count: "exact", head: true })
+        .eq("candidate_id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID),
+    ]);
+    if (
+      profileResidue.error ||
+      candidateResidue.error ||
+      profileResidue.count !== 0 ||
+      candidateResidue.count !== 0
+    )
+      throw new Error("acceptance_chat_fixture_residue_detected");
+  }
+}
+
 async function verifyAbsentOriginalCvApprovalReferences(
   client: SupabaseClient,
   profileIds: string[],
@@ -924,7 +1013,7 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
         throw new Error("acceptance_chat_fixture_cleanup_failed");
       // No chat mutation is permitted when the candidate lease is gone.
       // Continue identity cleanup only after exact zero-reference readback.
-      await verifyAbsentChatFixtureReferences(
+      await cleanupAbsentChatFixtureReferences(
         client,
         plan.profileIds,
         config.runId,

@@ -129,14 +129,36 @@ async function deleteExact(
   client: SupabaseClient,
   expected: AcceptanceFixtureLeaseExpectation,
   protectedExpiredCleanup = false,
+  protectedOrphanCleanup = false,
 ) {
   const found = await presence(client);
   const state = acceptanceFixtureState(found, expected);
+  let orphanCandidateVerified = false;
+  if (
+    protectedOrphanCleanup &&
+    state === "orphan_candidate" &&
+    found.registry === null &&
+    found.candidateById &&
+    found.candidateByMarker &&
+    !found.indexByCandidateId
+  ) {
+    const { data, error } = await client
+      .from("candidates")
+      .select(
+        "id,name,email,phone,linkedin_url,title,current_title,current_company,headline,summary,current_location,raw_text,resume_text,location,country,experience,education,skills,sap_modules,primary_module,secondary_modules,status,profile_confirmation_status",
+      )
+      .eq("id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID)
+      .single();
+    orphanCandidateVerified =
+      !error && validateAcceptanceSyntheticCandidate(data).valid;
+  }
   const permission = fixtureRemovalAllowed({
     state,
     registry: found.registry,
     expected,
     protectedExpiredCleanup,
+    protectedOrphanCleanup,
+    orphanCandidateVerified,
   });
   if (!permission.allowed)
     throw new Error(`acceptance_fixture_cleanup_ownership_denied:${state}`);
@@ -221,6 +243,7 @@ async function main() {
     "install",
     "verify",
     "remove",
+    "remove-protected-orphan",
     "residue-verify",
     "admin-verify",
     "remove-expired-fixed-fixture",
@@ -241,7 +264,7 @@ async function main() {
     expectedCommitSha: decision.value.expectedCommitSha,
     expiresAt: decision.value.expiresAt,
   };
-  if (!["remove", "residue-verify"].includes(action))
+  if (!["remove", "remove-protected-orphan", "residue-verify"].includes(action))
     await fetchAcceptanceReleaseEvidence(
       fetch,
       acceptanceBridgeConfigurationFromProcess(),
@@ -304,6 +327,10 @@ async function main() {
   } else if (action === "remove") {
     await removeAcceptanceComparisonPack(client, expected);
     await deleteExact(client, expected);
+    await githubFlag("ACCEPTANCE_FIXTURE_REMOVED");
+  } else if (action === "remove-protected-orphan") {
+    await removeAcceptanceComparisonPack(client, expected);
+    await deleteExact(client, expected, false, true);
     await githubFlag("ACCEPTANCE_FIXTURE_REMOVED");
   } else if (action === "residue-verify") {
     await verifyAcceptanceComparisonPackAbsent(client, expected);

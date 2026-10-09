@@ -92,6 +92,29 @@ assert.equal(
   "orphan_candidate",
 );
 assert.equal(
+  fixtureRemovalAllowed({
+    state: "orphan_candidate",
+    registry: null,
+    expected,
+    protectedOrphanCleanup: true,
+    orphanCandidateVerified: true,
+  }).allowed,
+  true,
+);
+for (const input of [
+  { protectedOrphanCleanup: false, orphanCandidateVerified: true },
+  { protectedOrphanCleanup: true, orphanCandidateVerified: false },
+])
+  assert.equal(
+    fixtureRemovalAllowed({
+      state: "orphan_candidate",
+      registry: null,
+      expected,
+      ...input,
+    }).allowed,
+    false,
+  );
+assert.equal(
   acceptanceFixtureState({ ...empty, indexByCandidateId: true }, expected),
   "orphan_index",
 );
