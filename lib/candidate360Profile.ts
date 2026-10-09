@@ -114,7 +114,10 @@ function stringField(candidate: AnyRecord, name: string, aliases: string[], appr
   const value = aliases.map((key) => candidate[key]).find((item) => clean(item)) ?? "";
   return resolveField(candidate, name, clean(value), approvals, decisions, history);
 }
-function nestedField(name: string, value: unknown, source: Source) { return field(name, clean(value), source); }
+function nestedField(name: string, value: unknown, source: Source) {
+  for (let depth = 0; value && typeof value === "object" && depth < 3; depth++) value = (value as { value?: unknown }).value;
+  return field(name, typeof value === "string" || typeof value === "number" ? clean(value) : "", source);
+}
 
 export function buildCandidate360Profile(candidate: AnyRecord, workflowState?: AnyRecord, approvals?: any, decisions?: any, applyHistory?: any): Candidate360Profile {
   const source = baseSource(candidate);

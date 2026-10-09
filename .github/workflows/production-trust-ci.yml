@@ -295,6 +295,7 @@ jobs:
           node --import tsx scripts/candidateDetailAuthorization.test.ts
           node --import tsx scripts/cvPdfOcr.test.ts
           node scripts/pdfWebpackRuntime.test.cjs
+          node --import tsx scripts/positionedResumeEvidence.test.ts
           node --import tsx scripts/pdfModernCompatibility.test.ts
           node --import tsx scripts/cvTextDocumentCompatibility.test.ts
           node --import tsx scripts/uploadCvSourceFailure.test.ts

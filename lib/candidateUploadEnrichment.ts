@@ -3,6 +3,11 @@ import { normalizeActualCandidateSchema } from "./candidate360SchemaNormalize";
 import { isValidProjectEntry } from "./candidateProfileIngestion";
 import { careerMonthIndex } from "./candidateCareerExperience";
 import {
+  pipeEmploymentCards,
+  positionedResumeSections,
+  trackedHeaderName,
+} from "./positionedResumeEvidence";
+import {
   PROJECT_CURRENT_TOKEN_PATTERN,
   PROJECT_DATE_TOKEN_PATTERN,
   projectDateIsCurrent,
@@ -709,6 +714,12 @@ export function enrichCandidateUpload(
   candidate: Record<string, any>,
   rawText: string,
 ) {
+  const positioned = positionedResumeSections(rawText);
+  const trackedName = trackedHeaderName(
+    rawText,
+    String(candidate.file_name || candidate.source_file || ""),
+  );
+  const pipeCards = pipeEmploymentCards(rawText);
   const full = extractFullCandidateProfile({
     ...candidate,
     raw_text: rawText,
@@ -732,28 +743,30 @@ export function enrichCandidateUpload(
     rawText,
     /^(?:skills?|technical skills?|core competencies|sap skills?|expertise)\s*:?[\s]*$/i,
   ).flatMap((line) => line.split(/[,;|•·▪]+/));
-  const experience = canonical.workExperience?.length
-    ? canonical.workExperience.map((item: any) => ({
-        employer: clean(item.company),
-        company: clean(item.company),
-        title: clean(item.title),
-        start_date: clean(item.startDate),
-        end_date: clean(item.endDate),
-        current: item.current === true,
-      }))
-    : (full.employerHistory || [])
-        .filter(
-          (item: any) => item.isEmployer !== false && clean(item.employer),
-        )
-        .map((item: any) => ({
-          employer: clean(item.employer),
-          company: clean(item.employer),
+  const experience = pipeCards.length
+    ? pipeCards
+    : canonical.workExperience?.length
+      ? canonical.workExperience.map((item: any) => ({
+          employer: clean(item.company),
+          company: clean(item.company),
           title: clean(item.title),
           start_date: clean(item.startDate),
           end_date: clean(item.endDate),
-          current: item.isCurrent === true,
-          evidence_confidence: Number(item.confidence || 0),
-        }));
+          current: item.current === true,
+        }))
+      : (full.employerHistory || [])
+          .filter(
+            (item: any) => item.isEmployer !== false && clean(item.employer),
+          )
+          .map((item: any) => ({
+            employer: clean(item.employer),
+            company: clean(item.employer),
+            title: clean(item.title),
+            start_date: clean(item.startDate),
+            end_date: clean(item.endDate),
+            current: item.isCurrent === true,
+            evidence_confidence: Number(item.confidence || 0),
+          }));
   const currentExperience = experience.find(
     (item: any) => item.current === true && clean(item.employer),
   );
@@ -778,18 +791,24 @@ export function enrichCandidateUpload(
   // records before deduplicating. Never copy employment dates to a project.
   const projects = mergeGroundedProjects(
     canonicalProjects,
-    explicitProjects,
+    [...explicitProjects, ...positioned.projects],
     rawText,
   );
-  const education = explicitEducation.length
-    ? explicitEducation
-    : canonical.education || [];
-  const certifications = explicitCertifications.length
-    ? explicitCertifications
-    : canonical.certifications || [];
-  const languages = explicitLanguageValues.length
-    ? explicitLanguageValues
-    : canonical.languages || [];
+  const education = positioned.education.length
+    ? positioned.education
+    : explicitEducation.length
+      ? explicitEducation
+      : canonical.education || [];
+  const certifications = positioned.certifications.length
+    ? positioned.certifications
+    : explicitCertifications.length
+      ? explicitCertifications
+      : canonical.certifications || [];
+  const languages = positioned.languages.length
+    ? positioned.languages
+    : explicitLanguageValues.length
+      ? explicitLanguageValues
+      : canonical.languages || [];
   const skills = unique([
     ...(candidate.skills || []),
     ...(canonical.skills || []),
@@ -808,18 +827,21 @@ export function enrichCandidateUpload(
   return {
     ...candidate,
     name:
-      full.extractedFullName && !full.isNameSuspicious
+      trackedName ||
+      (full.extractedFullName && !full.isNameSuspicious
         ? full.extractedFullName
-        : candidate.name,
+        : candidate.name),
     email: full.extractedEmail || candidate.email,
     phone: full.extractedPhone || candidate.phone,
     linkedin_url: full.linkedInUrl || candidate.linkedin_url,
-    location,
-    country: full.locationCountry || candidate.country,
+    location: positioned.location || location,
+    country: positioned.country || full.locationCountry || candidate.country,
     current_title:
-      full.extractedCurrentTitle && !full.isTitleSuspicious
-        ? full.extractedCurrentTitle
-        : candidate.current_title || candidate.currentTitle,
+      pipeCards.length && currentExperience
+        ? currentExperience.title
+        : full.extractedCurrentTitle && !full.isTitleSuspicious
+          ? full.extractedCurrentTitle
+          : candidate.current_title || candidate.currentTitle,
     // Current employer is a temporal claim. Only an explicitly open-ended
     // canonical employment row may populate it; stale upstream fields and
     // undated labels remain review evidence instead of current facts.

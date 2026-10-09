@@ -764,7 +764,7 @@ export async function parseCv(buffer: Buffer, fileName?: string, options: import
   if (fileName?.toLowerCase().endsWith('.pdf')) {
     const { extractCvPdf } = await import('./cvPdfExtraction');
     const { text, sourceExtraction } = await extractCvPdf(buffer, options);
-    return { ...parseCandidateFromText(text, fileName), sourceExtraction };
+    return { ...parseCandidateFromText(text, fileName), rawText: text, sourceExtraction };
   }
   const text = await bufferToText(buffer, fileName || "");
   return { ...parseCandidateFromText(text, fileName), sourceExtraction: {method: 'native' as const, pageCount: 0, reason: ''} };

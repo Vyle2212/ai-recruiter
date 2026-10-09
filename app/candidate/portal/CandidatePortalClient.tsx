@@ -21,7 +21,10 @@ const input =
   "mt-2 w-full rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm outline-hidden focus:border-cyan-400";
 
 function value(field: any) {
-  return String(field?.value ?? "").trim();
+  const scalar = field && typeof field === "object" ? field.value : field;
+  return typeof scalar === "string" || typeof scalar === "number"
+    ? String(scalar).trim()
+    : "";
 }
 function rows(value: any) {
   return Array.isArray(value) ? value : [];
@@ -107,10 +110,7 @@ function normalizeLanguages(items: any[]) {
             value(row.language) ||
             value(row.name) ||
             String(row.language ?? row.name ?? ""),
-          proficiency:
-            value(row.proficiency) ||
-            value(row.level) ||
-            String(row.proficiency ?? row.level ?? ""),
+          proficiency: value(row.proficiency) || value(row.level),
         },
   );
 }
