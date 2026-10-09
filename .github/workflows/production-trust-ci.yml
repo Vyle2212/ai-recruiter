@@ -22,6 +22,12 @@ on:
       - "release/**"
       - integration
   workflow_dispatch:
+    inputs:
+      verify_gmail_credentials:
+        description: Verify acceptance Gmail refresh token and mailbox only (no signup)
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -164,6 +170,7 @@ jobs:
           node --import tsx scripts/acceptanceCandidateRegistrationEmailCleanup.test.ts
           node --import tsx scripts/acceptanceCandidateRegistrationGmail.test.ts
           node scripts/acceptanceGmailCredentialsPreflight.test.mjs
+          node --import tsx scripts/acceptanceCandidateRegistrationGmailRuntime.test.ts
           node --import tsx scripts/candidateRegistrationProvisionContract.test.ts
           node --import tsx scripts/chatAuthorizationCore.test.ts
           node --import tsx scripts/candidateChatConsentBoundary.test.ts
@@ -380,3 +387,37 @@ jobs:
           path: artifacts/production-trust-client-bundle-scan.json
           if-no-files-found: error
           retention-days: 7
+
+  acceptance-gmail-credentials:
+    if: github.event_name == 'workflow_dispatch' && inputs.verify_gmail_credentials == true && github.ref_name == 'codex/production-admin-auth'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: acceptance
+    steps:
+      - name: Checkout exact reviewed revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify exact revision
+        env:
+          REQUESTED_SHA: ${{ github.sha }}
+          RUN_SHA: ${{ github.sha }}
+        run: |
+          test "$REQUESTED_SHA" = "$RUN_SHA"
+          test "$(git rev-parse HEAD)" = "$RUN_SHA"
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+      - name: Verify mocked credential failure and privacy contracts
+        run: node scripts/acceptanceGmailCredentialsPreflight.test.mjs
+      - name: Verify credential refresh and exact mailbox only
+        env:
+          APP_ENV: acceptance
+          ACCEPTANCE_TEST_MODE: "true"
+          ACCEPTANCE_REGISTRATION_CAPTURE_EMAIL: vjvjan.le@gmail.com
+          ACCEPTANCE_GMAIL_CLIENT_ID: ${{ secrets.ACCEPTANCE_GMAIL_CLIENT_ID }}
+          ACCEPTANCE_GMAIL_CLIENT_SECRET: ${{ secrets.ACCEPTANCE_GMAIL_CLIENT_SECRET }}
+          ACCEPTANCE_GMAIL_REFRESH_TOKEN: ${{ secrets.ACCEPTANCE_GMAIL_REFRESH_TOKEN }}
+        run: node scripts/acceptanceGmailCredentialsPreflight.mjs
