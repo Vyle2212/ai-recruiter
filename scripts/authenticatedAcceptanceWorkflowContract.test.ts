@@ -41,8 +41,9 @@ async function main() {
   assert.doesNotMatch(workflow, /ACCEPTANCE_SYNTHETIC_FIXTURE_OWNER_RUN_ID/);
   assert.match(
     workflow,
-    /acceptance_scope:[\s\S]*default: internal_only[\s\S]*options:\s*\[\s*internal_only,\s*full_scope,\s*cleanup_run37,\s*cleanup_run40,\s*cleanup_run42,?\s*\]/,
+    /acceptance_scope:[\s\S]*default: internal_only[\s\S]*options:\s*\[\s*internal_only,\s*full_scope,\s*cleanup_run37,\s*cleanup_run40,\s*cleanup_run42,\s*cleanup_run66,?\s*\]/,
   );
+  assert.match(workflow, /cleanup_run66\) run_id="ptf1c2-gh-37940009098-1"/);
   assert.match(workflow, /cleanup_run42\) run_id="ptf1c2-gh-37439551708-1"/);
   assert.match(workflow, /cleanup_run40\) run_id="ptf1c2-gh-37409506068-1"/);
   assert.match(workflow, /cleanup_run37\) run_id="ptf1c2-gh-37236641902-1"/);
