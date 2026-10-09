@@ -154,6 +154,7 @@ jobs:
           node --import tsx scripts/candidateCallbackCookies.test.ts
           node --import tsx scripts/candidateCallbackSsr.test.ts
           node --import tsx scripts/candidateRegistrationSsr.test.ts
+          node --import tsx scripts/candidateRegistrationJourney.test.ts
           node --import tsx scripts/candidateRegistrationCallback.test.ts
           node --import tsx scripts/candidateRegistrationOwnership.test.ts
           node --import tsx scripts/acceptanceCandidateRegistrationOwnership.test.ts
