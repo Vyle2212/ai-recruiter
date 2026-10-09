@@ -1,15 +1,7 @@
-import path from "node:path";
-import { createRequire } from "node:module";
+import { pdfStandardFontDataUrl } from "./cvPdfRuntime";
 import { extractCanonicalEmploymentFromResume } from "./candidate360Employment";
 import { CvSourceError, configuredPdfOcr } from "./cvPdfOcr";
 import { createCvPdfRenderer } from "./pdfTextLayout";
-
-const require = createRequire(import.meta.url);
-const standardFontDataUrl =
-  path.join(
-    path.dirname(require.resolve("pdfjs-dist/package.json")),
-    "standard_fonts",
-  ) + path.sep;
 
 export type PdfExtractionOptions = {
   ocr?: (
@@ -59,7 +51,7 @@ export async function extractCvPdf(
   // isolated copy so the original bytes remain available for OCR/archive.
   const loadingTask = getDocument({
     data: Uint8Array.from(buffer),
-    standardFontDataUrl,
+    standardFontDataUrl: pdfStandardFontDataUrl(),
   });
   try {
     const document = await loadingTask.promise;
