@@ -9,13 +9,19 @@ const env={APP_ENV:"acceptance",ACCEPTANCE_TEST_MODE:"true",ACCEPTANCE_GMAIL_CLE
 const link=new URL("https://"+projectRef+".supabase.co/auth/v1/verify");
 link.searchParams.set("token","synthetic_confirmation_token");link.searchParams.set("type","signup");link.searchParams.set("redirect_to",origin+"/auth/candidate/callback");
 const message={id:"abc123",internalDate:String(Date.now()),payload:{mimeType:"text/plain",headers:[{name:"Delivered-To",value:intent.email}],body:{data:Buffer.from(link.href).toString("base64url")}}};
-let deleted=false, deletes=0, changed=false, residue=false, failDelete=false, calls=0, wrong=false;
+let deleted=false, deletes=0, changed=false, residue=false, failDelete=false, calls=0, wrong=false, emptyLists=0, listCalls=0, ambiguous=false;
 const transport:typeof fetch=async(target,init)=>{
 calls++;const url=new URL(String(target));
 assert.equal(init?.redirect,"error");assert.equal(init?.cache,"no-store");
 if(url.origin==="https://oauth2.googleapis.com") return Response.json({token_type:"Bearer",access_token:"synthetic_access_token_123",expires_in:3600,scope:"https://mail.google.com/"});
 if(url.pathname.endsWith("/profile"))return Response.json({emailAddress:email});
-if(url.pathname.endsWith("/messages"))return Response.json({messages:[{id:"abc123"}]});
+if(url.pathname.endsWith("/messages")){
+listCalls++;
+assert.equal(url.searchParams.get("q"),"deliveredto:"+intent.email+" after:"+Math.floor(Date.parse(input.startedAt)/1000));
+assert.equal(url.searchParams.get("maxResults"),"10");
+if(emptyLists>0){emptyLists--;return Response.json({messages:[]});}
+return Response.json({messages:ambiguous?[{id:"abc123"},{id:"def456"}]:[{id:"abc123"}]});
+}
 assert.equal(url.pathname,"/gmail/v1/users/me/messages/abc123");
 if(init?.method==="DELETE"){deletes++;if(failDelete)return new Response(null,{status:403});deleted=true;return new Response(null,{status:204});}
 if(deleted&&!residue)return new Response(null,{status:404});
@@ -35,6 +41,15 @@ residue=false;deleted=false;failDelete=true;
 await assert.rejects(withAcceptanceRegistrationGmailCleanup(input,env,async()=>"ok",transport));
 failDelete=false;wrong=true;deletes=0;
 await assert.rejects(withAcceptanceRegistrationGmailCleanup(input,env,async()=>"ok",transport));assert.equal(deletes,0);
+wrong=false;deleted=false;deletes=0;emptyLists=1;listCalls=0;
+assert.equal(await withAcceptanceRegistrationGmailCleanup(input,env,async()=>"delayed",transport),"delayed");
+assert.equal(listCalls,2);assert.equal(deletes,1);
+deleted=false;deletes=0;emptyLists=10;listCalls=0;let journeys=0;
+await assert.rejects(withAcceptanceRegistrationGmailCleanup(input,env,async()=>{journeys++;},transport));
+assert.equal(listCalls,5);assert.equal(journeys,0);assert.equal(deletes,0);
+emptyLists=0;listCalls=0;ambiguous=true;
+await assert.rejects(withAcceptanceRegistrationGmailCleanup(input,env,async()=>{journeys++;},transport));
+assert.equal(listCalls,1);assert.equal(journeys,0);assert.equal(deletes,0);
 console.log("Gmail cleanup runtime contracts PASS (mocked; no live deletion or signup).");
 }
 void main().catch(()=>{console.error("Gmail cleanup runtime contracts failed");process.exitCode=1;});

@@ -60,14 +60,35 @@ export async function withAcceptanceRegistrationGmailCleanup<T>(
         });
       const provider: RegistrationEmailProvider = {
         async list(signal) {
-          let ids: string[] = [];
-          const messages = await capture(undefined, (values) => { ids = values; })(signal);
-          if (messages.length !== ids.length || messages.length !== 1) throw fail();
-          return messages.map((message, index) => {
-            const record = { ...message, id: ids[index] };
-            owned.set(record.id, structuredClone(record));
-            return record;
-          });
+          // Retry only an empty exact-alias query. Malformed, ambiguous or
+          // mismatched mail fails immediately; none of it becomes deletion authority.
+          // Five attempts at two-second intervals fit the outer 15-second deadline.
+          for (let attempt = 0; attempt < 5; attempt++) {
+            if (signal.aborted) throw fail();
+            let ids: string[] = [];
+            const messages = await capture(undefined, (values) => { ids = values; })(signal);
+            if (messages.length !== ids.length || messages.length > 1) throw fail();
+            if (messages.length === 1) {
+              const record = { ...messages[0], id: ids[0] };
+              owned.set(record.id, structuredClone(record));
+              return [record];
+            }
+            if (attempt === 4) return [];
+            await new Promise<void>((resolve, reject) => {
+              const abort = () => {
+                clearTimeout(timer);
+                signal.removeEventListener("abort", abort);
+                reject(fail());
+              };
+              const timer = setTimeout(() => {
+                signal.removeEventListener("abort", abort);
+                resolve();
+              }, 2000);
+              signal.addEventListener("abort", abort, { once: true });
+              if (signal.aborted) abort();
+            });
+          }
+          throw fail();
         },
         async read(id, signal) {
           if (!owned.has(id)) throw fail();
