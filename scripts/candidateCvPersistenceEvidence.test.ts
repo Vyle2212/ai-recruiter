@@ -107,6 +107,37 @@ async function main() {
     normalizeForTest({ ...persisted, ...canonical }),
   );
   assert.equal(profile.displayName.value, "Alex Smith");
+  const confirmedEmployment = buildCandidate360Profile(
+    normalizeForTest({
+      ...normalizeActualCandidateSchema({
+        id,
+        name: "Alex Smith",
+        experience: [
+          {
+            employer: "Example Consulting",
+            title: "SAP FICO Consultant",
+            start_date: "2024-06",
+            end_date: null,
+            current: true,
+          },
+          {
+            employer: "Previous Employer",
+            title: "Consultant",
+            start_date: "2022-01",
+            end_date: "2024-05",
+            current: false,
+          },
+        ],
+      }),
+    }),
+  );
+  assert.equal(
+    confirmedEmployment.workExperience[0].current,
+    true,
+    "confirmed current employment survives canonical profile readback even when end date is null",
+  );
+  assert.equal(confirmedEmployment.workExperience[1].current, false);
+
   const confirmedWithoutPhone = buildCandidate360Profile(
     normalizeForTest({
       ...persisted,

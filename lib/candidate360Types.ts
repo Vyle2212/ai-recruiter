@@ -35,6 +35,7 @@ export type Candidate360Field<T = unknown> = {
 
 export type Candidate360Experience = {
   id: string;
+  current?: boolean;
   title: Candidate360Field<string>;
   company: Candidate360Field<string>;
   startDate: Candidate360Field<string>;

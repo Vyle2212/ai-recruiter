@@ -295,7 +295,7 @@ export function buildCandidate360Profile(candidate: AnyRecord, workflowState?: A
     candidate.careerHistory
   ).map((item, index) => {
     const entry = typeof item === "object" ? item : { description: item };
-    return { id: clean(entry.id) || `experience-${index + 1}`, title: nestedField("experience.title", entry.title || entry.role, source), company: nestedField("experience.company", entry.company || entry.employer, source), startDate: nestedField("experience.startDate", entry.startDate || entry.start_date, source), endDate: nestedField("experience.endDate", entry.endDate || entry.end_date, source), description: nestedField("experience.description", entry.description || entry.summary, source) };
+    return { id: clean(entry.id) || `experience-${index + 1}`, current: entry.current === true || entry.is_current === true || entry.isCurrent === true || /^(present|current|now)$/i.test(clean(entry.endDate?.value ?? entry.endDate ?? entry.end_date)), title: nestedField("experience.title", entry.title || entry.role, source), company: nestedField("experience.company", entry.company || entry.employer, source), startDate: nestedField("experience.startDate", entry.startDate || entry.start_date, source), endDate: nestedField("experience.endDate", entry.endDate || entry.end_date, source), description: nestedField("experience.description", entry.description || entry.summary, source) };
   });
     const education: Candidate360Education[] = array(
     candidate.education ??
