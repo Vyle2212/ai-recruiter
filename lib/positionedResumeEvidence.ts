@@ -3,7 +3,7 @@ import { projectDateRange, projectDateIsCurrent } from "./projectDateEvidence";
 const linesOf = (text: string) =>
   text.split(/\r?\n/).map((line) => line.trim());
 const heading =
-  /^(?:professional summary|professional experience|work experience|employment history|education|courses|certifications?|languages?(?: skills)?|functional expertise|core competencies|key achievements|project summary experience)$/i;
+  /^(?:professional summary|professional experience|work experience|employment history|education|courses|certifications?|languages?(?: skills)?|skills?|technical skills?|sap skills?|expertise|functional expertise|core competencies|key achievements|project summary experience)\s*:?[\s]*$/i;
 
 function section(text: string, label: RegExp): string[] {
   const lines = text.split(/\r?\n/);
