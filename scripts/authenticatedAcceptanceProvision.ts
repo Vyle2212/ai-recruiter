@@ -360,6 +360,39 @@ async function verifyAbsentChatFixtureReferences(
   }
 }
 
+async function verifyAbsentOriginalCvApprovalReferences(
+  client: SupabaseClient,
+  profileIds: string[],
+  runId: string,
+) {
+  if (!profileIds.length)
+    throw new Error("acceptance_original_cv_approval_scope_invalid");
+  const fixture = await client
+    .from("acceptance_synthetic_candidates")
+    .select("candidate_id", { count: "exact", head: true })
+    .eq("owner_run_id", runId);
+  if (fixture.error || fixture.count !== 0)
+    throw new Error("acceptance_original_cv_approval_fixture_scope_ambiguous");
+  const references: [string, string][] = [
+    ["recruiter_original_cv_requests", "recruiter_profile_id"],
+    ["recruiter_original_cv_requests", "resolved_by_profile_id"],
+    ["recruiter_original_cv_grants", "recruiter_profile_id"],
+    ["recruiter_original_cv_grants", "approved_by_profile_id"],
+    ["recruiter_original_cv_grants", "updated_by_profile_id"],
+    ["recruiter_original_cv_grant_events", "recruiter_profile_id"],
+    ["recruiter_original_cv_grant_events", "actor_profile_id"],
+    ["recruiter_original_cv_access_events", "actor_profile_id"],
+  ];
+  for (const [table, column] of references) {
+    const probe = await client
+      .from(table)
+      .select("id", { count: "exact", head: true })
+      .in(column, profileIds);
+    if (probe.error || probe.count !== 0)
+      throw new Error("acceptance_original_cv_approval_reference_present");
+  }
+}
+
 async function verifyDatabaseMarker(
   client: SupabaseClient,
   config: SafeConfig,
@@ -856,11 +889,23 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
       "cleanup_acceptance_original_cv_approval_run",
       { p_run_id: config.runId },
     );
-    if (
-      approvalCleanup.error ||
-      approvalCleanup.data?.remainingApprovalRows !== 0
-    )
+    if (approvalCleanup.error) {
+      if (
+        approvalCleanup.error.message !==
+        "acceptance_original_cv_approval_cleanup_fixture_scope_missing"
+      )
+        throw new Error("acceptance_original_cv_approval_cleanup_failed");
+      // A prior always-run step may already have removed the fixture. Do not
+      // delete approval rows without its scope: continue only after every
+      // actor reference is proven absent, including immutable audit rows.
+      await verifyAbsentOriginalCvApprovalReferences(
+        client,
+        profileIds,
+        config.runId,
+      );
+    } else if (approvalCleanup.data?.remainingApprovalRows !== 0) {
       throw new Error("acceptance_original_cv_approval_cleanup_failed");
+    }
   }
   const chatProbe = await client
     .from("chat_conversations")
