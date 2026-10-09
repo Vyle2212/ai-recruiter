@@ -31,6 +31,12 @@ on:
             cleanup_run42,
           ]
 
+      include_signup:
+        description: Include live candidate signup and exact run-owned Gmail cleanup
+        required: false
+        type: boolean
+        default: false
+
 permissions:
   contents: read
 
@@ -50,6 +56,8 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
       ACCEPTANCE_TEST_MODE: "true"
       APP_ENV: acceptance
+      ACCEPTANCE_REGISTRATION_JOURNEY_ENABLED: ${{ inputs.include_signup && 'true' || 'false' }}
+      ACCEPTANCE_REGISTRATION_CAPTURE_EMAIL: ${{ inputs.include_signup && 'lekhanhha3005@gmail.com' || '' }}
       ACCEPTANCE_DEPLOYMENT_PROTECTION_REQUIRED: "true"
       ACCEPTANCE_EXTERNAL_MODE: ${{ inputs.acceptance_scope == 'full_scope' && 'required' || 'disabled' }}
       ACCEPTANCE_BASE_URL: ${{ secrets.ACCEPTANCE_BASE_URL }}
@@ -159,6 +167,12 @@ jobs:
       - name: Provision controlled synthetic identities
         run: npm run acceptance:provision
       - name: Run authenticated browser and API acceptance
+        env:
+          ACCEPTANCE_GMAIL_CLEANUP_ENABLED: ${{ inputs.include_signup && 'true' || 'false' }}
+          ACCEPTANCE_GMAIL_CREDENTIAL_MODE: dedicated-cleanup-preflight
+          ACCEPTANCE_GMAIL_CLIENT_ID: ${{ inputs.include_signup && secrets.ACCEPTANCE_GMAIL_CLIENT_ID || '' }}
+          ACCEPTANCE_GMAIL_CLIENT_SECRET: ${{ inputs.include_signup && secrets.ACCEPTANCE_GMAIL_CLIENT_SECRET || '' }}
+          ACCEPTANCE_GMAIL_REFRESH_TOKEN: ${{ inputs.include_signup && secrets.ACCEPTANCE_GMAIL_REFRESH_TOKEN || '' }}
         run: npm run acceptance:e2e
       - name: Generate pre-cleanup sanitized evidence
         if: always() && steps.dependencies.outcome == 'success'

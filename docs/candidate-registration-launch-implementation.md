@@ -105,3 +105,30 @@ external provider when configured and authorized; obtain a fresh isolated
 restore and reviewed production RLS/Storage/Auth comparison. Only then review
 the production cutover and portal enablement. Internal acceptance PASS is
 insufficient to enable production.
+
+## Prepared protected signup acceptance
+
+The Gmail credential-only preflight has passed for the dedicated test mailbox.
+A gated browser journey now submits the real candidate signup form with its
+configured CAPTCHA, persists the run intent before sending, binds the discovered
+unconfirmed Auth identity, reads the exact run-alias confirmation, verifies one
+Auth/profile/account/candidate chain, removes only the captured message, and
+revokes refresh sessions for the bound identity. Confirmation URLs, cookies,
+credentials and mailbox message IDs stay out of screenshots, traces and evidence.
+
+The existing protected authenticated-acceptance workflow has an optional
+`include_signup` input, default false. Only the E2E step receives Gmail secrets
+when that input is true. Identity and database cleanup retain their existing
+always-run steps. The report permits a skipped signup only when it was not
+requested, and requires signup PASS plus cleanup verification when requested.
+Mocked journey/report contracts verify these boundaries; they do not prove
+live delivery, real CAPTCHA completion, or successful public onboarding.
+
+Registration remains OFF. Before requesting one protected live run, verify the
+acceptance Auth CAPTCHA provider and exact callback allowlist, review the exact
+PR SHA and enable registration only on `ai-recruiter-acceptance` Production.
+The journey fails before signup if the deployed release is not that reviewed SHA,
+registration is not configured/enabled, Gmail credentials cannot refresh, the
+run fixture is not ready, or the proposed run identity already exists.
+This signup proof is separate from remaining replay/duplicate-address and the
+full onboarding-to-upload/search acceptance requirements above.

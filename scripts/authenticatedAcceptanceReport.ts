@@ -31,7 +31,10 @@ const roleTests = new Set([
 ]);
 // Keep the report tied to the actual acceptance contract. A count alone can
 // pass when an essential test is removed and an unrelated one is added.
+const registrationTest =
+  "public candidate signup confirms one ownership chain and cleans captured mail";
 const requiredTests = new Set([
+  registrationTest,
   "exact deployed release is the requested HTTPS build",
   "anonymous and denied-role responses are private error-only JSON",
   "recruiter, manager and admin retain authorized Search V2 access",
@@ -85,10 +88,12 @@ async function main() {
   const skipped = tests.filter((test) =>
     ["skipped", "pending"].includes(test.status),
   );
-  const allowedSkippedTests =
-    externalMode === "disabled"
-      ? externalTests
-      : new Set([disabledExternalTest]);
+  const registrationRequested =
+    process.env.ACCEPTANCE_REGISTRATION_JOURNEY_ENABLED === "true";
+  const allowedSkippedTests = new Set(
+    externalMode === "disabled" ? externalTests : [disabledExternalTest],
+  );
+  if (!registrationRequested) allowedSkippedTests.add(registrationTest);
   const externalProviderExecuted = [...externalTests].every((name) =>
     passedNames.has(name),
   );
@@ -96,6 +101,11 @@ async function main() {
     passedNames.has(name),
   );
   const testsPassed =
+    tests.some(
+      (test) =>
+        test.test === registrationTest &&
+        test.status === (registrationRequested ? "passed" : "skipped"),
+    ) &&
     tests.length === requiredTests.size &&
     new Set(tests.map((test) => test.test)).size === requiredTests.size &&
     tests.every((test) => requiredTests.has(test.test)) &&
@@ -130,6 +140,15 @@ async function main() {
     ),
     acceptanceScope:
       externalMode === "required" ? "full_scope" : "internal_talent_hub_only",
+    candidateRegistration: {
+      requested: registrationRequested,
+      onboardingAndMailCleanupVerified:
+        registrationRequested && passedNames.has(registrationTest),
+      identityCleanupVerified:
+        registrationRequested &&
+        passedNames.has(registrationTest) &&
+        process.env.ACCEPTANCE_IDENTITY_CLEANUP_VERIFIED === "true",
+    },
     externalProviderExecuted,
     externalProviderDisabled:
       process.env.ACCEPTANCE_EXTERNAL_PROVIDER_DISABLED === "true",
