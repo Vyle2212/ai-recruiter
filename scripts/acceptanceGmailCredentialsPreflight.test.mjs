@@ -47,3 +47,15 @@ await assert.rejects(verifyAcceptanceGmailCredentials(env, async (url) => Respon
 )), /^Error: acceptance_gmail_credentials_unavailable$/);
 await assert.rejects(verifyAcceptanceGmailCredentials(env, async () => { throw new Error(env.ACCEPTANCE_GMAIL_REFRESH_TOKEN); }), /^Error: acceptance_gmail_credentials_unavailable$/);
 console.log("Gmail credential preflight contracts PASS (mocked transport; no live credentials).");
+
+const cleanupEnv = { ...env, ACCEPTANCE_GMAIL_CREDENTIAL_MODE: "dedicated-cleanup-preflight", ACCEPTANCE_REGISTRATION_CAPTURE_EMAIL: "lekhanhha3005@gmail.com" };
+const cleanupTransport = async (url) => Response.json(url.endsWith("/token") ? { ...token, scope: "https://mail.google.com/" } : { emailAddress: cleanupEnv.ACCEPTANCE_REGISTRATION_CAPTURE_EMAIL });
+assert.equal((await verifyAcceptanceGmailCredentials(cleanupEnv, cleanupTransport)).status, "PASS_CREDENTIALS_ONLY");
+for (const patch of [{ ACCEPTANCE_REGISTRATION_CAPTURE_EMAIL: "synthetic@gmail.com" }, { ACCEPTANCE_GMAIL_CREDENTIAL_MODE: "unknown" }]) {
+  let requested = false;
+  await assert.rejects(verifyAcceptanceGmailCredentials({ ...cleanupEnv, ...patch }, async () => { requested = true; return Response.json({}); }), /^Error: acceptance_gmail_credentials_unavailable$/);
+  assert.equal(requested, false);
+}
+await assert.rejects(verifyAcceptanceGmailCredentials(cleanupEnv, async () => Response.json(token)), /^Error: acceptance_gmail_credentials_unavailable$/);
+await assert.rejects(verifyAcceptanceGmailCredentials(cleanupEnv, async () => Response.json({ ...token, scope: "https://mail.google.com/ https://www.googleapis.com/auth/gmail.readonly" })), /^Error: acceptance_gmail_credentials_unavailable$/);
+console.log("Dedicated mailbox credential-only preflight contracts PASS.");
