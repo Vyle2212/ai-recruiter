@@ -46,6 +46,18 @@ async function main() {
   assert.match(workflow, /cleanup_run66\) run_id="ptf1c2-gh-37940009098-1"/);
   assert.match(
     workflow,
+    /Recover only run 66's validated orphan fixture lease\s+if: inputs\.acceptance_scope == 'cleanup_run66'\s+run: npm exec -- tsx scripts\/authenticatedAcceptanceSyntheticFixture\.ts recover-run66-lease/,
+  );
+  assert.match(
+    workflow,
+    /Remove any remaining exact-run search fixture\s+if: always\(\) && steps\.identity_cleanup\.outcome == 'success' && steps\.identity_cleanup_verification\.outcome == 'success'/,
+  );
+  assert.match(
+    workflow,
+    /ACCEPTANCE_IDENTITY_CLEANUP_ARMED != 'true' \|\| \(steps\.identity_cleanup\.outcome == 'success' && steps\.identity_cleanup_verification\.outcome == 'success'\)/,
+  );
+  assert.match(
+    workflow,
     /cleanup_run66\) npm run acceptance:synthetic:recover-orphan/,
   );
   assert.match(workflow, /cleanup_run42\) run_id="ptf1c2-gh-37439551708-1"/);

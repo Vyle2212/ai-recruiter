@@ -196,6 +196,7 @@ jobs:
           node scripts/acceptanceMissingChatFixtureCleanup.test.cjs
           node scripts/acceptanceOriginalCvApprovalCleanupContract.test.cjs
           node scripts/acceptanceAbsentApprovalFixture.test.cjs
+          node scripts/acceptanceRun66FixtureRecovery.test.cjs
           node --import tsx scripts/searchV2AcceptanceLatencyContract.test.ts
 
       - name: Search authorization, cache scope, and candidate privacy

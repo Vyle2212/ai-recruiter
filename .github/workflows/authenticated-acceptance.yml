@@ -181,13 +181,15 @@ jobs:
         if: always() && steps.dependencies.outcome == 'success'
         run: npm run acceptance:report:initial
       - name: Clean identities and controlled mutations
+        id: identity_cleanup
         if: always() && env.ACCEPTANCE_IDENTITY_CLEANUP_ARMED == 'true'
         run: npm run acceptance:cleanup
       - name: Verify identity and mutation cleanup
+        id: identity_cleanup_verification
         if: always() && env.ACCEPTANCE_IDENTITY_CLEANUP_ARMED == 'true'
         run: npm run acceptance:cleanup:verify
       - name: Remove candidate search index, registry lease and candidate
-        if: always() && env.ACCEPTANCE_FIXTURE_CLEANUP_ARMED == 'true'
+        if: always() && env.ACCEPTANCE_FIXTURE_CLEANUP_ARMED == 'true' && (env.ACCEPTANCE_IDENTITY_CLEANUP_ARMED != 'true' || (steps.identity_cleanup.outcome == 'success' && steps.identity_cleanup_verification.outcome == 'success'))
         run: npm run acceptance:synthetic:remove
       - name: Verify zero per-run residue
         if: always() && env.ACCEPTANCE_FIXTURE_CLEANUP_ARMED == 'true'
@@ -266,6 +268,7 @@ jobs:
           node scripts/authenticatedAcceptanceOriginalCvCleanup.test.cjs
           node scripts/acceptanceMissingChatFixtureCleanup.test.cjs
           node scripts/acceptanceAbsentApprovalFixture.test.cjs
+          node scripts/acceptanceRun66FixtureRecovery.test.cjs
       - name: Bind only the failed run's synthetic namespace
         shell: bash
         run: |
@@ -287,13 +290,18 @@ jobs:
           } >> "$GITHUB_ENV"
       - name: Verify acceptance environment and database marker
         run: npm run acceptance:environment:verify
+      - name: Recover only run 66's validated orphan fixture lease
+        if: inputs.acceptance_scope == 'cleanup_run66'
+        run: npm exec -- tsx scripts/authenticatedAcceptanceSyntheticFixture.ts recover-run66-lease
       - name: Clean only the failed run's identities and mutations
+        id: identity_cleanup
         run: npm run acceptance:cleanup
       - name: Verify identity and mutation cleanup
+        id: identity_cleanup_verification
         if: always()
         run: npm run acceptance:cleanup:verify
       - name: Remove any remaining exact-run search fixture
-        if: always()
+        if: always() && steps.identity_cleanup.outcome == 'success' && steps.identity_cleanup_verification.outcome == 'success'
         shell: bash
         run: |
           case "${{ inputs.acceptance_scope }}" in
