@@ -24,9 +24,13 @@ import {
 import { verifyAcceptanceAuthConfirmation } from "../lib/acceptanceAuthConfirmation";
 import { acceptanceCleanupPlan } from "../lib/acceptanceCleanupPlan";
 import {
-  acceptanceRegistrationAuthIdentityOwned,
+  acceptanceCandidateRegistrationIntentPath,
+  acceptanceRegistrationIntentOwnsAuthUser,
+  parseAcceptanceCandidateRegistrationIntent,
+  type AcceptanceCandidateRegistrationIntent,
+} from "../lib/acceptanceCandidateRegistrationIntent";
+import {
   acceptanceRegistrationCandidateOwned,
-  acceptanceRegistrationFullName,
   acceptanceRegistrationProfileOwned,
 } from "../lib/acceptanceCandidateRegistrationOwnership";
 import { ACCEPTANCE_SYNTHETIC_CANDIDATE_ID } from "../lib/acceptanceSyntheticCandidateFixture";
@@ -160,6 +164,27 @@ async function readRunOwnedOriginalCvLedger(ledgerPath: string) {
     objectKeys.push((entry as { objectKey: string }).objectKey);
   }
   return objectKeys;
+}
+
+async function readCandidateRegistrationIntent(
+  intentPath: string,
+  runHash: string,
+  captureEmail?: string,
+): Promise<AcceptanceCandidateRegistrationIntent | null> {
+  let contents = "";
+  try {
+    contents = await readFile(intentPath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw new Error("acceptance_registration_intent_read_failed");
+  }
+  if (!captureEmail)
+    throw new Error("acceptance_registration_capture_email_missing");
+  return parseAcceptanceCandidateRegistrationIntent(
+    contents,
+    runHash,
+    captureEmail,
+  );
 }
 
 function mergeRunOwnedOriginalCvObjectKeys(
@@ -683,9 +708,16 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
   if (error) throw new Error("acceptance_entity_ledger_read_failed");
   const runHash = pseudonymousAcceptanceIdentifier(config.runId);
   const syntheticEmailSuffix = `+${runHash}@acceptance.invalid`;
-  const registrationFullName = acceptanceRegistrationFullName(runHash);
   const registrationCaptureEmail =
     process.env.ACCEPTANCE_REGISTRATION_CAPTURE_EMAIL;
+  const registrationIntentPath = acceptanceCandidateRegistrationIntentPath(
+    config.credentialBundlePath,
+  );
+  const registrationIntent = await readCandidateRegistrationIntent(
+    registrationIntentPath,
+    runHash,
+    registrationCaptureEmail,
+  );
   const syntheticOrganizationName = `PTF synthetic organization ${runHash}`;
   const syntheticClientOrganizationName = `PTF synthetic client organization ${runHash}`;
   const { data: discoveredProfiles, error: profileDiscoveryError } =
@@ -693,13 +725,16 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
       .from("user_profiles")
       .select("id,auth_user_id,email,full_name,role,status,candidate_id")
       .like("email", `%${syntheticEmailSuffix}`);
-  const {
-    data: discoveredRegistrationProfiles,
-    error: registrationProfileDiscoveryError,
-  } = await client
-    .from("user_profiles")
-    .select("id,auth_user_id,email,full_name,role,status,candidate_id")
-    .eq("full_name", registrationFullName);
+  let discoveredRegistrationProfiles: Record<string, unknown>[] = [];
+  let registrationProfileDiscoveryError: unknown = null;
+  if (registrationIntent) {
+    const result = await client
+      .from("user_profiles")
+      .select("id,auth_user_id,email,full_name,role,status,candidate_id")
+      .eq("full_name", registrationIntent.fullName);
+    discoveredRegistrationProfiles = result.data || [];
+    registrationProfileDiscoveryError = result.error;
+  }
   const { data: discoveredOrganizations, error: organizationDiscoveryError } =
     await client
       .from("organizations")
@@ -735,11 +770,8 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
         (user) =>
           (user.user_metadata?.synthetic === true &&
             user.user_metadata?.acceptance_run_hash === runHash) ||
-          acceptanceRegistrationAuthIdentityOwned(
-            user,
-            runHash,
-            registrationCaptureEmail,
-          ),
+          (registrationIntent &&
+            acceptanceRegistrationIntentOwnsAuthUser(registrationIntent, user)),
       )
       .map((user) => ({
         entity_type: "auth_user" as const,
@@ -994,6 +1026,16 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
     .from("user_profiles")
     .select("id", { count: "exact", head: true })
     .like("email", `%${syntheticEmailSuffix}`);
+  let registrationProfileResidue = 0;
+  let registrationProfileResidueError: unknown = null;
+  if (registrationIntent) {
+    const result = await client
+      .from("user_profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("full_name", registrationIntent.fullName);
+    registrationProfileResidue = result.count ?? -1;
+    registrationProfileResidueError = result.error;
+  }
   const { count: organizationResidue, error: organizationResidueError } =
     await client
       .from("organizations")
@@ -1003,14 +1045,18 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
     await client.auth.admin.listUsers({ page: 1, perPage: 1000 });
   if (
     profileResidueError ||
+    registrationProfileResidueError ||
     organizationResidueError ||
     authResidueError ||
     profileResidue !== 0 ||
+    registrationProfileResidue !== 0 ||
     organizationResidue !== 0 ||
     (remainingAuth.users || []).some(
       (user) =>
-        user.user_metadata?.synthetic === true &&
-        user.user_metadata?.acceptance_run_hash === runHash,
+        (user.user_metadata?.synthetic === true &&
+          user.user_metadata?.acceptance_run_hash === runHash) ||
+        (registrationIntent &&
+          acceptanceRegistrationIntentOwnsAuthUser(registrationIntent, user)),
     )
   )
     throw new Error("acceptance_identity_table_residue_detected");
@@ -1032,6 +1078,7 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
     .eq("run_id", config.runId);
   if (runError) throw new Error("acceptance_run_cleanup_status_failed");
   await unlink(config.credentialBundlePath).catch(() => undefined);
+  await unlink(registrationIntentPath).catch(() => undefined);
   return entities.length;
 }
 

@@ -185,6 +185,7 @@ jobs:
           if [ -n "${ACCEPTANCE_CREDENTIAL_BUNDLE_PATH:-}" ]; then
             rm -f -- "$ACCEPTANCE_CREDENTIAL_BUNDLE_PATH"
             rm -f -- "$ACCEPTANCE_CREDENTIAL_BUNDLE_PATH.original-cv-ledger.jsonl"
+            rm -f -- "$ACCEPTANCE_CREDENTIAL_BUNDLE_PATH.candidate-registration-intent.json"
           fi
       - name: Upload sanitized acceptance evidence
         if: always() && steps.dependencies.outcome == 'success'
