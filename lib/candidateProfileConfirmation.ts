@@ -1,4 +1,5 @@
 import type { Candidate360Profile } from "./candidate360Types";
+import { candidateLanguagesForStorage } from "./candidateLanguageEvidence";
 import { buildCandidateSearchIndexRow } from "./candidateSearchIndex";
 import {
   buildCandidateSelfConfirmSubmission,
@@ -144,7 +145,9 @@ export function buildCandidateProfileConfirmation(params: {
     projects: canonicalProjects(fields.projectExperience),
     education: canonicalEducation(fields.education),
     certifications: canonicalCertifications(fields.certifications),
-    languages: canonicalLanguages(fields.languages),
+    languages: candidateLanguagesForStorage(
+      canonicalLanguages(fields.languages),
+    ),
   };
   const projectedCandidate = {
     ...params.currentCandidate,

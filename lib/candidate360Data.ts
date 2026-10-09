@@ -8,6 +8,7 @@ import { redactCandidate360Contact } from "./candidate360ContactBoundary";
 
 import { buildCandidate360Profile } from "./candidate360Profile";
 import { normalizeActualCandidateSchema } from "./candidate360SchemaNormalize";
+import { candidateLanguageRecords } from "./candidateLanguageEvidence";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -463,12 +464,14 @@ function normalizeCandidate(rawCandidate: UnknownRecord): UnknownRecord {
     "industry",
   ]);
 
-  const languages = findArray(rawCandidate, [
-    "languageSkills",
-    "language_skills",
-    "languages",
-    "language",
-  ]);
+  const languages = candidateLanguageRecords(
+    deepFindValue(rawCandidate, [
+      "languageSkills",
+      "language_skills",
+      "languages",
+      "language",
+    ]),
+  );
 
   const certifications = findArray(rawCandidate, [
     "professionalCertifications",
