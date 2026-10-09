@@ -1,5 +1,7 @@
 import type { Candidate360Profile } from "./candidate360Types";
 import { candidateLanguagesForStorage } from "./candidateLanguageEvidence";
+import { careerMonthIndex } from "./candidateCareerExperience";
+import { careerDateIsCurrent } from "./careerDateEvidence";
 import { buildCandidateSearchIndexRow } from "./candidateSearchIndex";
 import {
   buildCandidateSelfConfirmSubmission,
@@ -41,6 +43,17 @@ function fieldText(value: unknown) {
   return text(value);
 }
 
+function confirmationDate(value: unknown) {
+  const source = fieldText(value);
+  // Keep ISO and year-only precision. Convert explicit month/year text without
+  // inventing a day or accepting invalid calendar dates.
+  if (!/^[A-Za-z]+[\s’'-]+\d{4}$/.test(source)) return source;
+  const month = careerMonthIndex(source);
+  return month === null
+    ? source
+    : `${Math.floor(month / 12)}-${String((month % 12) + 1).padStart(2, "0")}`;
+}
+
 function canonicalEmployment(value: unknown) {
   return rows(value).map((entry) => {
     const row = entry as Record<string, any>;
@@ -48,9 +61,9 @@ function canonicalEmployment(value: unknown) {
     return {
       employer: fieldText(row.employer ?? row.company),
       title: fieldText(row.title ?? row.role),
-      start_date: fieldText(row.start_date ?? row.startDate),
-      end_date: /^(?:current|present|now)$/i.test(end) ? null : end || null,
-      current: row.current === true || /^(?:current|present|now)$/i.test(end),
+      start_date: confirmationDate(row.start_date ?? row.startDate),
+      end_date: careerDateIsCurrent(end) ? null : confirmationDate(end) || null,
+      current: row.current === true || careerDateIsCurrent(end),
     };
   });
 }
@@ -63,9 +76,9 @@ function canonicalProjects(value: unknown) {
       project: fieldText(row.project ?? row.projectName ?? row.name),
       client: fieldText(row.client ?? row.customer) || null,
       role: fieldText(row.role ?? row.title),
-      start_date: fieldText(row.start_date ?? row.startDate),
-      end_date: /^(?:current|present|now)$/i.test(end) ? null : end || null,
-      current: row.current === true || /^(?:current|present|now)$/i.test(end),
+      start_date: confirmationDate(row.start_date ?? row.startDate),
+      end_date: careerDateIsCurrent(end) ? null : confirmationDate(end) || null,
+      current: row.current === true || careerDateIsCurrent(end),
     };
   });
 }
@@ -110,10 +123,19 @@ export function buildCandidateProfileConfirmation(params: {
   profile: Candidate360Profile;
   currentCandidate: Record<string, unknown>;
 }) {
+  const fields: Record<string, unknown> = {
+    ...params.submittedFields,
+    workExperience: JSON.stringify(
+      canonicalEmployment(params.submittedFields.workExperience),
+    ),
+    projectExperience: JSON.stringify(
+      canonicalProjects(params.submittedFields.projectExperience),
+    ),
+  };
   const submission = buildCandidateSelfConfirmSubmission(
     params.candidateId,
     {
-      ...params.submittedFields,
+      ...fields,
       confirmAccuracy: false,
       candidateConsent:
         (params.submittedFields.candidateConsent === true ||
@@ -130,7 +152,6 @@ export function buildCandidateProfileConfirmation(params: {
     return { accepted: false as const, submission, validation };
   }
 
-  const fields = params.submittedFields;
   const candidatePayload = {
     name: text(fields.displayName),
     email: text(fields.email) || null,

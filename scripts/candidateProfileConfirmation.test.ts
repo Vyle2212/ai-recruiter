@@ -64,6 +64,70 @@ const accepted = buildCandidateProfileConfirmation({
   currentCandidate: current,
 });
 assert.equal(accepted.accepted, true);
+const namedDates = buildCandidateProfileConfirmation({
+  candidateId: current.id,
+  profile,
+  currentCandidate: current,
+  submittedFields: {
+    ...fields,
+    workExperience: JSON.stringify([
+      {
+        employer: "Employer One",
+        title: "SAP FICO Consultant",
+        start_date: "Sept 2025",
+        end_date: "Present",
+        current: true,
+      },
+      {
+        employer: "Employer Two",
+        title: "SAP FICO Consultant",
+        start_date: "June 2024",
+        end_date: "September 2025",
+        current: false,
+      },
+      {
+        employer: "Employer Three",
+        title: "SAP FICO Consultant",
+        start_date: "June 2024",
+        end_date: "August 2025",
+      },
+      {
+        employer: "Employer Four",
+        title: "SAP FICO Consultant",
+        start_date: "Feb 2022",
+        end_date: "June 2023",
+      },
+      {
+        employer: "Employer Five",
+        title: "SAP FICO Consultant",
+        start_date: "August 2018",
+        end_date: "February 2022",
+      },
+    ]),
+    projectExperience: JSON.stringify([
+      {
+        project: "SAP Rollout",
+        client: "Client One",
+        role: "SAP FI Consultant",
+        start_date: "",
+        end_date: "",
+        current: false,
+      },
+    ]),
+  },
+});
+assert.equal(
+  namedDates.accepted,
+  true,
+  "parser month names and Present must be confirmable without manual date edits",
+);
+if (namedDates.accepted) {
+  assert.equal(namedDates.candidatePayload.experience[0].start_date, "2025-09");
+  assert.equal(namedDates.candidatePayload.experience[0].end_date, null);
+  assert.equal(namedDates.candidatePayload.experience[1].end_date, "2025-09");
+  assert.equal(namedDates.candidatePayload.projects[0].start_date, "");
+  assert.equal(namedDates.candidatePayload.projects[0].end_date, null);
+}
 if (accepted.accepted) {
   assert.equal(
     accepted.candidatePayload.experience[0].employer,
@@ -116,7 +180,7 @@ for (const [label, patch] of [
         {
           employer: "Employer One",
           title: "Consultant",
-          start_date: "May 2022",
+          start_date: "May 202222",
           current: true,
         },
       ]),
