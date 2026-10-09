@@ -158,6 +158,7 @@ jobs:
           node --import tsx scripts/candidateRegistrationOwnership.test.ts
           node --import tsx scripts/acceptanceCandidateRegistrationOwnership.test.ts
           node --import tsx scripts/acceptanceCandidateRegistrationIntent.test.ts
+          node --import tsx scripts/acceptanceCandidateRegistrationEmail.test.ts
           node --import tsx scripts/candidateRegistrationProvisionContract.test.ts
           node --import tsx scripts/chatAuthorizationCore.test.ts
           node --import tsx scripts/candidateChatConsentBoundary.test.ts
