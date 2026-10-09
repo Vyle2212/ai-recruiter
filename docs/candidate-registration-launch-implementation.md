@@ -1,12 +1,16 @@
 # Candidate registration implementation and launch evidence
 
-Status: implementation required; not a launch approval.
+Status: registration implemented behind OFF gates; live email onboarding unverified.
 
-## Observed gaps
+## Implemented boundaries
 
-At PR #7 commit 3e9d961d8e9aba73e181a2dc9ea09b9ae6dae348, /auth/signup renders a DisabledForm.
-No public signUp call exists under app, lib or utils. The staging runtime
-supports sign-in, reset, invitation and session operations, not registration.
+The candidate-only signup UI, bounded POST registration handler, isolated
+public-key SSR signup and PKCE callback are implemented. Registration remains
+disabled by default. Signup releases only the verifier cookie after a neutral
+pending result; callback releases session cookies only after fresh verified
+Auth and successful ownership provisioning. Installed SSR tests use mocked
+transport and prove verifier continuity and tampered-verifier denial. They do
+not prove email delivery or a live public signup.
 Candidate upload requires a fresh verified Auth user, exactly one active
 candidate user_profile, one matching active candidate_account and an existing
 candidate record. Creating an Auth user alone does not satisfy onboarding.
@@ -14,7 +18,7 @@ candidate record. Creating an Auth user alone does not satisfy onboarding.
 Run #65 proves an owned administrative Auth transition and preconfirmation
 chat denial, not public signup or email delivery.
 
-## Required implementation order
+## Ownership and onboarding requirements
 
 1. Add candidate-only registration behind a separate explicit registration
    runtime gate. Keep portal gates off while implementing and testing.
@@ -55,9 +59,43 @@ Track Auth creation before subsequent writes so failure cleanup can find it.
 - Consent and subscription chat gates plus original-CV approval gates.
 - Cleanup of captured mail, sessions, Auth and all run-owned records; zero residue.
 
-Email capture/configuration and any new ownership transaction need explicit
-acceptance configuration and platform review. Existing SQL003/004/005/006
-must not be repeated or modified to bypass this requirement.
+SQL007 has been applied and verified on acceptance project
+`iujucosewivndjpcjbuz`. SQL003 through SQL007 must never be reapplied. New schema
+changes require their own exact review; signup approval does not authorize
+production changes.
+
+## Configuration handoff before live signup
+
+Keep registration OFF until these acceptance-only values are reviewed:
+
+- `CANDIDATE_REGISTRATION_SUPABASE_PROJECT_REF` must identify the acceptance
+  project and match the configured Supabase origin exactly.
+- Configure the reviewed registration callback origin and allow its exact
+  `/auth/candidate/callback` redirect in acceptance Auth. Require email
+  confirmation; an immediate signup session is rejected by the handler.
+- Configure the acceptance Turnstile site key and matching Auth CAPTCHA
+  provider secret through safe secret entry. Never substitute a production
+  key or disable CAPTCHA to make a test pass.
+- Configure `ACCEPTANCE_REGISTRATION_CAPTURE_EMAIL` to an owned capture
+  mailbox and a reviewed provider adapter. The adapter must query only the
+  run-owned alias, preserve envelope recipients and receipt time, and support
+  bounded capture plus deletion of the captured message. No real mailbox,
+  provider token or confirmation URL belongs in source or workflow artifacts.
+- Persist the exact run intent before signup and record the discovered Auth
+  identity before subsequent writes. Editable Auth metadata alone is not
+  deletion authority. Partial signup failure still requires owned cleanup.
+
+The capture contracts validate exactly one recent message and an exact
+Supabase signup confirmation URL. Provider failures and timeouts are
+sanitized. A live provider adapter and delivery evidence remain outstanding.
+These mocked contracts do not justify enabling registration.
+
+After reviewed configuration, enable registration only on acceptance,
+deploy the dynamic PR HEAD through the approved path, and require exact
+Production READY plus fresh release SHA/build/classification/configuration
+proof. Then dispatch one materially new protected workflow on the allowlisted
+branch and wait for Vy's Environment review. Do not spend protected runs for
+OFF preparation, rerun run65, or treat a READY Preview as acceptance proof.
 
 ## Launch sequence
 
