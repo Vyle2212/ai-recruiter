@@ -163,6 +163,7 @@ jobs:
           node --import tsx scripts/acceptanceCandidateRegistrationEmailCapture.test.ts
           node --import tsx scripts/acceptanceCandidateRegistrationEmailCleanup.test.ts
           node --import tsx scripts/acceptanceCandidateRegistrationGmail.test.ts
+          node scripts/acceptanceGmailCredentialsPreflight.test.mjs
           node --import tsx scripts/candidateRegistrationProvisionContract.test.ts
           node --import tsx scripts/chatAuthorizationCore.test.ts
           node --import tsx scripts/candidateChatConsentBoundary.test.ts
