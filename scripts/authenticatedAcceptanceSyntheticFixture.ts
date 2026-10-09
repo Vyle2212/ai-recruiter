@@ -204,15 +204,22 @@ async function recoverRun66FixtureLease(
       error ||
       !rows ||
       rows.length !== expectedCount ||
-      rows.some(
-        (row) =>
+      rows.some((row) => {
+        const recordedAt =
+          timeField === "updated_at" && "updated_at" in row
+            ? row.updated_at
+            : timeField === "changed_at" && "changed_at" in row
+              ? row.changed_at
+              : undefined;
+        const timestamp = Date.parse(String(recordedAt));
+        return (
           row.candidate_id !== ACCEPTANCE_SYNTHETIC_CANDIDATE_ID ||
           !profileIds.has(String(row.user_profile_id)) ||
-          !Number.isFinite(Date.parse(String(row[timeField]))) ||
-          Date.parse(String(row[timeField])) < Date.parse(run.created_at) ||
-          Date.parse(String(row[timeField])) >
-            Date.parse("2026-10-09T13:55:24Z"),
-      )
+          !Number.isFinite(timestamp) ||
+          timestamp < Date.parse(run.created_at) ||
+          timestamp > Date.parse("2026-10-09T13:55:24Z")
+        );
+      })
     )
       throw new Error("acceptance_run66_recovery_consent_scope_invalid");
   }
