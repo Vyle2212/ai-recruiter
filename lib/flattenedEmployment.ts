@@ -724,12 +724,15 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
     // All three fields must be adjacent; dates in an intervening project are
     // never used to complete a partial employment form.
     const formCompany =
-      "(?:(?!\\b(?:COMPANY|POSITION|DURATION)\\b)[^:;|]){2,120}?";
-    const formRole = "(?:(?!\\b(?:COMPANY|POSITION|DURATION)\\b)[^:;]){2,160}?";
+      "(?:(?!\\b(?:COMPANY|LOCATION|POSITION|DESIGNATION|DURATION)\\b)[^:;|]){2,120}?";
+    const formLocation =
+      "(?:(?!\\b(?:COMPANY|LOCATION|POSITION|DESIGNATION|DURATION)\\b)[^:;|]){1,80}?";
+    const formRole =
+      "(?:(?!\\b(?:COMPANY|LOCATION|POSITION|DESIGNATION|DURATION)\\b)[^:;]){2,160}?";
     const forms = [
       ...fullSection.matchAll(
         new RegExp(
-          `\\bCOMPANY\\s+(${formCompany})\\s+POSITION\\s+(${formRole})\\s+DURATION\\s+${range}(?=\\s|[.;)]|$)`,
+          `\\bCOMPANY\\s+(${formCompany})(?:\\s+LOCATION\\s+(${formLocation}))?\\s+(?:POSITION|DESIGNATION)\\s+(${formRole})\\s+DURATION\\s+${range}(?=\\s|[.;)]|$)`,
           "gi",
         ),
       ),
@@ -744,7 +747,7 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
       for (const m of forms) {
         if (
           !/^COMPANY\s/.test(m[0]) ||
-          !/\sPOSITION\s/.test(m[0]) ||
+          !/\s(?:POSITION|DESIGNATION)\s/.test(m[0]) ||
           !/\sDURATION\s/.test(m[0])
         )
           continue;
@@ -754,7 +757,14 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
           )
         )
           continue;
-        add(m[1], m[2], m[3], m[4], m[0], "labelled-employment-form", true);
+        if (
+          m[2] &&
+          (forbidden.test(m[2]) ||
+            new RegExp(date, "i").test(m[2]) ||
+            new RegExp(`\\b${job}\\b`, "i").test(m[2]))
+        )
+          continue;
+        add(m[1], m[3], m[4], m[5], m[0], "labelled-employment-form", true);
       }
     }
     // Current/Previous Employment explicitly introduces Company, Position and
@@ -1223,10 +1233,11 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
       },
       {
         re: new RegExp(
-          `^COMPANY\\s+(${company})\\s+POSITION\\s+([^:;]{2,110}?)\\s+DURATION\\s+${range}(?=\\s|[.;]|$)`,
+          `^COMPANY\\s+(${company})(?:\\s+LOCATION\\s+([^:;|]{1,80}?))?\\s+(?:POSITION|DESIGNATION)\\s+([^:;]{2,110}?)\\s+DURATION\\s+${range}(?=\\s|[.;]|$)`,
           "i",
         ),
-        f: [1, 2, 3, 4],
+        f: [1, 3, 4, 5],
+        location: 2,
       },
     ];
     for (const { re, f, location } of fieldHeadings) {
@@ -1242,7 +1253,8 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
         !(
           location &&
           (forbidden.test(m[location] || "") ||
-            new RegExp(date, "i").test(m[location] || ""))
+            new RegExp(date, "i").test(m[location] || "") ||
+            new RegExp(`\\b${job}\\b`, "i").test(m[location] || ""))
         )
       )
         add(m[f[0]], m[f[1]], m[f[2]], m[f[3]], m[0], "bounded-heading-fields");

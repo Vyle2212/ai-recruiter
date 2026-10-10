@@ -107,6 +107,11 @@ const headingFields = [
     "REGIONAL MASTER DATA CONTROLLER",
   ],
   [
+    "Employment History COMPANY Example Technologies Ltd. LOCATION Example City POSITION Associate SAP Consultant DURATION April 4th 2012 - May 29th 2015 Key Learning: Supported reporting.",
+    "Example Technologies Ltd.",
+    "Associate SAP Consultant",
+  ],
+  [
     "Employment History Example Systems Ltd Position: SAP Consultant (Jan 2020 – Dec 2021) Job Functions: Delivery.",
     "Example Systems Ltd",
     "SAP Consultant",
@@ -127,6 +132,41 @@ for (const [text, company, title] of headingFields) {
   assert.equal(rows.length, 1, text);
   assert.deepEqual([rows[0].company, rows[0].title], [company, title]);
 }
+const standaloneLabelTable = `EMPLOYMENT HISTORY:
+Company
+Example Technologies Ltd.
+Location
+Example City
+Designation
+Associate SAP Consultant
+Duration
+April 4th 2012 - May 29th 2015
+Key Learning
+Supported a reporting platform.
+PROJECT EXPERIENCE
+Company
+Synthetic Customer Ltd
+Position
+SAP Consultant
+Duration
+June 2014 - July 2014`;
+assert.deepEqual(
+  extractCanonicalEmploymentFromResume(standaloneLabelTable).map((item) => [
+    item.company,
+    item.title,
+    item.start,
+    item.end,
+  ]),
+  [
+    [
+      "Example Technologies Ltd.",
+      "Associate SAP Consultant",
+      "4 April 2012",
+      "29 May 2015",
+    ],
+  ],
+  "a Location field cannot be appended to an explicitly labelled employer",
+);
 const numbered =
   "Employment History I1 7 Example Systems Sdn Bhd Metro City Position: SAP Consultant (Jan 2022 – Present) Job Functions: Delivery. Employment History II Example Labs Ltd Harbor City Position: SAP Analyst (Jan 2020 – Dec 2021) Responsibilities: Delivery.";
 assert.deepEqual(
@@ -156,6 +196,8 @@ const headingNegatives = [
   "Employment History Example Systems Ltd Position: SAP Consultant (Jan 2020) Job Functions: Delivery. Project: Rollout Duration: Jan 2020 – Present",
   "Employment History COMPANY Example Systems POSITION SAP Consultant DURATION Jan 2022 – Dec 2021",
   "Employment History COMPANY Example Systems POSITION SAP Consultant DURATION Jan 2020 – Jan 20200",
+  "Employment History COMPANY Example Technologies Ltd LOCATION SAP Manager DESIGNATION Associate SAP Consultant DURATION April 2012 - May 2015",
+  "Employment History COMPANY Synthetic Client Ltd LOCATION Example City POSITION SAP Consultant DURATION April 2012 - May 2015",
   "Employment History Example Systems Ltd 31 April 2020 – Dec 2021 SAP Consultant Responsibilities: Delivery.",
   "Employment History Example Systems Ltd Jan 2020 – Dec 2021 Worked as a consultant",
   "Employment History Jan 2025 - Present | Example Client (Contracting)",
