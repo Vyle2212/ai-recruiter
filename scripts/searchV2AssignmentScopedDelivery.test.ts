@@ -690,4 +690,83 @@ assert.doesNotMatch(
   /profile\?\.displayName\.value \|\| candidate\.candidateName/,
 );
 
+// FI and CO are members of the FICO search family when the assignment itself
+// says SAP FI/CO. Never borrow a module from another project or profile skill.
+const fiCoFamily = candidate("fi-co-family", "SAP FICO Consultant", [
+  project(
+    "fi-rollout",
+    "SAP Rollout",
+    "SAP FI Consultant & Data Conversion",
+    [],
+  ),
+  project(
+    "fi-ams",
+    "Application Managed Services (AMS)",
+    "SAP FI Consultant",
+    [],
+  ),
+  project(
+    "fi-brownfield",
+    "SAP Brownfield and System Integration",
+    "Expert, IT SAP FI",
+    [],
+  ),
+  project("co-implementation", "SAP Implementation", "SAP CO Consultant", []),
+  project("hcm-implementation", "SAP Implementation", "SAP HCM Consultant", []),
+  project(
+    "unscoped-migration",
+    "SAP Transformation",
+    "Data Migration Lead",
+    [],
+  ),
+]);
+const familyDelivery = targetModuleDeliveryEvidence(fiCoFamily, "FICO");
+assert.equal(familyDelivery.directTargetAssignments.length, 4);
+assert.equal(familyDelivery.unsupportedAssignments.length, 2);
+const familyCriterion = {
+  id: "criterion:depth:fico",
+  label: "Demonstrated SAP FICO delivery depth",
+  conceptId: "FICO",
+  importance: "important" as const,
+  source: "ai_suggestion" as const,
+};
+assert.equal(
+  evaluateSearchCriteria(fiCoFamily, [familyCriterion]).scorePercent,
+  100,
+);
+const familySearch = searchCandidatesV2([fiCoFamily], {
+  query: "SAP FICO",
+  criteria: [familyCriterion],
+  minimumScore: 50,
+});
+assert.equal(
+  familySearch.results.length,
+  1,
+  "direct SAP FI/CO delivery remains visible under Relevant",
+);
+assert.ok(familySearch.results[0].overallMatchScore! >= 70);
+for (const [id, role, responsibility] of [
+  [
+    "fi-security",
+    "SAP Security Consultant",
+    "Maintain SAP FI authorization roles",
+  ],
+  [
+    "fi-touchpoint",
+    "SAP MM Consultant",
+    "Implement MM integration with SAP FI",
+  ],
+  ["bare-fi", "FI Consultant", "Generic Implementation"],
+]) {
+  const unrelated = candidate(id, "SAP FICO Consultant", [
+    project(id, "Implementation", role, [responsibility]),
+  ]);
+  assert.equal(
+    targetModuleDeliveryEvidence(unrelated, "FICO").directTargetAssignments
+      .length,
+    0,
+    id,
+  );
+}
+
 console.log("Search V2 assignment-scoped module delivery tests passed.");
