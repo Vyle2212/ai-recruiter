@@ -710,10 +710,17 @@ export default function CandidatePortalClient({
                           ))}
                         </select>
                         <p className="text-xs text-slate-400">
-                          Choose a module to add it, or edit the SAP modules
-                          field above. Keep only modules you have worked with.
+                          SAP specializations, e.g. FI, CO, MM or SD. Choose a
+                          module to add it, or type in the field above.
                         </p>
                       </div>
+                    ) : null}
+                    {name === "techSkills" ? (
+                      <p className="mt-2 text-xs text-slate-400">
+                        Technical and functional skills, e.g. ABAP, SQL, Fiori,
+                        integration or data migration. SAP modules may also
+                        appear here when extracted from your CV.
+                      </p>
                     ) : null}
                   </label>
                 ))}

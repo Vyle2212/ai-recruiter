@@ -40,7 +40,7 @@ export default function CandidateDateEditor({
               );
           }}
         >
-          <option value="">Month / year only</option>
+          <option value="">Month</option>
           {candidateMonths.map((m, i) => (
             <option key={m} value={String(i + 1).padStart(2, "0")}>
               {m}

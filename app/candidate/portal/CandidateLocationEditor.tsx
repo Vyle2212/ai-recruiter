@@ -23,25 +23,22 @@ export default function CandidateLocationEditor({
     <div className="grid gap-3 md:col-span-2 md:grid-cols-2">
       <label className="text-sm">
         Country <span className="text-amber-200">*</span>
-        <select
-          aria-required
-          className={
+        <CandidateFieldPicker
+          required
+          allowCustom={false}
+          inputClass={
             location.country
               ? inputClass
               : inputClass.replace("border-slate-700", "border-amber-400")
           }
           value={location.country}
-          onChange={(event) =>
-            onChange(joinCandidateLocation("", event.target.value))
-          }
-        >
-          <option value="">Select country</option>
-          {candidateCountries.map((item) => (
-            <option key={item.code} value={item.name}>
-              {item.name}
-            </option>
-          ))}
-        </select>
+          options={candidateCountries.map((item) => item.name)}
+          placeholder="Country"
+          onChange={(country) => {
+            if (country !== location.country)
+              onChange(joinCandidateLocation("", country));
+          }}
+        />
       </label>
       <label className="text-sm">
         City <span className="text-xs text-slate-400">Optional</span>
