@@ -248,6 +248,33 @@ export function evaluateCandidateProfileCompletion(
   const missing = REQUIRED_CORE_FIELDS.filter(
     ([, aliases]) => !present(candidate, aliases),
   ).map(([name]) => name);
+  if (
+    options.requireCandidateConfirmation &&
+    !/^\+[1-9]\d{6,14}$/.test(clean(candidate.phone).replace(/[ ()\-.]/g, ""))
+  )
+    missing.push("phone");
+  if (
+    options.requireCandidateConfirmation &&
+    candidate.is_sap_profile === true
+  ) {
+    const projects = list(
+      candidate.projects ||
+        candidate.project_history ||
+        candidate.projectHistory,
+    );
+    if (
+      !projects.length ||
+      !projects.every((item) => {
+        const row = item as Record<string, unknown>;
+        return Boolean(
+          rowText(row, "client", "customer") &&
+            rowText(row, "start_date", "startDate") &&
+            isValidProjectEntry(row),
+        );
+      })
+    )
+      missing.push("project_details");
+  }
   if (!validEmployment(candidate.experience || candidate.employment))
     missing.push("employment_history");
   const sapProfile =

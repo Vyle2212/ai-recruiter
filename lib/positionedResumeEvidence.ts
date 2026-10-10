@@ -221,7 +221,7 @@ export function positionedResumeSections(text: string) {
       return [];
     const proficiency =
       languageLines[index + 1]?.match(
-        /(?:Reading,\s*Speaking,\s*and\s*Writing\s*:\s*)?(Native|Fluent|Advanced|Intermediate|Basic)\s*$/i,
+        /(?:Reading,\s*Speaking,\s*and\s*Writing\s*:\s*)?(Native|Fluent|Advanced|Intermediate|Basic|(?:JLPT\s*)?N[1-5]|HSK\s*[1-9]|TOPIK\s*[1-6]|CEFR\s*[ABC][12]|IELTS\s*\d(?:\.\d)?)\s*$/i,
       )?.[1] || "";
     return [{ language: line, proficiency }];
   });
@@ -295,13 +295,28 @@ export function embeddedSapEmploymentProjects(text: string) {
       const name = match[0].trim();
       if (seen.has(name.toLowerCase())) continue;
       seen.add(name.toLowerCase());
+      const dates = projectDateRange(sentence);
+      const current =
+        projectDateIsCurrent(dates?.[2]) ||
+        /\b(?:currently (?:leading|delivering|implementing)|ongoing project)\b/i.test(
+          sentence,
+        );
+      const client =
+        sentence.match(/\b(?:client|customer)\s*:\s*([^,;.]+)/i)?.[1]?.trim() ||
+        sentence
+          .match(
+            /\bfor (?:a |the )?(Tier-\d+ [^,;.]+? (?:organisation|organization|company|client))\b/i,
+          )?.[1]
+          ?.trim() ||
+        "";
       records.push({
         name,
         employer: owner.employer,
-        client: "",
+        client,
         role: owner.title,
-        start_date: "",
-        end_date: "",
+        start_date: dates?.[1] || "",
+        end_date: current ? "" : dates?.[2] || "",
+        current,
         description: sentence,
         evidence_source: "employment_narrative",
         evidence_confidence: 0.8,

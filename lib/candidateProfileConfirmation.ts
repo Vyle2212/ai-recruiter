@@ -74,6 +74,9 @@ function canonicalProjects(value: unknown) {
     return {
       project: fieldText(row.project ?? row.projectName ?? row.name),
       client: fieldText(row.client ?? row.customer) || null,
+      employer: fieldText(row.employer),
+      description: fieldText(row.description),
+      project_type: fieldText(row.project_type ?? row.projectType),
       role: fieldText(row.role ?? row.title),
       start_date: confirmationDate(row.start_date ?? row.startDate),
       end_date: careerDateIsCurrent(end) ? null : confirmationDate(end) || null,
@@ -154,7 +157,7 @@ export function buildCandidateProfileConfirmation(params: {
   const candidatePayload = {
     name: text(fields.displayName),
     email: text(fields.email) || null,
-    phone: text(fields.phone) || null,
+    phone: text(fields.phone).replace(/[ ()\-.]/g, "") || null,
     current_title: text(fields.currentTitle),
     current_company: text(fields.currentCompany),
     location: text(fields.location),

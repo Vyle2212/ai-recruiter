@@ -26,6 +26,7 @@ const INTERNAL = new Set([
 ]);
 export const CANDIDATE_SELF_CONFIRM_REQUIRED_FIELDS = [
   "displayName",
+  "phone",
   "currentTitle",
   "currentCompany",
   "location",
@@ -137,15 +138,18 @@ function completeDatedRow(
   );
 }
 function completeProjectRow(row: Record<string, any>) {
-  const identity = Boolean(rowValue(row, "name", "project", "client"));
+  const identity = Boolean(rowValue(row, "client", "customer"));
   const role = Boolean(rowValue(row, "role", "title"));
   const start = rowValue(row, "startDate", "start_date");
   const end = rowValue(row, "endDate", "end_date");
-  if (!identity || !role) return false;
-  if (!start) return !end && row.current !== true;
+  if (!identity || !role || !start) return false;
   return completeDatedRow(row, identity, role);
 }
 function structuredRequirementReason(fieldName: string, value: unknown) {
+  if (fieldName === "phone")
+    return /^\+[1-9]\d{6,14}$/.test(text(value).replace(/[ ()\-.]/g, ""))
+      ? ""
+      : "Phone with a country calling code is required (for example +6591234567).";
   if (fieldName === "sapModules" || fieldName === "techSkills")
     return text(value)
       .split(/[,;|]+/)
@@ -177,7 +181,7 @@ function structuredRequirementReason(fieldName: string, value: unknown) {
       });
     return valid
       ? ""
-      : "Every SAP project needs project/client and role. Dates may both be blank; if supplied, they must form a valid ISO range or an explicit Current period.";
+      : "Every SAP project needs client, role, start date and an end date or Current. Missing source details must be supplied before confirmation; do not copy employment dates.";
   }
   if (fieldName === "education") {
     const valid =

@@ -1,5 +1,5 @@
 "use client";
-import { useId } from "react";
+import CandidateFieldPicker from "./CandidateFieldPicker";
 import {
   candidateCountries,
   candidateCitySuggestions,
@@ -15,7 +15,6 @@ export default function CandidateLocationEditor({
   onChange: (value: string) => void;
   inputClass: string;
 }) {
-  const id = useId();
   const location = splitCandidateLocation(value);
   const code =
     candidateCountries.find((item) => item.name === location.country)?.code ||
@@ -46,22 +45,15 @@ export default function CandidateLocationEditor({
       </label>
       <label className="text-sm">
         City <span className="text-xs text-slate-400">Optional</span>
-        <input
-          className={inputClass}
+        <CandidateFieldPicker
+          inputClass={inputClass}
           value={location.city}
-          list={id}
-          placeholder="Choose or type your city"
-          onChange={(event) =>
-            onChange(
-              joinCandidateLocation(event.target.value, location.country),
-            )
+          options={candidateCitySuggestions[code] || []}
+          placeholder="City"
+          onChange={(city) =>
+            onChange(joinCandidateLocation(city, location.country))
           }
         />
-        <datalist id={id}>
-          {(candidateCitySuggestions[code] || []).map((city) => (
-            <option key={city} value={city} />
-          ))}
-        </datalist>
       </label>
       <p className="text-xs text-slate-400 md:col-span-2">
         Choose where you currently live. Changing country clears the city; you

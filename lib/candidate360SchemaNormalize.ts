@@ -3220,7 +3220,9 @@ function normalizeProjects(
       [item],
       ["start_date", "startDate", "from", "start"],
     );
-    const end = firstText([item], ["end_date", "endDate", "to", "end"]);
+    const explicitEnd = firstText([item], ["end_date", "endDate", "to", "end"]);
+    const currentFlag = unwrap(firstValue([item], ["current", "isCurrent", "is_current"]));
+    const end = explicitEnd || (currentFlag === true || /^(?:true|yes|1)$/i.test(clean(currentFlag)) ? "Current" : "");
     return withProjectEvidence(
       {
         id: firstText([item], ["id", "project_id"]) || `project-${index + 1}`,

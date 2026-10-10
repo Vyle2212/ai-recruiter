@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import {
+  contactHeaderPhone,
+  candidateLanguageLevels,
+  candidateDateParts,
+  sapProjectTypeEvidence,
+} from "../lib/candidatePortalEditEvidence";
 import { buildCandidatePortalAudit } from "./auditCandidatePortal";
 import {
   candidateCountries,
@@ -29,6 +35,36 @@ async function main() {
     "Unrecognised location text",
   );
   assert.equal(splitCandidateLocation("HCMC, Vietnam").country, "Vietnam");
+  assert.equal(
+    contactHeaderPhone(
+      "Aruna\n+61 435189635 | email@example.invalid\nPROFILE SUMMARY\nFinance",
+    ),
+    "+61435189635",
+  );
+  assert.equal(
+    contactHeaderPhone(
+      "Aruna\nPROFILE SUMMARY\nA project had phone +6591234567",
+    ),
+    undefined,
+    "A number in project text must not become contact",
+  );
+  assert.equal(
+    contactHeaderPhone("Aruna\n+6591234567 | +84912345678\nPROFILE SUMMARY"),
+    undefined,
+    "Ambiguous phones require candidate choice",
+  );
+  assert.ok(candidateLanguageLevels("Japanese").includes("JLPT N2"));
+  assert.ok(!candidateLanguageLevels("French").includes("JLPT N2"));
+  assert.ok(candidateLanguageLevels("Korean").includes("TOPIK 6"));
+  assert.deepEqual(candidateDateParts("1998"), { year: "1998", month: "" });
+  assert.deepEqual(candidateDateParts("September 2025"), {
+    year: "2025",
+    month: "09",
+  });
+  assert.equal(
+    sapProjectTypeEvidence("SAP BPC implementation with post-go-live support"),
+    "Implementation, Support",
+  );
   const audit = await buildCandidatePortalAudit();
   assert.equal(audit.ownershipResolvedServerSide, true);
   assert.equal(audit.arbitraryCandidateIdInputRemoved, true);

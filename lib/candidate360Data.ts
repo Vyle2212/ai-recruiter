@@ -8,6 +8,7 @@ import { redactCandidate360Contact } from "./candidate360ContactBoundary";
 
 import { buildCandidate360Profile } from "./candidate360Profile";
 import { normalizeActualCandidateSchema } from "./candidate360SchemaNormalize";
+import { contactHeaderPhone } from "./candidatePortalEditEvidence";
 import { candidateLanguageRecords } from "./candidateLanguageEvidence";
 
 type UnknownRecord = Record<string, unknown>;
@@ -661,6 +662,7 @@ export type Candidate360LoadTimings = {
 async function loadCandidate360ProfileInternal(
   candidateId: string,
   stageTimings: Candidate360LoadTimings | undefined,
+  ownerContactSuggestions = false,
 ) {
   const totalStartedAt = performance.now();
   const supabase = createCandidateSupabaseAdminClient();
@@ -752,6 +754,14 @@ async function loadCandidate360ProfileInternal(
   );
   const result = {
     ...profile,
+    ...(ownerContactSuggestions
+      ? {
+          cvPhoneSuggestion:
+            contactHeaderPhone(
+              String(data.raw_text || data.resume_text || ""),
+            ) || "",
+        }
+      : {}),
     sourceResumeAvailable: [data.resume_text, data.raw_text, data.raw_cv].some(
       (value) => typeof value === "string" && value.trim().length > 0,
     ),
@@ -794,5 +804,5 @@ export function loadCandidate360ProfileForOwner(
   candidateId: string,
   stageTimings?: Candidate360LoadTimings,
 ) {
-  return loadCandidate360ProfileInternal(candidateId, stageTimings);
+  return loadCandidate360ProfileInternal(candidateId, stageTimings, true);
 }

@@ -1,3 +1,7 @@
+import {
+  contactHeaderPhone,
+  sapProjectTypeEvidence,
+} from "./candidatePortalEditEvidence";
 import { extractFullCandidateProfile } from "./fullCandidateExtractionEngine";
 import { normalizeActualCandidateSchema } from "./candidate360SchemaNormalize";
 import { isValidProjectEntry } from "./candidateProfileIngestion";
@@ -292,9 +296,28 @@ function explicitLanguages(rawText: string) {
     "French",
     "Spanish",
   ];
-  return known.filter((language) =>
-    new RegExp(`\\b${language.replace(/\s+/g, "\\s+")}\\b`, "i").test(section),
-  );
+  const anchors = known
+    .flatMap((language) => {
+      const match = new RegExp(
+        `\\b${language.replace(/\s+/g, "\\s+")}\\b`,
+        "i",
+      ).exec(section);
+      return match
+        ? [{ language, index: match.index, end: match.index + match[0].length }]
+        : [];
+    })
+    .sort((a, b) => a.index - b.index);
+  return anchors.map((anchor, index) => {
+    const bounded = section.slice(
+      anchor.end,
+      anchors[index + 1]?.index ?? section.length,
+    );
+    const proficiency =
+      bounded.match(
+        /\b(?:JLPT\s*N[1-5]|N[1-5]|HSK\s*[1-9]|TOPIK\s*[1-6]|(?:CEFR\s*)?[ABC][12]|IELTS\s*\d(?:\.\d)?|Native|Fluent|Advanced|Intermediate|Basic|Professional)\b/i,
+      )?.[0] || "";
+    return { language: anchor.language, proficiency };
+  });
 }
 
 function explicitProjectRecords(rawText: string) {
@@ -784,6 +807,7 @@ export function enrichCandidateUpload(
       description: clean(item.description),
       start_date: clean(item.startDate),
       end_date: clean(item.endDate),
+      current: item.current === true || projectDateIsCurrent(item.endDate),
       project_type: clean(item.projectType),
     }),
   );
@@ -840,7 +864,8 @@ export function enrichCandidateUpload(
         ? full.extractedFullName
         : candidate.name),
     email: full.extractedEmail || candidate.email,
-    phone: full.extractedPhone || candidate.phone,
+    phone:
+      contactHeaderPhone(rawText) || full.extractedPhone || candidate.phone,
     linkedin_url: full.linkedInUrl || candidate.linkedin_url,
     location:
       explicitContactLocation(rawText) ||
@@ -874,8 +899,26 @@ export function enrichCandidateUpload(
     skills,
     experience,
     employment_history: experience,
-    projects,
-    project_history: projects,
+    projects: projects.map(
+      (row): Record<string, any> => ({
+        ...row,
+        project_type:
+          clean(row.project_type) ||
+          sapProjectTypeEvidence(
+            `${clean(row.name)} ${clean(row.description)}`,
+          ),
+      }),
+    ),
+    project_history: projects.map(
+      (row): Record<string, any> => ({
+        ...row,
+        project_type:
+          clean(row.project_type) ||
+          sapProjectTypeEvidence(
+            `${clean(row.name)} ${clean(row.description)}`,
+          ),
+      }),
+    ),
     project_types: unique([
       ...(candidate.project_types || []),
       ...(full.projectTypes || []),

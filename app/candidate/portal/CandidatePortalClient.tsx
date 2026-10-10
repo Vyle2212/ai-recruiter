@@ -4,6 +4,13 @@ import { createClient } from "@supabase/supabase-js";
 import { useCallback, useEffect, useId, useState } from "react";
 import { finalizePossiblyCompletedSignedCvUpload } from "@/lib/signedCvUploadFinalization";
 import { MAX_ORIGINAL_BYTES } from "@/lib/cvUploadLimits";
+import CandidateFieldPicker from "./CandidateFieldPicker";
+import CandidateDateEditor from "./CandidateDateEditor";
+import CandidatePhoneEditor from "./CandidatePhoneEditor";
+import {
+  candidateLanguageLevels,
+  candidateProjectTypes,
+} from "@/lib/candidatePortalEditEvidence";
 import CandidateLocationEditor from "./CandidateLocationEditor";
 import {
   candidateLanguageSuggestions,
@@ -143,6 +150,8 @@ const fieldLabels: Record<string, string> = {
   current_company: "Current employer",
   currentCompany: "Current employer",
   location: "Location / country",
+  phone: "Phone with country code",
+  project_details: "Project client, start date and end date / Current",
   workExperience: "Employment history",
   experience: "Employment history",
   employment: "Employment history",
@@ -177,7 +186,15 @@ function StructuredEditor({
   const update = (index: number, key: string, next: unknown) =>
     onChange(
       rows.map((row, rowIndex) =>
-        rowIndex === index ? { ...row, [key]: next } : row,
+        rowIndex === index
+          ? {
+              ...row,
+              [key]: next,
+              ...(key === "language" && row.language !== next
+                ? { proficiency: "" }
+                : {}),
+            }
+          : row,
       ),
     );
   return (
@@ -197,9 +214,9 @@ function StructuredEditor({
               {title === "Employment history"
                 ? "Every row needs employer, job title and dates, or Current. Check all jobs against your CV."
                 : title === "SAP project history"
-                  ? "Every row needs a project or client and your role. Dates are optional when the CV does not state them. Do not copy employment dates."
+                  ? "Every row needs a project or client and your role. Client and start date are required, plus end date or Current. Add missing details before confirming; never copy employment dates."
                   : title === "Languages"
-                    ? "Add at least one language. If your CV does not state it, enter it yourself."
+                    ? "Choose a language and its level, or type your exact certificate/score. Test levels are not automatically converted into speaking fluency."
                     : "Add at least one education record. Check the institution, qualification and year against your CV."}
             </p>
           ) : null}
@@ -238,28 +255,58 @@ function StructuredEditor({
                         column.key,
                       )) ||
                       (title === "SAP project history" &&
-                        column.key === "role") ||
+                        ["role", "client", "start_date", "end_date"].includes(
+                          column.key,
+                        )) ||
                       (title === "Languages" && column.key === "language")) ? (
                       <span className="ml-1 text-amber-200">*</span>
                     ) : null}
-                    <input
-                      list={
-                        column.suggestions
-                          ? `${listId}-${column.key}`
-                          : undefined
-                      }
-                      className={input}
-                      value={String(row[column.key] ?? "")}
-                      placeholder={column.placeholder}
-                      disabled={
-                        currentable &&
-                        column.key === "end_date" &&
-                        row.current === true
-                      }
-                      onChange={(event) =>
-                        update(index, column.key, event.target.value)
-                      }
-                    />
+                    {column.key === "start_date" ||
+                    column.key === "end_date" ? (
+                      <CandidateDateEditor
+                        label={column.label}
+                        inputClass={input}
+                        value={String(row[column.key] ?? "")}
+                        disabled={
+                          currentable &&
+                          column.key === "end_date" &&
+                          row.current === true
+                        }
+                        onChange={(next) => update(index, column.key, next)}
+                      />
+                    ) : column.suggestions ||
+                      column.key === "graduation_year" ||
+                      column.key === "project_type" ||
+                      column.key === "proficiency" ? (
+                      <CandidateFieldPicker
+                        inputClass={input}
+                        value={String(row[column.key] ?? "")}
+                        placeholder={column.label}
+                        options={
+                          column.key === "proficiency"
+                            ? candidateLanguageLevels(
+                                String(row.language || ""),
+                              )
+                            : column.key === "graduation_year"
+                              ? Array.from({ length: 100 }, (_, i) =>
+                                  String(new Date().getUTCFullYear() - i),
+                                )
+                              : column.key === "project_type"
+                                ? candidateProjectTypes
+                                : column.suggestions || []
+                        }
+                        onChange={(next) => update(index, column.key, next)}
+                      />
+                    ) : (
+                      <input
+                        className={input}
+                        value={String(row[column.key] ?? "")}
+                        placeholder={column.placeholder}
+                        onChange={(event) =>
+                          update(index, column.key, event.target.value)
+                        }
+                      />
+                    )}
                   </label>
                 ))}
               </div>
@@ -284,7 +331,9 @@ function StructuredEditor({
                         onChange(next);
                       }}
                     />
-                    Current role/project
+                    {title === "Employment history"
+                      ? "Current role"
+                      : "Current project"}
                   </label>
                 ) : (
                   <span />
@@ -344,7 +393,8 @@ export default function CandidatePortalClient({
     setFields({
       displayName: value(profile.displayName),
       email: next.verifiedEmail || value(profile.contactInfo?.email),
-      phone: value(profile.contactInfo?.phone),
+      phone:
+        value(profile.contactInfo?.phone) || value(profile.cvPhoneSuggestion),
       currentTitle: value(profile.currentTitle),
       currentCompany: value(profile.currentCompany),
       location: value(profile.location),
@@ -595,29 +645,76 @@ export default function CandidatePortalClient({
                 ].map(([name, label]) => (
                   <label className="text-sm" key={name}>
                     {label}
-                    {name !== "email" && name !== "phone" ? (
+                    {name !== "email" ? (
                       <span className="ml-1 text-amber-200">*</span>
                     ) : (
                       <span className="ml-1 text-xs text-slate-400">
                         {name === "email" ? "Verified" : "Optional"}
                       </span>
                     )}
-                    <input
-                      aria-required={name !== "email" && name !== "phone"}
-                      className={
-                        name !== "email" &&
-                        name !== "phone" &&
-                        !String(fields[name] ?? "").trim()
-                          ? input.replace(
-                              "border-slate-700",
-                              "border-amber-400",
-                            )
-                          : input
-                      }
-                      value={String(fields[name] ?? "")}
-                      disabled={name === "email"}
-                      onChange={(event) => set(name, event.target.value)}
-                    />
+                    {name === "phone" ? (
+                      <CandidatePhoneEditor
+                        value={String(fields.phone || "")}
+                        onChange={(next) => set("phone", next)}
+                        inputClass={input}
+                      />
+                    ) : (
+                      <input
+                        aria-required={name !== "email"}
+                        className={
+                          name !== "email" &&
+                          name !== "phone" &&
+                          !String(fields[name] ?? "").trim()
+                            ? input.replace(
+                                "border-slate-700",
+                                "border-amber-400",
+                              )
+                            : input
+                        }
+                        value={String(fields[name] ?? "")}
+                        disabled={name === "email"}
+                        onChange={(event) => set(name, event.target.value)}
+                      />
+                    )}
+                    {name === "sapModules" ? (
+                      <div
+                        className="mt-3 flex flex-wrap gap-2"
+                        aria-label="Add SAP module"
+                      >
+                        <select
+                          className={input}
+                          aria-label="Add SAP module"
+                          value=""
+                          onChange={(event) => {
+                            const next = event.target.value;
+                            if (next)
+                              set(
+                                "sapModules",
+                                Array.from(
+                                  new Set([
+                                    ...String(fields.sapModules || "")
+                                      .split(/[,;]+/)
+                                      .map((item) => item.trim())
+                                      .filter(Boolean),
+                                    next,
+                                  ]),
+                                ).join(", "),
+                              );
+                          }}
+                        >
+                          <option value="">Add SAP module…</option>
+                          {SAP_SKILL_TAXONOMY.map((module) => (
+                            <option key={module} value={module}>
+                              {module}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-slate-400">
+                          Choose a module to add it, or edit the SAP modules
+                          field above. Keep only modules you have worked with.
+                        </p>
+                      </div>
+                    ) : null}
                   </label>
                 ))}
                 <CandidateLocationEditor
@@ -626,46 +723,9 @@ export default function CandidatePortalClient({
                   inputClass={input}
                 />
               </div>
-              <div
-                className="mt-3 flex flex-wrap gap-2"
-                aria-label="Add SAP module"
-              >
-                <select
-                  className={input}
-                  aria-label="Add SAP module"
-                  value=""
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    if (next)
-                      set(
-                        "sapModules",
-                        Array.from(
-                          new Set([
-                            ...String(fields.sapModules || "")
-                              .split(/[,;]+/)
-                              .map((item) => item.trim())
-                              .filter(Boolean),
-                            next,
-                          ]),
-                        ).join(", "),
-                      );
-                  }}
-                >
-                  <option value="">Add SAP module…</option>
-                  {SAP_SKILL_TAXONOMY.map((module) => (
-                    <option key={module} value={module}>
-                      {module}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-slate-400">
-                  Choose a module to add it, or edit the SAP modules field
-                  above. Keep only modules you have worked with.
-                </p>
-              </div>
               <p className="mt-3 text-xs text-slate-500">
-                At least one verified email or phone is required. Employer is
-                never taken from a project client field.
+                Verified sign-in email and phone with country code are required.
+                Employer is never taken from a project client field.
               </p>
             </section>
 
@@ -721,14 +781,19 @@ export default function CandidatePortalClient({
                   placeholder: "Role on this project",
                 },
                 {
+                  key: "project_type",
+                  label: "Project type",
+                  placeholder: "Choose or type project type",
+                },
+                {
                   key: "start_date",
                   label: "Start date",
-                  placeholder: "YYYY-MM; optional if no project dates stated",
+                  placeholder: "YYYY-MM; required before confirmation",
                 },
                 {
                   key: "end_date",
                   label: "End date",
-                  placeholder: "YYYY-MM; optional if no project dates stated",
+                  placeholder: "YYYY-MM; required before confirmation",
                 },
               ]}
               onChange={(next) => setStructured("projectExperience", next)}

@@ -47,7 +47,11 @@ async function main() {
     assert.equal(prepared.accepted, true);
     if (!prepared.accepted) throw new Error("synthetic_cv_rejected");
     const profile = prepared.candidatePayload;
-    assert.equal(profile.name, "Synthetic Abcdefghijklmnop", "run-owned name must survive both parser entry points");
+    assert.equal(
+      profile.name,
+      "Synthetic Abcdefghijklmnop",
+      "run-owned name must survive both parser entry points",
+    );
     assert.equal(profile.profile_source_type, source);
     assert.equal(profile.current_company, "Synthetic Consulting");
     assert.equal(
@@ -92,12 +96,22 @@ async function main() {
     );
     assert.deepEqual(
       completion.missingRequiredFields,
-      ["candidate_accuracy_confirmation"],
-      "fully extracted synthetic profile must need only accuracy confirmation",
+      ["phone", "project_details", "candidate_accuracy_confirmation"],
+      "missing source phone/project dates must remain gaps until candidate supplies them",
     );
     assert.equal(
       evaluateCandidateProfileCompletion(
-        { ...profile, profile_confirmation_status: "candidate_confirmed" },
+        {
+          ...profile,
+          phone: "+6591234567",
+          projects: profile.projects.map(
+            (project: Record<string, unknown>, index: number) =>
+              index === 1
+                ? { ...project, start_date: "2024-01", end_date: "2024-12" }
+                : project,
+          ),
+          profile_confirmation_status: "candidate_confirmed",
+        },
         { requireCandidateConfirmation: true },
       ).searchable,
       true,

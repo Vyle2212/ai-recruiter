@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { normalizeActualCandidateSchema } from "../lib/candidate360SchemaNormalize";
 import { buildCandidate360Profile } from "../lib/candidate360Profile";
 import { buildCandidateProfileConfirmation } from "../lib/candidateProfileConfirmation";
 
@@ -109,8 +110,8 @@ const namedDates = buildCandidateProfileConfirmation({
         project: "SAP Rollout",
         client: "Client One",
         role: "SAP FI Consultant",
-        start_date: "",
-        end_date: "",
+        start_date: "Jan 2022",
+        end_date: "Jun 2023",
         current: false,
       },
     ]),
@@ -130,8 +131,8 @@ if (namedDates.accepted) {
   assert.equal(namedDates.candidatePayload.experience[0].start_date, "2025-09");
   assert.equal(namedDates.candidatePayload.experience[0].end_date, null);
   assert.equal(namedDates.candidatePayload.experience[1].end_date, "2025-09");
-  assert.equal(namedDates.candidatePayload.projects[0].start_date, "");
-  assert.equal(namedDates.candidatePayload.projects[0].end_date, null);
+  assert.equal(namedDates.candidatePayload.projects[0].start_date, "2022-01");
+  assert.equal(namedDates.candidatePayload.projects[0].end_date, "2023-06");
 }
 if (accepted.accepted) {
   assert.equal(
@@ -145,6 +146,51 @@ if (accepted.accepted) {
   );
   assert.equal(accepted.searchRow.candidate_id, current.id);
   assert.equal(accepted.searchRow.primary_module, "FICO");
+}
+const currentProject = buildCandidateProfileConfirmation({
+  candidateId: current.id,
+  profile,
+  currentCandidate: current,
+  submittedFields: {
+    ...fields,
+    projectExperience: JSON.stringify([
+      {
+        ...current.projects[0],
+        start_date: "Jan 2025",
+        end_date: "Present",
+        current: true,
+        project_type: "Rollout",
+        employer: "Example Consulting",
+        description: "Source-owned project description",
+      },
+    ]),
+    languages: JSON.stringify([
+      { language: "Japanese", proficiency: "JLPT N2" },
+    ]),
+  },
+});
+assert.equal(currentProject.accepted, true);
+if (currentProject.accepted) {
+  assert.equal(currentProject.candidatePayload.projects[0].current, true);
+  assert.equal(currentProject.candidatePayload.projects[0].end_date, null);
+  assert.equal(
+    currentProject.candidatePayload.projects[0].project_type,
+    "Rollout",
+  );
+  assert.equal(
+    currentProject.candidatePayload.projects[0].employer,
+    "Example Consulting",
+  );
+  assert.equal(
+    currentProject.candidatePayload.languages[0].proficiency,
+    "JLPT N2",
+  );
+  const readback = normalizeActualCandidateSchema(
+    currentProject.candidatePayload,
+  );
+  assert.equal(readback.projectExperience[0].endDate, "Current");
+  assert.equal(readback.projectExperience[0].projectType, "Rollout");
+  assert.equal(readback.projectExperience[0].employer, "Example Consulting");
 }
 const undatedProjects = buildCandidateProfileConfirmation({
   candidateId: current.id,
@@ -163,19 +209,21 @@ const undatedProjects = buildCandidateProfileConfirmation({
 });
 assert.equal(
   undatedProjects.accepted,
-  true,
-  "a project without source dates can be confirmed",
+  false,
+  "candidate must supply missing project dates before confirming",
 );
-if (undatedProjects.accepted) {
-  assert.equal(undatedProjects.candidatePayload.projects[0].start_date, "");
-  assert.equal(undatedProjects.candidatePayload.projects[0].end_date, null);
-  assert.equal(
-    undatedProjects.candidatePayload.experience[0].start_date,
-    "2021-01",
-  );
-}
 
 for (const [label, patch] of [
+  ["phone", { phone: "" }],
+  ["phone country code", { phone: "0912345678" }],
+  [
+    "project client",
+    {
+      projectExperience: JSON.stringify([
+        { ...current.projects[0], client: "" },
+      ]),
+    },
+  ],
   ["sharing consent", { consentToShare: false }],
   ["skills", { techSkills: "" }],
   [

@@ -118,3 +118,33 @@ assert.equal(
   ).length,
   0,
 );
+
+const boundedProject = embeddedSapEmploymentProjects(`WORK EXPERIENCE
+SAP FI Consultant | Example Consulting | Jan 2020 – Present
+Led SAP Finance implementation, Client: Example Client, project dates Jan 2024 – Current.
+EDUCATION
+SAP Finance implementation Jan 1998 – Dec 1999`);
+assert.equal(boundedProject.length, 1);
+assert.equal(boundedProject[0].client, "Example Client");
+assert.equal(boundedProject[0].start_date, "Jan 2024");
+assert.equal(boundedProject[0].end_date, "");
+assert.equal(boundedProject[0].current, true);
+const languageCv = enrichCandidateUpload(
+  parseCvFromText(
+    source +
+      "\nLANGUAGES\nJapanese: JLPT N2; French: CEFR B2; English: IELTS 7.5",
+    "synthetic.txt",
+  ),
+  source +
+    "\nLANGUAGES\nJapanese: JLPT N2; French: CEFR B2; English: IELTS 7.5",
+);
+assert.ok(
+  languageCv.languages.some(
+    (row: any) => row.language === "Japanese" && row.proficiency === "JLPT N2",
+  ),
+);
+assert.ok(
+  languageCv.languages.some(
+    (row: any) => row.language === "French" && row.proficiency === "CEFR B2",
+  ),
+);

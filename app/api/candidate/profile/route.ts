@@ -33,7 +33,7 @@ export async function GET() {
         id: profile.candidateId,
         name: profile.displayName.value,
         email: authorization.scope.verifiedAuthEmail,
-        phone: profile.contactInfo.phone.value,
+        phone: profile.contactInfo.phone.value || profile.cvPhoneSuggestion,
         current_title: profile.currentTitle.value,
         current_company: profile.currentCompany.value,
         location: profile.location.value,
