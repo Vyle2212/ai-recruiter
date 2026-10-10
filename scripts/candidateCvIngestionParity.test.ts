@@ -874,6 +874,22 @@ EDUCATION`,
   assert.equal(longProject[0].role, longProjectRole);
   assert.equal(longProject[0].start_date, "Jan 2021");
   assert.equal(longProject[0].end_date, "Dec 2024");
+  const repeatedSeparators = enrichCandidateUpload(
+    { name: "Jane Doe" },
+    `SAP SD Consultant
+PROJECT EXPERIENCE
+PROJECT :2
+Client: : Example Resources
+Role: : SAP SD Functional Consultant
+Project Type: : Implementation
+Duration: : Feb 2008 to Present`,
+  ).project_history.filter(isValidProjectEntry);
+  assert.equal(repeatedSeparators.length, 1);
+  assert.equal(repeatedSeparators[0].name, "2");
+  assert.equal(repeatedSeparators[0].client, "Example Resources");
+  assert.equal(repeatedSeparators[0].role, "SAP SD Functional Consultant");
+  assert.equal(repeatedSeparators[0].start_date, "Feb 2008");
+  assert.equal(repeatedSeparators[0].end_date, "Present");
   for (const emptyRole of ["Role", "Role:"]) {
     const blankRoleSource = splitRoleProjectSource.replace(
       "Role\nSAP MM Consultant",

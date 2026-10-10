@@ -137,6 +137,15 @@ function mergeGroundedProjects(
   explicit: Array<Record<string, unknown>>,
   rawText: string,
 ) {
+  const normalizeFieldSeparators = (row: Record<string, unknown>) => {
+    const normalized = { ...row };
+    for (const field of ["name", "client", "role", "project_type"])
+      if (typeof normalized[field] === "string")
+        normalized[field] = clean(normalized[field]).replace(/^:[ \t]*/, "");
+    return normalized;
+  };
+  canonical = canonical.map(normalizeFieldSeparators);
+  explicit = explicit.map(normalizeFieldSeparators);
   // A section heading after an empty Project label is not a project identity.
   // Discard these reader artefacts rather than borrowing a later assignment.
   const isHeading = (row: Record<string, unknown>) =>
@@ -406,7 +415,10 @@ function explicitProjectRecords(rawText: string) {
     );
   };
   const projectFieldValue = (value: unknown) => {
-    const normalized = clean(value);
+    // Some Word tables retain a second separator in the value cell
+    // (for example `Client: : Example`). It is layout punctuation, not
+    // source content. Remove only a leading colon and preserve the rest.
+    const normalized = clean(value).replace(/^:[ \t]*/, "");
     return /^(?:project(?:[ \t]+(?:name|title|role|dates?|duration|type))?|end[ \t]+client|client|customer|role|position|designation|duration|period|(?:project[ \t]+)?start(?:ing)?[ \t]+date|(?:project[ \t]+)?end(?:ing)?[ \t]+date|date[ \t]+(?:from|to)|from|to|sap[ \t]+modules?|modules?|type|education|skills?)[ \t]*(?::|$)/i.test(
       normalized,
     )
@@ -519,7 +531,7 @@ function explicitProjectRecords(rawText: string) {
     const block = boundedProjectBlock(normalized.slice(start, end));
     const name = projectFieldValue(
       block.match(
-        /(?:^|\n)\s*(?:project\s+(?:name|title)|project)\s*:\s*([^\n]{2,600})/im,
+        /(?:^|\n)\s*(?:project\s+(?:name|title)|project)\s*:\s*([^\n]{1,600})/im,
       )?.[1],
     );
     const client = projectFieldValue(
