@@ -1,10 +1,11 @@
+import { formatSalaryInput } from "@/lib/candidateSalaryInput";
 import type {
   CandidateJobPreferences,
   Compensation,
 } from "@/lib/candidateJobPreferences";
 function compensation(c: Compensation, daily = false) {
   if (c.status !== "Provided") return c.status || "Not provided";
-  return `${c.currency} ${c.amount}${c.maximum ? ` – ${c.maximum}` : ""} gross/${daily ? "day" : "month"}${c.negotiable ? " · Negotiable" : ""}`;
+  return `${c.currency} ${formatSalaryInput(c.amount || "")}${c.maximum ? ` – ${formatSalaryInput(c.maximum || "")}` : ""} gross/${daily ? "day" : "month"}${c.negotiable ? " · Negotiable" : ""}`;
 }
 export default function CandidateJobPreferencesSummary({
   value: p,

@@ -377,7 +377,11 @@ function StructuredEditor({
                   <label className="flex gap-2 text-sm text-slate-300">
                     <input
                       type="checkbox"
-                      checked={row.current === true}
+                      checked={
+                        row.current === true ||
+                        projectStatuses[index] === "Latest"
+                      }
+                      disabled={projectStatuses[index] === "Latest"}
                       onChange={(event) => {
                         const next = rows.map((item, rowIndex) =>
                           rowIndex === index
@@ -397,7 +401,9 @@ function StructuredEditor({
                     />
                     {title === "Employment history"
                       ? "Current role"
-                      : "Current project"}
+                      : projectStatuses[index] === "Latest"
+                        ? "Latest project (from End date)"
+                        : "Current project"}
                   </label>
                 ) : (
                   <span />
@@ -459,7 +465,12 @@ export default function CandidatePortalClient({
     const profile = next.profile;
     setData(next);
     setFields({
-      jobPreferences: JSON.stringify(profile.jobPreferences || {}),
+      jobPreferences: JSON.stringify({
+        ...profile.jobPreferences,
+        workAuthorization: (
+          profile.jobPreferences?.workAuthorization || []
+        ).map((r: any) => ({ ...r, _rowId: crypto.randomUUID() })),
+      }),
       displayName: value(profile.displayName),
       email: next.verifiedEmail || value(profile.contactInfo?.email),
       phone:
@@ -955,7 +966,14 @@ export default function CandidatePortalClient({
 
             <CandidateJobPreferencesEditor
               value={parseJobPreferences(fields.jobPreferences)}
-              onChange={(next) => set("jobPreferences", JSON.stringify(next))}
+              onChange={(update) =>
+                setFields((current) => ({
+                  ...current,
+                  jobPreferences: JSON.stringify(
+                    update(parseJobPreferences(current.jobPreferences)),
+                  ),
+                }))
+              }
               inputClass={input}
             />
 

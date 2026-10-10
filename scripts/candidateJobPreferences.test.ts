@@ -6,6 +6,7 @@ import {
 } from "../lib/candidateJobPreferences";
 import { candidateProjectStatuses } from "../lib/candidateProjectStatus";
 const both = {
+  currentSalary: { status: "Provided", currency: "SGD", amount: "7500" },
   employmentType: "Both",
   workingTypes: ["Hybrid", "Remote"],
   availability: "Available immediately",
@@ -65,12 +66,11 @@ for (const bad of [
   { ...both, workingTypes: "Remote" },
 ])
   assert.ok(Object.keys(jobPreferenceIssues(bad)).length);
-assert.deepEqual(
+assert.ok(
   jobPreferenceIssues({
     ...both,
     currentSalary: { status: "Prefer not to disclose" },
-  }),
-  {},
+  }).currentSalary,
 );
 const privateValues = canonicalJobPreferences({
   ...both,
@@ -83,7 +83,11 @@ const privateValues = canonicalJobPreferences({
   adminRole: "admin",
 });
 assert.equal(privateValues.currentSalary?.amount, undefined);
-assert.equal(privateValues.contract?.amount, undefined);
+assert.ok(
+  jobPreferenceIssues({ ...both, contract: { status: "Open to discussion" } })[
+    "contract.amount"
+  ],
+);
 assert.equal((privateValues as any).adminRole, undefined);
 assert.equal(
   canonicalJobPreferences({ ...both, employmentType: "Permanent" }).contract,
@@ -145,3 +149,31 @@ assert.ok(sql.includes("confirmation_definition_changed_review_required"));
 console.log(
   "Candidate job preferences and current/latest project tests passed.",
 );
+
+import {
+  cleanSalaryInput,
+  formatSalaryInput,
+} from "../lib/candidateSalaryInput";
+assert.equal(formatSalaryInput("1234567.50"), "1,234,567.50");
+assert.equal(cleanSalaryInput("1,234,567.50"), "1234567.50");
+assert.equal(formatSalaryInput("1234."), "1,234.");
+assert.ok(
+  jobPreferenceIssues({ ...both, currentSalary: undefined })[
+    "currentSalary.amount"
+  ],
+);
+
+assert.deepEqual(
+  jobPreferenceIssues({
+    ...both,
+    currentSalary: { currency: "SGD", amount: "0" },
+  }),
+  {},
+);
+assert.ok(
+  jobPreferenceIssues({ ...both, contract: { ...both.contract, amount: "0" } })[
+    "contract.amount"
+  ],
+);
+assert.equal(cleanSalaryInput("-100"), "-100");
+assert.equal(cleanSalaryInput("1e6"), "1e6");

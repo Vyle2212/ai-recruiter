@@ -1,12 +1,15 @@
 "use client";
 import { useState } from "react";
+import {
+  cleanSalaryInput,
+  formatSalaryInput,
+} from "@/lib/candidateSalaryInput";
 import CandidateFieldPicker from "./CandidateFieldPicker";
 import { candidateCountries } from "@/lib/candidateEditOptions";
 import {
   availabilityOptions,
   employmentTypes,
   workingTypes,
-  salaryStatuses,
   jobCurrencies,
   visaOptions,
   jobPreferenceIssues,
@@ -45,84 +48,87 @@ function CompensationEditor({
       ? inputClass.replace("border-slate-700", "border-red-400")
       : inputClass;
   const update = (key: string, next: unknown) =>
-    onChange({ ...value, [key]: next });
+    onChange({ ...value, status: "Provided", [key]: next });
   return (
     <div className="rounded-xl border border-slate-700 p-4">
-      <h3 className="font-semibold">
-        {title} {expected ? "*" : "(Optional)"}
-      </h3>
-      <label className="block mt-3 text-sm">
-        {expected ? "Expected compensation" : "Disclosure"}
-        <select
-          className={fieldClass("status")}
-          value={value.status || ""}
-          onChange={(e) => update("status", e.target.value)}
-        >
-          <option value="">Choose…</option>
-          {(expected ? ["Provided", "Open to discussion"] : salaryStatuses).map(
-            (s) => (
-              <option key={s}>{s}</option>
-            ),
-          )}
-        </select>
-      </label>
-      {value.status === "Provided" ? (
-        <>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <label className="text-sm">
-              Currency *
-              <CandidateFieldPicker
-                placeholder={`${title} currency`}
-                inputClass={fieldClass("currency")}
-                value={value.currency || ""}
-                options={jobCurrencies}
-                allowCustom={false}
-                onChange={(v) => update("currency", v)}
-              />
-            </label>
-            <label className="text-sm">
-              {expected ? "From" : "Amount"} *
-              <input
-                aria-label={`${title} amount`}
-                type="number"
-                min="0"
-                step="0.01"
-                className={fieldClass("amount")}
-                value={value.amount || ""}
-                onChange={(e) => update("amount", e.target.value)}
-              />
-            </label>
-            {expected ? (
-              <label className="text-sm">
-                To (optional)
-                <input
-                  aria-label={`${title} maximum`}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  className={fieldClass("maximum")}
-                  value={value.maximum || ""}
-                  onChange={(e) => update("maximum", e.target.value)}
-                />
-              </label>
+      <h3 className="font-semibold">{title} *</h3>
+      <>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="text-sm">
+            Currency *
+            <CandidateFieldPicker
+              placeholder={`${title} currency`}
+              inputClass={fieldClass("currency")}
+              value={value.currency || ""}
+              options={jobCurrencies}
+              allowCustom={false}
+              onChange={(v) => update("currency", v)}
+            />
+            {issues[prefix + ".currency"] ? (
+              <p className="mt-1 text-xs text-red-300">
+                {issues[prefix + ".currency"]}
+              </p>
             ) : null}
-          </div>
-          <p className="mt-2 text-xs text-slate-400">
-            {daily
-              ? "Gross per day, before tax."
-              : "Gross per month, before tax. Enter the base amount; benefits are separate."}
-          </p>
+          </label>
+          <label className="text-sm">
+            {expected ? "From" : "Amount"} *
+            <input
+              aria-label={`${title} amount`}
+              type="text"
+              inputMode="decimal"
+              className={fieldClass("amount")}
+              value={formatSalaryInput(value.amount || "")}
+              onChange={(e) =>
+                update("amount", cleanSalaryInput(e.target.value))
+              }
+            />
+            {issues[prefix + ".amount"] ? (
+              <p className="mt-1 text-xs text-red-300">
+                {issues[prefix + ".amount"]}
+              </p>
+            ) : null}
+          </label>
           {expected ? (
-            <label className="mt-3 flex gap-2 text-sm">
+            <label className="text-sm">
+              To (optional)
               <input
-                type="checkbox"
-                checked={value.negotiable === true}
-                onChange={(e) => update("negotiable", e.target.checked)}
+                aria-label={`${title} maximum`}
+                type="text"
+                inputMode="decimal"
+                className={fieldClass("maximum")}
+                value={formatSalaryInput(value.maximum || "")}
+                onChange={(e) =>
+                  update("maximum", cleanSalaryInput(e.target.value))
+                }
               />
-              Negotiable
+              {issues[prefix + ".maximum"] ? (
+                <p className="mt-1 text-xs text-red-300">
+                  {issues[prefix + ".maximum"]}
+                </p>
+              ) : null}
             </label>
           ) : null}
-        </>
+        </div>
+        <p className="mt-2 text-xs text-slate-400">
+          {daily
+            ? "Gross per day, before tax."
+            : "Gross per month, before tax. Enter the base amount; benefits are separate."}
+        </p>
+        {expected ? (
+          <label className="mt-3 flex gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={value.negotiable === true}
+              onChange={(e) => update("negotiable", e.target.checked)}
+            />
+            Negotiable
+          </label>
+        ) : null}
+      </>
+      {!expected ? (
+        <p className="mt-2 text-xs text-slate-400">
+          Enter 0 if you are not currently earning a salary.
+        </p>
       ) : null}
       <button
         type="button"
@@ -180,11 +186,13 @@ export default function CandidateJobPreferencesEditor({
   inputClass,
 }: {
   value: CandidateJobPreferences;
-  onChange: (p: CandidateJobPreferences) => void;
+  onChange: (
+    update: (p: CandidateJobPreferences) => CandidateJobPreferences,
+  ) => void;
   inputClass: string;
 }) {
   const update = (key: string, next: unknown) =>
-    onChange({ ...p, [key]: next });
+    onChange((current) => ({ ...current, [key]: next }));
   const issues = jobPreferenceIssues(p);
   const fieldClass = (key: string) =>
     issues[key]
@@ -262,6 +270,11 @@ export default function CandidateJobPreferencesEditor({
               </label>
             ))}
           </div>
+          {issues.workingTypes ? (
+            <p className="mt-2 text-xs text-red-300">
+              Select at least one option.
+            </p>
+          ) : null}
         </fieldset>
         <label className="block text-sm">
           Notice period / Availability *
@@ -274,15 +287,25 @@ export default function CandidateJobPreferencesEditor({
             onChange={(v) => update("availability", v)}
           />
         </label>
+        {issues.availability ? (
+          <p className="text-xs text-red-300">
+            Choose your notice period or availability.
+          </p>
+        ) : null}
         {p.availability === "Specific date" ? (
           <label className="block text-sm">
             Available start date *
             <input
               type="date"
-              className={inputClass}
+              className={fieldClass("availabilityDate")}
               value={p.availabilityDate || ""}
               onChange={(e) => update("availabilityDate", e.target.value)}
             />
+            {issues.availabilityDate ? (
+              <p className="mt-1 text-xs text-red-300">
+                Choose your available start date.
+              </p>
+            ) : null}
           </label>
         ) : null}
         {p.availability === "Other" ? (
@@ -304,22 +327,30 @@ export default function CandidateJobPreferencesEditor({
         </p>
         {(p.workAuthorization || []).map((r, i) => {
           const rowUpdate = (key: string, v: string) =>
-            update(
-              "workAuthorization",
-              p.workAuthorization!.map((x, j) =>
-                j === i
-                  ? {
-                      ...x,
-                      [key]: v,
-                      ...(key === "country"
-                        ? { status: "", visaType: "" }
-                        : {}),
-                    }
-                  : x,
+            onChange((current) => ({
+              ...current,
+              workAuthorization: (current.workAuthorization || []).map(
+                (x, j) =>
+                  (r._rowId ? x._rowId === r._rowId : j === i)
+                    ? {
+                        ...x,
+                        [key]: v,
+                        ...(key === "country"
+                          ? { status: "", visaType: "" }
+                          : {}),
+                      }
+                    : x,
               ),
-            );
+            }));
           return (
-            <div key={i} className="rounded-xl border border-slate-700 p-3">
+            <div
+              key={r._rowId || i}
+              className={
+                issues[`visa.${i}`] || issues[`visa.${i}.sponsorship`]
+                  ? "rounded-xl border border-red-400 p-3"
+                  : "rounded-xl border border-slate-700 p-3"
+              }
+            >
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="text-sm">
                   Work country
@@ -374,14 +405,24 @@ export default function CandidateJobPreferencesEditor({
                   </select>
                 </label>
               </div>
+              {issues[`visa.${i}`] ||
+              issues[`visa.${i}.sponsorship`] ||
+              issues[`visa.${i}.expiry`] ? (
+                <p className="mt-2 text-xs text-red-300">
+                  Complete country, visa status and sponsorship, or remove this
+                  row. {issues[`visa.${i}.expiry`] || ""}
+                </p>
+              ) : null}
               <button
                 type="button"
-                className="mt-3 text-sm text-red-300"
+                className="mt-3 rounded-lg border border-red-400/50 px-3 py-2 text-sm text-red-300"
                 onClick={() =>
-                  update(
-                    "workAuthorization",
-                    p.workAuthorization!.filter((_, j) => j !== i),
-                  )
+                  onChange((current) => ({
+                    ...current,
+                    workAuthorization: (current.workAuthorization || []).filter(
+                      (_, j) => j !== i,
+                    ),
+                  }))
                 }
               >
                 Remove authorization
@@ -389,30 +430,35 @@ export default function CandidateJobPreferencesEditor({
             </div>
           );
         })}
+        {(p.workAuthorization || []).length ? (
+          <button
+            type="button"
+            className="rounded-lg border border-red-400/50 px-3 py-2 text-sm text-red-300"
+            onClick={() => update("workAuthorization", [])}
+          >
+            Remove all work authorizations
+          </button>
+        ) : null}
         <button
           type="button"
           className="text-sm text-cyan-200"
           onClick={() =>
-            update("workAuthorization", [
-              ...(p.workAuthorization || []),
-              { country: "", status: "", sponsorship: "" },
-            ])
+            onChange((current) => ({
+              ...current,
+              workAuthorization: [
+                ...(current.workAuthorization || []),
+                {
+                  _rowId: crypto.randomUUID(),
+                  country: "",
+                  status: "",
+                  sponsorship: "",
+                },
+              ],
+            }))
           }
         >
           Add work authorization
         </button>
-        {Object.keys(issues).length ? (
-          <div
-            role="status"
-            className="rounded-lg border border-red-400/60 p-3 text-sm text-red-300"
-          >
-            <ul className="list-disc pl-5">
-              {Object.entries(issues).map(([key, reason]) => (
-                <li key={key}>{reason}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
       </div>
     </section>
   );
