@@ -577,6 +577,59 @@ export function narrativeResumeEmployment(text: string) {
 
 /** Reorder client/project fields only inside the same numbered card. */
 export function projectFieldLayoutText(text: string) {
+  // Some native Word tables collapse literal field labels into one line.
+  // Recover only the explicit Duration/Position pair and optional Project
+  // label; Company is deliberately not reclassified as a project client.
+  text = text.replace(
+    /^([^\n]*?)Duration([^\n]+?)Position([^\n]+)$/gim,
+    (line, prefix, duration, position) => {
+      const project = prefix.match(
+        /^Company.+Project(?:[ \t]+Name)?([^\n]+)$/i,
+      );
+      if (prefix.trim() && !project) return line;
+      if (!new RegExp(PROJECT_DATE_TOKEN_PATTERN, "i").test(duration))
+        return line;
+      return `${project ? `Project: ${project[1].trim()}\n` : ""}Duration: ${duration.trim()}\nPosition: ${position.trim()}`;
+    },
+  );
+  // Repeated Customer / Duration / Project Description / Function tables
+  // explicitly own the function as the project role. Require the complete
+  // schema inside each local header, rather than aliasing Function globally.
+  if ([...text.matchAll(/^[ \t]*Customer[ \t]*$/gim)].length >= 2)
+    text = text.replace(
+      /^[ \t]*Customer[ \t]*\r?\n([\s\S]*?)(?=^[ \t]*Customer[ \t]*$|(?![\s\S]))/gim,
+      (block: string, body: string) => {
+        const lines = body
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+        const value = (label: string) => {
+          const i = lines.findIndex(
+            (line) => line.toLowerCase() === label.toLowerCase(),
+          );
+          const next = i >= 0 && i < 12 ? lines[i + 1] || "" : "";
+          return /^(?:Duration|Industry|Project Description|Function|Responsibilities(?:\/Deliverables)?|Deliverables|Systems)$/i.test(
+            next,
+          )
+            ? ""
+            : next;
+        };
+        const client = lines[0] || "",
+          duration = value("Duration"),
+          name = value("Project Description"),
+          role = value("Function");
+        if (
+          !client ||
+          !duration ||
+          !name ||
+          !role ||
+          /^(?:Duration|Company|Industry)$/i.test(client)
+        )
+          return block;
+        return `Project: ${name}\nClient: ${client}\nRole: ${role}\nDuration: ${duration}\n${body}`;
+      },
+    );
+
   // Literal Client Name is the same field as Client. Split inline table
   // periods before whitespace normalization so they cannot enter the name.
   text = text
@@ -590,6 +643,10 @@ export function projectFieldLayoutText(text: string) {
   if ([...text.matchAll(roleClientCard)].length >= 2)
     text = text.replace(roleClientCard, "$3\n$1\n$2\n");
   const lines = text
+    .replace(
+      /^[ \t]*Duration[ \t]*\(Month and Year\)[ \t]*\t+[ \t]*/gim,
+      "Duration: ",
+    )
     // These are literal client-site table labels, not inferred employers.
     .replace(/^[ \t]*Exposure[ \t]+(Client[ \t]*:)/gim, "$1")
     .replace(
@@ -597,7 +654,7 @@ export function projectFieldLayoutText(text: string) {
       "$1",
     )
     .replace(
-      /^(\s*(?:client|customer|project|duration|period|position|designation|role))\t+[ \t]*([^\n]+)/gim,
+      /^(\s*(?:client|customer|project(?:[ \t]+(?:name|title))?|duration|period|position|designation|role))\t+[ \t]*([^\n]+)/gim,
       (_, label, value) => `${label}: ${value.replace(/^[ \t]*:[ \t]*/, "")}`,
     )
     // Normalize only explicit duration endpoints for every project reader.
@@ -612,6 +669,39 @@ export function projectFieldLayoutText(text: string) {
         ),
     )
     .split(/\r?\n/);
+  // A named project after Client is still the same explicit field table.
+  // Move it before Client only inside a short header with its own later Role.
+  // Employer/Client boundaries prevent reaching into the next assignment.
+  const clientStarts = lines.flatMap((line, index) =>
+    /^[ \t]*(?:Client|Customer)[ \t]*:/i.test(line) ? [index] : [],
+  );
+  for (const start of clientStarts.reverse()) {
+    let end = Math.min(lines.length, start + 24);
+    for (let j = start + 1; j < end; j++)
+      if (
+        /^[ \t]*(?:Client|Customer|Employer|Company)[ \t]*(?::|\t)/i.test(
+          lines[j],
+        )
+      ) {
+        end = j;
+        break;
+      }
+    const header = lines.slice(start, end);
+    const named = header.findIndex((line) =>
+      /^[ \t]*Project[ \t]+(?:Name|Title)[ \t]*:[ \t]*\S/i.test(line),
+    );
+    const role = header.findIndex((line) =>
+      /^[ \t]*(?:Role|Position|Designation)[ \t]*:[ \t]*\S/i.test(line),
+    );
+    if (
+      named > 0 &&
+      role > named &&
+      header.slice(0, named).filter((line) => line.trim()).length <= 8
+    ) {
+      const [field] = lines.splice(start + named, 1);
+      lines.splice(start, 0, field);
+    }
+  }
   const anchors = lines.flatMap((line, index) =>
     /^\s*Project\s+\d+\s*:/i.test(line) ? [index] : [],
   );

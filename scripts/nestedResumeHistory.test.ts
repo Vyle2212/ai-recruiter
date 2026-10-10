@@ -658,3 +658,123 @@ Duration\t: April 2011 to March 2016`,
 assert.equal(tabColonRole.length, 1);
 assert.equal(tabColonRole[0].role, "SAP Lead Consultant");
 console.log("Employer narrative boundary and tab/colon field values: passed");
+
+const literalProjectNames = enrichCandidateUpload(
+  {},
+  `Project Name\tExample SAP Migration
+Client\tExample Client
+Role\tSAP Data Migration Consultant
+Duration\tJan 2020 - Dec 2020`,
+).projects;
+assert.equal(literalProjectNames.length, 1);
+assert.equal(literalProjectNames[0].name, "Example SAP Migration");
+const customerFunctionCards = enrichCandidateUpload(
+  {},
+  `Customer
+First Example Client
+Duration
+Feb 2017 - May 2017
+Industry
+Utilities
+Project Description
+BW Reporting
+Function
+SAP BW Developer
+Responsibilities/Deliverables
+Configured SAP BW.
+Customer
+Second Example Client
+Duration
+Aug 2016 - Dec 2016
+Industry
+Utilities
+Project Description
+BW Upgrade
+Function
+BW Functional Lead
+`,
+).projects;
+assert.equal(customerFunctionCards.length, 2);
+assert.equal(customerFunctionCards[0].client, "First Example Client");
+assert.equal(customerFunctionCards[0].role, "SAP BW Developer");
+assert.equal(customerFunctionCards[1].client, "Second Example Client");
+assert.equal(customerFunctionCards[1].start_date, "Aug 2016");
+const collapsedProjectCards = enrichCandidateUpload(
+  {},
+  `Project Name
+Example Support
+DurationNov 2014 – Feb 2015PositionABAP Consultant
+Background
+Supported SAP.
+CompanyExample ConsultingProject NameExample Internal ReportDurationJan 2015 – Feb 2015PositionABAP Consultant
+Background
+Created SAP report.
+CompanyExample ConsultingProject NamePartial ExampleDurationNov 2014PositionABAP Consultant`,
+).projects;
+assert.equal(collapsedProjectCards.length, 2);
+assert.ok(collapsedProjectCards.some((row) => row.name === "Example Support"));
+const internalCard = collapsedProjectCards.find(
+  (row) => row.name === "Example Internal Report",
+);
+assert.ok(internalCard);
+assert.equal(internalCard.client, "");
+assert.equal(internalCard.role, "ABAP Consultant");
+console.log(
+  "Repeated customer/function and collapsed Word project cards: passed",
+);
+
+const missingCustomerFunction = enrichCandidateUpload(
+  {},
+  `Customer
+First Example Client
+Duration
+Jan 2020 - Dec 2020
+Industry
+Utilities
+Project Description
+Example Migration
+Function
+Responsibilities/Deliverables
+Configured SAP.
+Customer
+Second Example Client
+Duration
+Jan 2021 - Dec 2021
+Industry
+Utilities
+Project Description
+Example Rollout
+Function
+SAP Consultant
+`,
+).projects;
+assert.equal(
+  missingCustomerFunction.some((row) => row.client === "First Example Client"),
+  false,
+);
+assert.equal(
+  missingCustomerFunction.find((row) => row.client === "Second Example Client")
+    ?.role,
+  "SAP Consultant",
+);
+
+const clientFirstNamedProject = enrichCandidateUpload(
+  {},
+  `Employer\tExample Consulting
+Client\tFirst Example Client
+Duration (Month and Year)\tJune 2008 - February 2010
+Industry\tManufacturing
+Project Name\tExample Migration
+Project Type\tImplementation and Support
+Role\tSAP ABAP Developer
+Employer\tSecond Example Consulting
+Client\tSecond Example Client
+Duration (Month and Year)\tJan 2011 - Dec 2012
+Project Name\tExample Rollout
+Role\tSAP ABAP Lead`,
+).projects;
+assert.equal(clientFirstNamedProject.length, 2);
+assert.equal(clientFirstNamedProject[0].client, "First Example Client");
+assert.equal(clientFirstNamedProject[0].start_date, "June 2008");
+assert.equal(clientFirstNamedProject[1].client, "Second Example Client");
+assert.equal(clientFirstNamedProject[1].start_date, "Jan 2011");
