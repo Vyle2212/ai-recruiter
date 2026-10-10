@@ -402,4 +402,47 @@ assert.match(
   /where id = p_candidate_id[\s\S]*?v_candidate\.updated_at is distinct from p_expected_updated_at/,
   "the owned candidate row must still match the authorized version",
 );
+const preferences = {
+  employmentType: "Both",
+  workingTypes: ["Remote"],
+  availability: "Available immediately",
+  permanent: { status: "Provided", currency: "SGD", amount: "9000" },
+  contract: { status: "Provided", currency: "USD", amount: "600" },
+};
+const preferenceConfirmation = buildCandidateProfileConfirmation({
+  candidateId: current.id,
+  submittedFields: {
+    ...fields,
+    jobPreferences: JSON.stringify(preferences),
+    confirmAccuracy: true,
+    consentToShare: true,
+  },
+  profile,
+  currentCandidate: current,
+});
+assert.equal(preferenceConfirmation.accepted, true);
+if (preferenceConfirmation.accepted) {
+  assert.equal(
+    preferenceConfirmation.candidatePayload.job_preferences?.contract?.basis,
+    "gross_daily",
+  );
+  assert.equal(
+    preferenceConfirmation.candidatePayload.job_preferences?.permanent?.amount,
+    "9000",
+  );
+}
+assert.equal(
+  buildCandidateProfileConfirmation({
+    candidateId: current.id,
+    submittedFields: {
+      ...fields,
+      jobPreferences: JSON.stringify({ ...preferences, contract: undefined }),
+      confirmAccuracy: true,
+      consentToShare: true,
+    },
+    profile,
+    currentCandidate: current,
+  }).accepted,
+  false,
+);
 console.log("candidateProfileConfirmation.test.ts passed");

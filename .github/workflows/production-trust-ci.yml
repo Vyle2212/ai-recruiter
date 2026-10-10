@@ -273,6 +273,7 @@ jobs:
           node --import tsx scripts/candidateOwnedCvUpdate.test.ts
           node --import tsx scripts/candidateCvReplayIntegrity.test.ts
           node --import tsx scripts/candidateProfileConfirmation.test.ts
+          node --import tsx scripts/candidateJobPreferences.test.ts
           node --import tsx scripts/candidatePortal.test.ts
           node --import tsx scripts/adminCvBulkUpload.test.ts
           node --import tsx scripts/candidateSearchLifecycleConsistency.test.ts

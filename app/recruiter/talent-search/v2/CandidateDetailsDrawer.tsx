@@ -1,5 +1,7 @@
 "use client";
 
+import CandidateJobPreferencesSummary from "@/app/candidate/portal/CandidateJobPreferencesSummary";
+import { candidateProjectStatuses } from "@/lib/candidateProjectStatus";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   BookmarkCheck,
@@ -386,6 +388,7 @@ export default function CandidateDetailsDrawer({
   const employment = enterprise?.employmentTimeline || [];
   const externalEmployment = candidate.externalProfile?.employmentRecords || [];
   const projects = enterprise?.projects || [];
+  const projectStatuses = candidateProjectStatuses(projects);
   const canonicalAssignmentEvidence = diagnostic.criteria.find(
     (item) => item.assignmentEvidence,
   )?.assignmentEvidence;
@@ -789,6 +792,9 @@ export default function CandidateDetailsDrawer({
             >
               {error}
             </p>
+          ) : null}
+          {profile && tab === "Overview" ? (
+            <CandidateJobPreferencesSummary value={profile.jobPreferences} />
           ) : null}
           {overview && tab === "Overview" ? (
             <>
@@ -1282,11 +1288,16 @@ export default function CandidateDetailsDrawer({
             <Panel title={`Projects (${projects.length})`}>
               {projects.length ? (
                 <ol className="space-y-5">
-                  {projects.map((item) => (
+                  {projects.map((item, projectIndex) => (
                     <li
                       key={item.id}
                       className="rounded-lg border border-slate-800 p-4"
                     >
+                      {projectStatuses[projectIndex] ? (
+                        <span className="mb-2 inline-block rounded-full border border-cyan-600 px-2 py-1 text-xs text-cyan-200">
+                          {projectStatuses[projectIndex]} project
+                        </span>
+                      ) : null}
                       <div className="flex justify-between gap-3">
                         <h4 className="font-semibold text-white">
                           {text(

@@ -1,3 +1,4 @@
+import { jobPreferenceIssues } from "@/lib/candidateJobPreferences";
 import { NextRequest, NextResponse } from "next/server";
 
 import { buildCandidate360Profile } from "@/lib/candidate360Profile";
@@ -49,6 +50,12 @@ export async function POST(request: NextRequest) {
       .toLowerCase() !== authorization.scope.verifiedAuthEmail
   )
     return failure("candidate_profile_verified_email_required", 422);
+
+  const preferenceIssues = jobPreferenceIssues(submittedFields.jobPreferences);
+  if (Object.keys(preferenceIssues).length)
+    return failure("candidate_profile_incomplete", 422, {
+      reasons: Object.values(preferenceIssues),
+    });
 
   const result = await supabase
     .from("candidates")

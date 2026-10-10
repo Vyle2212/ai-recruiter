@@ -10,6 +10,9 @@ import { useCallback, useEffect, useId, useState } from "react";
 import { finalizePossiblyCompletedSignedCvUpload } from "@/lib/signedCvUploadFinalization";
 import { MAX_ORIGINAL_BYTES } from "@/lib/cvUploadLimits";
 import CandidateFieldPicker from "./CandidateFieldPicker";
+import CandidateJobPreferencesEditor from "./CandidateJobPreferencesEditor";
+import { parseJobPreferences } from "@/lib/candidateJobPreferences";
+import { candidateProjectStatuses } from "@/lib/candidateProjectStatus";
 import CandidateDateEditor from "./CandidateDateEditor";
 import CandidatePhoneEditor from "./CandidatePhoneEditor";
 import {
@@ -157,6 +160,7 @@ type EditorColumn = {
   suggestions?: string[];
 };
 const fieldLabels: Record<string, string> = {
+  jobPreferences: "Job preferences & availability",
   display_name: "Full name",
   displayName: "Full name",
   current_title: "Current title",
@@ -224,6 +228,8 @@ function StructuredEditor({
           : row,
       ),
     );
+  const projectStatuses =
+    title === "SAP project history" ? candidateProjectStatuses(rows) : [];
   return (
     <section className={panel}>
       <div className="flex items-center justify-between gap-3">
@@ -272,6 +278,11 @@ function StructuredEditor({
               className="rounded-xl border border-slate-800 bg-[#070A0F] p-4"
               key={`${title}-${index}`}
             >
+              {title === "SAP project history" && projectStatuses[index] ? (
+                <span className="mb-3 inline-block rounded-full border border-cyan-600 px-2 py-1 text-xs text-cyan-200">
+                  {projectStatuses[index]} project
+                </span>
+              ) : null}
               <div className="grid gap-3 md:grid-cols-2">
                 {columns.map((column) => {
                   const issue = required
@@ -448,6 +459,7 @@ export default function CandidatePortalClient({
     const profile = next.profile;
     setData(next);
     setFields({
+      jobPreferences: JSON.stringify(profile.jobPreferences || {}),
       displayName: value(profile.displayName),
       email: next.verifiedEmail || value(profile.contactInfo?.email),
       phone:
@@ -939,6 +951,12 @@ export default function CandidatePortalClient({
                 },
               ]}
               onChange={(next) => setStructured("certifications", next)}
+            />
+
+            <CandidateJobPreferencesEditor
+              value={parseJobPreferences(fields.jobPreferences)}
+              onChange={(next) => set("jobPreferences", JSON.stringify(next))}
+              inputClass={input}
             />
 
             <section className={panel}>

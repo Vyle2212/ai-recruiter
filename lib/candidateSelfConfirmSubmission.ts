@@ -1,3 +1,4 @@
+import { jobPreferenceIssues } from "./candidateJobPreferences";
 import { splitCandidateLocation } from "./candidateEditOptions";
 import { careerMonthIndex } from "./candidateCareerExperience";
 import { careerDateIsCurrent } from "./careerDateEvidence";
@@ -49,6 +50,7 @@ const GENERIC = new Set([
   "co-founder &",
 ]);
 export const CANDIDATE_SELF_CONFIRM_DB_FIELDS: Record<string, string> = {
+  jobPreferences: "job_preferences",
   displayName: "name",
   email: "email",
   phone: "phone",
@@ -288,6 +290,9 @@ export function candidateProfileRequiredReasons(
       if (reason) reasons[name] = reason;
     }
   }
+  if (Object.keys(jobPreferenceIssues(fields.jobPreferences)).length)
+    reasons.jobPreferences =
+      "Complete job preferences, availability and expected compensation.";
   return reasons;
 }
 
@@ -392,9 +397,12 @@ function validateField(
     impact = "blocked";
     reasons.push("Submitted value is empty or required.");
   }
-  const structuredReason = REQUIRED.has(field.fieldName)
-    ? structuredRequirementReason(field.fieldName, field.submittedValue)
-    : "";
+  const structuredReason =
+    field.fieldName === "jobPreferences"
+      ? Object.values(jobPreferenceIssues(field.submittedValue)).join(" ")
+      : REQUIRED.has(field.fieldName)
+        ? structuredRequirementReason(field.fieldName, field.submittedValue)
+        : "";
   if (structuredReason) {
     risk = "blocked";
     impact = "blocked";

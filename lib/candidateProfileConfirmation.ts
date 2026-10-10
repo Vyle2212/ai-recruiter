@@ -1,3 +1,4 @@
+import { canonicalJobPreferences } from "./candidateJobPreferences";
 import type { Candidate360Profile } from "./candidate360Types";
 import { careerMonthIndex } from "./candidateCareerExperience";
 import { careerDateIsCurrent } from "./careerDateEvidence";
@@ -161,6 +162,9 @@ export function buildCandidateProfileConfirmation(params: {
   }
 
   const candidatePayload = {
+    ...(fields.jobPreferences !== undefined
+      ? { job_preferences: canonicalJobPreferences(fields.jobPreferences) }
+      : {}),
     name: text(fields.displayName),
     email: text(fields.email) || null,
     phone: text(fields.phone).replace(/[ ()\-.]/g, "") || null,

@@ -1,3 +1,4 @@
+import { canonicalJobPreferences } from "./candidateJobPreferences";
 import "server-only";
 
 import fs from "node:fs";
@@ -754,6 +755,10 @@ async function loadCandidate360ProfileInternal(
   );
   const result = {
     ...profile,
+    jobPreferences: canonicalJobPreferences(
+      (data.profile_source_state as Record<string, unknown> | null)
+        ?.job_preferences,
+    ),
     ...(ownerContactSuggestions
       ? {
           cvPhoneSuggestion:

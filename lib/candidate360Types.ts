@@ -89,6 +89,7 @@ export type Candidate360ProfileCompleteness = {
 };
 
 export type Candidate360Profile = {
+  jobPreferences?: import("./candidateJobPreferences").CandidateJobPreferences;
   lifecycle: CandidateLifecycleRecord;
   enterpriseProfile: EnterpriseCandidateProfile;
   canonicalOverview?: import("./candidateProfileOverview").CanonicalProfileOverview;
