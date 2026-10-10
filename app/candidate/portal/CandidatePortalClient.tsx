@@ -365,7 +365,8 @@ function StructuredEditor({
                       )}
                       {column.key === "client" ? (
                         <span className="mt-1 block text-xs text-slate-400">
-                          If confidential, enter Confidential, Not disclosed or NA.
+                          If confidential, enter Confidential, Not disclosed or
+                          NA.
                         </span>
                       ) : null}
                       {issue ? (
