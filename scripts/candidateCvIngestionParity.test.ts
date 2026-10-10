@@ -858,6 +858,22 @@ EDUCATION`,
     assert.equal(projects[0].name, "Procurement rollout");
     assert.equal(projects[0].client, "Example Manufacturing");
   }
+  const longProjectName =
+    `Regional procurement harmonization ${"and logistics integration ".repeat(8)}`.trim();
+  const longProjectClient =
+    `Synthetic Holdings (${"subsidiary alpha, subsidiary beta, subsidiary gamma, ".repeat(6)}regional headquarters)`.trim();
+  const longProjectRole =
+    `SAP MM Lead responsible for ${"procurement design, integration testing, cutover governance, ".repeat(4)}`.trim();
+  const longProject = enrichCandidateUpload(
+    { name: "Jane Doe" },
+    `SAP MM Consultant\nPROJECT EXPERIENCE\nProject: ${longProjectName}\nClient: ${longProjectClient}\nRole: ${longProjectRole}\nDuration: Jan 2021 - Dec 2024`,
+  ).project_history.filter(isValidProjectEntry);
+  assert.equal(longProject.length, 1);
+  assert.equal(longProject[0].name, longProjectName);
+  assert.equal(longProject[0].client, longProjectClient);
+  assert.equal(longProject[0].role, longProjectRole);
+  assert.equal(longProject[0].start_date, "Jan 2021");
+  assert.equal(longProject[0].end_date, "Dec 2024");
   for (const emptyRole of ["Role", "Role:"]) {
     const blankRoleSource = splitRoleProjectSource.replace(
       "Role\nSAP MM Consultant",

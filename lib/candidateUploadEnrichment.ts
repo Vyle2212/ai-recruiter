@@ -238,11 +238,23 @@ function mergeGroundedProjects(
       const explicitClient = key(row.client);
       const existingName = key(existing.name);
       const explicitName = key(row.name);
+      const sourceValuesCompatible = (left: string, right: string) =>
+        Boolean(
+          left &&
+            right &&
+            (left === right ||
+              left.startsWith(right) ||
+              right.startsWith(left)),
+        );
       if (
         (existingClient &&
           explicitClient &&
-          existingClient !== explicitClient) ||
-        (existingName && explicitName && existingName !== explicitName)
+          existingClient !== explicitClient &&
+          !sourceValuesCompatible(existingClient, explicitClient)) ||
+        (existingName &&
+          explicitName &&
+          existingName !== explicitName &&
+          !sourceValuesCompatible(existingName, explicitName))
       )
         return false;
       const sameOwnership = Boolean(
@@ -253,8 +265,16 @@ function mergeGroundedProjects(
       );
     });
     if (matching) {
-      if (!clean(matching.name)) matching.name = row.name;
-      if (!clean(matching.client)) matching.client = row.client;
+      if (
+        !clean(matching.name) ||
+        key(row.name).length > key(matching.name).length
+      )
+        matching.name = row.name;
+      if (
+        !clean(matching.client) ||
+        key(row.client).length > key(matching.client).length
+      )
+        matching.client = row.client;
       if (
         key(matching.role) !== key(row.role) &&
         key(matching.role).startsWith(`${key(row.role)} `)
@@ -397,7 +417,7 @@ function explicitProjectRecords(rawText: string) {
     projectFieldValue(
       block.match(
         new RegExp(
-          `(?:^|\\n)[ \\t]*(?:${labels})[ \\t]*\\n(?:[ \\t]*\\n){0,2}[ \\t]*([^\\n]{2,160})`,
+          `(?:^|\\n)[ \\t]*(?:${labels})[ \\t]*\\n(?:[ \\t]*\\n){0,2}[ \\t]*([^\\n]{2,600})`,
           "im",
         ),
       )?.[1],
@@ -406,7 +426,7 @@ function explicitProjectRecords(rawText: string) {
     projectFieldValue(
       block.match(
         new RegExp(
-          `(?:^|\\n)[ \\t]*(?:${labels})[ \\t]*:[ \\t]*([^\\n]{2,120})`,
+          `(?:^|\\n)[ \\t]*(?:${labels})[ \\t]*:[ \\t]*([^\\n]{2,600})`,
           "im",
         ),
       )?.[1] || nextLabelLine(block, labels),
@@ -499,12 +519,12 @@ function explicitProjectRecords(rawText: string) {
     const block = boundedProjectBlock(normalized.slice(start, end));
     const name = projectFieldValue(
       block.match(
-        /(?:^|\n)\s*(?:project\s+(?:name|title)|project)\s*:\s*([^\n]{2,160})/im,
+        /(?:^|\n)\s*(?:project\s+(?:name|title)|project)\s*:\s*([^\n]{2,600})/im,
       )?.[1],
     );
     const client = projectFieldValue(
       block.match(
-        /(?:^|\n)\s*(?:client|customer)\s*:\s*([^\n]{2,160})/im,
+        /(?:^|\n)\s*(?:client|customer)\s*:\s*([^\n]{2,600})/im,
       )?.[1] || nextLabelLine(block, "client|customer"),
     );
     const multilineRole = nextLabelLine(
@@ -528,12 +548,12 @@ function explicitProjectRecords(rawText: string) {
         : "";
     const colonRole = projectFieldValue(
       block.match(
-        /(?:^|\n)\s*(?:project\s+role|job\s+role|role|position(?:\s+title)?|designation)\s*:\s*([^\n]{2,160})/im,
+        /(?:^|\n)\s*(?:project\s+role|job\s+role|role|position(?:\s+title)?|designation)\s*:\s*([^\n]{2,600})/im,
       )?.[1] || supportedCombinedRole,
     );
     const narrativeRole = projectFieldValue(
       block.match(
-        /(?:^|\n)[ \t]*(?:[-•*][ \t]*)?(?:Involved|Worked|Working|Served) as[ \t]+([^\n]{2,160})/im,
+        /(?:^|\n)[ \t]*(?:[-•*][ \t]*)?(?:Involved|Worked|Working|Served) as[ \t]+([^\n]{2,600})/im,
       )?.[1],
     );
     const role = colonRole || multilineRole || narrativeRole;
@@ -633,12 +653,12 @@ function explicitProjectRecords(rawText: string) {
       const block = boundedProjectBlock(normalized.slice(start, end));
       const client = projectFieldValue(
         block.match(
-          /(?:^|\n)[ \t]*(?:client|customer)[ \t]*:[ \t]*([^\n]{2,160})/im,
+          /(?:^|\n)[ \t]*(?:client|customer)[ \t]*:[ \t]*([^\n]{2,600})/im,
         )?.[1] || nextLabelLine(block, "client|customer"),
       );
       const role = projectFieldValue(
         block.match(
-          /(?:^|\n)[ \t]*(?:project[ \t]+role|role|position|designation)[ \t]*:[ \t]*([^\n]{2,160})/im,
+          /(?:^|\n)[ \t]*(?:project[ \t]+role|role|position|designation)[ \t]*:[ \t]*([^\n]{2,600})/im,
         )?.[1] ||
           nextLabelLine(block, "project[ \\t]+role|role|position|designation"),
       );
@@ -728,7 +748,7 @@ function explicitProjectRecords(rawText: string) {
     const index = block.findIndex((line) => label.test(line));
     const value = index < 0 ? "" : clean(block[index + 1]);
     return value &&
-      value.length <= 160 &&
+      value.length <= 600 &&
       !/^(?:client|customer|project|role|position|designation)$/i.test(value)
       ? value
       : "";
