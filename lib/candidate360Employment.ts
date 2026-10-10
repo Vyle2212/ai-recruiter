@@ -1537,7 +1537,7 @@ function resumeEmployment(resumeText: string) {
       excerpt: project.excerpt });
     if (parsed) output.push(parsed);
   }
-  for (const [index, row] of flattenedEmployment(source).entries()) {
+  for (const [index, row] of flattenedEmployment(source, resumeText).entries()) {
     const parsed = entry({...row, allowGroundedEmployerOnly: true,
       sourceRef: `resume.flattened.${row.group}.${index + 1}`, sourceType: "parsed_resume", confidence: 94});
     if (!parsed) continue;

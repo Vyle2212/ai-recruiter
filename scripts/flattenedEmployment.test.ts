@@ -1327,3 +1327,36 @@ assert.equal(
     0,
   );
 }
+
+const positionLedger =
+  "List of professional positions\nOrganisation\nDescription of activities\nExample Advisory\nDec 2019 - Present\nSD Consultant\nTo provide consulting services for implementation and support\nExample Consulting Sdn Bhd\nDec 2017 - Nov 2019\nSD Consultant\nDevelopment for various industries\nExample Technology Ltd\nDec 2014 - Nov 2017\nSAP SD Consultant\nREFERENCES\nReference Person\nJan 2010 - Dec 2014\nSAP Consultant";
+assert.deepEqual(
+  read(positionLedger).map((x) => [x.company, x.title, x.start, x.end]),
+  [
+    ["Example Advisory", "SD Consultant", "Dec 2019", "Present"],
+    ["Example Consulting Sdn Bhd", "SD Consultant", "Dec 2017", "Nov 2019"],
+    ["Example Technology Ltd", "SAP SD Consultant", "Dec 2014", "Nov 2017"],
+  ],
+);
+assert.deepEqual(
+  read(
+    positionLedger.replace(
+      "List of professional positions",
+      "Selected project experience",
+    ),
+  ),
+  [],
+);
+assert.deepEqual(
+  read(
+    "List of professional positions\nClient: Example Buyer\nDec 2019 - Present\nSAP SD Consultant",
+  ),
+  [],
+);
+assert.deepEqual(
+  read(
+    "List of professional positions\nExample Advisory\nDec 2025 - Mar 2025\nSAP SD Consultant",
+  ),
+  [],
+);
+assert.equal(extractCanonicalEmploymentFromResume(positionLedger).length, 3);

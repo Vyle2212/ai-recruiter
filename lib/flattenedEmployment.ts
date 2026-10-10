@@ -43,7 +43,10 @@ const cleanDate = (value: string) => {
     : cleaned;
 };
 
-export function flattenedEmployment(source: string): FlattenedEmployment[] {
+export function flattenedEmployment(
+  source: string,
+  layoutSource = source,
+): FlattenedEmployment[] {
   const result: FlattenedEmployment[] = [];
   const add = (
     employer: string,
@@ -137,6 +140,53 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
       if (!m) break; // never resynchronize inside a broken/ambiguous row
       add(m[1], "", m[2], m[3], m[0], "employer-duration-total-table");
       tail = tail.slice(m[0].length).trim();
+    }
+  }
+
+  // A professional-position ledger explicitly separates employer, date range
+  // and title into adjacent lines. Keep activities, references and projects out.
+  const ledgerLines = layoutSource
+    .normalize("NFKC")
+    .split(/\r?\n/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+  const ledgerStart = ledgerLines.findIndex((x) =>
+    /^List of professional positions\s*:?$/i.test(x),
+  );
+  if (ledgerStart >= 0) {
+    const periodOnly = new RegExp(`^${range}$`, "i");
+    const roleOnly = new RegExp(
+      `^[A-Za-z0-9/&(). +,-]{2,100}\\b${job}(?:\\s*\\([^)]{1,40}\\))?$`,
+      "i",
+    );
+    for (let i = ledgerStart + 1; i + 2 < ledgerLines.length; i++) {
+      if (
+        /^(?:references?|referrals?|education|qualifications?|certifications?|(?:selected )?projects?(?: experience| history| details)?)\b/i.test(
+          ledgerLines[i],
+        )
+      )
+        break;
+      const employer = ledgerLines[i],
+        dates = ledgerLines[i + 1],
+        role = ledgerLines[i + 2];
+      const match = periodOnly.exec(dates);
+      if (
+        !match ||
+        !roleOnly.test(role) ||
+        /^(?:organisation|organization|description|to provide|activities)\b/i.test(
+          employer,
+        )
+      )
+        continue;
+      add(
+        employer,
+        role,
+        match[1],
+        match[2],
+        [employer, dates, role].join("\n"),
+        "professional-position-ledger",
+      );
+      i += 2;
     }
   }
 
