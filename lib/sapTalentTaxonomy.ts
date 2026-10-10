@@ -1,3 +1,5 @@
+import { sourceSupportsSapModuleClaim } from "./sourceSapModuleClaims";
+
 export type SapModuleKey =
   | "FICO" | "FI" | "CO" | "MM" | "SD" | "PP" | "PM" | "QM" | "PS"
   | "WM" | "EWM" | "TM" | "ABAP" | "BASIS" | "BW" | "BW4HANA"
@@ -171,6 +173,10 @@ export function inferSapModulesFromText(input: any): { primaryModule: SapModuleK
 
   for (const entry of SAP_MODULE_TAXONOMY) {
     if (entry.key === "UNKNOWN") continue;
+    // Related tools and a client's industry cannot establish module expertise.
+    // Explicit structured module selections are already scored above and stay
+    // intact; this guard only limits newly inferred keyword claims.
+    if (!sourceSupportsSapModuleClaim(entry.key, text)) continue;
     for (const alias of entry.aliases) {
       const rx = aliasRegex(alias);
       if (!rx) continue;
