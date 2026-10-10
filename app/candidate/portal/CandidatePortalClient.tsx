@@ -1,9 +1,16 @@
 "use client";
 
 import { createClient } from "@supabase/supabase-js";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { finalizePossiblyCompletedSignedCvUpload } from "@/lib/signedCvUploadFinalization";
 import { MAX_ORIGINAL_BYTES } from "@/lib/cvUploadLimits";
+import CandidateLocationEditor from "./CandidateLocationEditor";
+import {
+  candidateLanguageSuggestions,
+  candidateProficiencySuggestions,
+  candidateQualificationSuggestions,
+} from "@/lib/candidateEditOptions";
+import { SAP_SKILL_TAXONOMY } from "@/lib/sapTalentTaxonomy";
 import CandidateChatConsent from "./CandidateChatConsent";
 
 type PortalResponse = {
@@ -122,7 +129,12 @@ function normalizeCertifications(items: any[]) {
   }));
 }
 
-type EditorColumn = { key: string; label: string; placeholder: string };
+type EditorColumn = {
+  key: string;
+  label: string;
+  placeholder: string;
+  suggestions?: string[];
+};
 const fieldLabels: Record<string, string> = {
   display_name: "Full name",
   displayName: "Full name",
@@ -161,6 +173,7 @@ function StructuredEditor({
   required?: boolean;
   onChange: (rows: Record<string, any>[]) => void;
 }) {
+  const listId = useId();
   const update = (index: number, key: string, next: unknown) =>
     onChange(
       rows.map((row, rowIndex) =>
@@ -199,6 +212,15 @@ function StructuredEditor({
           Add row
         </button>
       </div>
+      {columns
+        .filter((column) => column.suggestions)
+        .map((column) => (
+          <datalist key={column.key} id={`${listId}-${column.key}`}>
+            {column.suggestions!.map((option) => (
+              <option key={option} value={option} />
+            ))}
+          </datalist>
+        ))}
       <div className="mt-4 space-y-4">
         {rows.length ? (
           rows.map((row, index) => (
@@ -221,6 +243,11 @@ function StructuredEditor({
                       <span className="ml-1 text-amber-200">*</span>
                     ) : null}
                     <input
+                      list={
+                        column.suggestions
+                          ? `${listId}-${column.key}`
+                          : undefined
+                      }
                       className={input}
                       value={String(row[column.key] ?? "")}
                       placeholder={column.placeholder}
@@ -563,7 +590,6 @@ export default function CandidatePortalClient({
                   ["phone", "Phone"],
                   ["currentTitle", "Current title"],
                   ["currentCompany", "Current employer"],
-                  ["location", "Location / country"],
                   ["sapModules", "SAP modules"],
                   ["techSkills", "Skills"],
                 ].map(([name, label]) => (
@@ -594,6 +620,48 @@ export default function CandidatePortalClient({
                     />
                   </label>
                 ))}
+                <CandidateLocationEditor
+                  value={String(fields.location ?? "")}
+                  onChange={(next) => set("location", next)}
+                  inputClass={input}
+                />
+              </div>
+              <div
+                className="mt-3 flex flex-wrap gap-2"
+                aria-label="Add SAP module"
+              >
+                <select
+                  className={input}
+                  aria-label="Add SAP module"
+                  value=""
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    if (next)
+                      set(
+                        "sapModules",
+                        Array.from(
+                          new Set([
+                            ...String(fields.sapModules || "")
+                              .split(/[,;]+/)
+                              .map((item) => item.trim())
+                              .filter(Boolean),
+                            next,
+                          ]),
+                        ).join(", "),
+                      );
+                  }}
+                >
+                  <option value="">Add SAP module…</option>
+                  {SAP_SKILL_TAXONOMY.map((module) => (
+                    <option key={module} value={module}>
+                      {module}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-400">
+                  Choose a module to add it, or edit the SAP modules field
+                  above. Keep only modules you have worked with.
+                </p>
               </div>
               <p className="mt-3 text-xs text-slate-500">
                 At least one verified email or phone is required. Employer is
@@ -679,7 +747,8 @@ export default function CandidatePortalClient({
                 {
                   key: "qualification",
                   label: "Qualification",
-                  placeholder: "Degree or qualification",
+                  placeholder: "Choose or type qualification",
+                  suggestions: candidateQualificationSuggestions,
                 },
                 {
                   key: "field_of_study",
@@ -703,12 +772,14 @@ export default function CandidatePortalClient({
                 {
                   key: "language",
                   label: "Language",
-                  placeholder: "Language",
+                  placeholder: "Choose or type language",
+                  suggestions: candidateLanguageSuggestions,
                 },
                 {
                   key: "proficiency",
                   label: "Proficiency",
-                  placeholder: "Only if known",
+                  placeholder: "Choose or type level; only if known",
+                  suggestions: candidateProficiencySuggestions,
                 },
               ]}
               onChange={(next) => setStructured("languages", next)}

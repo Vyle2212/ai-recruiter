@@ -1,9 +1,34 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { buildCandidatePortalAudit } from "./auditCandidatePortal";
+import {
+  candidateCountries,
+  splitCandidateLocation,
+  joinCandidateLocation,
+} from "../lib/candidateEditOptions";
 import { recruiterRouteRegistry } from "../lib/recruiterRouteRegistry";
 
 async function main() {
+  assert.equal(candidateCountries.length, 249);
+  for (const location of [
+    "Manila, Philippines",
+    "Singapore",
+    "Perth, Australia",
+    "Łódź, Poland",
+    "City not listed, Philippines",
+  ]) {
+    const parts = splitCandidateLocation(location);
+    assert.equal(
+      joinCandidateLocation(parts.city, parts.country),
+      location,
+      "Changing presentation must preserve existing location",
+    );
+  }
+  assert.equal(
+    splitCandidateLocation("Unrecognised location text").city,
+    "Unrecognised location text",
+  );
+  assert.equal(splitCandidateLocation("HCMC, Vietnam").country, "Vietnam");
   const audit = await buildCandidatePortalAudit();
   assert.equal(audit.ownershipResolvedServerSide, true);
   assert.equal(audit.arbitraryCandidateIdInputRemoved, true);
