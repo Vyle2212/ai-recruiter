@@ -1064,6 +1064,47 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
         rest = rest.trimStart().slice(m[0].length);
       }
     }
+    // Explicit Date / Company Name / Role ledgers sometimes preserve only
+    // each role's start date. Keep that stated precision and leave the end
+    // blank; the following row must never manufacture an endpoint. Consume
+    // only consecutive, legal-employer, recognized-role cells from the left
+    // edge so a later project/customer date cannot resync the table.
+    const startOnlyTable = section.match(
+      /^Date\s+Company Name\s+Role\s+([\s\S]*)/i,
+    );
+    if (startOnlyTable) {
+      let rest = startOnlyTable[1];
+      const startOnlyRole = `(?:[A-Za-z0-9/&-]+\\s+){0,8}?${job}(?:\\s*\\((?:Trainee|B2B|Contract)\\))?`;
+      const cell = new RegExp(
+        `^(${date})\\s+(${legal})\\s+(${startOnlyRole})(?=\\s+(?:${date})|\\s*$)`,
+        "i",
+      );
+      while (rest.trim()) {
+        const m = rest.trimStart().match(cell);
+        if (!m) break;
+        if (
+          (
+            `${m[2]} ${m[3]}`.match(
+              /\b(?:Sdn\.?\s*Bhd\.?|Pte\.?\s*Ltd\.?|Pvt\.?\s*Ltd\.?|Private Limited|Corporation|Berhad|S\/B|Limited|Ltd\.?|Inc\.?)/gi,
+            ) || []
+          ).length !== 1
+        )
+          break;
+        const previousCount = result.length;
+        add(
+          m[2],
+          m[3],
+          m[1],
+          "",
+          m[0],
+          "date-company-role-start-table",
+          true,
+          true,
+        );
+        if (result.length === previousCount) break;
+        rest = rest.trimStart().slice(m[0].length);
+      }
+    }
     // Compact employment ledger: date : employer, location role. Each cell
     // must be complete and adjacent; a project/narrative breaks the ledger.
     const ledgerDates = [

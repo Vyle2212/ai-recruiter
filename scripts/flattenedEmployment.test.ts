@@ -435,6 +435,22 @@ assert.deepEqual(
   ],
 );
 assert.equal(extractCanonicalEmploymentFromResume(yearColumns).length, 3);
+const startOnlyColumns =
+  "Employment History: Date Company Name Role Feb 2013 Example Outsourcing Sdn Bhd SAP HANA Professional Consultant Nov 2011 Example Outsourcing Sdn Bhd Professional Consultant March 2011 Example Shared Services Sdn Bhd (Project) Basis for a migration. Skills: SAP HANA";
+assert.deepEqual(
+  read(startOnlyColumns).map((r) => [r.company, r.title, r.start, r.end]),
+  [
+    [
+      "Example Outsourcing Sdn Bhd",
+      "SAP HANA Professional Consultant",
+      "Feb 2013",
+      "",
+    ],
+    ["Example Outsourcing Sdn Bhd", "Professional Consultant", "Nov 2011", ""],
+  ],
+  "start-only headed rows retain their precision without inferred end dates",
+);
+assert.equal(extractCanonicalEmploymentFromResume(startOnlyColumns).length, 2);
 const datedLedger =
   "Work Experience Dec 2021 – Present: Example Technologies, Example City Manager June 2020 – June 2021: Example Delivery, Example City Senior Manager Aug 2015 – June 2020: Example Systems, Example City Associate Manager May 2011 – Aug 2015: Example Services, Example City Technical Lead April 2006 – May 2011: Example Hardware (EH), Example City SSE & Technical Lead Professional Experience: Since Mar 2024 – Healthcare Client, Example City as Lead/Developer";
 const ledgerRows = read(datedLedger);
@@ -457,6 +473,9 @@ for (const text of [
   "Employment History Position Company Period Consultant Example Services Ltd 2022 - 2020",
   "Employment History Position Company Period Consultant Example Client Ltd 2020 - Present",
   "Employment History Position Company Period Consultant Example Services Ltd 2020 - Project: Delivery 2021 - Present",
+  "Project Employment History Date Company Name Role Feb 2013 Example Services Ltd SAP Consultant",
+  "Employment History Date Company Name Role Feb 2013 Example One Ltd Example Two Ltd SAP Consultant",
+  "Employment History Date Company Name Role Feb 2013 Example Services Ltd Unclassified",
   "Work Experience Jan 2020 - Present: Example Client, Example City Manager",
   "Work Experience Jan 2020 - Present: Example Services, Client City Manager",
   "Work Experience Jan 2020 - Present: Example Services, Example City Manager for delivery",
