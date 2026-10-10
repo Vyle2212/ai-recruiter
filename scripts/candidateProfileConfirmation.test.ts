@@ -450,3 +450,29 @@ assert.equal(
   false,
 );
 console.log("candidateProfileConfirmation.test.ts passed");
+
+// Mononyms and confidential clients must not block otherwise complete confirmations.
+for (const client of ["NA", "na", "Confidential", "Not disclosed"]) {
+  const confirmed = buildCandidateProfileConfirmation({
+    candidateId: current.id, profile, currentCandidate: current,
+    submittedFields: { ...fields, displayName: "Gunawan",
+      projectExperience: JSON.stringify([
+        {...current.projects[0], client, end_date: "Current", current: true},
+        {...current.projects[0], project: "Parallel project", client, end_date: "Present", current: true},
+      ]),
+    },
+  });
+  assert.equal(confirmed.accepted, true, `mononym and ${client} with parallel projects`);
+  if (confirmed.accepted) {
+    assert.equal(confirmed.searchRow.display_name, "Gunawan");
+    assert.equal(confirmed.candidatePayload.projects.filter(row => row.current).length, 2);
+  }
+}
+
+for (const displayName of ["Profile under review", "SAP Consultant", "alex@example.com"]) {
+  const rejected = buildCandidateProfileConfirmation({
+    candidateId: current.id, profile, currentCandidate: current,
+    submittedFields: {...fields, displayName},
+  });
+  assert.equal(rejected.accepted, false, `reject noisy name ${displayName}`);
+}

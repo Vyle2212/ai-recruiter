@@ -166,7 +166,7 @@ function cleanTitle(value: any): string {
   return title;
 }
 
-function cleanName(value: any): string | null {
+function cleanName(value: any, candidateConfirmed = false): string | null {
   const name = s(value);
   if (!name) return null;
 
@@ -228,7 +228,8 @@ function cleanName(value: any): string | null {
   }
 
   const parts = name.split(/\s+/).filter(Boolean);
-  if (parts.length < 2 || parts.length > 6) return null;
+  // Confirmed candidates may have a legal mononym; retain stricter parser-only checks.
+  if (parts.length < (candidateConfirmed ? 1 : 2) || parts.length > 6) return null;
 
   // Reject title/section-like extracted names.
   if (/\b(manager|consultant|developer|architect|analyst|specialist|project|program|position|title|role|summary|profile|career|professional|technical|functional|implementation|support|rollout|migration)\b/i.test(name)) {
@@ -374,7 +375,11 @@ export function buildCandidateSearchIndexRow(candidate: AnyRecord) {
 
   const title = cleanTitle(candidate.current_title || candidate.title || candidate.headline || "");
   const company = s(candidate.current_company || candidate.company || "");
-  const displayName = cleanName(candidate.name);
+  const displayName = cleanName(
+    candidate.name,
+    candidate.profile_confirmation_status === "candidate_confirmed" &&
+      candidate.profile_source_type === "candidate_confirmed",
+  );
 
   if (!isIndexEligibleCandidate(candidate, displayName, primary, title)) return null;
 

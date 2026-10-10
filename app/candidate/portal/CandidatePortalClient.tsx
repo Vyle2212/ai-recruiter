@@ -363,6 +363,11 @@ function StructuredEditor({
                           }
                         />
                       )}
+                      {column.key === "client" ? (
+                        <span className="mt-1 block text-xs text-slate-400">
+                          If confidential, enter Confidential, Not disclosed or NA.
+                        </span>
+                      ) : null}
                       {issue ? (
                         <p className="mt-1 text-xs font-medium text-red-300">
                           {issue}
@@ -876,7 +881,7 @@ export default function CandidatePortalClient({
                 {
                   key: "client",
                   label: "Client (not employer)",
-                  placeholder: "Customer/client, if stated",
+                  placeholder: "Client name, Confidential, Not disclosed or NA",
                 },
                 {
                   key: "role",
