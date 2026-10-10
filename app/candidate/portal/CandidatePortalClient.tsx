@@ -578,7 +578,16 @@ export default function CandidatePortalClient({
                     )}
                     <input
                       aria-required={name !== "email" && name !== "phone"}
-                      className={`${input} ${name !== "email" && name !== "phone" && !String(fields[name] ?? "").trim() ? "border-amber-400" : ""}`}
+                      className={
+                        name !== "email" &&
+                        name !== "phone" &&
+                        !String(fields[name] ?? "").trim()
+                          ? input.replace(
+                              "border-slate-700",
+                              "border-amber-400",
+                            )
+                          : input
+                      }
                       value={String(fields[name] ?? "")}
                       disabled={name === "email"}
                       onChange={(event) => set(name, event.target.value)}
