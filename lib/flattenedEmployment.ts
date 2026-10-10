@@ -10,6 +10,7 @@ export type FlattenedEmployment = {
   current: boolean;
   excerpt: string;
   group: string;
+  location?: string;
 };
 const month = "(?:Jan|Feb|Mar|Mac|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*";
 const day = "\\d{1,2}(?:\\s*(?:st|nd|rd|th))?";
@@ -43,7 +44,10 @@ const cleanDate = (value: string) => {
     : cleaned;
 };
 
-export function flattenedEmployment(source: string): FlattenedEmployment[] {
+export function flattenedEmployment(
+  source: string,
+  layoutSource = source,
+): FlattenedEmployment[] {
   const result: FlattenedEmployment[] = [];
   const add = (
     employer: string,
@@ -137,6 +141,138 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
       if (!m) break; // never resynchronize inside a broken/ambiguous row
       add(m[1], "", m[2], m[3], m[0], "employer-duration-total-table");
       tail = tail.slice(m[0].length).trim();
+    }
+  }
+
+  // A professional-position ledger explicitly separates employer, date range
+  // and title into adjacent lines. Keep activities, references and projects out.
+  const ledgerLines = layoutSource
+    .normalize("NFKC")
+    .split(/\r?\n/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+  const ledgerStart = ledgerLines.findIndex((x) =>
+    /^List of professional positions\s*:?$/i.test(x),
+  );
+  if (ledgerStart >= 0) {
+    const periodOnly = new RegExp(`^${range}$`, "i");
+    const roleOnly = new RegExp(
+      `^[A-Za-z0-9/&(). +,-]{2,100}\\b${job}(?:\\s*\\([^)]{1,40}\\))?$`,
+      "i",
+    );
+    for (let i = ledgerStart + 1; i + 2 < ledgerLines.length; i++) {
+      if (
+        /^(?:references?|referrals?|education|qualifications?|certifications?|(?:selected )?projects?(?: experience| history| details)?)\b/i.test(
+          ledgerLines[i],
+        )
+      )
+        break;
+      const employer = ledgerLines[i],
+        dates = ledgerLines[i + 1],
+        role = ledgerLines[i + 2];
+      const match = periodOnly.exec(dates);
+      if (
+        !match ||
+        !roleOnly.test(role) ||
+        /^(?:organisation|organization|description|to provide|activities)\b/i.test(
+          employer,
+        )
+      )
+        continue;
+      add(
+        employer,
+        role,
+        match[1],
+        match[2],
+        [employer, dates, role].join("\n"),
+        "professional-position-ledger",
+      );
+      i += 2;
+    }
+  }
+
+  // Explicit three-column employment tables keep cell ownership even when
+  // dates are absent or only a start is printed. Never borrow project dates.
+  const tableSource = layoutSource.normalize("NFKC");
+  const tableScope = tableSource.match(
+    /(?:^|\n)\s*(?:Professional Experience|Employment History|Experience History)\s*:?\s*\n([\s\S]*?)(?=\n\s*(?:Education|Educational Qualifications|Technical Skills|Skills|References|Projects?|Project Experience|Project Undertaken)\b|$)/i,
+  )?.[1];
+  if (tableScope) {
+    const cells = tableScope
+      .split(/[\r\n\t]+/)
+      .map((x) => x.trim())
+      .filter(Boolean);
+    const header = cells.slice(0, 3).map((x) => x.toLowerCase());
+    const roleCell = new RegExp(
+      `^[A-Za-z0-9/&(). +,-]{0,100}\\b(?:${job}|Sales Representative)(?:\\s*\\([^)]{1,40}\\))?$`,
+      "i",
+    );
+    const periodCell = new RegExp(`^${range}$`, "i");
+    const startCell = new RegExp(`^${date}$`, "i");
+    const kind = header.join("|");
+    if (
+      [
+        "organization|designation|location",
+        "organisation|designation|location",
+        "date|company name|role",
+        "period|organization|designation",
+        "period|organisation|designation",
+      ].includes(kind)
+    ) {
+      for (let i = 3; i + 2 < cells.length; i += 3) {
+        const [first, second, third] = cells.slice(i, i + 3);
+        if (
+          /^(?:client|customer|projects?|references?|education)\b/i.test(first)
+        )
+          break;
+        if (kind.endsWith("|location")) {
+          if (
+            !roleCell.test(second) ||
+            !/^[\p{L} .'-]{2,60},\s*[\p{L} .'-]{2,60}$/u.test(third)
+          )
+            break;
+          const before = result.length;
+          add(
+            first,
+            second,
+            "",
+            "",
+            [first, second, third].join("\n"),
+            "undated-organization-role-location",
+            true,
+            false,
+            true,
+          );
+          if (result.length > before)
+            result[result.length - 1].location = third;
+        } else if (kind.startsWith("date|")) {
+          if (!startCell.test(first)) break;
+          if (/^\(Project\)/i.test(third)) continue;
+          if (!roleCell.test(third)) break;
+          add(
+            second,
+            third,
+            first,
+            "",
+            [first, second, third].join("\n"),
+            "start-only-company-role-table",
+            true,
+            true,
+          );
+        } else {
+          const match = periodCell.exec(first);
+          if (!match || !roleCell.test(third)) break;
+          add(
+            second,
+            third,
+            match[1],
+            match[2],
+            [first, second, third].join("\n"),
+            "period-organization-designation-table",
+            true,
+          );
+        }
+      }
     }
   }
 
@@ -724,12 +860,15 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
     // All three fields must be adjacent; dates in an intervening project are
     // never used to complete a partial employment form.
     const formCompany =
-      "(?:(?!\\b(?:COMPANY|POSITION|DURATION)\\b)[^:;|]){2,120}?";
-    const formRole = "(?:(?!\\b(?:COMPANY|POSITION|DURATION)\\b)[^:;]){2,160}?";
+      "(?:(?!\\b(?:COMPANY|LOCATION|POSITION|DESIGNATION|DURATION)\\b)[^:;|]){2,120}?";
+    const formLocation =
+      "(?:(?!\\b(?:COMPANY|LOCATION|POSITION|DESIGNATION|DURATION)\\b)[^:;|]){1,80}?";
+    const formRole =
+      "(?:(?!\\b(?:COMPANY|LOCATION|POSITION|DESIGNATION|DURATION)\\b)[^:;]){2,160}?";
     const forms = [
       ...fullSection.matchAll(
         new RegExp(
-          `\\bCOMPANY\\s+(${formCompany})\\s+POSITION\\s+(${formRole})\\s+DURATION\\s+${range}(?=\\s|[.;)]|$)`,
+          `\\bCOMPANY\\s+(${formCompany})(?:\\s+LOCATION\\s+(${formLocation}))?\\s+(?:POSITION|DESIGNATION)\\s+(${formRole})\\s+DURATION\\s+${range}(?=\\s|[.;)]|$)`,
           "gi",
         ),
       ),
@@ -744,7 +883,7 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
       for (const m of forms) {
         if (
           !/^COMPANY\s/.test(m[0]) ||
-          !/\sPOSITION\s/.test(m[0]) ||
+          !/\s(?:POSITION|DESIGNATION)\s/.test(m[0]) ||
           !/\sDURATION\s/.test(m[0])
         )
           continue;
@@ -754,7 +893,14 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
           )
         )
           continue;
-        add(m[1], m[2], m[3], m[4], m[0], "labelled-employment-form", true);
+        if (
+          m[2] &&
+          (forbidden.test(m[2]) ||
+            new RegExp(date, "i").test(m[2]) ||
+            new RegExp(`\\b${job}\\b`, "i").test(m[2]))
+        )
+          continue;
+        add(m[1], m[3], m[4], m[5], m[0], "labelled-employment-form", true);
       }
     }
     // Current/Previous Employment explicitly introduces Company, Position and
@@ -1054,6 +1200,47 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
         rest = rest.trimStart().slice(m[0].length);
       }
     }
+    // Explicit Date / Company Name / Role ledgers sometimes preserve only
+    // each role's start date. Keep that stated precision and leave the end
+    // blank; the following row must never manufacture an endpoint. Consume
+    // only consecutive, legal-employer, recognized-role cells from the left
+    // edge so a later project/customer date cannot resync the table.
+    const startOnlyTable = section.match(
+      /^Date\s+Company Name\s+Role\s+([\s\S]*)/i,
+    );
+    if (startOnlyTable) {
+      let rest = startOnlyTable[1];
+      const startOnlyRole = `(?:[A-Za-z0-9/&-]+\\s+){0,8}?${job}(?:\\s*\\((?:Trainee|B2B|Contract)\\))?`;
+      const cell = new RegExp(
+        `^(${date})\\s+(${legal})\\s+(${startOnlyRole})(?=\\s+(?:${date})|\\s*$)`,
+        "i",
+      );
+      while (rest.trim()) {
+        const m = rest.trimStart().match(cell);
+        if (!m) break;
+        if (
+          (
+            `${m[2]} ${m[3]}`.match(
+              /\b(?:Sdn\.?\s*Bhd\.?|Pte\.?\s*Ltd\.?|Pvt\.?\s*Ltd\.?|Private Limited|Corporation|Berhad|S\/B|Limited|Ltd\.?|Inc\.?)/gi,
+            ) || []
+          ).length !== 1
+        )
+          break;
+        const previousCount = result.length;
+        add(
+          m[2],
+          m[3],
+          m[1],
+          "",
+          m[0],
+          "date-company-role-start-table",
+          true,
+          true,
+        );
+        if (result.length === previousCount) break;
+        rest = rest.trimStart().slice(m[0].length);
+      }
+    }
     // Compact employment ledger: date : employer, location role. Each cell
     // must be complete and adjacent; a project/narrative breaks the ledger.
     const ledgerDates = [
@@ -1223,10 +1410,11 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
       },
       {
         re: new RegExp(
-          `^COMPANY\\s+(${company})\\s+POSITION\\s+([^:;]{2,110}?)\\s+DURATION\\s+${range}(?=\\s|[.;]|$)`,
+          `^COMPANY\\s+(${company})(?:\\s+LOCATION\\s+([^:;|]{1,80}?))?\\s+(?:POSITION|DESIGNATION)\\s+([^:;]{2,110}?)\\s+DURATION\\s+${range}(?=\\s|[.;]|$)`,
           "i",
         ),
-        f: [1, 2, 3, 4],
+        f: [1, 3, 4, 5],
+        location: 2,
       },
     ];
     for (const { re, f, location } of fieldHeadings) {
@@ -1242,7 +1430,8 @@ export function flattenedEmployment(source: string): FlattenedEmployment[] {
         !(
           location &&
           (forbidden.test(m[location] || "") ||
-            new RegExp(date, "i").test(m[location] || ""))
+            new RegExp(date, "i").test(m[location] || "") ||
+            new RegExp(`\\b${job}\\b`, "i").test(m[location] || ""))
         )
       )
         add(m[f[0]], m[f[1]], m[f[2]], m[f[3]], m[0], "bounded-heading-fields");

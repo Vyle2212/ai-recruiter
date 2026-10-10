@@ -33,7 +33,7 @@ export async function GET() {
         id: profile.candidateId,
         name: profile.displayName.value,
         email: authorization.scope.verifiedAuthEmail,
-        phone: profile.contactInfo.phone.value,
+        phone: profile.contactInfo.phone.value || profile.cvPhoneSuggestion,
         current_title: profile.currentTitle.value,
         current_company: profile.currentCompany.value,
         location: profile.location.value,
@@ -41,6 +41,7 @@ export async function GET() {
         skills: profile.techSkills.map((item) => item.name.value),
         sap_modules: profile.sapModules.map((item) => item.name.value),
         projects: profile.projectExperience,
+        is_sap_profile: profile.sapModules.length > 0,
         education: profile.education,
         languages: profile.languages,
         profile_confirmation_status:

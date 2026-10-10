@@ -5,7 +5,10 @@ import {
   recruiterSearchPrivateNoStoreHeaders,
   requireRecruiterSearchAuthorization,
 } from "@/lib/recruiterSearchAuthorization";
-import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
+import {
+  candidateSearchLifecycleDecision,
+  selectCandidateLifecycleCompatible,
+} from "@/lib/candidateSearchLifecycle";
 
 export async function GET() {
   const authorization = await requireRecruiterSearchAuthorization({
@@ -16,13 +19,15 @@ export async function GET() {
     return recruiterSearchAuthorizationDenied(authorization);
   const supabase = createLazySupabaseServiceClient();
 
-  const { data, error } = await supabase
-    .from("candidates")
-    // The list endpoint has no valid need for raw CV, contact, or notes fields.
-    .select(
-      "id,name,current_title,current_company,location,primary_module,years,profile_quality_score,updated_at,status,extraction_coverage_status,profile_confirmation_status",
-    )
-    .order("created_at", { ascending: false });
+  // The list endpoint has no valid need for raw CV, contact, or notes fields.
+  const { data, error } = await selectCandidateLifecycleCompatible<any[]>(
+    "id,name,current_title,current_company,location,primary_module,years,profile_quality_score,updated_at,status,extraction_coverage_status,profile_confirmation_status",
+    (columns) =>
+      supabase
+        .from("candidates")
+        .select(columns)
+        .order("created_at", { ascending: false }),
+  );
 
   if (error) {
     return NextResponse.json(

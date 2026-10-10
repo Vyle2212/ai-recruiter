@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { MAX_ADMIN_CV_BYTES } from "../lib/adminCvBulkUpload";
 import {
   evaluateCandidateProfileCompletion,
   resolveCandidateIngestion,
@@ -60,7 +61,8 @@ assert.match(
   /finalizePossiblyCompletedSignedCvUpload\(\{[\s\S]*uploadError/,
   "admin upload must ask the server to resolve an ambiguous Storage response",
 );
-assert.match(uploadPage, /MAX_CV_BYTES = 10 \* 1024 \* 1024/);
+assert.match(uploadPage, /MAX_CV_BYTES = MAX_ADMIN_CV_BYTES/);
+assert.equal(MAX_ADMIN_CV_BYTES, 20 * 1024 * 1024);
 assert.match(
   uploadPage,
   /for \(let index = 0; index < files\.length; index \+= 1\)/,

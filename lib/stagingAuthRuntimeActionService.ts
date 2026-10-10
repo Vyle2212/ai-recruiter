@@ -157,6 +157,7 @@ export async function executeStagingAuthRuntimeAction(
         const result = await adapter.signIn({
           email,
           password: input.password,
+          ...(input.captchaToken ? { captchaToken: input.captchaToken } : {}),
         });
 
         return mapResult(adapter, result, emailMasked);

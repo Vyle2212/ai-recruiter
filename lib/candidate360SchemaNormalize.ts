@@ -1,3 +1,4 @@
+import { careerDateIsCurrent } from "./careerDateEvidence";
 import { hasUsableEvidence } from "./candidate360EvidenceAvailability";
 import { nativeProjectCards } from "./nativeProjectCards";
 import {
@@ -10,6 +11,8 @@ import { estimateEmploymentFromProjects, ownedProjectRangesFromResume, supported
 import { ownedProjectCareerLedger } from "./ownedProjectCareerLedger";
 import { customerObjectiveCareerCards } from "./customerObjectiveCareerCards";
 import { sectionedProjectExperienceCards } from "./sectionedProjectExperienceCards";
+import { explicitProjectListCards } from "./explicitProjectListCards";
+import { labelledProjectCards } from "./labelledProjectCards";
 import { calculateTotalCareerYears } from "./candidateCareerExperience";
 import {
   CANDIDATE_EMPLOYMENT_TIMELINE_VERSION,
@@ -25,7 +28,7 @@ export type CandidateSchemaRecord = Record<string, unknown>;
 export const CANDIDATE_CANONICAL_VERSION =
   "candidate-canonical-v63-original-layout";
 export const CANDIDATE_DETAIL_PROJECTION_VERSION =
-  "candidate-detail-v24-exact-project-identity";
+  "candidate-detail-v25-source-projection-isolation";
 export const CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION =
   `${CANDIDATE_EMPLOYMENT_TIMELINE_VERSION}:sap-sales-distribution-v2`;
 export const CANDIDATE_PROJECT_EXTRACTOR_VERSION =
@@ -507,7 +510,7 @@ function recordLists(
   return output;
 }
 
-function stringList(values: unknown[]): string[] {
+function stringList(values: unknown[], preserveRecord = false): string[] {
   const output: string[] = [];
   const seen = new Set<string>();
   const add = (value: unknown) => {
@@ -538,7 +541,7 @@ function stringList(values: unknown[]): string[] {
       return;
     }
     for (const item of clean(current)
-      .split(/[,;|\n]/)
+      .split(preserveRecord ? /[\n]/ : /[,;|\n]/)
       .map((entry) => entry.trim())
       .filter(Boolean)) {
       const key = item.toLowerCase();
@@ -1182,11 +1185,24 @@ function assignmentOrganizationAliases(value: string) {
   return aliases;
 }
 
-function projectsDescribeSameAssignment(
+export function projectsDescribeSameAssignment(
   left: EnterpriseProject,
   right: EnterpriseProject,
 ) {
   if (left.id === right.id) return true;
+  const roleKinds = (value: string) =>
+    new Set((value.toLowerCase().match(/\b(?:consultant|developer|analyst|architect|engineer|lead|manager|specialist|tester|administrator)\b/g) || []));
+  const leftKinds = roleKinds(left.role);
+  const rightKinds = roleKinds(right.role);
+  const leftResponsibilities = normalizedAssignmentAnchor(left.responsibilities.join(" "));
+  const rightResponsibilities = normalizedAssignmentAnchor(right.responsibilities.join(" "));
+  const sameResponsibilities = Boolean(
+    leftResponsibilities && rightResponsibilities &&
+    leftResponsibilities === rightResponsibilities
+  );
+  if (leftKinds.size && rightKinds.size &&
+      ![...leftKinds].some((kind) => rightKinds.has(kind)) &&
+      !sameResponsibilities) return false;
   const leftClient = inferredProjectClient(left);
   const rightClient = inferredProjectClient(right);
   const leftName = normalizedAssignmentAnchor(left.name);
@@ -1528,7 +1544,7 @@ function normalizeEmploymentLegacy(
       [item],
       ["start_date", "startDate", "from", "start"],
     );
-    const end = firstText([item], ["end_date", "endDate", "to", "end"]);
+    const end = firstText([item], ["end_date", "endDate", "to", "end", "current_end_label"]);
     const currentValue = unwrap(
       firstValue([item], ["current", "is_current", "isCurrent"]),
     );
@@ -1536,7 +1552,7 @@ function normalizeEmploymentLegacy(
       currentValue === true ||
       currentValue === 1 ||
       /^(true|yes)$/i.test(clean(currentValue)) ||
-      /present|current|now/i.test(end);
+      careerDateIsCurrent(end);
     if (!company && !title) return;
     const entry: EnterpriseEmployment = {
       id: firstText([item], ["id"]) || `employment-${index + 1}`,
@@ -1580,7 +1596,7 @@ function normalizeEmploymentLegacy(
       if (!company) continue;
       const start = match[1];
       const end = match[2];
-      const current = /present/i.test(end);
+      const current = careerDateIsCurrent(end);
       const entry: EnterpriseEmployment = {
         id: `resume-employment-${++index}`,
         company,
@@ -1619,7 +1635,7 @@ function normalizeEmploymentLegacy(
         const company = clean(careerMatch[2]);
         const start = clean(careerMatch[3]);
         const end = clean(careerMatch[4]);
-        const current = /present|current/i.test(end);
+        const current = careerDateIsCurrent(end);
         if (title && company)
           unique.set(`${company}|${title}|${start}|${end}`.toLowerCase(), {
             id: `resume-employment-${++careerIndex}`,
@@ -2768,7 +2784,7 @@ function narrativeProjects(
     );
     let name = clean(
       segment.match(
-        /\b(?:projects?|program(?:me)?)\s*[:\-]\s*([\s\S]{2,180}?)(?=\s+(?:role|client|system|year|highlights?|project\s+duration)\s*:|[.;|]|$)/i,
+        /\b(?:projects?|program(?:me)?)\s*(?::\s*|\s+[–—-]\s+)([\s\S]{2,180}?)(?=\s+(?:role|client|system|year|highlights?|project\s+duration)\s*:|[.;|]|$)/i,
       )?.[1] || "",
     );
     let client = rawClient;
@@ -3205,7 +3221,9 @@ function normalizeProjects(
       [item],
       ["start_date", "startDate", "from", "start"],
     );
-    const end = firstText([item], ["end_date", "endDate", "to", "end"]);
+    const explicitEnd = firstText([item], ["end_date", "endDate", "to", "end", "current_end_label"]);
+    const currentFlag = unwrap(firstValue([item], ["current", "isCurrent", "is_current"]));
+    const end = explicitEnd || (currentFlag === true || /^(?:true|yes|1)$/i.test(clean(currentFlag)) ? "Current" : "");
     return withProjectEvidence(
       {
         id: firstText([item], ["id", "project_id"]) || `project-${index + 1}`,
@@ -3288,6 +3306,21 @@ function normalizeProjects(
   output.push(...narrativeProjects(sourceScopes));
   const nativeSource = firstValue(sourceScopes, ["resume_text", "raw_text", "cv_text", "raw_cv"]);
   if (typeof unwrap(nativeSource) === "string") {
+    output.push(...labelledProjectCards(String(unwrap(nativeSource))).map((card,index)=>withProjectEvidence({
+      id:`labelled-project-card-${index+1}`,name:card.name,client:card.client,employer:"",industry:"",country:"",
+      role:card.role,modules:stringList(`${card.name} ${card.role}`.match(/\b(?:FICO|FI|CO|MM|SD|PP|PS|BW|BI|HCM|ABAP)\b/gi)||[]),
+      projectType:labelledAssignmentType(card.name),implementationType:labelledAssignmentType(card.name),
+      start:card.start,end:card.end,duration:projectDuration(card.start,card.end),
+      responsibilities:[],teamSize:null,environment:"",
+    },"parsed_resume",`resume.labelledProjectCard.${index+1}`,false,card.excerpt)));
+    output.push(...explicitProjectListCards(String(unwrap(nativeSource))).map((card, index) => withProjectEvidence({
+      id: `explicit-project-list-${index + 1}`,
+      name: card.name, client: "", employer: "", industry: "", country: "",
+      role: card.role, modules: stringList(`${card.role} ${card.name}`.match(/\b(?:FICO|FI|CO|MM|SD|PP|PS|BW|BI|HCM|ABAP)\b/gi) || []),
+      projectType: labelledAssignmentType(card.name), implementationType: labelledAssignmentType(card.name),
+      start: card.start, end: card.end, duration: projectDuration(card.start, card.end),
+      responsibilities: [], teamSize: null, environment: "",
+    }, "parsed_resume", `resume.explicitProjectList.${index + 1}`, false, card.excerpt)));
     output.push(
       ...sectionedProjectExperienceCards(String(unwrap(nativeSource))).map(
         (card, index) =>
@@ -3788,13 +3821,16 @@ function normalizeCertifications(sourceScopes: CandidateSchemaRecord[]) {
       "SAP Data Medium Exchange",
     );
   };
-  const structured = allStrings(sourceScopes, [
-    "certifications",
-    "certification",
-    "certificates",
-    "professional_certifications",
-    "professionalCertifications",
-  ]).map(completeSourceToken);
+  const structured = stringList(
+    sourceScopes.flatMap((scope) => [
+      scope.certifications,
+      scope.certification,
+      scope.certificates,
+      scope.professional_certifications,
+      scope.professionalCertifications,
+    ]),
+    true,
+  ).map(completeSourceToken);
   if (structured.length) return structured;
   const section = resumeSection(
     sourceScopes,
@@ -4992,6 +5028,7 @@ function normalizeActualCandidateSchemaFresh(
     id: item.id,
     company: item.company,
     title: item.title,
+    ...(item.location ? { location: item.location } : {}),
     startDate: item.start,
     endDate: item.end,
     description: "",
@@ -5075,7 +5112,7 @@ export function normalizeActualCandidateSchema(
   // fixtures and ad-hoc objects deliberately bypass this process cache.
   const cacheKey =
     candidateId && updatedAt
-      ? `${CANDIDATE_CANONICAL_VERSION}:${CANDIDATE_DETAIL_PROJECTION_VERSION}:${CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION}:${CANDIDATE_PROJECT_EXTRACTOR_VERSION}:${candidateId}:${updatedAt}`
+      ? `${CANDIDATE_CANONICAL_VERSION}:${CANDIDATE_DETAIL_PROJECTION_VERSION}:${CANDIDATE_EXPERIENCE_EXTRACTOR_VERSION}:${CANDIDATE_PROJECT_EXTRACTOR_VERSION}:${candidateId}:${updatedAt}:${Object.keys(raw).sort().join(",")}`
       : null;
   const cached = cacheKey ? normalizedProjectionCache.get(cacheKey) : null;
   if (cached) return cached;

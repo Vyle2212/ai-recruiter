@@ -1,0 +1,161 @@
+{
+  "reviewed_at": "2026-10-10",
+  "scope": "Representative current employer JDs plus primary SAP product documentation; not an exhaustive live SAP jobs census",
+  "method": [
+    "Use employer JDs as customer-specific requirements",
+    "Use SAP Learning/Help as technical domain definitions",
+    "Do not turn a customer preference or job threshold into a universal parser rule",
+    "Preserve source-stated product, edition, task, involvement and project dates",
+    "Validate changes against CV sources before accuracy claims"
+  ],
+  "role_families": [
+    {
+      "family": "Finance",
+      "role": "SAP Finance Architect",
+      "customer_requirements": [
+        "FICO process knowledge",
+        "A stated specialty such as FSCM, Treasury, Cash, FICA, costing, consolidation or Central Finance",
+        "Public Edition and completed implementation cycles when explicitly required"
+      ],
+      "do_not_infer": [
+        "All finance specialties from FICO",
+        "Public Edition experience from generic S/4HANA"
+      ],
+      "job_source": "https://careers.sap.com/job/Porto-Salvo-Principal-Finance-Architect-2740-262/1378089433/",
+      "knowledge_source": "https://learning.sap.com/learning-journeys/implementing-financial-accounting-in-sap-s4hana-cloud"
+    },
+    {
+      "family": "Transportation",
+      "role": "SAP TM Principal/Lead",
+      "customer_requirements": [
+        "Planning, freight orders, carrier selection, charges and settlement",
+        "Separately evidenced program leadership, client advisory and presales",
+        "Separate overall SAP tenure from TM-specific tenure"
+      ],
+      "do_not_infer": [
+        "EWM/GTS expertise from integration mentions",
+        "Completed implementations from support projects"
+      ],
+      "job_source": "https://careers.sap.com/job/Dublin-24-Principal-Transportation-Management-Consultant-D24WA02/1379509033/",
+      "knowledge_source": "https://learning.sap.com/learning-journeys/implementing-transportation-management-in-sap-s-4hana-cloud"
+    },
+    {
+      "family": "Warehouse",
+      "role": "SAP EWM/TM Consultant",
+      "customer_requirements": [
+        "Identify EWM versus TM responsibilities independently",
+        "Check the role-specific language requirement against source"
+      ],
+      "do_not_infer": [
+        "EWM proficiency from classic WM, MM deliveries, warehouse industry or TM integration"
+      ],
+      "job_source": "https://jobs.sea.deloitte.com/job/Ho-Chi-Minh-City-T&T-Consultant-SAP-EWMTM-(Japanese-language)-SEA-Ho-C/1355734066/",
+      "knowledge_source": "https://learning.sap.com/learning-journeys/implementing-extended-warehouse-management-in-sap-s-4hana-cloud"
+    },
+    {
+      "family": "Cloud development",
+      "role": "SAP BTP/ABAP Developer or Architect",
+      "customer_requirements": [
+        "Separate application development and architecture from functional delivery",
+        "Track actual CAP/RAP/ABAP technologies and project responsibility"
+      ],
+      "do_not_infer": [
+        "ABAP expertise from CAP; CAP supports Node.js/Java",
+        "Coding expertise from using Fiori apps",
+        "Functional specialty ownership from developing an extension"
+      ],
+      "job_source": "https://jobs.sea.deloitte.com/job/Jakarta-T&T-Senior-Consultant-SAP-BTP-ABAP-SEA/1365531666/",
+      "knowledge_source": "https://learning.sap.com/courses/developing-an-sap-fiori-elements-app-based-on-a-cap-odata-v4-service/using-the-sap-cloud-application-programming-model-cap-_ae6a9177-5c6f-44dd-9a55-05c2cd574412"
+    },
+    {
+      "family": "HCM Payroll",
+      "role": "SuccessFactors ECP Consultant",
+      "customer_requirements": [
+        "Employee Central Payroll/PCC and payroll process experience",
+        "Country payroll and release context",
+        "Read certification and implementation/support requirements literally"
+      ],
+      "do_not_infer": [
+        "ECP experience from Employee Central alone",
+        "All SuccessFactors modules from one certification"
+      ],
+      "job_source": "https://jobs.sea.deloitte.com/job/Manila-SAP-SuccessFactors-ECP-Consultant-HR-Strategy-&-Technology-PH-PDC/1361599166/careers.deloitte.com"
+    },
+    {
+      "family": "HCM",
+      "role": "SuccessFactors Consultant",
+      "customer_requirements": [
+        "Identify actual configured modules and integrations",
+        "Preserve preferred versus required certification wording"
+      ],
+      "do_not_infer": [
+        "Talent Management acronym TM means transportation",
+        "A role title proves every SuccessFactors module"
+      ],
+      "job_source": "https://jobs.sea.deloitte.com/job/Kuala-Lumpur-T&T-ConsultantSenior-Consultant-SuccessFactors-IDMY/1329915166/"
+    },
+    {
+      "family": "Technical operations",
+      "role": "SAP BASIS Technical Services Manager",
+      "customer_requirements": [
+        "Technical landscape, operations, migration, continuity and architecture responsibility",
+        "Distinguish certifications preferred from mandatory"
+      ],
+      "do_not_infer": [
+        "BASIS skills from daily basis or Solution Manager use",
+        "Application module expertise from operating its landscape"
+      ],
+      "job_source": "https://careers.sap.com/job/San-Pedro-Garza-Garc%C3%ADa-Technical-Services-Manager-%28SAP-Basis%29-Global-Cloud-Operations-%28GCO%29%2C-North-America-Nuev-66265/1376697233/"
+    },
+    {
+      "family": "Security",
+      "role": "SAP Security Analyst",
+      "customer_requirements": [
+        "Identify incident response versus application authorization/GRC duties",
+        "Read tools and security responsibilities independently"
+      ],
+      "do_not_infer": [
+        "GRC Access Control ownership from generic security or BASIS"
+      ],
+      "job_source": "https://careers.sap.com/job/Bucharest-Senior-Security-Analyst-0030144/1429197133/"
+    },
+    {
+      "family": "Procurement",
+      "role": "SAP sourcing/procurement implementation scope",
+      "customer_requirements": [
+        "Requisitioning, purchasing, sourcing/contracts, configuration and edition context"
+      ],
+      "do_not_infer": [
+        "ABAP skill from writing functional RICEF specifications",
+        "All MM/Ariba capabilities from generic procurement"
+      ],
+      "knowledge_source": "https://learning.sap.com/learning-journeys/implement-sap-s-4hana-cloud-public-edition-for-sourcing-and-procurement"
+    }
+  ],
+  "implemented_this_revision": [
+    "Three EWM task areas with explicit EWM domain guard",
+    "Bounded EWM heading-to-bullet inheritance",
+    "UI5/RAP/CAP coding tasks distinguished from functional delivery"
+  ],
+  "not_yet_implemented_from_research": [
+    "Edition evidence validation across all CVs",
+    "Payroll country and release interpretation",
+    "Universal leadership or full-lifecycle project counting",
+    "Full role-family taxonomy coverage"
+  ],
+  "next_research_families": [
+    "SD/O2C",
+    "MM/Ariba",
+    "PP/DS",
+    "PM/EAM",
+    "QM",
+    "PS",
+    "IBP/APO",
+    "MDG",
+    "GRC/IAG",
+    "BW/4HANA/Datasphere/SAC",
+    "Integration Suite/PI/PO",
+    "industry solutions"
+  ],
+  "accuracy_below_one_percent_verified": false
+}

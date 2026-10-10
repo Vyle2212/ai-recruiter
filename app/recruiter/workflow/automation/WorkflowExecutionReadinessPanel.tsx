@@ -146,13 +146,13 @@ function ReadinessContent({
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
+          <div className="text-xs font-semibold uppercase tracking-widest text-slate-500">
             Execution Readiness
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span
-              className={`rounded-md border px-2 py-1 text-xs font-bold uppercase tracking-[0.1em] ${tone.badge}`}
+              className={`rounded-md border px-2 py-1 text-xs font-bold uppercase tracking-widest ${tone.badge}`}
             >
               {item.status}
             </span>

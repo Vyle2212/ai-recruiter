@@ -95,10 +95,20 @@ async function main() {
       "acceptance/e2e/productionTrustAuthenticatedAcceptance.spec.ts",
       "utf8",
     );
-    const names = [...source.matchAll(/test\("([^"\n]+)"/g)].map(
+    const names = [...source.matchAll(/test\(\s*"([^"\n]+)"/g)].map(
       (match) => match[1],
     );
-    assert.equal(names.length, 16);
+    const registrationSource = readFileSync(
+      "acceptance/e2e/candidateRegistrationAcceptance.spec.ts",
+      "utf8",
+    );
+    names.push(
+      ...[...registrationSource.matchAll(/test\(\s*"([^"\n]+)"/g)].map(
+        (match) => match[1],
+      ),
+    );
+    assert.equal(names.length, 26);
+    assert.equal(new Set(names).size, names.length);
     const specs = names.map((title) => ({
       title,
       tests: [
@@ -106,6 +116,7 @@ async function main() {
           results: [
             {
               status:
+                title.startsWith("public candidate signup") ||
                 title.startsWith("external continuation") ||
                 title.startsWith("Search V2 UI pagination")
                   ? "skipped"
@@ -133,6 +144,7 @@ async function main() {
             ACCEPTANCE_PLAYWRIGHT_RESULTS: input,
             ACCEPTANCE_REPORT_PATH: output,
             ACCEPTANCE_EXTERNAL_MODE: "disabled",
+            ACCEPTANCE_REGISTRATION_JOURNEY_ENABLED: "false",
             ACCEPTANCE_EXTERNAL_PROVIDER_DISABLED: "true",
             ACCEPTANCE_FIXTURE_INSTALLED: "true",
             ACCEPTANCE_FIXTURE_REMOVED: "true",
@@ -151,7 +163,15 @@ async function main() {
     specs[0].tests[0].results[0].status = "failed";
     writeFileSync(input, JSON.stringify({ suites: [{ suites: [{ specs }] }] }));
     assert.equal(execute().status, 1);
-    assert.equal(JSON.parse(readFileSync(output, "utf8")).testCount, 16);
+    assert.equal(JSON.parse(readFileSync(output, "utf8")).testCount, 26);
+    specs[0].tests[0].results[0].status = "passed";
+    specs[0].title = "unrelated replacement test";
+    writeFileSync(input, JSON.stringify({ suites: [{ suites: [{ specs }] }] }));
+    assert.equal(
+      execute().status,
+      1,
+      "Replacing a required test must block acceptance even at the same count",
+    );
     writeFileSync(input, "{}");
     assert.equal(
       execute().status,

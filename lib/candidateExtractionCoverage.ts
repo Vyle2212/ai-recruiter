@@ -1,4 +1,10 @@
 import {
+  nestedResumeHistory,
+  nestedProjectEvidenceCount,
+  projectFieldLayoutText,
+} from "./nestedResumeHistory";
+import { pipeEmploymentCards } from "./positionedResumeEvidence";
+import {
   evaluateCandidateProfileCompletion,
   hasMeaningfulCandidateValue,
   isValidEmploymentEntry,
@@ -123,11 +129,12 @@ function explicitEmploymentCount(rawText: string): number {
       ),
     ) || []
   ).length;
-  return inline + nextLine;
+  return Math.max(inline + nextLine, pipeEmploymentCards(rawText).length);
 }
 
 /** Count repeated project-entry labels without double-counting Client + Project in one entry. */
 function explicitProjectCount(rawText: string): number {
+  rawText = projectFieldLayoutText(rawText);
   const labels = ["(?:client|customer)(?: name)?", "project(?: name| title)?"];
   const nextField =
     "(?:project(?: name| title| role| duration| dates?| experience)?|client(?: name)?|customer(?: name)?|role|position|designation|duration|period|start date|end date|education|skills?|languages?)";
@@ -164,7 +171,7 @@ const OBSERVED_PATTERNS: Record<
   education:
     /(?:^|\n)\s*(?:education|academic background|academic qualification|qualifications?)\s*:?(?:\n|$)/im,
   certifications:
-    /(?:^|\n)\s*(?:certifications?|licenses?\s*(?:&|and)\s*certifications?|credentials?)\s*:?(?:\n|$)/im,
+    /(?:^|\n)\s*(?:certifications?(?:\s*(?:&|and)\s*training)?|licenses?\s*(?:&|and)\s*certifications?|credentials?)\s*:?(?:\n|$)/im,
   skills:
     /(?:^|\n)\s*(?:skills?|technical skills?|core competencies|sap skills?|expertise)\s*:?(?:\n|$)/im,
   languages:
@@ -205,8 +212,15 @@ export function evaluateCandidateExtractionCoverage(
     "identity",
     "sap_modules",
   ]);
-  const projectAnchors = explicitProjectCount(rawText);
-  const employmentAnchors = explicitEmploymentCount(rawText);
+  const nested = nestedResumeHistory(rawText);
+  const projectAnchors = Math.max(
+    explicitProjectCount(rawText),
+    nestedProjectEvidenceCount(rawText),
+  );
+  const employmentAnchors = Math.max(
+    explicitEmploymentCount(rawText),
+    nested?.experience.length || 0,
+  );
   if (projectAnchors) observed.add("projects");
   if (employmentAnchors) observed.add("employment");
   for (const [section, pattern] of Object.entries(OBSERVED_PATTERNS)) {

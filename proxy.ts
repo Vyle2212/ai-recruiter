@@ -1,10 +1,13 @@
 import { acceptanceAuthConfigured } from "./lib/acceptanceAuthConfiguration";
+import { productionAuthConfigured } from "./lib/productionAuthConfiguration";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import {
   isStagingPortalGuardEnabled,
   shouldProtectPortal,
+  updateClientShareApiSession,
+  updateChatApiSession,
   updateRecruiterApiSession,
   updateStagingSession,
 } from "./utils/supabase/proxy";
@@ -17,11 +20,36 @@ export async function proxy(request: NextRequest) {
   );
   const recruiterApiNamespace =
     request.nextUrl.pathname.startsWith("/api/recruiter/");
+  const clientShareApi =
+    request.nextUrl.pathname === "/api/client/recruiter-shares";
+  const chatApi = request.nextUrl.pathname.startsWith("/api/chat/");
+  const candidateRegistrationApi =
+    request.method === "POST" &&
+    request.nextUrl.pathname === "/api/auth/candidate/register";
+  if (chatApi && process.env.CHAT_ENABLED !== "true")
+    return NextResponse.json(
+      { error: "not_found" },
+      { status: 404, headers: { "Cache-Control": "private, no-store" } },
+    );
+  if (
+    process.env.VERCEL_ENV === "production" &&
+    process.env.PRODUCTION_AUTH_ENABLED === "true" &&
+    !productionAuthConfigured() &&
+    request.nextUrl.pathname !== "/" &&
+    request.nextUrl.pathname !== "/auth/login"
+  ) {
+    return new NextResponse("Production authentication is not configured.", {
+      status: 503,
+      headers: { "Cache-Control": "private, no-store" },
+    });
+  }
   if (
     process.env.APP_ENV === "acceptance" &&
     !acceptanceAuthConfigured() &&
     (shouldProtectPortal(request.nextUrl.pathname) ||
       recruiterApiNamespace ||
+      clientShareApi ||
+      chatApi ||
       Boolean(apiPolicy))
   ) {
     return new NextResponse("Acceptance authentication is not configured.", {
@@ -33,8 +61,39 @@ export async function proxy(request: NextRequest) {
     return updateRecruiterApiSession(request);
   }
 
+  if (clientShareApi) {
+    return updateClientShareApiSession(request);
+  }
+
+  if (chatApi) {
+    return updateChatApiSession(request);
+  }
+
+  // Registration is the only public write during Auth cutover. Its handler
+  // repeats default-off, exact-origin, size, JSON, CAPTCHA and provider checks.
+  if (candidateRegistrationApi) {
+    return NextResponse.next();
+  }
+
+  if (
+    productionAuthConfigured() &&
+    request.nextUrl.pathname.startsWith("/api/")
+  ) {
+    return new NextResponse(
+      "This API is not available during the production Auth cutover.",
+      {
+        status: 403,
+        headers: { "Cache-Control": "private, no-store" },
+      },
+    );
+  }
+
   if (!shouldProtectPortal(request.nextUrl.pathname)) {
     return NextResponse.next();
+  }
+
+  if (productionAuthConfigured()) {
+    return updateStagingSession(request);
   }
 
   if (process.env.APP_ENV === "acceptance") {
@@ -50,11 +109,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    "/admin/:path*",
-    "/recruiter/:path*",
-    "/client/:path*",
-    "/candidate/:path*",
-    "/api/:path*",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

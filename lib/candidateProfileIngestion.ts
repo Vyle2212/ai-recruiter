@@ -214,11 +214,14 @@ export function isValidProjectEntry(item: unknown): boolean {
   const role = rowText(row, "role", "title", "position");
   const start = rowText(row, "start_date", "startDate", "from");
   const end = rowText(row, "end_date", "endDate", "to");
+  // A project can be explicitly identified without an individual date range.
+  // Its dates must never be filled from the parent employment period.
   return Boolean(
     identity &&
       role &&
-      start &&
-      validDatedRange(start, end, row.current === true),
+      (start
+        ? validDatedRange(start, end, row.current === true)
+        : !end && row.current !== true),
   );
 }
 
@@ -245,6 +248,33 @@ export function evaluateCandidateProfileCompletion(
   const missing = REQUIRED_CORE_FIELDS.filter(
     ([, aliases]) => !present(candidate, aliases),
   ).map(([name]) => name);
+  if (
+    options.requireCandidateConfirmation &&
+    !/^\+[1-9]\d{6,14}$/.test(clean(candidate.phone).replace(/[ ()\-.]/g, ""))
+  )
+    missing.push("phone");
+  if (
+    options.requireCandidateConfirmation &&
+    candidate.is_sap_profile === true
+  ) {
+    const projects = list(
+      candidate.projects ||
+        candidate.project_history ||
+        candidate.projectHistory,
+    );
+    if (
+      !projects.length ||
+      !projects.every((item) => {
+        const row = item as Record<string, unknown>;
+        return Boolean(
+          rowText(row, "client", "customer") &&
+            rowText(row, "start_date", "startDate") &&
+            isValidProjectEntry(row),
+        );
+      })
+    )
+      missing.push("project_details");
+  }
   if (!validEmployment(candidate.experience || candidate.employment))
     missing.push("employment_history");
   const sapProfile =

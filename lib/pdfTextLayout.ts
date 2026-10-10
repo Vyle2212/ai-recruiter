@@ -61,7 +61,9 @@ const compact = (items: TextItem[]) =>
   renderPdfTextItems(items).replace(/\s+/g, " ").trim();
 
 /** Split a sidebar only at a positioned, explicit employment heading. */
-function renderEmploymentColumns(items: TextItem[]): string | undefined {
+function renderEmploymentColumns(
+  items: TextItem[],
+): { text: string; x: number } | undefined {
   const ys = [...new Set(items.map((x) => x.transform[5]))].sort(
     (a, b) => b - a,
   );
@@ -77,7 +79,13 @@ function renderEmploymentColumns(items: TextItem[]): string | undefined {
       let label = "";
       for (let last = first; last < row.length && label.length <= 24; last++) {
         label += row[last].str.replace(/[^a-z]/gi, "").toUpperCase();
-        if (label !== "WORKEXPERIENCE" && label !== "PROFESSIONALEXPERIENCE")
+        if (
+          ![
+            "WORKEXPERIENCE",
+            "PROFESSIONALEXPERIENCE",
+            "PROFESSIONALSUMMARY",
+          ].includes(label)
+        )
           continue;
         const x = row[first].transform[4];
         if (x < minX + 100) continue;
@@ -89,17 +97,22 @@ function renderEmploymentColumns(items: TextItem[]): string | undefined {
           !renderPdfTextItems(left)
             .split("\n")
             .some((s) =>
-              /^(?:EDUCATION|SKILLS|LANGUAGES|SUMMARYOFQUALIFICATIONS)$/i.test(
+              /^(?:EDUCATION|SKILLS|LANGUAGES(?:SKILLS)?|SUMMARYOFQUALIFICATIONS|CORECOMPETENCIES|CERTIFICATIONS?|KEYACHIEVEMENTS)$/i.test(
                 s.replace(/[^a-z]/gi, ""),
               ),
             )
         )
           continue;
-        return [
-          renderPdfTextItems(items.filter((item) => item.transform[5] > y + 2)),
-          renderPdfTextItems(left),
-          renderPdfTextItems(right),
-        ].join("\n");
+        return {
+          x,
+          text: [
+            renderPdfTextItems(
+              items.filter((item) => item.transform[5] > y + 2),
+            ),
+            renderPdfTextItems(left) + "\n\f",
+            renderPdfTextItems(right),
+          ].join("\n"),
+        };
       }
     }
   }
@@ -108,6 +121,7 @@ function renderEmploymentColumns(items: TextItem[]): string | undefined {
 /** Keep cells in explicit employment tables together instead of interleaving prose. */
 export function createCvPdfRenderer() {
   let scopeTable = false;
+  let sidebarX: number | undefined;
   return async (page: PdfPage) => {
     const content = await page.getTextContent({
       includeMarkedContent: false,
@@ -119,7 +133,102 @@ export function createCvPdfRenderer() {
     );
     const plain = renderPdfTextItems(items);
     const columns = renderEmploymentColumns(items);
-    if (columns) return columns;
+    if (columns) {
+      sidebarX = columns.x;
+      return columns.text;
+    }
+    if (sidebarX !== undefined) {
+      const left = items.filter((item) => item.transform[4] < sidebarX! - 3);
+      if (
+        renderPdfTextItems(left)
+          .split("\n")
+          .some((line) =>
+            /^(?:EDUCATION|LANGUAGES(?:SKILLS)?|KEYACHIEVEMENTS|FUNCTIONALEXPERTISE|CERTIFICATIONS?|CORECOMPETENCIES)$/i.test(
+              line.replace(/[^a-z]/gi, ""),
+            ),
+          )
+      ) {
+        return [
+          renderPdfTextItems(left) + "\n\f",
+          renderPdfTextItems(
+            items.filter((item) => item.transform[4] >= sidebarX! - 3),
+          ),
+        ].join("\n");
+      }
+      sidebarX = undefined;
+    }
+    if (/PROJECT SUMMARY EXPERIENCE/i.test(plain)) {
+      const headers = ["Clients", "Project Type", "Role"].map((label) =>
+        items.find((item) => item.str.trim() === label),
+      );
+      if (headers.every(Boolean)) {
+        const body = items.filter(
+          (item) => item.transform[5] < headers[0]!.transform[5] - 3,
+        );
+        const starts = body.filter(
+          (item) =>
+            item.transform[4] < headers[0]!.transform[4] &&
+            body.some(
+              (other) =>
+                Math.abs(other.transform[5] - item.transform[5]) <= 2 &&
+                other.transform[4] > headers[0]!.transform[4] &&
+                other.transform[4] < headers[1]!.transform[4],
+            ),
+        );
+        if (starts.length) {
+          const ys = [...new Set(starts.map((item) => item.transform[5]))].sort(
+            (a, b) => b - a,
+          );
+          const projectX = Math.min(
+            ...body
+              .filter(
+                (item) =>
+                  item.transform[4] > headers[0]!.transform[4] &&
+                  Math.abs(item.transform[5] - ys[0]) <= 2,
+              )
+              .map((item) => item.transform[4]),
+          );
+          const roleX = Math.min(
+            ...body
+              .filter(
+                (item) =>
+                  item.transform[4] > headers[1]!.transform[4] &&
+                  item.transform[4] < headers[2]!.transform[4] &&
+                  Math.abs(item.transform[5] - ys[0]) <= 2 &&
+                  /(?:SAP|Management|Data|Expert)/.test(item.str),
+              )
+              .map((item) => item.transform[4]),
+          );
+          if (Number.isFinite(roleX))
+            return [
+              "PROJECT SUMMARY EXPERIENCE",
+              "Clients\tProject Type\tRole",
+              ...ys.map((y, index) => {
+                const block = body.filter(
+                  (item) =>
+                    item.transform[5] <= y + 2 &&
+                    item.transform[5] > (ys[index + 1] ?? -Infinity) + 2,
+                );
+                return [
+                  compact(
+                    block.filter((item) => item.transform[4] < projectX - 2),
+                  ),
+                  compact(
+                    block.filter(
+                      (item) =>
+                        item.transform[4] >= projectX - 2 &&
+                        item.transform[4] < roleX - 2,
+                    ),
+                  ),
+                  compact(
+                    block.filter((item) => item.transform[4] >= roleX - 2),
+                  ),
+                ].join("\t");
+              }),
+            ].join("\n");
+        }
+      }
+    }
     const scopeHeader = items.find((x) => /^Scope of\s*$/.test(x.str));
     if (
       /Name of Company/.test(plain) &&

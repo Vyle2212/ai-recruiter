@@ -14,7 +14,10 @@ begin
   select pg_get_functiondef(v_function), p.proconfig, p.prosecdef
     into v_definition, v_config, v_security_definer
   from pg_catalog.pg_proc p where p.oid = v_function;
-  if v_security_definer or not coalesce(v_config, '{}'::text[]) @> array['search_path='] then
+  if v_security_definer or not (
+    coalesce(v_config, '{}'::text[]) @> array['search_path=']
+    or coalesce(v_config, '{}'::text[]) @> array['search_path=""']
+  ) then
     raise exception 'candidate_profile_confirmation_function_security_invalid';
   end if;
   if has_function_privilege('public', v_function, 'execute')

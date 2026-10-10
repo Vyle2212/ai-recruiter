@@ -13,6 +13,7 @@ import {
 import { enrichCandidateUpload } from "./candidateUploadEnrichment";
 import { evaluateResumeQualityGate } from "./resumeQualityGate";
 import { enrichCandidateWithSapTaxonomy } from "./sapTalentTaxonomy";
+import { sourceSupportsSapModuleClaim } from "./sourceSapModuleClaims";
 
 /** The PDF readability check runs before full ingestion. Consult the same
  * employment readers used by ingestion before treating readable text as an
@@ -35,6 +36,10 @@ function nativeEmploymentRecoverable(text: string, fileName: string) {
 }
 
 export type CandidateCvIngestionSource = "admin_upload" | "candidate_upload";
+
+// Keep the public ingestion revision in a browser-safe module so resumable
+// admin uploads and revision-pinned workers use the same value.
+export { CANDIDATE_CV_INGESTION_REVISION } from "./cvIngestionRevision";
 
 type CandidateClassification = ReturnType<typeof classifyCandidateText>;
 export type CandidateCvParserQuality = ReturnType<
@@ -149,7 +154,36 @@ export async function prepareCandidateCv(input: {
     source_file: input.fileName,
     file_name: input.fileName,
   });
-  const candidatePayload = enrichCandidateUpload(baseCandidatePayload, rawText);
+  const enriched = enrichCandidateUpload(baseCandidatePayload, rawText);
+  const sourceModules = enriched.sap_modules.filter((module: string) =>
+    sourceSupportsSapModuleClaim(module, rawText),
+  );
+  const sourceSecondaryModules = enriched.secondary_modules.filter(
+    (module: string) => sourceSupportsSapModuleClaim(module, rawText),
+  );
+  const sourcePrimaryModule = sourceSupportsSapModuleClaim(
+    enriched.primary_module,
+    rawText,
+  )
+    ? enriched.primary_module
+    : null;
+  // The upload parser and enriched source reader expose two naming styles.
+  // Return one resolved value in both so consumers cannot select stale seeds.
+  // This is only the new CV ingestion path, never a candidate manual edit.
+  const candidatePayload = {
+    ...enriched,
+    primary_module: sourcePrimaryModule,
+    primaryModule: sourcePrimaryModule,
+    sap_modules: sourceModules,
+    sapModules: sourceModules,
+    secondary_modules: sourceSecondaryModules,
+    secondaryModules: sourceSecondaryModules,
+    extraction_module_claims_rejected: enriched.sap_modules.filter(
+      (module: string) => !sourceSupportsSapModuleClaim(module, rawText),
+    ),
+    currentCompany: enriched.current_company,
+    currentTitle: enriched.current_title,
+  };
   const extractionCoverage = evaluateCandidateExtractionCoverage(
     rawText,
     candidatePayload,

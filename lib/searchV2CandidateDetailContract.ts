@@ -1,3 +1,4 @@
+import { canonicalJobPreferences } from "./candidateJobPreferences";
 import type { Candidate360Profile } from "./candidate360Types";
 import type { CanonicalProfileOverview } from "./candidateProfileOverview";
 import {
@@ -9,7 +10,7 @@ import {
 import { buildCandidateEducationPresentation } from "./candidateProfilePresentation";
 
 export const SEARCH_V2_CANDIDATE_DETAIL_RESPONSE_VERSION =
-  "search-v2-candidate-detail-response-v29-authorization-scope";
+  "search-v2-candidate-detail-response-v30-job-preferences";
 
 export type SearchV2CandidateDetailScope = "recruiter" | "technical_debug";
 
@@ -113,6 +114,7 @@ export function buildSearchV2RecruiterCandidateDetail(
   return {
     contractVersion: SEARCH_V2_CANDIDATE_DETAIL_RESPONSE_VERSION,
     candidateId: profile.candidateId,
+    jobPreferences: canonicalJobPreferences(profile.jobPreferences),
     canonicalOverview,
     educationPresentation,
     enterpriseProfile: {
@@ -145,7 +147,12 @@ export function buildSearchV2RecruiterCandidateDetail(
         duration: cleanCandidatePresentationText(item.duration),
         current: item.current,
         linkedProjectIds: [...(item.linkedProjectIds || [])],
-        estimatedTenure: item.estimatedTenure ? { ...item.estimatedTenure, projectIds: [...item.estimatedTenure.projectIds] } : undefined,
+        estimatedTenure: item.estimatedTenure
+          ? {
+              ...item.estimatedTenure,
+              projectIds: [...item.estimatedTenure.projectIds],
+            }
+          : undefined,
       })),
       projects: enterprise.projects.map((item) => ({
         id: item.id,

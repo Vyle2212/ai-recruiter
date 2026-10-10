@@ -36,6 +36,8 @@ export type AcceptanceCredentialBundle = {
       email: string;
       password: string;
       authUserId: string;
+      profileId?: string;
+      clientId?: string;
       role: string | null;
       status: string | null;
     }

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
+import { selectJobComparisonResults } from "@/lib/searchV2JobComparison";
 
 import { adaptCandidatesToSearchV2Documents } from "@/lib/candidateSearchV2Adapter";
 
@@ -88,7 +90,46 @@ type SearchV2Body = CandidateSearchV2Request & {
 
   matchQuality?: SearchMatchQuality;
   integrityPlan?: GuidedSearchHandoff["integrityPlan"];
+  comparison?: {
+    scope: "shortlisted";
+    jobId: string;
+    anchorCandidateId?: string;
+  };
 };
+
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const comparisonDatabase = createLazySupabaseServiceClient();
+
+async function jobShortlistedRankedResults<T extends { candidateId: string }>(
+  ranked: T[],
+  comparison: NonNullable<SearchV2Body["comparison"]>,
+  ownerProfileId: string,
+  organizationId: string | null,
+) {
+  const ids = new Set<string>();
+  // Never silently truncate a large shortlist. The bounded read prevents a
+  // user-controlled list from creating an unbounded database request.
+  for (let offset = 0; offset <= 10000; offset += 500) {
+    let query = comparisonDatabase
+      .from("recruiter_search_shortlist_items")
+      .select("candidate_id")
+      .eq("owner_profile_id", ownerProfileId)
+      .eq("scope_key", `job:${comparison.jobId.toLowerCase()}`)
+      .order("id", { ascending: true })
+      .range(offset, offset + 499);
+    query = organizationId
+      ? query.eq("organization_id", organizationId)
+      : query.is("organization_id", null);
+    const { data, error } = await query;
+    if (error) throw error;
+    for (const item of data || []) ids.add(item.candidate_id);
+    if ((data || []).length < 500) break;
+    if (offset === 10000)
+      throw new Error("Shortlist exceeds comparison limit.");
+  }
+  return selectJobComparisonResults(ranked, ids, comparison.anchorCandidateId);
+}
 
 const SEARCH_RANKING_CACHE_VERSION = SEARCH_V2_CACHE_VERSION;
 const SEARCH_RANKING_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -127,54 +168,6 @@ function canonicalDatasetProjection(
     projection,
   });
   return { projection, cacheHit: false };
-}
-const engineReadinessByAuthorizationScope = new Map<string, Promise<void>>();
-function ensureSearchV2EngineReady(authorizationScope: string) {
-  const existing = engineReadinessByAuthorizationScope.get(authorizationScope);
-  if (existing) return existing;
-  const readiness = fetchCandidateSource()
-    .then((dataset) => {
-      const canonical = canonicalDatasetProjection(
-        dataset.documents,
-        dataset.revision,
-        authorizationScope,
-      ).projection.documents;
-      rankCandidatesV2(
-        canonical,
-        {
-          query:
-            "Senior SAP FICO Consultant in Malaysia with Mandarin and at least 8 years of experience",
-          mode: "hybrid",
-          talentPool: "internal_profiles",
-          filters: { deliveryExperience: ["Implementation"] },
-          criteria: [
-            {
-              id: "prewarm-delivery",
-              label: "Demonstrated SAP FICO implementation depth",
-              conceptId: "FICO",
-              importance: "most_important",
-              source: "ai_suggestion",
-            },
-            {
-              id: "prewarm-leadership",
-              label: "Delivery ownership and stakeholder leadership",
-              importance: "important",
-              source: "ai_suggestion",
-            },
-          ],
-          page: 1,
-          pageSize: 1,
-        },
-        undefined,
-        true,
-      );
-    })
-    .catch((error) => {
-      engineReadinessByAuthorizationScope.delete(authorizationScope);
-      throw error;
-    });
-  engineReadinessByAuthorizationScope.set(authorizationScope, readiness);
-  return readiness;
 }
 type RankedSearchCacheEntry = {
   createdAt: number;
@@ -318,14 +311,9 @@ export async function GET(request: NextRequest) {
     void prewarmCandidateSearchV2Dataset().catch(() => undefined);
     readiness = searchV2ProjectionReadiness();
   }
-  if (readiness.status === "ready") {
-    // Recruiter-visible readiness follows the valid dataset. Ranking prewarm is
-    // intentionally detached so an exact identity request cannot queue behind
-    // a synchronous full-population scoring pass in this request.
-    void ensureSearchV2EngineReady(authorization.scope.cacheKey).catch(
-      () => undefined,
-    );
-  }
+  // Readiness must stay cheap: full-population scoring in this GET runs on the
+  // same Node event loop as the next POST and can stall the first search.
+  // Ranking is performed for the user's actual requirements in POST.
   const readyDataset =
     readiness.status === "ready"
       ? await fetchCandidateSource().catch(() => null)
@@ -366,6 +354,7 @@ export async function GET(request: NextRequest) {
   );
 }
 export async function POST(request: NextRequest) {
+  const routeStartedAt = performance.now();
   const authorization = await requireRecruiterSearchAuthorization({
     permission: "search:read",
     route: "/api/recruiter/search-v2",
@@ -373,6 +362,31 @@ export async function POST(request: NextRequest) {
   if (!authorization.allowed)
     return recruiterSearchAuthorizationDenied(authorization);
 
+  const authorizationMs = performance.now() - routeStartedAt;
+  const response = await authorizedSearchPost(request, authorization);
+  console.info(
+    "[search-v2] request timing",
+    JSON.stringify({
+      authorizationMs: Math.round(authorizationMs),
+      handlerMs: Math.round(performance.now() - routeStartedAt),
+    }),
+  );
+  // Numeric timings expose no actor or credential information. Existing total
+  // starts after authorization, so retain it and report the full handler too.
+  response.headers.append(
+    "Server-Timing",
+    `authorization;dur=${authorizationMs.toFixed(1)}, handler;dur=${(performance.now() - routeStartedAt).toFixed(1)}`,
+  );
+  return response;
+}
+
+async function authorizedSearchPost(
+  request: NextRequest,
+  authorization: Extract<
+    Awaited<ReturnType<typeof requireRecruiterSearchAuthorization>>,
+    { allowed: true }
+  >,
+) {
   try {
     const startedAt = performance.now();
     const requestCorrelationId =
@@ -387,6 +401,20 @@ export async function POST(request: NextRequest) {
       rawQuery: queryNormalization.rawQuery,
       query: queryNormalization.normalizedQuery,
     };
+    if (
+      body.comparison &&
+      (body.comparison.scope !== "shortlisted" ||
+        !UUID.test(body.comparison.jobId) ||
+        (body.comparison.anchorCandidateId &&
+          !UUID.test(body.comparison.anchorCandidateId)) ||
+        body.talentPool === "linkedin_talent_pool" ||
+        body.page !== 1 ||
+        body.pageSize !== 20)
+    )
+      return NextResponse.json(
+        { error: "Invalid job comparison request." },
+        { status: 400, headers: { "Cache-Control": "private, no-store" } },
+      );
     if (
       (Array.isArray(body.documents) || Array.isArray(body.candidates)) &&
       !searchV2RequestDatasetAllowed({
@@ -752,6 +780,28 @@ export async function POST(request: NextRequest) {
       lifecycleBlockedCount = 0,
       datasetCache: "hit" | "miss" | "request" = "request";
     let documents: CandidateSearchV2Document[];
+    // The lifecycle gate must be fresh for every request, but it is independent
+    // of source hydration. Start it now so its database round trip overlaps
+    // the (potentially cold) index read; still await it before any result or
+    // cached ranking can be returned.
+    const lifecycleStartedAt = performance.now();
+    const lifecyclePromise = applyCurrentCandidateSearchLifecycle(
+      // The fetched documents are passed after hydration below. Fetch the
+      // mutable gate independently here so it cannot queue behind hydration.
+      [],
+      request.signal,
+    ).then(
+      (value) => ({
+        ok: true as const,
+        value,
+        durationMs: performance.now() - lifecycleStartedAt,
+      }),
+      (error: unknown) => ({
+        ok: false as const,
+        error,
+        durationMs: performance.now() - lifecycleStartedAt,
+      }),
+    );
     if (lightweightIdentityLookup) {
       const retrievalStartedAt = performance.now();
       const dataset = await fetchCandidateSourceByIdentityToken(
@@ -790,11 +840,17 @@ export async function POST(request: NextRequest) {
             .join("|"),
         ).slice(0, 12);
     }
-    const lifecycle = await applyCurrentCandidateSearchLifecycle(
-      documents,
-      request.signal,
+    const lifecycleOutcome = await lifecyclePromise;
+    if (!lifecycleOutcome.ok) throw lifecycleOutcome.error;
+    const lifecycle = lifecycleOutcome.value;
+    // Record the lifecycle query itself, not the longer wall-clock interval
+    // until source hydration also finishes. The two operations intentionally
+    // overlap, so measuring here would double-count retrieval in diagnostics.
+    const lifecycleMs = lifecycleOutcome.durationMs;
+    const blockedIds = lifecycle.blockedIds;
+    documents = documents.filter(
+      (document) => !blockedIds.has(String(document.candidateId || "")),
     );
-    documents = lifecycle.documents;
     lifecycleBlockedCount = lifecycle.blockedCount;
     datasetRevision = `${datasetRevision}:lifecycle-${lifecycle.visibilityRevision}`;
     unifiedIntent = confirmSearchV2IdentityIntent(
@@ -835,19 +891,27 @@ export async function POST(request: NextRequest) {
     const cached = rankingCacheable ? freshRankedSearch(cacheKey) : null;
     const cacheReadMs = performance.now() - cacheReadStartedAt;
     if (cached) {
+      const visibleRanked = body.comparison
+        ? await jobShortlistedRankedResults(
+            cached.rankedResults,
+            body.comparison,
+            authorization.scope.profileId,
+            authorization.scope.organizationId,
+          )
+        : cached.rankedResults;
       const result = paginateRankedCandidatesV2(
-        cached.rankedResults,
+        visibleRanked,
         cached.totalDocuments,
         searchRequest,
         profileHash,
       );
       result.committedSearchId = profileHash;
       result.requestId = requestCorrelationId;
-      const tiers = searchV2TierCounts(cached.rankedResults);
+      const tiers = searchV2TierCounts(visibleRanked);
       result.summary = {
         ...result.summary,
         eligibleTotal: cached.eligibleTotal,
-        visibleTotal: cached.rankedResults.length,
+        visibleTotal: visibleRanked.length,
         verifiedVisible: tiers.exact_verified,
         supportedVisible: tiers.exact_supported,
         relatedVisible: tiers.related,
@@ -858,6 +922,7 @@ export async function POST(request: NextRequest) {
       const phases = {
         parse: queryParsingMs,
         retrieval: retrievalMs,
+        lifecycle: lifecycleMs,
         evidence: sourceEvidenceLoadingMs,
         projection: evidenceProjectionMs,
         retrievalFilter: 0,
@@ -957,18 +1022,29 @@ export async function POST(request: NextRequest) {
       const identityPage = searchRequest.page || 1;
       const identityPageSize = searchRequest.pageSize || 20;
       const startIndex = (identityPage - 1) * identityPageSize;
-      const identityResults = allMatches
-        .slice(startIndex, startIndex + identityPageSize)
-        .map(({ document, matchRank }) =>
-          identityOnlyCandidateProjection(
-            document,
-            matchRank === 0 ? "exact" : matchRank === 1 ? "partial" : "fuzzy",
-          ),
-        );
+      const projectedMatches = allMatches.map(({ document, matchRank }) =>
+        identityOnlyCandidateProjection(
+          document,
+          matchRank === 0 ? "exact" : matchRank === 1 ? "partial" : "fuzzy",
+        ),
+      );
+      const visibleMatches = body.comparison
+        ? await jobShortlistedRankedResults(
+            projectedMatches,
+            body.comparison,
+            authorization.scope.profileId,
+            authorization.scope.organizationId,
+          )
+        : projectedMatches;
+      const identityResults = visibleMatches.slice(
+        startIndex,
+        startIndex + identityPageSize,
+      );
       const totalMs = performance.now() - startedAt;
       const phases = {
         parse: queryParsingMs,
         retrieval: retrievalMs,
+        lifecycle: lifecycleMs,
         evidence: sourceEvidenceLoadingMs,
         projection: evidenceProjectionMs,
         retrievalFilter: 0,
@@ -991,9 +1067,9 @@ export async function POST(request: NextRequest) {
           },
           summary: {
             totalDocuments: dedupe.documents.length,
-            totalMatched: allMatches.length,
+            totalMatched: visibleMatches.length,
             eligibleTotal: allMatches.length,
-            visibleTotal: allMatches.length,
+            visibleTotal: visibleMatches.length,
             verifiedVisible: 0,
             supportedVisible: 0,
             relatedVisible: 0,
@@ -1057,19 +1133,27 @@ export async function POST(request: NextRequest) {
         directRequest,
         unifiedIntent,
       );
+      const visibleDirectResults = body.comparison
+        ? await jobShortlistedRankedResults(
+            directResults,
+            body.comparison,
+            authorization.scope.profileId,
+            authorization.scope.organizationId,
+          )
+        : directResults;
       const result = paginateRankedCandidatesV2(
-        directResults,
+        visibleDirectResults,
         dedupe.documents.length,
         directRequest,
         profileHash,
       );
       result.committedSearchId = profileHash;
       result.requestId = requestCorrelationId;
-      const tiers = searchV2TierCounts(directResults);
+      const tiers = searchV2TierCounts(visibleDirectResults);
       result.summary = {
         ...result.summary,
         eligibleTotal: directResults.length,
-        visibleTotal: directResults.length,
+        visibleTotal: visibleDirectResults.length,
         verifiedVisible: tiers.exact_verified,
         supportedVisible: tiers.exact_supported,
         relatedVisible: tiers.related,
@@ -1080,6 +1164,7 @@ export async function POST(request: NextRequest) {
       const phases = {
         parse: queryParsingMs,
         retrieval: retrievalMs,
+        lifecycle: lifecycleMs,
         evidence: sourceEvidenceLoadingMs,
         projection: evidenceProjectionMs,
         retrievalFilter: 0,
@@ -1139,19 +1224,27 @@ export async function POST(request: NextRequest) {
       );
     const rankedResults = visibleSearchV2Results(eligibleResults, profile);
     const presentationStartedAt = performance.now();
+    const visibleRanked = body.comparison
+      ? await jobShortlistedRankedResults(
+          rankedResults,
+          body.comparison,
+          authorization.scope.profileId,
+          authorization.scope.organizationId,
+        )
+      : rankedResults;
     const result = paginateRankedCandidatesV2(
-      rankedResults,
+      visibleRanked,
       dedupe.documents.length,
       searchRequest,
       profileHash,
     );
     result.committedSearchId = profileHash;
     result.requestId = requestCorrelationId;
-    const tiers = searchV2TierCounts(rankedResults);
+    const tiers = searchV2TierCounts(visibleRanked);
     result.summary = {
       ...result.summary,
       eligibleTotal: eligibleResults.length,
-      visibleTotal: rankedResults.length,
+      visibleTotal: visibleRanked.length,
       verifiedVisible: tiers.exact_verified,
       supportedVisible: tiers.exact_supported,
       relatedVisible: tiers.related,
@@ -1196,6 +1289,7 @@ export async function POST(request: NextRequest) {
     const phases = {
       parse: queryParsingMs + (engineTimings.queryParsingMs || 0),
       retrieval: retrievalMs,
+      lifecycle: lifecycleMs,
       evidence: sourceEvidenceLoadingMs,
       projection: evidenceProjectionMs,
       retrievalFilter: engineTimings.retrievalFilteringMs || 0,

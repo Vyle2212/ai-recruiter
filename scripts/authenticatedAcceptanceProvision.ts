@@ -21,7 +21,23 @@ import {
   type AcceptanceCredentialBundle,
   type AcceptanceIdentityKey,
 } from "../lib/acceptanceSyntheticIdentityContract";
+import { verifyAcceptanceAuthConfirmation } from "../lib/acceptanceAuthConfirmation";
 import { acceptanceCleanupPlan } from "../lib/acceptanceCleanupPlan";
+import {
+  acceptanceCandidateRegistrationIntentPath,
+  acceptanceRegistrationIntentOwnsAuthUser,
+  parseAcceptanceCandidateRegistrationIntent,
+  type AcceptanceCandidateRegistrationIntent,
+} from "../lib/acceptanceCandidateRegistrationIntent";
+import {
+  acceptanceRegistrationCandidateOwned,
+  acceptanceRegistrationProfileOwned,
+} from "../lib/acceptanceCandidateRegistrationOwnership";
+import { ACCEPTANCE_SYNTHETIC_CANDIDATE_ID } from "../lib/acceptanceSyntheticCandidateFixture";
+import {
+  ORIGINAL_CV_BUCKET,
+  ownedOriginalCvObjectKey,
+} from "../lib/originalCvArchiveKey";
 
 type SafeConfig = Extract<
   ReturnType<typeof evaluateAcceptanceEnvironment>,
@@ -81,6 +97,391 @@ function adminClient(config: SafeConfig) {
   });
 }
 
+const MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY = 100;
+const ACCEPTANCE_LIFECYCLE_CANDIDATE_NAME = "Synthetic PTF Tester";
+
+function syntheticUploadCandidateName(runHash: string) {
+  if (!/^[0-9a-f]{16}$/.test(runHash))
+    throw new Error("acceptance_upload_run_hash_invalid");
+  const suffix = [...runHash]
+    .map((digit) => String.fromCharCode(97 + parseInt(digit, 16)))
+    .join("");
+  return `Synthetic ${suffix[0].toUpperCase()}${suffix.slice(1)}`;
+}
+
+async function discoverRunOwnedOriginalCvObjectKeys(
+  client: SupabaseClient,
+  authUserIds: string[],
+) {
+  const bucket = client.storage.from(ORIGINAL_CV_BUCKET);
+  const objectKeys: string[] = [];
+  for (const authUserId of authUserIds) {
+    const { data, error } = await bucket.list(authUserId, {
+      limit: MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY + 1,
+      offset: 0,
+      sortBy: { column: "name", order: "asc" },
+    });
+    if (error || !Array.isArray(data))
+      throw new Error("acceptance_original_cv_discovery_failed");
+    const entries = data || [];
+    if (entries.length > MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY)
+      throw new Error("acceptance_original_cv_cleanup_bound_exceeded");
+    for (const entry of entries) {
+      if (!entry.id)
+        throw new Error("acceptance_original_cv_unexpected_layout");
+      const objectKey = `${authUserId}/${entry.name}`;
+      if (!ownedOriginalCvObjectKey(authUserId, objectKey))
+        throw new Error("acceptance_original_cv_ownership_mismatch");
+      objectKeys.push(objectKey);
+    }
+  }
+  return objectKeys;
+}
+
+async function readRunOwnedOriginalCvLedger(ledgerPath: string) {
+  let contents = "";
+  try {
+    contents = await readFile(ledgerPath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw new Error("acceptance_original_cv_ledger_read_failed");
+  }
+  const objectKeys: string[] = [];
+  for (const line of contents.split("\n").filter(Boolean)) {
+    let entry: unknown;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      throw new Error("acceptance_original_cv_ledger_invalid");
+    }
+    if (
+      !entry ||
+      typeof entry !== "object" ||
+      Object.keys(entry).length !== 1 ||
+      typeof (entry as { objectKey?: unknown }).objectKey !== "string"
+    )
+      throw new Error("acceptance_original_cv_ledger_invalid");
+    objectKeys.push((entry as { objectKey: string }).objectKey);
+  }
+  return objectKeys;
+}
+
+async function readCandidateRegistrationIntent(
+  intentPath: string,
+  runHash: string,
+  captureEmail?: string,
+): Promise<AcceptanceCandidateRegistrationIntent | null> {
+  let contents = "";
+  try {
+    contents = await readFile(intentPath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw new Error("acceptance_registration_intent_read_failed");
+  }
+  if (!captureEmail)
+    throw new Error("acceptance_registration_capture_email_missing");
+  return parseAcceptanceCandidateRegistrationIntent(
+    contents,
+    runHash,
+    captureEmail,
+  );
+}
+
+function mergeRunOwnedOriginalCvObjectKeys(
+  discoveredObjectKeys: string[],
+  ledgerObjectKeys: string[],
+  authUserIds: string[],
+) {
+  const maximum =
+    MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY * authUserIds.length;
+  if (ledgerObjectKeys.length > maximum)
+    throw new Error("acceptance_original_cv_cleanup_bound_exceeded");
+  for (const objectKey of ledgerObjectKeys) {
+    if (
+      !authUserIds.some((authUserId) =>
+        ownedOriginalCvObjectKey(authUserId, objectKey),
+      )
+    )
+      throw new Error("acceptance_original_cv_ownership_mismatch");
+  }
+  for (const authUserId of authUserIds) {
+    const ownedLedgerKeys = new Set(
+      ledgerObjectKeys.filter((objectKey) =>
+        ownedOriginalCvObjectKey(authUserId, objectKey),
+      ),
+    );
+    if (ownedLedgerKeys.size > MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY)
+      throw new Error("acceptance_original_cv_cleanup_bound_exceeded");
+  }
+  const objectKeys = [
+    ...new Set([...discoveredObjectKeys, ...ledgerObjectKeys]),
+  ];
+  if (objectKeys.length > maximum)
+    throw new Error("acceptance_original_cv_cleanup_bound_exceeded");
+  return objectKeys;
+}
+
+async function cleanupRunOwnedOriginalCvData(
+  client: SupabaseClient,
+  authUserIds: string[],
+  runHash: string,
+  ledgerObjectKeys: string[] = [],
+) {
+  const discoveredObjectKeys = await discoverRunOwnedOriginalCvObjectKeys(
+    client,
+    authUserIds,
+  );
+  const objectKeys = mergeRunOwnedOriginalCvObjectKeys(
+    discoveredObjectKeys,
+    ledgerObjectKeys,
+    authUserIds,
+  );
+  if (!objectKeys.length) return;
+  const references = objectKeys.map(
+    (objectKey) => `${ORIGINAL_CV_BUCKET}/${objectKey}`,
+  );
+  const { data: candidates, error: candidateDiscoveryError } = await client
+    .from("candidates")
+    .select("id,name,source_file")
+    .in("source_file", references)
+    .limit(MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY + 1);
+  if (
+    candidateDiscoveryError ||
+    !Array.isArray(candidates) ||
+    (candidates || []).length > MAX_ACCEPTANCE_ORIGINAL_CV_OBJECTS_PER_IDENTITY
+  )
+    throw new Error("acceptance_original_cv_candidate_discovery_failed");
+  const expectedName = syntheticUploadCandidateName(runHash);
+  if (
+    (candidates || []).some(
+      (candidate) =>
+        ![expectedName, ACCEPTANCE_LIFECYCLE_CANDIDATE_NAME].includes(
+          candidate.name,
+        ) || !references.includes(String(candidate.source_file || "")),
+    )
+  )
+    throw new Error("acceptance_original_cv_candidate_ownership_mismatch");
+  const candidateIds = (candidates || []).map((candidate) => candidate.id);
+  for (const table of [
+    "candidate_chat_contact_consent_events",
+    "candidate_chat_contact_consents",
+    "chat_conversations",
+  ]) {
+    if (!candidateIds.length) break;
+    const { count, error } = await client
+      .from(table)
+      .select("candidate_id", { count: "exact", head: true })
+      .in("candidate_id", candidateIds);
+    if (error || count !== 0)
+      throw new Error("acceptance_original_cv_candidate_dependency_detected");
+  }
+  const { error: reviewDeleteError } = await client
+    .from("candidate_upload_reviews")
+    .delete()
+    .in("source_file", references);
+  if (reviewDeleteError)
+    throw new Error("acceptance_original_cv_review_cleanup_failed");
+  if (candidateIds.length) {
+    const { error: candidateDeleteError } = await client
+      .from("candidates")
+      .delete()
+      .in("id", candidateIds);
+    if (candidateDeleteError)
+      throw new Error("acceptance_original_cv_candidate_cleanup_failed");
+  }
+  const [candidateResidue, reviewResidue] = await Promise.all([
+    client
+      .from("candidates")
+      .select("id", { count: "exact", head: true })
+      .in("source_file", references),
+    client
+      .from("candidate_upload_reviews")
+      .select("id", { count: "exact", head: true })
+      .in("source_file", references),
+  ]);
+  if (
+    candidateResidue.error ||
+    reviewResidue.error ||
+    candidateResidue.count !== 0 ||
+    reviewResidue.count !== 0
+  )
+    throw new Error("acceptance_original_cv_database_residue_detected");
+  const bucket = client.storage.from(ORIGINAL_CV_BUCKET);
+  const { error: removeError } = await bucket.remove(objectKeys);
+  if (removeError) throw new Error("acceptance_original_cv_cleanup_failed");
+  for (const authUserId of authUserIds) {
+    const { data: remaining, error: residueError } = await bucket.list(
+      authUserId,
+      { limit: 1, offset: 0 },
+    );
+    if (residueError || !Array.isArray(remaining) || remaining.length)
+      throw new Error("acceptance_original_cv_residue_detected");
+  }
+}
+
+async function verifyAbsentChatFixtureReferences(
+  client: SupabaseClient,
+  profileIds: string[],
+  runId: string,
+) {
+  const fixture = await client
+    .from("acceptance_synthetic_candidates")
+    .select("candidate_id", { count: "exact", head: true })
+    .eq("owner_run_id", runId);
+  if (fixture.error || fixture.count !== 0 || profileIds.length === 0)
+    throw new Error("acceptance_chat_fixture_scope_unresolved");
+  const probes: [string, string, string[]][] = [
+    ["chat_conversations", "created_by_profile_id", profileIds],
+    ["chat_conversations", "recipient_profile_id", profileIds],
+    ["chat_conversation_participants", "user_profile_id", profileIds],
+    ["chat_messages", "sender_profile_id", profileIds],
+    ["chat_message_events", "actor_profile_id", profileIds],
+    ["candidate_chat_contact_consents", "user_profile_id", profileIds],
+    ["candidate_chat_contact_consent_events", "user_profile_id", profileIds],
+    ["chat_conversations", "candidate_id", [ACCEPTANCE_SYNTHETIC_CANDIDATE_ID]],
+    [
+      "candidate_chat_contact_consents",
+      "candidate_id",
+      [ACCEPTANCE_SYNTHETIC_CANDIDATE_ID],
+    ],
+    [
+      "candidate_chat_contact_consent_events",
+      "candidate_id",
+      [ACCEPTANCE_SYNTHETIC_CANDIDATE_ID],
+    ],
+  ];
+  for (const [table, column, ids] of probes) {
+    const result = await client
+      .from(table)
+      .select("*", { count: "exact", head: true })
+      .in(column, ids);
+    if (result.error || result.count !== 0)
+      throw new Error("acceptance_chat_fixture_references_unresolved");
+  }
+}
+
+async function cleanupAbsentChatFixtureReferences(
+  client: SupabaseClient,
+  profileIds: string[],
+  runId: string,
+) {
+  const fixture = await client
+    .from("acceptance_synthetic_candidates")
+    .select("candidate_id", { count: "exact", head: true })
+    .eq("owner_run_id", runId);
+  if (fixture.error || fixture.count !== 0 || profileIds.length === 0)
+    throw new Error("acceptance_chat_fixture_scope_unresolved");
+  const probes: [string, string, string[]][] = [
+    ["chat_conversations", "created_by_profile_id", profileIds],
+    ["chat_conversations", "recipient_profile_id", profileIds],
+    ["chat_conversation_participants", "user_profile_id", profileIds],
+    ["chat_messages", "sender_profile_id", profileIds],
+    ["chat_message_events", "actor_profile_id", profileIds],
+    ["chat_conversations", "candidate_id", [ACCEPTANCE_SYNTHETIC_CANDIDATE_ID]],
+  ];
+  for (const [table, column, ids] of probes) {
+    const result = await client
+      .from(table)
+      .select("*", { count: "exact", head: true })
+      .in(column, ids);
+    if (result.error || result.count !== 0)
+      throw new Error("acceptance_chat_fixture_references_unresolved");
+  }
+  // A previous always-run fixture step can remove the lease before identity
+  // cleanup. Consent rows are still safely attributable only when both sides
+  // of every remaining row are the fixed candidate and one of this run's
+  // ledger-owned profiles. Prove the two sets are identical before deleting.
+  for (const table of [
+    "candidate_chat_contact_consent_events",
+    "candidate_chat_contact_consents",
+  ]) {
+    const [byProfile, byCandidate, intersection] = await Promise.all([
+      client
+        .from(table)
+        .select("*", { count: "exact", head: true })
+        .in("user_profile_id", profileIds),
+      client
+        .from(table)
+        .select("*", { count: "exact", head: true })
+        .eq("candidate_id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID),
+      client
+        .from(table)
+        .select("*", { count: "exact", head: true })
+        .eq("candidate_id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID)
+        .in("user_profile_id", profileIds),
+    ]);
+    if (
+      byProfile.error ||
+      byCandidate.error ||
+      intersection.error ||
+      byProfile.count === null ||
+      byCandidate.count === null ||
+      intersection.count === null ||
+      byProfile.count !== intersection.count ||
+      byCandidate.count !== intersection.count
+    )
+      throw new Error("acceptance_chat_fixture_references_unresolved");
+    if (intersection.count > 0) {
+      const { error } = await client
+        .from(table)
+        .delete()
+        .eq("candidate_id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID)
+        .in("user_profile_id", profileIds);
+      if (error) throw new Error("acceptance_chat_fixture_cleanup_failed");
+    }
+    const [profileResidue, candidateResidue] = await Promise.all([
+      client
+        .from(table)
+        .select("*", { count: "exact", head: true })
+        .in("user_profile_id", profileIds),
+      client
+        .from(table)
+        .select("*", { count: "exact", head: true })
+        .eq("candidate_id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID),
+    ]);
+    if (
+      profileResidue.error ||
+      candidateResidue.error ||
+      profileResidue.count !== 0 ||
+      candidateResidue.count !== 0
+    )
+      throw new Error("acceptance_chat_fixture_residue_detected");
+  }
+}
+
+async function verifyAbsentOriginalCvApprovalReferences(
+  client: SupabaseClient,
+  profileIds: string[],
+  runId: string,
+) {
+  if (!profileIds.length)
+    throw new Error("acceptance_original_cv_approval_scope_invalid");
+  const fixture = await client
+    .from("acceptance_synthetic_candidates")
+    .select("candidate_id", { count: "exact", head: true })
+    .eq("owner_run_id", runId);
+  if (fixture.error || fixture.count !== 0)
+    throw new Error("acceptance_original_cv_approval_fixture_scope_ambiguous");
+  const references: [string, string][] = [
+    ["recruiter_original_cv_requests", "recruiter_profile_id"],
+    ["recruiter_original_cv_requests", "resolved_by_profile_id"],
+    ["recruiter_original_cv_grants", "recruiter_profile_id"],
+    ["recruiter_original_cv_grants", "approved_by_profile_id"],
+    ["recruiter_original_cv_grants", "updated_by_profile_id"],
+    ["recruiter_original_cv_grant_events", "recruiter_profile_id"],
+    ["recruiter_original_cv_grant_events", "actor_profile_id"],
+    ["recruiter_original_cv_access_events", "actor_profile_id"],
+  ];
+  for (const [table, column] of references) {
+    const probe = await client
+      .from(table)
+      .select("id", { count: "exact", head: true })
+      .in(column, profileIds);
+    if (probe.error || probe.count !== 0)
+      throw new Error("acceptance_original_cv_approval_reference_present");
+  }
+}
+
 async function verifyDatabaseMarker(
   client: SupabaseClient,
   config: SafeConfig,
@@ -138,7 +539,7 @@ async function createAuthUser(
   const { data, error } = await client.auth.admin.createUser({
     email: generatedEmail,
     password: generatedPassword,
-    email_confirm: true,
+    email_confirm: caseKey !== "candidate",
     user_metadata: {
       synthetic: true,
       acceptance_run_hash: pseudonymousAcceptanceIdentifier(config.runId),
@@ -159,6 +560,17 @@ async function createAuthUser(
 }
 
 async function provision(config: SafeConfig, client: SupabaseClient) {
+  const cleanupProbe = await client.rpc(
+    "cleanup_acceptance_original_cv_approval_run",
+    { p_run_id: "invalid" },
+  );
+  if (
+    !cleanupProbe.error ||
+    !cleanupProbe.error.message.includes(
+      "acceptance_original_cv_approval_cleanup_run_invalid",
+    )
+  )
+    throw new Error("acceptance_original_cv_approval_cleanup_unavailable");
   const { error: runError } = await client.from("acceptance_test_runs").insert({
     run_id: config.runId,
     synthetic_namespace: config.syntheticNamespace,
@@ -183,10 +595,31 @@ async function provision(config: SafeConfig, client: SupabaseClient) {
     entity_type: "organization",
     entity_id: String(organization.id),
   });
+  const runHash = pseudonymousAcceptanceIdentifier(config.runId);
+  const { data: clientOrganization, error: clientOrganizationError } =
+    await client
+      .from("organizations")
+      .insert({
+        name: `PTF synthetic client organization ${runHash}`,
+        organization_type: "client",
+        status: "active",
+      })
+      .select("id")
+      .single();
+  if (clientOrganizationError || !clientOrganization?.id)
+    throw new Error("acceptance_client_organization_create_failed");
+  await recordEntity(client, config.runId, {
+    entity_type: "organization",
+    entity_id: String(clientOrganization.id),
+  });
 
   const identities = {} as AcceptanceCredentialBundle["identities"];
+  let syntheticClient: { profileId: string; clientId: string } | null = null;
+  let syntheticRecruiterProfileId: string | null = null;
   for (const definition of ACCEPTANCE_IDENTITY_CASES) {
     const auth = await createAuthUser(client, config, definition.key);
+    let profileId: string | undefined;
+    let clientId: string | undefined;
     if (definition.profile) {
       const profileShape = {
         auth_user_id: auth.authUserId,
@@ -195,9 +628,16 @@ async function provision(config: SafeConfig, client: SupabaseClient) {
         role: definition.role,
         status: definition.status,
         organization_id:
-          definition.role === "candidate" ? null : String(organization.id),
+          definition.role === "candidate"
+            ? null
+            : definition.role === "client"
+              ? String(clientOrganization.id)
+              : String(organization.id),
         client_id: definition.role === "client" ? randomUUID() : null,
-        candidate_id: definition.role === "candidate" ? randomUUID() : null,
+        candidate_id:
+          definition.role === "candidate"
+            ? ACCEPTANCE_SYNTHETIC_CANDIDATE_ID
+            : null,
       };
       const { data: profile, error: profileError } = await client
         .from("user_profiles")
@@ -206,13 +646,37 @@ async function provision(config: SafeConfig, client: SupabaseClient) {
         .single();
       if (profileError || !profile?.id)
         throw new Error("acceptance_profile_create_failed");
+      profileId = String(profile.id);
+      clientId = profileShape.client_id
+        ? String(profileShape.client_id)
+        : undefined;
       await recordEntity(client, config.runId, {
         entity_type: "user_profile",
         entity_id: String(profile.id),
       });
+      if (definition.role === "candidate") {
+        const { error: accountError } = await client
+          .from("candidate_accounts")
+          .insert({
+            user_profile_id: String(profile.id),
+            candidate_id: ACCEPTANCE_SYNTHETIC_CANDIDATE_ID,
+            status: "active",
+          });
+        if (accountError)
+          throw new Error("acceptance_candidate_account_create_failed");
+      }
+      if (definition.key === "client")
+        syntheticClient = {
+          profileId: String(profile.id),
+          clientId: String(profileShape.client_id),
+        };
+      if (definition.key === "recruiter")
+        syntheticRecruiterProfileId = String(profile.id);
     }
     identities[definition.key as AcceptanceIdentityKey] = {
       ...auth,
+      ...(profileId ? { profileId } : {}),
+      ...(clientId ? { clientId } : {}),
       role: definition.role,
       status: definition.status,
     };
@@ -242,6 +706,99 @@ async function provision(config: SafeConfig, client: SupabaseClient) {
     .eq("run_id", config.runId)
     .eq("entity_type", "auth_user")
     .eq("entity_id", unknown.authUserId);
+
+  if (!syntheticClient || !syntheticRecruiterProfileId)
+    throw new Error("acceptance_job_fixture_identity_missing");
+  const clientScope: { profileId: string; clientId: string } = syntheticClient;
+  const recruiterProfileId: string = syntheticRecruiterProfileId;
+  const job = await client
+    .from("jobs")
+    .insert({
+      title: `PTF synthetic job ${runHash}`,
+      company: `PTF synthetic organization ${runHash}`,
+      status: "active",
+      description: "Synthetic SAP role for controlled acceptance only.",
+    })
+    .select("id")
+    .single();
+  if (job.error || !job.data?.id)
+    throw new Error("acceptance_job_fixture_create_failed");
+  const relations = [
+    client.from("client_memberships").insert({
+      user_profile_id: clientScope.profileId,
+      organization_id: clientOrganization.id,
+      client_id: clientScope.clientId,
+      status: "active",
+    }),
+    client.from("client_recruiter_assignments").insert({
+      client_id: clientScope.clientId,
+      recruiter_profile_id: recruiterProfileId,
+      assigned_by_profile_id: clientScope.profileId,
+      status: "active",
+    }),
+    client.from("client_feature_entitlements").insert({
+      client_id: clientScope.clientId,
+      plan_code: "acceptance_synthetic",
+      feature: "recruiter_support",
+      status: "active",
+    }),
+    client.from("client_job_ownership").insert({
+      client_id: clientScope.clientId,
+      job_id: job.data.id,
+      status: "active",
+    }),
+    client.from("client_candidate_access").insert({
+      client_id: clientScope.clientId,
+      candidate_id: ACCEPTANCE_SYNTHETIC_CANDIDATE_ID,
+      status: "active",
+    }),
+    client.from("client_candidate_shares").insert({
+      client_id: clientScope.clientId,
+      recruiter_profile_id: recruiterProfileId,
+      candidate_id: ACCEPTANCE_SYNTHETIC_CANDIDATE_ID,
+      shared_by_profile_id: clientScope.profileId,
+      status: "active",
+    }),
+  ];
+  const relationResults = await Promise.all(relations);
+  if (relationResults.some((result) => result.error))
+    throw new Error("acceptance_job_fixture_relations_failed");
+
+  const candidate = identities.candidate;
+  if (!candidate?.profileId)
+    throw new Error("acceptance_candidate_confirmation_fixture_missing");
+  await verifyAcceptanceAuthConfirmation(
+    client.auth.admin,
+    candidate.authUserId,
+    runHash,
+    {
+      setConsent: async (consent) =>
+        client.from("candidate_chat_contact_consents").upsert(
+          {
+            candidate_id: ACCEPTANCE_SYNTHETIC_CANDIDATE_ID,
+            user_profile_id: candidate.profileId,
+            consent,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "candidate_id" },
+        ),
+      attemptConversation: async () =>
+        client.rpc("create_recruiter_candidate_chat_conversation", {
+          p_recruiter_profile_id: recruiterProfileId,
+          p_candidate_id: ACCEPTANCE_SYNTHETIC_CANDIDATE_ID,
+          p_client_id: clientScope.clientId,
+        }),
+    },
+  );
+  console.log(
+    JSON.stringify({
+      ok: true,
+      action: "candidate-auth-confirmation",
+      unconfirmedReadback: true,
+      preconfirmationProjectionDenied: true,
+      confirmedReadback: true,
+    }),
+  );
 
   const bundle: AcceptanceCredentialBundle = {
     schemaVersion: AUTHENTICATED_ACCEPTANCE_HARNESS_VERSION,
@@ -273,23 +830,56 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
   if (error) throw new Error("acceptance_entity_ledger_read_failed");
   const runHash = pseudonymousAcceptanceIdentifier(config.runId);
   const syntheticEmailSuffix = `+${runHash}@acceptance.invalid`;
+  const registrationCaptureEmail =
+    process.env.ACCEPTANCE_REGISTRATION_CAPTURE_EMAIL;
+  const registrationIntentPath = acceptanceCandidateRegistrationIntentPath(
+    config.credentialBundlePath,
+  );
+  const registrationIntent = await readCandidateRegistrationIntent(
+    registrationIntentPath,
+    runHash,
+    registrationCaptureEmail,
+  );
   const syntheticOrganizationName = `PTF synthetic organization ${runHash}`;
+  const syntheticClientOrganizationName = `PTF synthetic client organization ${runHash}`;
   const { data: discoveredProfiles, error: profileDiscoveryError } =
     await client
       .from("user_profiles")
-      .select("id")
+      .select("id,auth_user_id,email,full_name,role,status,candidate_id")
       .like("email", `%${syntheticEmailSuffix}`);
+  let discoveredRegistrationProfiles: Record<string, unknown>[] = [];
+  let registrationProfileDiscoveryError: unknown = null;
+  if (registrationIntent) {
+    const result = await client
+      .from("user_profiles")
+      .select("id,auth_user_id,email,full_name,role,status,candidate_id")
+      .eq("full_name", registrationIntent.fullName);
+    discoveredRegistrationProfiles = result.data || [];
+    registrationProfileDiscoveryError = result.error;
+  }
   const { data: discoveredOrganizations, error: organizationDiscoveryError } =
     await client
       .from("organizations")
       .select("id")
-      .eq("name", syntheticOrganizationName);
+      .in("name", [syntheticOrganizationName, syntheticClientOrganizationName]);
   const { data: authPage, error: authDiscoveryError } =
     await client.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  if (profileDiscoveryError || organizationDiscoveryError || authDiscoveryError)
+  if (
+    profileDiscoveryError ||
+    registrationProfileDiscoveryError ||
+    organizationDiscoveryError ||
+    authDiscoveryError
+  )
     throw new Error("acceptance_partial_provision_discovery_failed");
+  const allDiscoveredProfiles = [
+    ...(discoveredProfiles || []),
+    ...(discoveredRegistrationProfiles || []),
+  ].filter(
+    (profile, index, all) =>
+      index === all.findIndex((candidate) => candidate.id === profile.id),
+  );
   const discovered: Entity[] = [
-    ...(discoveredProfiles || []).map((item) => ({
+    ...allDiscoveredProfiles.map((item) => ({
       entity_type: "user_profile" as const,
       entity_id: String(item.id),
     })),
@@ -300,8 +890,10 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
     ...(authPage.users || [])
       .filter(
         (user) =>
-          user.user_metadata?.synthetic === true &&
-          user.user_metadata?.acceptance_run_hash === runHash,
+          (user.user_metadata?.synthetic === true &&
+            user.user_metadata?.acceptance_run_hash === runHash) ||
+          (registrationIntent &&
+            acceptanceRegistrationIntentOwnsAuthUser(registrationIntent, user)),
       )
       .map((user) => ({
         entity_type: "auth_user" as const,
@@ -319,12 +911,229 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
   );
   const plan = acceptanceCleanupPlan(entities);
   const profileIds = plan.profileIds;
+  const registrationProfiles = (discoveredRegistrationProfiles || []).filter(
+    (profile) =>
+      acceptanceRegistrationProfileOwned(
+        profile,
+        runHash,
+        plan.authUserIds,
+        registrationCaptureEmail,
+      ),
+  );
+  if (
+    registrationProfiles.length !==
+    (discoveredRegistrationProfiles || []).length
+  )
+    throw new Error("acceptance_registration_profile_ownership_mismatch");
+  const registrationCandidateIds = registrationProfiles.map((profile) =>
+    String(profile.candidate_id),
+  );
+  if (registrationCandidateIds.length) {
+    const { data: registrationCandidates, error: candidateDiscoveryError } =
+      await client
+        .from("candidates")
+        .select(
+          "id,email,normalized_email,name,status,profile_source_state,profile_confirmation_status",
+        )
+        .in("id", registrationCandidateIds);
+    if (
+      candidateDiscoveryError ||
+      (registrationCandidates || []).length !==
+        new Set(registrationCandidateIds).size ||
+      (registrationCandidates || []).some(
+        (candidate) =>
+          !acceptanceRegistrationCandidateOwned(
+            candidate,
+            runHash,
+            registrationCaptureEmail,
+          ),
+      )
+    )
+      throw new Error("acceptance_registration_candidate_ownership_mismatch");
+  }
+  if (profileIds.length) {
+    const auditProbe = await client
+      .from("recruiter_original_cv_access_events")
+      .select("id", { count: "exact", head: true })
+      .in("actor_profile_id", profileIds);
+    if (auditProbe.error || auditProbe.count === null)
+      throw new Error("acceptance_original_cv_audit_discovery_failed");
+    if (auditProbe.count > 0) {
+      const auditCleanup = await client.rpc(
+        "cleanup_acceptance_original_cv_run",
+        {
+          p_run_id: config.runId,
+        },
+      );
+      if (auditCleanup.error || auditCleanup.data?.remainingAccessEvents !== 0)
+        throw new Error("acceptance_original_cv_audit_cleanup_failed");
+      const auditResidue = await client
+        .from("recruiter_original_cv_access_events")
+        .select("id", { count: "exact", head: true })
+        .in("actor_profile_id", profileIds);
+      if (auditResidue.error || auditResidue.count !== 0)
+        throw new Error("acceptance_original_cv_audit_residue_detected");
+    }
+    const approvalCleanup = await client.rpc(
+      "cleanup_acceptance_original_cv_approval_run",
+      { p_run_id: config.runId },
+    );
+    if (approvalCleanup.error) {
+      if (
+        approvalCleanup.error.message !==
+        "acceptance_original_cv_approval_cleanup_fixture_scope_missing"
+      )
+        throw new Error("acceptance_original_cv_approval_cleanup_failed");
+      // A prior always-run step may already have removed the fixture. Do not
+      // delete approval rows without its scope: continue only after every
+      // actor reference is proven absent, including immutable audit rows.
+      await verifyAbsentOriginalCvApprovalReferences(
+        client,
+        profileIds,
+        config.runId,
+      );
+    } else if (approvalCleanup.data?.remainingApprovalRows !== 0) {
+      throw new Error("acceptance_original_cv_approval_cleanup_failed");
+    }
+  }
+  const chatProbe = await client
+    .from("chat_conversations")
+    .select("id", { count: "exact", head: true })
+    .limit(0);
+  if (!chatProbe.error) {
+    const { error: chatCleanupError } = await client.rpc(
+      "cleanup_acceptance_chat_run",
+      { p_run_id: config.runId },
+    );
+    if (chatCleanupError) {
+      if (
+        chatCleanupError.message !==
+        "acceptance_chat_cleanup_fixture_scope_missing"
+      )
+        throw new Error("acceptance_chat_fixture_cleanup_failed");
+      // No chat mutation is permitted when the candidate lease is gone.
+      // Continue identity cleanup only after exact zero-reference readback.
+      await cleanupAbsentChatFixtureReferences(
+        client,
+        plan.profileIds,
+        config.runId,
+      );
+    }
+  } else if (
+    !(["42P01", "PGRST205"] as string[]).includes(chatProbe.error.code)
+  ) {
+    throw new Error("acceptance_chat_fixture_discovery_failed");
+  }
+  // Delete only objects below this run's synthetic auth-user UUID prefixes,
+  // verify ownership for every exact key, and prove the prefixes are empty
+  // before deleting the identities that establish run ownership.
+  const originalCvLedgerPath = `${config.credentialBundlePath}.original-cv-ledger.jsonl`;
+  const ledgerObjectKeys =
+    await readRunOwnedOriginalCvLedger(originalCvLedgerPath);
+  await cleanupRunOwnedOriginalCvData(
+    client,
+    plan.authUserIds,
+    runHash,
+    ledgerObjectKeys,
+  );
+  await unlink(originalCvLedgerPath).catch((error) => {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+      throw new Error("acceptance_original_cv_ledger_remove_failed");
+  });
+  const { data: syntheticJobs, error: jobsDiscoveryError } = await client
+    .from("jobs")
+    .select("id")
+    .eq("title", `PTF synthetic job ${runHash}`);
+  if (jobsDiscoveryError) throw new Error("acceptance_job_discovery_failed");
+  const jobIds = (syntheticJobs || []).map((job) => job.id);
+  const { data: syntheticClients, error: clientDiscoveryError } = await client
+    .from("user_profiles")
+    .select("client_id")
+    .like("email", `%${syntheticEmailSuffix}`)
+    .eq("role", "client");
+  if (clientDiscoveryError)
+    throw new Error("acceptance_client_discovery_failed");
+  const clientIds = [
+    ...new Set(
+      (syntheticClients || []).map((item) => item.client_id).filter(Boolean),
+    ),
+  ];
+  // Dependent rows use RESTRICT foreign keys. Remove only this run's job and
+  // client scope before deleting its profiles and organization.
+  for (const [table, key, ids] of [
+    ["client_job_shares", "job_id", jobIds],
+    ["client_job_ownership", "job_id", jobIds],
+    ["client_candidate_shares", "client_id", clientIds],
+    ["client_candidate_access", "client_id", clientIds],
+    ["client_feature_entitlements", "client_id", clientIds],
+    ["client_recruiter_assignments", "client_id", clientIds],
+    ["client_memberships", "client_id", clientIds],
+    ["jobs", "id", jobIds],
+  ] as const) {
+    if (!ids.length) continue;
+    const { error: deleteError } = await client
+      .from(table)
+      .delete()
+      .in(key, ids);
+    if (deleteError) throw new Error("acceptance_job_fixture_cleanup_failed");
+  }
+  for (const [table, key, ids] of [
+    ["client_job_shares", "job_id", jobIds],
+    ["client_job_ownership", "job_id", jobIds],
+    ["client_candidate_shares", "client_id", clientIds],
+    ["client_candidate_access", "client_id", clientIds],
+    ["client_feature_entitlements", "client_id", clientIds],
+    ["client_recruiter_assignments", "client_id", clientIds],
+    ["client_memberships", "client_id", clientIds],
+  ] as const) {
+    if (!ids.length) continue;
+    const { count, error: residueError } = await client
+      .from(table)
+      .select("*", { count: "exact", head: true })
+      .in(key, ids);
+    if (residueError || count !== 0)
+      throw new Error("acceptance_job_fixture_residue_detected");
+  }
+  const candidateAccountIds = [
+    ACCEPTANCE_SYNTHETIC_CANDIDATE_ID,
+    ...registrationCandidateIds,
+  ];
+  if (profileIds.length) {
+    const { error: accountDeleteError } = await client
+      .from("candidate_accounts")
+      .delete()
+      .in("candidate_id", candidateAccountIds)
+      .in("user_profile_id", profileIds);
+    if (accountDeleteError)
+      throw new Error("acceptance_candidate_account_cleanup_failed");
+    const { count: accountResidue, error: accountResidueError } = await client
+      .from("candidate_accounts")
+      .select("id", { count: "exact", head: true })
+      .in("candidate_id", candidateAccountIds)
+      .in("user_profile_id", profileIds);
+    if (accountResidueError || accountResidue !== 0)
+      throw new Error("acceptance_candidate_account_residue_detected");
+  }
   if (profileIds.length) {
     const { error: deleteError } = await client
       .from("user_profiles")
       .delete()
       .in("id", profileIds);
     if (deleteError) throw new Error("acceptance_profile_cleanup_failed");
+  }
+  if (registrationCandidateIds.length) {
+    const { error: deleteError } = await client
+      .from("candidates")
+      .delete()
+      .in("id", registrationCandidateIds);
+    if (deleteError)
+      throw new Error("acceptance_registration_candidate_cleanup_failed");
+    const { count, error } = await client
+      .from("candidates")
+      .select("id", { count: "exact", head: true })
+      .in("id", registrationCandidateIds);
+    if (error || count !== 0)
+      throw new Error("acceptance_registration_candidate_residue_detected");
   }
   for (const userId of plan.authUserIds) {
     const { error: deleteError } = await client.auth.admin.deleteUser(userId);
@@ -351,26 +1160,46 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
     .from("user_profiles")
     .select("id", { count: "exact", head: true })
     .like("email", `%${syntheticEmailSuffix}`);
+  let registrationProfileResidue = 0;
+  let registrationProfileResidueError: unknown = null;
+  if (registrationIntent) {
+    const result = await client
+      .from("user_profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("full_name", registrationIntent.fullName);
+    registrationProfileResidue = result.count ?? -1;
+    registrationProfileResidueError = result.error;
+  }
   const { count: organizationResidue, error: organizationResidueError } =
     await client
       .from("organizations")
       .select("id", { count: "exact", head: true })
-      .eq("name", syntheticOrganizationName);
+      .in("name", [syntheticOrganizationName, syntheticClientOrganizationName]);
   const { data: remainingAuth, error: authResidueError } =
     await client.auth.admin.listUsers({ page: 1, perPage: 1000 });
   if (
     profileResidueError ||
+    registrationProfileResidueError ||
     organizationResidueError ||
     authResidueError ||
     profileResidue !== 0 ||
+    registrationProfileResidue !== 0 ||
     organizationResidue !== 0 ||
     (remainingAuth.users || []).some(
       (user) =>
-        user.user_metadata?.synthetic === true &&
-        user.user_metadata?.acceptance_run_hash === runHash,
+        (user.user_metadata?.synthetic === true &&
+          user.user_metadata?.acceptance_run_hash === runHash) ||
+        (registrationIntent &&
+          acceptanceRegistrationIntentOwnsAuthUser(registrationIntent, user)),
     )
   )
     throw new Error("acceptance_identity_table_residue_detected");
+  const { count: jobResidue, error: jobResidueError } = await client
+    .from("jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("title", `PTF synthetic job ${runHash}`);
+  if (jobResidueError || jobResidue !== 0)
+    throw new Error("acceptance_job_fixture_residue_detected");
   const { error: ledgerDeleteError } = await client
     .from("acceptance_test_entities")
     .delete()
@@ -383,6 +1212,7 @@ async function cleanup(config: SafeConfig, client: SupabaseClient) {
     .eq("run_id", config.runId);
   if (runError) throw new Error("acceptance_run_cleanup_status_failed");
   await unlink(config.credentialBundlePath).catch(() => undefined);
+  await unlink(registrationIntentPath).catch(() => undefined);
   return entities.length;
 }
 

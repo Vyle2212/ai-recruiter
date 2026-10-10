@@ -35,6 +35,7 @@ export type Candidate360Field<T = unknown> = {
 
 export type Candidate360Experience = {
   id: string;
+  current?: boolean;
   title: Candidate360Field<string>;
   company: Candidate360Field<string>;
   startDate: Candidate360Field<string>;
@@ -88,6 +89,7 @@ export type Candidate360ProfileCompleteness = {
 };
 
 export type Candidate360Profile = {
+  jobPreferences?: import("./candidateJobPreferences").CandidateJobPreferences;
   lifecycle: CandidateLifecycleRecord;
   enterpriseProfile: EnterpriseCandidateProfile;
   canonicalOverview?: import("./candidateProfileOverview").CanonicalProfileOverview;

@@ -576,7 +576,7 @@ export default function WorkflowExecutionReleaseGatePage() {
         <section className="mt-6 rounded-xl border border-slate-800 bg-[#090C11] p-4">
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_260px]">
             <input
-              className="rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-none focus:border-amber-500"
+              className="rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-hidden focus:border-amber-500"
               onChange={(
                 event,
               ) =>
@@ -589,7 +589,7 @@ export default function WorkflowExecutionReleaseGatePage() {
             />
 
             <select
-              className="rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-none"
+              className="rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-hidden"
               onChange={(
                 event,
               ) =>

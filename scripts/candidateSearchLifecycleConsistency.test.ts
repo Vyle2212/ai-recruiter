@@ -6,6 +6,8 @@ import {
   CANDIDATE_SEARCH_REVIEW_CONFIRMATION_STATUSES,
   CANDIDATE_SEARCH_REVIEW_EXTRACTION_STATUSES,
   candidateSearchLifecycleDecision,
+  missingOptionalLifecycleColumn,
+  selectCandidateLifecycleCompatible,
 } from "../lib/candidateSearchLifecycle";
 import { buildSearchIndexAudit } from "../lib/searchIndexAudit";
 import { candidateSearchMutationEligibility } from "../lib/candidateSearchMutationGate";
@@ -49,6 +51,128 @@ for (const status of ["deleted", "non_sap", "rejected_noise"]) {
   );
 }
 assert.deepEqual([...CANDIDATE_SEARCH_BLOCKED_STATUSES].sort(), blocked.sort());
+assert.ok(
+  CANDIDATE_SEARCH_REVIEW_CONFIRMATION_STATUSES.includes("not_claimed"),
+  "a migrated but unclaimed profile must stay out of recruiter search",
+);
+assert.equal(
+  missingOptionalLifecycleColumn({
+    code: "42703",
+    message: "column candidates.extraction_coverage_status does not exist",
+  }),
+  "extraction_coverage_status",
+);
+assert.equal(
+  missingOptionalLifecycleColumn({
+    code: "42703",
+    message: "column candidates.profile_confirmation_status does not exist",
+  }),
+  "profile_confirmation_status",
+);
+assert.equal(
+  missingOptionalLifecycleColumn({
+    code: "42501",
+    message: "permission denied for extraction_coverage_status",
+  }),
+  null,
+);
+void (async () => {
+  const legacySelections: string[] = [];
+  const legacySelection = await selectCandidateLifecycleCompatible<
+    { id: string }[]
+  >(
+    "id,status,extraction_coverage_status,profile_confirmation_status",
+    async (columns) => {
+      legacySelections.push(columns);
+      if (columns.includes("extraction_coverage_status"))
+        return {
+          data: null,
+          error: {
+            code: "42703",
+            message:
+              "column candidates.extraction_coverage_status does not exist",
+          },
+        };
+      if (columns.includes("profile_confirmation_status"))
+        return {
+          data: null,
+          error: {
+            code: "42703",
+            message:
+              "column candidates.profile_confirmation_status does not exist",
+          },
+        };
+      return { data: [{ id: "active" }], error: null };
+    },
+  );
+  assert.deepEqual(legacySelection.data, [{ id: "active" }]);
+  assert.deepEqual(legacySelections, [
+    "id,status,extraction_coverage_status,profile_confirmation_status",
+    "id,status,profile_confirmation_status",
+    "id,status",
+  ]);
+  const nestedSelections: string[] = [];
+  const partialSelection = await selectCandidateLifecycleCompatible<
+    { candidates: { status: string; extraction_coverage_status: string } }[]
+  >(
+    "id,candidates (id,status,extraction_coverage_status,profile_confirmation_status),jobs (id)",
+    async (columns) => {
+      nestedSelections.push(columns);
+      if (columns.includes("profile_confirmation_status"))
+        return {
+          data: null,
+          error: {
+            code: "42703",
+            message:
+              "column candidates.profile_confirmation_status does not exist",
+          },
+        };
+      return {
+        data: [
+          {
+            candidates: {
+              status: "active",
+              extraction_coverage_status: "incomplete_needs_review",
+            },
+          },
+        ],
+        error: null,
+      };
+    },
+  );
+  assert.equal(nestedSelections.length, 2);
+  assert.match(nestedSelections[1], /extraction_coverage_status/);
+  assert.doesNotMatch(nestedSelections[1], /profile_confirmation_status/);
+  assert.doesNotMatch(nestedSelections[1], /,\s*\)/);
+  assert.equal(
+    candidateSearchLifecycleDecision(partialSelection.data?.[0].candidates)
+      .visible,
+    false,
+  );
+  let unauthorizedCalls = 0;
+  const unauthorizedSelection = await selectCandidateLifecycleCompatible(
+    "id,status,profile_confirmation_status",
+    async () => {
+      unauthorizedCalls++;
+      return {
+        data: null,
+        error: { code: "42501", message: "permission denied" },
+      };
+    },
+  );
+  assert.equal(unauthorizedCalls, 1);
+  assert.equal(unauthorizedSelection.error?.code, "42501");
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+assert.equal(
+  missingOptionalLifecycleColumn({
+    code: "42703",
+    message: "column status missing",
+  }),
+  null,
+);
 for (const extraction_coverage_status of CANDIDATE_SEARCH_REVIEW_EXTRACTION_STATUSES) {
   assert.equal(
     candidateSearchLifecycleDecision({
@@ -187,10 +311,37 @@ const ownedUpdate = read(
 );
 
 assert.match(searchV2, /applyCurrentCandidateSearchLifecycle\(/);
+const lifecycleLookupStart = searchV2.indexOf(
+  "applyCurrentCandidateSearchLifecycle(",
+);
 assert.ok(
-  searchV2.indexOf("applyCurrentCandidateSearchLifecycle(") <
-    searchV2.indexOf("searchCacheKey(profile)"),
+  lifecycleLookupStart <
+    searchV2.indexOf("fetchCandidateSource()", lifecycleLookupStart),
+  "current lifecycle lookup must start before source hydration so the reads overlap",
+);
+assert.ok(
+  lifecycleLookupStart < searchV2.indexOf("searchCacheKey(profile)"),
   "current lifecycle state must contribute to the revision before ranked-cache lookup",
+);
+assert.match(
+  searchV2,
+  /durationMs: performance\.now\(\) - lifecycleStartedAt/,
+  "lifecycle duration must be captured when the independent lookup settles",
+);
+assert.match(
+  searchV2,
+  /const lifecycleMs = lifecycleOutcome\.durationMs/,
+  "overlapped source hydration must not be counted as lifecycle query time",
+);
+assert.doesNotMatch(
+  searchV2,
+  /const lifecycleMs = performance\.now\(\) - lifecycleStartedAt/,
+);
+assert.match(searchV2, /const blockedIds = lifecycle\.blockedIds/);
+assert.match(
+  searchV2,
+  /documents = documents\.filter\([\s\S]*?!blockedIds\.has/,
+  "fresh blocked candidate ids must still filter the hydrated source documents",
 );
 assert.match(
   searchV2,
@@ -200,7 +351,22 @@ assert.match(lifecycleAdapter, /\.from\("candidates"\)/);
 assert.match(lifecycleAdapter, /extraction_coverage_status/);
 assert.match(lifecycleAdapter, /profile_confirmation_status/);
 assert.match(lifecycleAdapter, /\.or\(/);
+assert.match(lifecycleAdapter, /missingOptionalLifecycleColumn/);
+assert.match(
+  lifecycleAdapter,
+  /missingOptionalLifecycleColumn\(response\.error\)/,
+);
+assert.match(lifecycleAdapter, /optionalColumns\.delete\(missing\)/);
+assert.match(
+  lifecycleAdapter,
+  /\.select\(\["id", "status", \.\.\.optionalColumns\]\.join\(","\)\)/,
+);
 assert.match(lifecycleAdapter, /CANDIDATE_SEARCH_BLOCKED_STATUSES/);
+assert.match(
+  lifecycleAdapter,
+  /CANDIDATE_SEARCH_REVIEW_CONFIRMATION_STATUSES\.join\(","\)/,
+  "fresh Search V2 lifecycle lookup must block every review confirmation state",
+);
 assert.match(lifecycleAdapter, /documents\.filter\(/);
 assert.match(lifecycleAdapter, /setCurrentBlockedCandidatesResolverForTests/);
 assert.match(lifecycleAdapter, /process\.env\.NODE_ENV !== "test"/);

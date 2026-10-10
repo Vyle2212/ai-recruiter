@@ -330,7 +330,23 @@ export function validateGuidedSourcingPlan(
       const word = Object.keys(words).find((key) =>
         new RegExp(`\b${key}\b`).test(yearsText),
       );
-      if (digit) valueFinal = digit[1];
+      const scopedSapYears = excerpt.match(
+        /\b(\d{1,2})\s*(?:\+|plus)?\s*years?\s+(?:of\s+)?SAP\s+(TM(?:\/TMS)?|TRM|FSCM)\b(?:\s+(implementation|consulting))?/i,
+      );
+      if (
+        /\b(?:minimum|at least)\s+(?:of\s+)?\d{1,2}\s*[-–]\s*\d{1,2}\s+years?\b/i.test(
+          excerpt,
+        )
+      ) {
+        nextType = "unresolved";
+        nextStatus = "unresolved";
+        ambiguity =
+          "The source gives a minimum experience range; confirm the intended threshold.";
+      } else if (scopedSapYears) {
+        const preferred = nextType === "preferred_years";
+        nextType = preferred ? "nice_to_have" : "must_have";
+        valueFinal = `SAP ${scopedSapYears[2].toUpperCase()}${scopedSapYears[3] ? ` ${scopedSapYears[3].toLowerCase()}` : ""} — ${preferred ? "preferred" : "minimum"} ${scopedSapYears[1]} years`;
+      } else if (digit) valueFinal = digit[1];
       else if (word) valueFinal = words[word];
       else {
         nextType = "unresolved";
@@ -390,8 +406,11 @@ export function guidedPromptInjectionSafeInstructions() {
     "Extract only the few criteria a recruiter must decide. Do not invent facts. For each criterion return one to four evidenceSegmentIds copied exactly from the labeled source segments.",
     "A concise criterion may summarize multiple segments, but every cited segment must genuinely support it. Never invent segment IDs or quote source text in the JSON.",
     "Never include candidate, resume, evidence tier, score, rank, or result fields.",
-      "Consolidate related business processes into one criterion. Avoid duplicate role or SAP concept criteria. Return at most 8 criteria.",
-      "Keep SAP Finance configuration, its FI-GL/AP/AR/AA capabilities, business-process knowledge, and S/4HANA context in one source-grounded must_have criterion when they describe one requirement. Use unresolved only for genuine ambiguity or unsupported terminology, not for ordinary requirements.",
+    "Consolidate related business processes into one criterion. Avoid duplicate role or SAP concept criteria. Return at most 8 criteria.",
+    "Keep SAP Finance configuration, its FI-GL/AP/AR/AA capabilities, business-process knowledge, and S/4HANA context in one source-grounded must_have criterion when they describe one requirement. Use unresolved only for genuine ambiguity or unsupported terminology, not for ordinary requirements.",
     "Unknown SAP terms must be unresolved. Return schema-valid JSON only.",
+    "Treat FSCM receivables/Credit, Treasury and Risk Management (TRM), and Cash Management as distinct capabilities even when a job title groups them under FSCM. Do not infer one from another or from FI/CO integration. Preserve 'one or more' alternatives and flag conflicting broad mandatory versus narrower preferred wording for recruiter review.",
+    "Keep overall SAP consulting years separate from module-specific implementation years. Use a scoped must_have criterion for module years and full-lifecycle project counts; never add years or infer completed implementations from support, rollout, or task lists. A minimum experience range requires clarification.",
+    "For TM Lead/Manager roles, keep functional delivery, transportation integration, program/team leadership and business-development responsibilities distinct. Integration partners SD/MM/EWM/FI/LBN do not become primary module requirements or prove expertise in those modules. Certification and preferred industries remain preferences unless explicitly mandatory.",
   ].join(" ");
 }

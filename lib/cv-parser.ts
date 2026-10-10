@@ -1,3 +1,4 @@
+import { sourcePhoneIsNumericDate } from "./cvPhoneEvidence";
 import { sanitizeCandidateSourceText } from "./candidateSourcePreservation";
 /* FINAL SAP CV Parser - recruiter-grade extraction
    Fixes:
@@ -85,6 +86,13 @@ const CONSULTING_BRANDS = [
 ];
 
 const BAD_NAME_PHRASES = [
+  "curriculum vitae",
+  "resume",
+  "candidate profile",
+  "candidate name",
+  "full name",
+  "personal particulars",
+  "personal details",
   "career objective",
   "career objectives",
   "professional summary",
@@ -240,10 +248,11 @@ export function extractEmail(text: string) {
 }
 
 export function extractPhone(text: string) {
-  const matches = String(text || "").match(/(?:\+?\d[\d\s().-]{7,}\d)/g) || [];
+  const matches = String(text || "").match(/(?:\+?\d[\d \t().-]{7,}\d)/g) || [];
   const valid = matches
     .map((m) => m.replace(/\s+/g, " ").trim())
     .filter((m) => {
+      if (sourcePhoneIsNumericDate(m)) return false;
       const digits = m.replace(/\D/g, "");
       if (digits.length < 8 || digits.length > 15) return false;
       if (/^(19|20)\d{2}/.test(digits) && digits.length < 10) return false;
@@ -256,21 +265,6 @@ function nameFromEmail(email: string | null) {
   if (!email) return null;
 
   const local0 = email.split("@")[0].toLowerCase();
-  const hardMap: Record<string, string> = {
-    "syed.maly1986": "Syed Maly",
-    "syed_maly1986": "Syed Maly",
-    janahjosette_jose: "Janah Josette Jose",
-    "janahjosette.jose": "Janah Josette Jose",
-    gerarddomingo: "Gerardo Domingo",
-    liannesdelacruz: "Lianne de la Cruz",
-    liannedelacruz: "Lianne de la Cruz",
-    "aap.jaehapni": "Aap Jaehapni",
-    "r.m.pangilinan": "Ronald M Pangilinan",
-    rio_caagbay: "Rio Caagbay",
-  };
-
-  if (hardMap[local0]) return hardMap[local0];
-
   const local = local0
     .replace(/\d+$/g, "")
     .replace(/[_\-.]+/g, " ")
@@ -312,15 +306,14 @@ export function extractCandidateName(text: string, fileName?: string) {
   const raw = cleanText(text);
   const lines = linesOf(raw).slice(0, 140);
 
-  const explicit = raw.match(/(?:Candidate\s+Name|Full\s+Name|Name)\s*[:\-]\s*([A-Z][A-Za-z'’.\-\s]{3,45})/i)?.[1];
-  if (explicit && looksLikeHumanName(explicit)) return titleCaseName(explicit);
-
-  const fromEmail = nameFromEmail(extractEmail(raw));
-  const emailAtTop = lines.findIndex((l) => /@/.test(l));
-  if (fromEmail && emailAtTop <= 20) return fromEmail;
-
-  const fromFile = nameFromFileName(fileName);
-  if (fromFile) return fromFile;
+  for (const line of lines.slice(0, 35)) {
+    const explicit = line
+      .match(/^(?:Candidate[ \t]+Name|Full[ \t]+Name|Name)[ \t]*[:\-][ \t]*([^\r\n]{3,70})$/i)?.[1]
+      ?.replace(/[ \t]+(?:Email|Phone|Mobile|Contact)[ \t]*[:\-].*$/i, "")
+      .trim();
+    if (explicit && looksLikeHumanName(explicit))
+      return titleCaseName(explicit);
+  }
 
   const contactIdx = lines.findIndex((l) => /@|mobile|phone|contact|whatsapp|\+\d/i.test(l));
   if (contactIdx > 0) {
@@ -335,9 +328,16 @@ export function extractCandidateName(text: string, fileName?: string) {
     }
   }
 
-  for (const line of lines.slice(0, 35)) {
+  for (const line of lines.slice(0, 12)) {
     if (looksLikeHumanName(line)) return titleCaseName(line);
   }
+
+  const fromFile = nameFromFileName(fileName);
+  if (fromFile) return fromFile;
+
+  const fromEmail = nameFromEmail(extractEmail(raw));
+  const emailAtTop = lines.findIndex((l) => /@/.test(l));
+  if (fromEmail && emailAtTop >= 0 && emailAtTop <= 20) return fromEmail;
 
   return "Candidate Name Not Detected";
 }
@@ -531,7 +531,7 @@ function weightedModuleScores(text: string) {
     ABAP: countTerms(titleZone, ["abap", "technical consultant", "developer", "fiori"]) * 8 + countTerms(t, ["abap", "fiori", "odata", "bapi", "enhancement", "user exit", "debugging", "workflow"]),
     BASIS: countTerms(titleZone, ["basis"]) * 8 + countTerms(t, ["basis", "security", "transport", "hana admin"]),
     "IS-U": countTerms(titleZone, ["is-u", "isu", "utilities"]) * 8 + countTerms(t, ["is-u", "isu", "utilities", "meter", "contract account"]),
-    BW: countTerms(titleZone, ["bw", "bi", "hana lead"]) * 8 + countTerms(t, ["sap bw", "business warehouse", "bw4hana", "bi reporting"]),
+    BW: countTerms(titleZone, ["\\bbw\\b", "\\bbi\\b", "hana lead"]) * 8 + countTerms(t, ["sap bw", "business warehouse", "bw4hana", "bi reporting"]),
   };
 
   return score;
@@ -766,7 +766,7 @@ export async function parseCv(buffer: Buffer, fileName?: string, options: import
   if (fileName?.toLowerCase().endsWith('.pdf')) {
     const { extractCvPdf } = await import('./cvPdfExtraction');
     const { text, sourceExtraction } = await extractCvPdf(buffer, options);
-    return { ...parseCandidateFromText(text, fileName), sourceExtraction };
+    return { ...parseCandidateFromText(text, fileName), rawText: text, sourceExtraction };
   }
   const text = await bufferToText(buffer, fileName || "");
   return { ...parseCandidateFromText(text, fileName), sourceExtraction: {method: 'native' as const, pageCount: 0, reason: ''} };

@@ -33,7 +33,9 @@ const auditedFiles = files.filter((file) => {
     recruiterApiPolicyForRequest(route, method),
   );
   const hasLocalBoundary =
-    /requireRecruiter(?:ApiRoute|Search)Authorization/.test(source);
+    /requireRecruiter(?:ApiRoute|Search)Authorization|requireClientShareAuthorization|authorizeClientCandidateLookup|authorizeClientCandidateMessage|authorizeChatRequest|authorizeChatConversation|createClientCandidateConversation|create_client_recruiter_chat_conversation|create_recruiter_candidate_chat_conversation/.test(
+      source,
+    );
   const hasCandidateBoundary = /authorizeCandidateCvUpload/.test(source);
   const usesPrivilegedCandidateData =
     /SUPABASE_SERVICE_ROLE|createLazySupabaseServiceClient|createCandidateSupabaseAdminClient|\.from\(["']candidates["']\)/.test(
@@ -71,7 +73,10 @@ const routeMethods = auditedFiles.flatMap((file) => {
   }));
 });
 
-const explicitPublicMethods = new Set(["GET /api/acceptance/release"]);
+const explicitPublicMethods = new Set([
+  "GET /api/acceptance/release",
+  "POST /api/auth/candidate/register",
+]);
 const allRouteMethods = files.flatMap((file) => {
   const source = readFileSync(file, "utf8");
   const route =
@@ -86,7 +91,7 @@ const uncoveredRouteMethods = allRouteMethods.filter(
   ({ route, method, source }) => {
     if (explicitPublicMethods.has(`${method} ${route}`)) return false;
     if (
-      /requireRecruiter(?:ApiRoute|Search)Authorization|authorizeCandidateCvUpload/.test(
+      /requireRecruiter(?:ApiRoute|Search)Authorization|requireClientShareAuthorization|authorizeClientCandidateLookup|authorizeCandidateCvUpload|authorizeClientCandidateMessage|authorizeChatRequest|authorizeChatConversation|createClientCandidateConversation|create_client_recruiter_chat_conversation|create_recruiter_candidate_chat_conversation/.test(
         source,
       )
     )
@@ -110,6 +115,26 @@ assert.match(
   /ACCEPTANCE_TEST_MODE\s*!==\s*["']true["']/,
 );
 
+const candidateRegistrationSource = readFileSync(
+  path.join(root, "auth/candidate/register/route.ts"),
+  "utf8",
+);
+const candidateRegistrationRuntimeSource = readFileSync(
+  path.join(process.cwd(), "lib/candidateRegistrationRuntime.ts"),
+  "utf8",
+);
+assert.match(
+  candidateRegistrationSource,
+  /candidateRegistrationConfiguration\(/,
+);
+assert.match(candidateRegistrationSource, /if\s*\(!configuration\.enabled\)/);
+assert.match(
+  candidateRegistrationRuntimeSource,
+  /request\.headers\.get\(["']origin["']\)/,
+);
+assert.match(candidateRegistrationSource, /captchaToken/);
+assert.doesNotMatch(candidateRegistrationSource, /SUPABASE_SERVICE_ROLE/);
+
 const recruiterFiles = auditedFiles.filter((file) =>
   path.relative(root, file).split(path.sep).join("/").startsWith("recruiter/"),
 );
@@ -118,13 +143,13 @@ const legacyServiceFiles = auditedFiles.filter(
 );
 assert.equal(
   recruiterFiles.length,
-  78,
-  "Expected the audited 78 recruiter route files",
+  80,
+  "Expected the audited 80 recruiter route files",
 );
 assert.equal(
   legacyServiceFiles.length,
-  54,
-  "Expected the audited 54 legacy privileged route files",
+  56,
+  "Expected the audited 56 legacy privileged route files",
 );
 assert.ok(
   routeMethods.length > auditedFiles.length,
@@ -204,7 +229,20 @@ for (const item of previousHighRiskRoutes) {
 
 const proxySource = readFileSync(path.join(process.cwd(), "proxy.ts"), "utf8");
 assert.match(proxySource, /recruiterApiPolicyForRequest/);
-assert.match(proxySource, /"\/api\/:path\*"/);
+assert.match(proxySource, /updateClientShareApiSession/);
+assert.match(proxySource, /updateChatApiSession/);
+assert.match(
+  proxySource,
+  /request\.method\s*===\s*["']POST["'][\s\S]*\/api\/auth\/candidate\/register/,
+);
+assert.match(
+  proxySource,
+  /if\s*\(candidateRegistrationApi\)\s*\{\s*return NextResponse\.next\(\);\s*\}/,
+);
+assert.ok(
+  proxySource.includes('"/((?!_next/static|_next/image|favicon.ico).*)"'),
+  "Proxy must cover API and public routes during the production cutover",
+);
 for (const file of legacyServiceFiles) {
   const source = readFileSync(file, "utf8");
   const route = path.relative(root, file).split(path.sep).join("/");

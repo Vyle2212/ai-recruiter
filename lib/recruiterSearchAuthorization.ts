@@ -1,4 +1,5 @@
 import "server-only";
+import { recruiterSearchProfilePrefetch } from "./recruiterSearchProfilePrefetch";
 
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
@@ -51,9 +52,9 @@ export function setRecruiterSearchAuthorizationResolverForTests(
   testResolver = resolver;
 }
 
-async function productionAdapter(): Promise<RecruiterSearchAuthAdapter> {
+async function productionAdapter(permission: RecruiterSearchPermission): Promise<RecruiterSearchAuthAdapter> {
   const client = await createClient();
-  return {
+  const adapter: RecruiterSearchAuthAdapter = {
     async getUser() {
       const {
         data: { user },
@@ -84,6 +85,16 @@ async function productionAdapter(): Promise<RecruiterSearchAuthAdapter> {
       };
     },
   };
+  return recruiterSearchProfilePrefetch(adapter, async () => {
+    // The cookie-backed session is only a speculative I/O hint. The helper
+    // reuses its RLS-bound profile read only when fresh getUser returns the
+    // exact same subject, so session data never authorizes the request.
+    const { data, error } = await client.auth.getSession();
+    const subject = data.session?.user?.id;
+    return !error && typeof subject === "string" &&
+      /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(subject)
+      ? subject : null;
+  });
 }
 
 export async function requireRecruiterSearchAuthorization(input: {
@@ -93,7 +104,7 @@ export async function requireRecruiterSearchAuthorization(input: {
   try {
     if (testResolver) return testResolver(input);
     return await authorizeRecruiterSearchAccess({
-      adapter: await productionAdapter(),
+      adapter: await productionAdapter(input.permission),
       permission: input.permission,
       route: input.route,
       log: securityLog,

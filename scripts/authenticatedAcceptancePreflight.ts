@@ -34,6 +34,10 @@ async function main() {
       externalMode,
     },
   );
+  if (!evidence.candidateCvUploadEnabled)
+    throw new Error("acceptance_candidate_cv_upload_disabled");
+  if (!evidence.candidateProfileConfirmationEnabled)
+    throw new Error("acceptance_candidate_profile_confirmation_disabled");
   if (process.env.GITHUB_ENV)
     await appendFile(
       process.env.GITHUB_ENV,

@@ -5,6 +5,7 @@ on:
     branches:
       - "codex/precision-*"
       - "codex/production-trust-*"
+      - "codex/production-admin-*"
       - "codex/recruiter-api-authorization-*"
       - "codex/dependency-security-*"
       - "codex/authenticated-acceptance-*"
@@ -13,6 +14,7 @@ on:
     branches:
       - "codex/profile-source-recovery"
       - "codex/production-trust-*"
+      - "codex/production-admin-*"
       - "codex/recruiter-api-authorization-*"
       - "codex/dependency-security-*"
       - "codex/authenticated-acceptance-*"
@@ -20,6 +22,12 @@ on:
       - "release/**"
       - integration
   workflow_dispatch:
+    inputs:
+      verify_gmail_credentials:
+        description: Verify acceptance Gmail refresh token and mailbox only (no signup)
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -141,12 +149,55 @@ jobs:
         run: npm run test:github-actions-pinning
 
       - name: Route policy and authorization matrix
-        run: npm run test:production-trust:authorization
+        run: |
+          npm run test:production-trust:authorization
+          node --import tsx scripts/productionAuthConfiguration.test.ts
+          node --import tsx scripts/candidateRegistrationRequest.test.ts
+          node --import tsx scripts/candidateRegistrationRuntime.test.ts
+          node --import tsx scripts/candidateRegistrationUi.test.ts
+          node --import tsx scripts/candidateRegistrationOutcome.test.ts
+          node --import tsx scripts/candidateRegistrationCookies.test.ts
+          node --import tsx scripts/candidateCallbackCookies.test.ts
+          node --import tsx scripts/candidateCallbackSsr.test.ts
+          node --import tsx scripts/candidateRegistrationSsr.test.ts
+          node --import tsx scripts/candidateRegistrationJourney.test.ts
+          node --import tsx scripts/candidateRegistrationCallback.test.ts
+          node --import tsx scripts/candidateRegistrationOwnership.test.ts
+          node --import tsx scripts/acceptanceCandidateRegistrationOwnership.test.ts
+          node --import tsx scripts/acceptanceCandidateRegistrationIntent.test.ts
+          node --import tsx scripts/acceptanceCandidateRegistrationEmail.test.ts
+          node --import tsx scripts/acceptanceCandidateRegistrationEmailCapture.test.ts
+          node --import tsx scripts/acceptanceCandidateRegistrationEmailCleanup.test.ts
+          node --import tsx scripts/acceptanceCandidateRegistrationGmail.test.ts
+          node scripts/acceptanceGmailCredentialsPreflight.test.mjs
+          node --import tsx scripts/acceptanceCandidateRegistrationGmailRuntime.test.ts
+          node --import tsx scripts/acceptanceCandidateRegistrationGmailCleanupRuntime.test.ts
+          node scripts/acceptanceCandidateRegistrationJourney.test.cjs
+          node scripts/acceptanceCandidateRegistrationReport.test.cjs
+          node --import tsx scripts/candidateRegistrationProvisionContract.test.ts
+          node --import tsx scripts/chatAuthorizationCore.test.ts
+          node --import tsx scripts/candidateChatConsentBoundary.test.ts
+          node --import tsx scripts/chatConversationStoreContract.test.ts
+          node --import tsx scripts/chatConversationCreateBoundary.test.ts
+          node --import tsx scripts/chatReceiptApiBoundary.test.ts
+          node --import tsx scripts/chatMessageApiBoundary.test.ts
+          node --import tsx scripts/chatInternalConversationBoundary.test.ts
+          node --import tsx scripts/chatClientRecruiterBoundary.test.ts
+          node --import tsx scripts/chatRecruiterCandidateBoundary.test.ts
+          node --import tsx scripts/chatClientCandidateEntryBoundary.test.ts
+          node --import tsx scripts/chatRecruiterAdminEntryBoundary.test.ts
 
       - name: Authenticated acceptance harness safety contracts
         env:
           NODE_OPTIONS: --conditions=react-server
-        run: npm run test:acceptance:harness
+        run: |
+          npm run test:acceptance:harness
+          node scripts/authenticatedAcceptanceOriginalCvCleanup.test.cjs
+          node scripts/acceptanceMissingChatFixtureCleanup.test.cjs
+          node scripts/acceptanceOriginalCvApprovalCleanupContract.test.cjs
+          node scripts/acceptanceAbsentApprovalFixture.test.cjs
+          node scripts/acceptanceRun66FixtureRecovery.test.cjs
+          node --import tsx scripts/searchV2AcceptanceLatencyContract.test.ts
 
       - name: Search authorization, cache scope, and candidate privacy
         run: |
@@ -155,15 +206,22 @@ jobs:
           node --import tsx scripts/candidateResponsePrivacy.test.ts
 
       - name: Internal and external Search V2 regressions
-        run: npm run test:production-trust:search-regression
+        run: |
+          npm run test:production-trust:search-regression
+          node --import tsx scripts/searchV2ComparisonActions.test.ts
+          node --import tsx scripts/acceptanceComparisonPackFixture.test.ts
+          node --import tsx scripts/acceptanceComparisonPackRuntime.test.ts
+          node --import tsx scripts/searchV2PerformanceUx.test.ts
 
       - name: Canonical evidence and immutable golden regressions
         run: |
           npm run test:production-trust:canonical
+          node --import tsx scripts/projectRoleProvenanceDeduplication.test.ts
           node --import tsx scripts/currentEmploymentInference.test.ts
 
       - name: CV source layout and complete-document OCR regressions
         run: |
+          node --import tsx scripts/cvParserNameBoundary.test.ts
           node --import tsx scripts/candidateSourcePreservation.test.ts
           node --import tsx scripts/pdfTextLayout.test.ts
           node --import tsx scripts/docxTextLayout.test.ts
@@ -200,17 +258,22 @@ jobs:
           node --import tsx scripts/originalCareerLayouts.test.ts
           node --import tsx scripts/threeTierRecovery.test.ts
           node --import tsx scripts/candidateSecurityFixtureRls.test.ts
+          node --import tsx scripts/stagingAuthPrivatePolicyHelpers.test.ts
+          node --import tsx scripts/acceptanceAuthPrivatePolicyHelpers.test.ts
+          node --import tsx scripts/privateRlsPreviewHelpers.test.ts
           node --import tsx scripts/productionPrivateDataRlsCutover.test.ts
           node --import tsx scripts/productionCutoverPlan.test.ts
           node --import tsx scripts/originalCvCollectionManifest.test.ts
           node --import tsx scripts/productionAuthFoundation.test.ts
           node --import tsx scripts/candidateProfileLifecycleBatch.test.ts
           node --import tsx scripts/candidateCvIngestionParity.test.ts
+          node --import tsx scripts/candidateUploadLifecycleAcceptance.test.ts
           node --import tsx scripts/offlineCvParserAudit.test.ts
           node --import tsx scripts/legacyCvUploadBoundary.test.ts
           node --import tsx scripts/candidateOwnedCvUpdate.test.ts
           node --import tsx scripts/candidateCvReplayIntegrity.test.ts
           node --import tsx scripts/candidateProfileConfirmation.test.ts
+          node --import tsx scripts/candidateJobPreferences.test.ts
           node --import tsx scripts/candidatePortal.test.ts
           node --import tsx scripts/adminCvBulkUpload.test.ts
           node --import tsx scripts/candidateSearchLifecycleConsistency.test.ts
@@ -232,6 +295,10 @@ jobs:
           node --import tsx scripts/releaseDocumentationIntegrity.test.ts
           node --import tsx scripts/candidateDetailAuthorization.test.ts
           node --import tsx scripts/cvPdfOcr.test.ts
+          node scripts/pdfWebpackRuntime.test.cjs
+          node --import tsx scripts/positionedResumeEvidence.test.ts
+          node --import tsx scripts/pipeResumeGeneralization.test.ts
+          node --import tsx scripts/candidateCvPersistenceEvidence.test.ts
           node --import tsx scripts/pdfModernCompatibility.test.ts
           node --import tsx scripts/cvTextDocumentCompatibility.test.ts
           node --import tsx scripts/uploadCvSourceFailure.test.ts
@@ -239,12 +306,18 @@ jobs:
       - name: Spreadsheet export and lazy-client regressions
         run: npm run test:production-trust:dependencies
 
+      - name: DOCX dependency and CSS compiler compatibility
+        run: npm run test:dependency-compatibility
+
       - name: TypeScript typecheck
         run: npm run typecheck
 
       - name: Scoped formatting check
         run: |
           npm run check:production-trust:format
+          npx prettier --check acceptance/e2e/productionTrustAuthenticatedAcceptance.spec.ts scripts/searchV2AcceptanceLatency.mjs scripts/searchV2AcceptanceLatencyContract.test.ts
+          npx prettier --check scripts/chatRecruiterAdminEntryBoundary.test.ts
+          npx prettier --check app/candidate/portal/CandidateChatConsent.tsx app/api/candidate/chat-consent/route.ts scripts/candidateChatConsentBoundary.test.ts
           npx prettier --check docs/precision-v172-blank-project-anchor-20260926.md
           npx prettier --check docs/precision-v171-leading-client-project-card-20260926.md
           npx prettier --check docs/precision-v170-split-role-project-cards-20260926.md
@@ -307,8 +380,14 @@ jobs:
       - name: Clean dependency installation
         run: npm ci
 
+      - name: Verify tracked source encoding
+        run: node scripts/verifyTrackedTextUtf8.cjs
+
       - name: Next.js 16.3.5 Webpack production build
         run: npm run build:webpack
+
+      - name: Verify PDF fonts are bundled with CV upload routes
+        run: node --import tsx scripts/pdfFontTrace.test.ts
 
       - name: Scan client bundle for server secret material
         run: npm run scan:production-trust:bundle
@@ -320,3 +399,38 @@ jobs:
           path: artifacts/production-trust-client-bundle-scan.json
           if-no-files-found: error
           retention-days: 7
+
+  acceptance-gmail-credentials:
+    if: github.event_name == 'workflow_dispatch' && inputs.verify_gmail_credentials == true && github.ref_name == 'codex/production-admin-auth'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: acceptance
+    steps:
+      - name: Checkout exact reviewed revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify exact revision
+        env:
+          REQUESTED_SHA: ${{ github.sha }}
+          RUN_SHA: ${{ github.sha }}
+        run: |
+          test "$REQUESTED_SHA" = "$RUN_SHA"
+          test "$(git rev-parse HEAD)" = "$RUN_SHA"
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+      - name: Verify mocked credential failure and privacy contracts
+        run: node scripts/acceptanceGmailCredentialsPreflight.test.mjs
+      - name: Verify credential refresh and exact mailbox only
+        env:
+          APP_ENV: acceptance
+          ACCEPTANCE_TEST_MODE: "true"
+          ACCEPTANCE_GMAIL_CREDENTIAL_MODE: dedicated-cleanup-preflight
+          ACCEPTANCE_REGISTRATION_CAPTURE_EMAIL: lekhanhha3005@gmail.com
+          ACCEPTANCE_GMAIL_CLIENT_ID: ${{ secrets.ACCEPTANCE_GMAIL_CLIENT_ID }}
+          ACCEPTANCE_GMAIL_CLIENT_SECRET: ${{ secrets.ACCEPTANCE_GMAIL_CLIENT_SECRET }}
+          ACCEPTANCE_GMAIL_REFRESH_TOKEN: ${{ secrets.ACCEPTANCE_GMAIL_REFRESH_TOKEN }}
+        run: node scripts/acceptanceGmailCredentialsPreflight.mjs

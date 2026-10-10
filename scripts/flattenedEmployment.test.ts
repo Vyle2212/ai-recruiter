@@ -107,6 +107,11 @@ const headingFields = [
     "REGIONAL MASTER DATA CONTROLLER",
   ],
   [
+    "Employment History COMPANY Example Technologies Ltd. LOCATION Example City POSITION Associate SAP Consultant DURATION April 4th 2012 - May 29th 2015 Key Learning: Supported reporting.",
+    "Example Technologies Ltd.",
+    "Associate SAP Consultant",
+  ],
+  [
     "Employment History Example Systems Ltd Position: SAP Consultant (Jan 2020 – Dec 2021) Job Functions: Delivery.",
     "Example Systems Ltd",
     "SAP Consultant",
@@ -127,6 +132,41 @@ for (const [text, company, title] of headingFields) {
   assert.equal(rows.length, 1, text);
   assert.deepEqual([rows[0].company, rows[0].title], [company, title]);
 }
+const standaloneLabelTable = `EMPLOYMENT HISTORY:
+Company
+Example Technologies Ltd.
+Location
+Example City
+Designation
+Associate SAP Consultant
+Duration
+April 4th 2012 - May 29th 2015
+Key Learning
+Supported a reporting platform.
+PROJECT EXPERIENCE
+Company
+Synthetic Customer Ltd
+Position
+SAP Consultant
+Duration
+June 2014 - July 2014`;
+assert.deepEqual(
+  extractCanonicalEmploymentFromResume(standaloneLabelTable).map((item) => [
+    item.company,
+    item.title,
+    item.start,
+    item.end,
+  ]),
+  [
+    [
+      "Example Technologies Ltd.",
+      "Associate SAP Consultant",
+      "4 April 2012",
+      "29 May 2015",
+    ],
+  ],
+  "a Location field cannot be appended to an explicitly labelled employer",
+);
 const numbered =
   "Employment History I1 7 Example Systems Sdn Bhd Metro City Position: SAP Consultant (Jan 2022 – Present) Job Functions: Delivery. Employment History II Example Labs Ltd Harbor City Position: SAP Analyst (Jan 2020 – Dec 2021) Responsibilities: Delivery.";
 assert.deepEqual(
@@ -156,6 +196,8 @@ const headingNegatives = [
   "Employment History Example Systems Ltd Position: SAP Consultant (Jan 2020) Job Functions: Delivery. Project: Rollout Duration: Jan 2020 – Present",
   "Employment History COMPANY Example Systems POSITION SAP Consultant DURATION Jan 2022 – Dec 2021",
   "Employment History COMPANY Example Systems POSITION SAP Consultant DURATION Jan 2020 – Jan 20200",
+  "Employment History COMPANY Example Technologies Ltd LOCATION SAP Manager DESIGNATION Associate SAP Consultant DURATION April 2012 - May 2015",
+  "Employment History COMPANY Synthetic Client Ltd LOCATION Example City POSITION SAP Consultant DURATION April 2012 - May 2015",
   "Employment History Example Systems Ltd 31 April 2020 – Dec 2021 SAP Consultant Responsibilities: Delivery.",
   "Employment History Example Systems Ltd Jan 2020 – Dec 2021 Worked as a consultant",
   "Employment History Jan 2025 - Present | Example Client (Contracting)",
@@ -393,6 +435,22 @@ assert.deepEqual(
   ],
 );
 assert.equal(extractCanonicalEmploymentFromResume(yearColumns).length, 3);
+const startOnlyColumns =
+  "Employment History: Date Company Name Role Feb 2013 Example Outsourcing Sdn Bhd SAP HANA Professional Consultant Nov 2011 Example Outsourcing Sdn Bhd Professional Consultant March 2011 Example Shared Services Sdn Bhd (Project) Basis for a migration. Skills: SAP HANA";
+assert.deepEqual(
+  read(startOnlyColumns).map((r) => [r.company, r.title, r.start, r.end]),
+  [
+    [
+      "Example Outsourcing Sdn Bhd",
+      "SAP HANA Professional Consultant",
+      "Feb 2013",
+      "",
+    ],
+    ["Example Outsourcing Sdn Bhd", "Professional Consultant", "Nov 2011", ""],
+  ],
+  "start-only headed rows retain their precision without inferred end dates",
+);
+assert.equal(extractCanonicalEmploymentFromResume(startOnlyColumns).length, 2);
 const datedLedger =
   "Work Experience Dec 2021 – Present: Example Technologies, Example City Manager June 2020 – June 2021: Example Delivery, Example City Senior Manager Aug 2015 – June 2020: Example Systems, Example City Associate Manager May 2011 – Aug 2015: Example Services, Example City Technical Lead April 2006 – May 2011: Example Hardware (EH), Example City SSE & Technical Lead Professional Experience: Since Mar 2024 – Healthcare Client, Example City as Lead/Developer";
 const ledgerRows = read(datedLedger);
@@ -415,6 +473,9 @@ for (const text of [
   "Employment History Position Company Period Consultant Example Services Ltd 2022 - 2020",
   "Employment History Position Company Period Consultant Example Client Ltd 2020 - Present",
   "Employment History Position Company Period Consultant Example Services Ltd 2020 - Project: Delivery 2021 - Present",
+  "Project Employment History Date Company Name Role Feb 2013 Example Services Ltd SAP Consultant",
+  "Employment History Date Company Name Role Feb 2013 Example One Ltd Example Two Ltd SAP Consultant",
+  "Employment History Date Company Name Role Feb 2013 Example Services Ltd Unclassified",
   "Work Experience Jan 2020 - Present: Example Client, Example City Manager",
   "Work Experience Jan 2020 - Present: Example Services, Client City Manager",
   "Work Experience Jan 2020 - Present: Example Services, Example City Manager for delivery",
@@ -1266,3 +1327,91 @@ assert.equal(
     0,
   );
 }
+
+const positionLedger =
+  "List of professional positions\nOrganisation\nDescription of activities\nExample Advisory\nDec 2019 - Present\nSD Consultant\nTo provide consulting services for implementation and support\nExample Consulting Sdn Bhd\nDec 2017 - Nov 2019\nSD Consultant\nDevelopment for various industries\nExample Technology Ltd\nDec 2014 - Nov 2017\nSAP SD Consultant\nREFERENCES\nReference Person\nJan 2010 - Dec 2014\nSAP Consultant";
+assert.deepEqual(
+  read(positionLedger).map((x) => [x.company, x.title, x.start, x.end]),
+  [
+    ["Example Advisory", "SD Consultant", "Dec 2019", "Present"],
+    ["Example Consulting Sdn Bhd", "SD Consultant", "Dec 2017", "Nov 2019"],
+    ["Example Technology Ltd", "SAP SD Consultant", "Dec 2014", "Nov 2017"],
+  ],
+);
+assert.deepEqual(
+  read(
+    positionLedger.replace(
+      "List of professional positions",
+      "Selected project experience",
+    ),
+  ),
+  [],
+);
+assert.deepEqual(
+  read(
+    "List of professional positions\nClient: Example Buyer\nDec 2019 - Present\nSAP SD Consultant",
+  ),
+  [],
+);
+assert.deepEqual(
+  read(
+    "List of professional positions\nExample Advisory\nDec 2025 - Mar 2025\nSAP SD Consultant",
+  ),
+  [],
+);
+assert.equal(extractCanonicalEmploymentFromResume(positionLedger).length, 3);
+
+const undatedColumns =
+  "Professional Experience\nOrganization\nDesignation\nLocation\nExample Technology Sdn Bhd\nSAP ABAP Consultant\nExample City, Malaysia\nExample Systems Pvt Ltd\nSAP ABAP Consultant\nExample Town, India\nEducation";
+assert.deepEqual(
+  read(undatedColumns).map((x) => [
+    x.company,
+    x.title,
+    x.start,
+    x.end,
+    x.current,
+  ]),
+  [
+    ["Example Technology Sdn Bhd", "SAP ABAP Consultant", "", "", false],
+    ["Example Systems Pvt Ltd", "SAP ABAP Consultant", "", "", false],
+  ],
+);
+assert.equal(extractCanonicalEmploymentFromResume(undatedColumns).length, 2);
+const startColumns =
+  "Employment History:\nDate\tCompany Name\tRole\nFeb 2013\tExample Services Sdn Bhd\tSAP HANA Professional Consultant\nNov 2011\tExample Services Sdn Bhd\tProfessional Consultant\nSkills:";
+assert.deepEqual(
+  read(startColumns).map((x) => [x.start, x.end, x.current]),
+  [
+    ["Feb 2013", "", false],
+    ["Nov 2011", "", false],
+  ],
+);
+assert.equal(extractCanonicalEmploymentFromResume(startColumns).length, 2);
+const periodColumns =
+  "Professional Experience:\nPeriod\tOrganization\tDesignation\nNov'2009 to till date\nExample Technology Ltd\nSD Consultant\nMay'2008-Nov'2009\tExample Manufacturing Ltd\tSales Representative\nTechnical Skills:";
+assert.deepEqual(
+  read(periodColumns).map((x) => [x.company, x.start, x.end]),
+  [
+    ["Example Technology Ltd", "Nov 2009", "Present"],
+    ["Example Manufacturing Ltd", "May 2008", "Nov 2009"],
+  ],
+);
+for (const value of [
+  undatedColumns.replace("Professional Experience", "Project Experience"),
+  undatedColumns.replace(
+    "Example Technology Sdn Bhd",
+    "Client: Example Technology Sdn Bhd",
+  ),
+  startColumns.replace("Employment History", "Project History"),
+])
+  assert.deepEqual(read(value), []);
+assert.deepEqual(
+  read(startColumns.replace("Feb 2013", "Feb 2013 Mar 2014")),
+  [],
+);
+assert.equal(
+  extractCanonicalEmploymentFromResume(undatedColumns).find(
+    (row) => row.company === "Example Technology Sdn Bhd",
+  )?.location,
+  "Example City, Malaysia",
+);

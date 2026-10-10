@@ -1,3 +1,4 @@
+import { sourcePhoneIsNumericDate } from "./cvPhoneEvidence";
 ﻿import { inferSapProfile, isWeakCandidateNameProduction, fallbackNameFromEmail, cleanPhoneProduction } from "./sapRecruiterRules";
 export type ConsultingLevel =
   | "CONSULTANT"
@@ -1293,12 +1294,12 @@ function extractPhone(candidate: any, rawText: string): string | null {
   }
 
   const text = rawText || rawTextOf(candidate) || blob(candidate);
-  const candidates = text.match(/(?:\+?\d[\d\s().-]{7,}\d)/g) || [];
+  const candidates = text.match(/(?:\+?\d[\d \t().-]{7,}\d)/g) || [];
 
   for (const item of candidates) {
     const cleaned = item.replace(/\s+/g, " ").trim();
 
-    if (isSuspiciousPhone(cleaned)) continue;
+    if (isSuspiciousPhone(cleaned) || sourcePhoneIsNumericDate(cleaned)) continue;
 
     return cleaned;
   }

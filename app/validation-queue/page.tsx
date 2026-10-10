@@ -104,7 +104,7 @@ export default function ValidationQueuePage() {
             <h1 className="mt-1 text-2xl font-semibold text-white">Candidate extraction review</h1>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/search" className="rounded-md border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-200 hover:border-cyan-500 hover:text-cyan-100">
+            <Link href="/recruiter/talent-search/v2" className="rounded-md border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-200 hover:border-cyan-500 hover:text-cyan-100">
               Talent Search
             </Link>
             <Link href="/audit" className="rounded-md border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-200 hover:border-cyan-500 hover:text-cyan-100">
@@ -150,7 +150,7 @@ export default function ValidationQueuePage() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search blocked candidates"
-            className="h-10 min-w-0 rounded-md border border-slate-700 bg-[#05070A] px-3 text-sm text-slate-100 outline-none focus:border-cyan-400 md:w-80"
+            className="h-10 min-w-0 rounded-md border border-slate-700 bg-[#05070A] px-3 text-sm text-slate-100 outline-hidden focus:border-cyan-400 md:w-80"
           />
         </div>
 

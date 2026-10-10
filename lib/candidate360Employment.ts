@@ -1537,7 +1537,7 @@ function resumeEmployment(resumeText: string) {
       excerpt: project.excerpt });
     if (parsed) output.push(parsed);
   }
-  for (const [index, row] of flattenedEmployment(source).entries()) {
+  for (const [index, row] of flattenedEmployment(source, resumeText).entries()) {
     const parsed = entry({...row, allowGroundedEmployerOnly: true,
       sourceRef: `resume.flattened.${row.group}.${index + 1}`, sourceType: "parsed_resume", confidence: 94});
     if (!parsed) continue;
@@ -2310,7 +2310,7 @@ export function canonicalEmploymentTimeline(input: {
 }) {
   const extracted: EnterpriseEmployment[] = [];
   input.structuredRecords.forEach(({ record, sourceRef }) => {
-    const end = value(record, ["end_date", "endDate", "to", "end"]);
+    const end = value(record, ["end_date", "endDate", "to", "end", "current_end_label"]);
     const currentValue = ["current", "is_current", "isCurrent"]
       .map((key) => record[key])
       .find((item) => typeof item === "boolean" || Boolean(clean(item)));

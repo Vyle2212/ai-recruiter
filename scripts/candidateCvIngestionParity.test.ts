@@ -1,3 +1,5 @@
+import { buildCandidateProfile } from "../lib/candidateProfile";
+import { reExtractCandidate } from "../lib/candidateReExtractionEngine";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
@@ -8,6 +10,90 @@ import {
 import { enrichCandidateUpload } from "../lib/candidateUploadEnrichment";
 import { isValidProjectEntry } from "../lib/candidateProfileIngestion";
 import { evaluateCandidateExtractionCoverage } from "../lib/candidateExtractionCoverage";
+import { extractPhone, derivePrimaryModule } from "../lib/cv-parser";
+import { classifyCandidateText } from "../lib/candidateFileGuards";
+
+const unspecifiedTechnicalSource = `Example Person
+example@example.invalid
+Phone +60123456789
+Career history\tSAP Senior Technical Consultant at Example Services
+Jan 2015 - Present
+SAP Technical Consultant at Example Services
+Jun 2012 - Present
+Skills
+Education
+`;
+for (const product of ["SAP Cloud for Customer", "SAP B1"]) {
+  assert.equal(
+    classifyCandidateText(
+      `Example Person\nEmail example@example.invalid\nPhone +60123456789\nWORK EXPERIENCE\n${product} consultant performing configuration and integration.\nEducation\nBachelor of Computing`,
+    ).recordType,
+    "SAP_CV",
+  );
+}
+assert.equal(
+  classifyCandidateText(
+    `Example Person\nEmail example@example.invalid\nPhone +60123456789\nWORK EXPERIENCE\nI am currently working as a SAP certified solutions advisor.\nEducation\nBachelor of Computing`,
+  ).recordType,
+  "SAP_CV",
+);
+assert.equal(
+  classifyCandidateText(`Example Person
+Email example@example.invalid
+Phone +60123456789
+WORK EXPERIENCE
+Tax Associate responsible for GST implementation and tax advice.
+Internship: entered journals into SAP accounting system.
+EDUCATION
+Bachelor of Accounting
+`).shouldSave,
+  false,
+  "Generic tax implementation cannot lend SAP delivery evidence to an unrelated end-user internship",
+);
+assert.equal(
+  classifyCandidateText(unspecifiedTechnicalSource).recordType,
+  "SAP_CV",
+);
+assert.ok(
+  classifyCandidateText(unspecifiedTechnicalSource).signals.includes(
+    "sap_career_role_module_unspecified",
+  ),
+);
+assert.equal(
+  classifyCandidateText(`Example Person
+Email example@example.invalid
+Phone +60123456789
+WORK EXPERIENCE
+BI Solution Consultant
+Project: Migrate data from SAP R3 to ECC6 using SAP BO Data Services.
+Education: Bachelor of Computing
+`).recordType,
+  "SAP_CV",
+  "Source SAP migration verbs must retain a genuine SAP delivery profile",
+);
+assert.equal(
+  classifyCandidateText(
+    unspecifiedTechnicalSource
+      .replaceAll("SAP ", "")
+      .replace("Skills", "Sage X3 implementation\nSkills"),
+  ).shouldSave,
+  false,
+  "Generic technical ERP title cannot prove SAP or ABAP",
+);
+
+assert.equal(
+  derivePrimaryModule(
+    "Business Integration Manager\n" +
+      "Business process integration\n".repeat(20) +
+      "SAP FI consultant delivering FSCM and treasury",
+  ),
+  "FICO",
+  "BI inside Business must not manufacture BW expertise",
+);
+assert.equal(
+  derivePrimaryModule("SAP BW Consultant\nBW modelling and BI reporting"),
+  "BW",
+);
 
 const source = `
 Jane Doe
@@ -43,6 +129,29 @@ English
 `;
 
 async function main() {
+  const embeddedSource = source
+    .replace(
+      "Delivered SAP S/4HANA implementations and regional rollouts.",
+      "Architected the SAP and BlackLine integration, improving close cycles.\nLed SAP FSCM Credit & Dispute Management automation, improving collections.",
+    )
+    .replace(/PROJECT EXPERIENCE[\s\S]*?(?=EDUCATION)/, "");
+  for (const uploadSource of ["admin_upload", "candidate_upload"] as const) {
+    const embedded = await prepareCandidateCv({
+      buffer: Buffer.from(embeddedSource),
+      fileName: "embedded-projects.txt",
+      source: uploadSource,
+    });
+    assert.equal(embedded.accepted, true);
+    if (!embedded.accepted) throw new Error("Embedded fixture rejected");
+    assert.equal(embedded.candidatePayload.project_history.length, 2);
+    for (const project of embedded.candidatePayload.project_history) {
+      assert.equal(project.employer, "Example Consulting");
+      assert.equal(project.role, "SAP MM Consultant");
+      assert.equal(project.client, "");
+      assert.equal(project.start_date, "");
+      assert.equal(project.end_date, "");
+    }
+  }
   const admin = await prepareCandidateCv({
     buffer: Buffer.from(source),
     fileName: "jane-doe.txt",
@@ -70,6 +179,17 @@ async function main() {
     "admin and candidate CVs must use the exact same extraction/parser output",
   );
   assert.equal(admin.candidatePayload.profile_source_type, "admin_upload");
+  for (const payload of [admin.candidatePayload, candidate.candidatePayload]) {
+    assert.equal(payload.primaryModule, payload.primary_module);
+    assert.deepEqual(payload.sapModules, payload.sap_modules);
+    assert.deepEqual(payload.secondaryModules, payload.secondary_modules);
+    assert.equal(payload.currentCompany, payload.current_company);
+    assert.equal(payload.currentTitle, payload.current_title);
+    assert.ok(
+      !payload.sap_modules.includes("PP"),
+      "Manufacturing client name is not PP expertise",
+    );
+  }
   assert.equal(
     candidate.candidatePayload.profile_source_type,
     "candidate_upload",
@@ -85,6 +205,97 @@ async function main() {
     admin.candidatePayload.project_history[0].role,
     "SAP MM Consultant",
   );
+  const repeatedProjectIdentity = enrichCandidateUpload(
+    {
+      name: "Jane Doe",
+      projects: [
+        {
+          name: "Synthetic rollout",
+          client: "Synthetic Manufacturing",
+          role: "SAP MM Consultant",
+          start_date: "",
+          end_date: "",
+        },
+      ],
+    },
+    `SAP MM Consultant
+PROJECT EXPERIENCE
+Project: Synthetic rollout
+Client: Synthetic Manufacturing
+Role: SAP MM Consultant
+Project: Synthetic rollout
+Client: Synthetic Manufacturing
+Role: SAP MM Consultant
+Duration: Jan 2022 - Dec 2023`,
+  );
+  const repeatedProjects =
+    repeatedProjectIdentity.project_history.filter(isValidProjectEntry);
+  assert.equal(
+    repeatedProjects.length,
+    2,
+    "same labels on separate project cards cannot lend dates to an undated assignment",
+  );
+  assert.ok(
+    repeatedProjects.some(
+      (project: Record<string, unknown>) =>
+        !project.start_date && !project.end_date,
+    ),
+    "the separate undated source assertion must remain review evidence",
+  );
+  const undatedProjectSource = source.replace(
+    /PROJECT EXPERIENCE[\s\S]*?EDUCATION/,
+    `PROJECT EXPERIENCE
+Project: S/4HANA rollout
+Client: Synthetic Retail
+Role: SAP MM Consultant
+Project: AMS support
+Client: Synthetic Manufacturing
+Role: SAP MM Lead
+EDUCATION`,
+  );
+  for (const origin of ["admin_upload", "candidate_upload"] as const) {
+    const prepared = await prepareCandidateCv({
+      buffer: Buffer.from(undatedProjectSource),
+      fileName: "synthetic-undated-client-projects.txt",
+      source: origin,
+    });
+    assert.equal(prepared.accepted, true);
+    if (!prepared.accepted) throw new Error("undated projects rejected");
+    const profile = prepared.candidatePayload;
+    assert.equal(profile.current_company, "Example Consulting");
+    assert.equal(profile.employment_history[0].employer, "Example Consulting");
+    assert.equal(profile.employment_history[0].start_date, "Jan 2020");
+    assert.equal(profile.employment_history[0].current, true);
+    assert.deepEqual(
+      profile.project_history.map((row: Record<string, unknown>) => ({
+        name: row.name,
+        client: row.client,
+        role: row.role,
+        start_date: row.start_date,
+        end_date: row.end_date,
+      })),
+      [
+        {
+          name: "S/4HANA rollout",
+          client: "Synthetic Retail",
+          role: "SAP MM Consultant",
+          start_date: "",
+          end_date: "",
+        },
+        {
+          name: "AMS support",
+          client: "Synthetic Manufacturing",
+          role: "SAP MM Lead",
+          start_date: "",
+          end_date: "",
+        },
+      ],
+      "clients and projects remain separate from the employer and cannot inherit its tenure",
+    );
+    assert.ok(
+      !prepared.extractionCoverage.missedObservedSections.includes("projects"),
+    );
+  }
   assert.deepEqual(
     admin.candidatePayload.sourceExtraction,
     admin.sourceExtraction,
@@ -583,22 +794,40 @@ EDUCATION`,
       new Set(["Alpha Manufacturing", "Beta Retail"]),
     );
   }
-  for (const leadingSection of [
-    "WORK EXPERIENCE\nClient: Employer Operations\nRole: SAP MM Consultant\nDuration: Jan 2021 - Dec 2022\nPROJECT EXPERIENCE",
-    "PROJECT EXPERIENCE\nWORK EXPERIENCE\nClient: Employer Operations\nRole: SAP MM Consultant\nDuration: Jan 2021 - Dec 2022",
-    "PROJECT EXPERIENCE\nClient: Partial Manufacturing\nRole: SAP MM Consultant",
-  ]) {
+  for (const [leadingSection, expectedClients] of [
+    [
+      "WORK EXPERIENCE\nClient: Employer Operations\nRole: SAP MM Consultant\nDuration: Jan 2021 - Dec 2022\nPROJECT EXPERIENCE",
+      ["Beta Retail"],
+    ],
+    [
+      "PROJECT EXPERIENCE\nWORK EXPERIENCE\nClient: Employer Operations\nRole: SAP MM Consultant\nDuration: Jan 2021 - Dec 2022",
+      ["Beta Retail"],
+    ],
+    [
+      "PROJECT EXPERIENCE\nClient: Partial Manufacturing\nRole: SAP MM Consultant",
+      ["Partial Manufacturing", "Beta Retail"],
+    ],
+  ] as const) {
     const bounded = enrichCandidateUpload(
       { name: "Jane Doe" },
       `SAP MM Consultant\n${leadingSection}\nProject: Beta rollout\nClient: Beta Retail\nRole: SAP MM Lead\nDuration: Jan 2023 - Dec 2024`,
     );
     const projects = bounded.project_history.filter(isValidProjectEntry);
-    assert.equal(
-      projects.length,
-      1,
-      "an employment Client or incomplete leading card cannot borrow the named project's dates",
+    assert.deepEqual(
+      new Set(
+        projects.map((project: Record<string, unknown>) => project.client),
+      ),
+      new Set(expectedClients),
+      "employment clients stay out of projects, while an undated project card remains present",
     );
-    assert.equal(projects[0].client, "Beta Retail");
+    assert.equal(
+      projects.find(
+        (project: Record<string, unknown>) =>
+          project.client === "Partial Manufacturing",
+      )?.start_date || "",
+      "",
+      "the adjacent named project cannot supply dates to an undated client card",
+    );
   }
   const splitRoleProjectSource = source.replace(
     /PROJECT EXPERIENCE[\s\S]*?EDUCATION/,
@@ -629,6 +858,38 @@ EDUCATION`,
     assert.equal(projects[0].name, "Procurement rollout");
     assert.equal(projects[0].client, "Example Manufacturing");
   }
+  const longProjectName =
+    `Regional procurement harmonization ${"and logistics integration ".repeat(8)}`.trim();
+  const longProjectClient =
+    `Synthetic Holdings (${"subsidiary alpha, subsidiary beta, subsidiary gamma, ".repeat(6)}regional headquarters)`.trim();
+  const longProjectRole =
+    `SAP MM Lead responsible for ${"procurement design, integration testing, cutover governance, ".repeat(4)}`.trim();
+  const longProject = enrichCandidateUpload(
+    { name: "Jane Doe" },
+    `SAP MM Consultant\nPROJECT EXPERIENCE\nProject: ${longProjectName}\nClient: ${longProjectClient}\nRole: ${longProjectRole}\nDuration: Jan 2021 - Dec 2024`,
+  ).project_history.filter(isValidProjectEntry);
+  assert.equal(longProject.length, 1);
+  assert.equal(longProject[0].name, longProjectName);
+  assert.equal(longProject[0].client, longProjectClient);
+  assert.equal(longProject[0].role, longProjectRole);
+  assert.equal(longProject[0].start_date, "Jan 2021");
+  assert.equal(longProject[0].end_date, "Dec 2024");
+  const repeatedSeparators = enrichCandidateUpload(
+    { name: "Jane Doe" },
+    `SAP SD Consultant
+PROJECT EXPERIENCE
+PROJECT :2
+Client: : Example Resources
+Role: : SAP SD Functional Consultant
+Project Type: : Implementation
+Duration: : Feb 2008 to Present`,
+  ).project_history.filter(isValidProjectEntry);
+  assert.equal(repeatedSeparators.length, 1);
+  assert.equal(repeatedSeparators[0].name, "2");
+  assert.equal(repeatedSeparators[0].client, "Example Resources");
+  assert.equal(repeatedSeparators[0].role, "SAP SD Functional Consultant");
+  assert.equal(repeatedSeparators[0].start_date, "Feb 2008");
+  assert.equal(repeatedSeparators[0].end_date, "Present");
   for (const emptyRole of ["Role", "Role:"]) {
     const blankRoleSource = splitRoleProjectSource.replace(
       "Role\nSAP MM Consultant",
@@ -656,8 +917,8 @@ EDUCATION`,
   );
   assert.equal(
     incompleteClientCard.project_history.filter(isValidProjectEntry).length,
-    2,
-    "a Client-only card cannot borrow a later project's dates",
+    3,
+    "an undated Client-only card remains present without borrowing a later project's dates",
   );
   const unfinishedNamedCard = enrichCandidateUpload(
     { name: "Jane Doe" },
@@ -665,8 +926,8 @@ EDUCATION`,
   );
   assert.equal(
     unfinishedNamedCard.project_history.filter(isValidProjectEntry).length,
-    2,
-    "an incomplete named card cannot borrow the next Client-only card's duration",
+    3,
+    "an undated named card remains present without borrowing the next Client-only card's duration",
   );
   const conflictingSource = `SAP MM Consultant\nPROJECT EXPERIENCE\nProject Title: Synthetic Alpha\nClient: Synthetic Logistics\nRole: SAP MM Consultant\nDuration: Jan 2020 - Dec 2021`;
   const conflictingProjects = enrichCandidateUpload(
@@ -799,11 +1060,12 @@ English
     });
     assert.equal(partial.accepted, true);
     if (!partial.accepted) throw new Error("partial fixture rejected");
-    assert.equal(partial.candidatePayload.project_history.length, 1);
+    assert.equal(partial.candidatePayload.project_history.length, 2);
+    assert.equal(partial.candidatePayload.project_history[1].start_date, "");
+    assert.equal(partial.candidatePayload.project_history[1].end_date, "");
     assert.ok(
-      partial.extractionCoverage.missedObservedSections.includes("projects"),
+      !partial.extractionCoverage.missedObservedSections.includes("projects"),
     );
-    assert.equal(partial.extractionCoverage.status, "incomplete_needs_review");
     const dateBeforeClient = await prepareCandidateCv({
       buffer: Buffer.from(
         multilineProjects
@@ -837,11 +1099,10 @@ English
     });
     assert.equal(unrelatedYear.accepted, true);
     if (!unrelatedYear.accepted) throw new Error("undated fixture rejected");
-    assert.equal(unrelatedYear.candidatePayload.project_history.length, 1);
-    assert.ok(
-      unrelatedYear.extractionCoverage.missedObservedSections.includes(
-        "projects",
-      ),
+    assert.equal(unrelatedYear.candidatePayload.project_history.length, 2);
+    assert.equal(
+      unrelatedYear.candidatePayload.project_history[1].start_date,
+      "",
     );
     const labelledDuration = await prepareCandidateCv({
       buffer: Buffer.from(`Jane Doe
@@ -881,6 +1142,97 @@ English`),
     assert.equal(
       labelledDuration.candidatePayload.project_history[0].name,
       "Synthetic Procurement Rollout",
+    );
+    const projectFirstSplitCards = await prepareCandidateCv({
+      buffer: Buffer.from(`Jane Doe
+Email: jane.doe@example.com
+Location: Singapore
+SAP FICO consultant delivering SAP S/4HANA programmes.
+WORK EXPERIENCE
+SAP FICO Consultant | Example Consulting | Jan 2020 - Present
+PROJECT EXPERIENCE
+Project
+Synthetic S/4HANA migration
+Client
+Synthetic Manufacturing
+Role
+SAP FICO Consultant
+Start Date
+Jan 2022
+End Date
+Dec 2023
+Project
+Synthetic support transition
+Client
+Synthetic Logistics
+Role
+SAP FICO Lead
+EDUCATION
+Bachelor of Computing
+SKILLS
+SAP FICO, S/4HANA
+LANGUAGES
+English`),
+      fileName: "synthetic-project-first-split-cards.txt",
+      source: sourceType,
+    });
+    assert.equal(projectFirstSplitCards.accepted, true);
+    if (!projectFirstSplitCards.accepted)
+      throw new Error("project-first split fixture rejected");
+    assert.equal(
+      projectFirstSplitCards.candidatePayload.project_history.length,
+      2,
+    );
+    assert.deepEqual(
+      projectFirstSplitCards.candidatePayload.project_history.map(
+        (row: Record<string, unknown>) => ({
+          name: row.name,
+          client: row.client,
+          role: row.role,
+          start_date: row.start_date,
+          end_date: row.end_date,
+        }),
+      ),
+      [
+        {
+          name: "Synthetic S/4HANA migration",
+          client: "Synthetic Manufacturing",
+          role: "SAP FICO Consultant",
+          start_date: "Jan 2022",
+          end_date: "Dec 2023",
+        },
+        {
+          name: "Synthetic support transition",
+          client: "Synthetic Logistics",
+          role: "SAP FICO Lead",
+          start_date: "",
+          end_date: "",
+        },
+      ],
+    );
+    const partialProjectFirstDates = await prepareCandidateCv({
+      buffer: Buffer.from(
+        projectFirstSplitCards.rawText.replace("End Date\nDec 2023\n", ""),
+      ),
+      fileName: "synthetic-project-first-partial-dates.txt",
+      source: sourceType,
+    });
+    assert.equal(partialProjectFirstDates.accepted, true);
+    if (!partialProjectFirstDates.accepted)
+      throw new Error("partial project-first split fixture rejected");
+    assert.equal(
+      partialProjectFirstDates.candidatePayload.project_history.length,
+      1,
+      "a start-only project card must remain under review while a separate undated card remains valid",
+    );
+    assert.equal(
+      partialProjectFirstDates.candidatePayload.project_history[0].name,
+      "Synthetic support transition",
+    );
+    assert.equal(
+      partialProjectFirstDates.candidatePayload.experience[0].employer,
+      "Example Consulting",
+      "project dates and clients must not alter employer tenure",
     );
     const missingDuration = await prepareCandidateCv({
       buffer: Buffer.from(
@@ -987,3 +1339,79 @@ main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
+
+const sidebarLanguages = enrichCandidateUpload(
+  {
+    raw_text:
+      "Example Person\nLanguages\nENGLISH - Fair\nBAHASA - Fluent\nARABIC - Simple\nSkills\nSAP FI",
+  },
+  "Languages\nENGLISH - Fair\nBAHASA - Fluent\nARABIC - Simple\nSkills\nSAP FI",
+);
+assert.deepEqual(sidebarLanguages.languages, [
+  { language: "English", proficiency: "Fair" },
+  { language: "Bahasa", proficiency: "Fluent" },
+  { language: "Arabic", proficiency: "Simple" },
+]);
+const compoundBahasa = enrichCandidateUpload(
+  {},
+  "Languages\nBahasa Malaysia - Fluent\nBahasa Indonesia - Native\nSkills\nSAP FI",
+);
+assert.deepEqual(compoundBahasa.languages, [
+  { language: "Bahasa Malaysia", proficiency: "Fluent" },
+  { language: "Bahasa Indonesia", proficiency: "Native" },
+]);
+
+// Numeric dates cannot become contact information or swallow a later phone.
+for (const numericDate of [
+  "01.01.2020",
+  "31-12-1999",
+  "2020-01-01",
+  "2019 - 2024",
+]) {
+  assert.equal(extractPhone(numericDate), null);
+  assert.ok(
+    !enrichCandidateUpload({}, `Date of birth: ${numericDate}\nSAP Consultant`)
+      .phone,
+  );
+}
+assert.equal(extractPhone("01.01.2020\n+65 9123 4567"), "+65 9123 4567");
+assert.equal(extractPhone("Mobile: 0812 3456 7890"), "0812 3456 7890");
+assert.equal(
+  enrichCandidateUpload({ phone: "0812 3456 7890" }, "SAP Consultant").phone,
+  "0812 3456 7890",
+);
+assert.ok(
+  !enrichCandidateUpload({}, "Phone: 01.01.2020\nSAP Consultant").phone,
+);
+
+// Profile rendering and re-extraction share the same numeric-date exclusion.
+for (const numericDate of ["01.01.2020", "31-12-1999", "2020-01-01"]) {
+  const candidate = {
+    id: "synthetic-contact-boundary",
+    name: "Example Candidate",
+    raw_text: `Phone: ${numericDate}\nSAP Consultant`,
+  };
+  assert.equal(buildCandidateProfile(candidate).phone, null);
+  assert.equal(reExtractCandidate(candidate).suggested.phone, "");
+}
+const adjacentAddress = {
+  id: "synthetic-address-boundary",
+  name: "Example Candidate",
+  raw_text: "Phone: +65 9123 4567\n9 Example Road\nSAP Consultant",
+};
+assert.equal(buildCandidateProfile(adjacentAddress).phone, "+65 9123 4567");
+assert.equal(
+  reExtractCandidate(adjacentAddress).suggested.phone,
+  "+65 9123 4567",
+);
+
+const explicitUndatedLocation = enrichCandidateUpload(
+  {},
+  "Professional Experience\nOrganization\nDesignation\nLocation\nExample Technology Sdn Bhd\nSAP ABAP Consultant\nExample City, Malaysia\nEducation",
+);
+assert.equal(
+  explicitUndatedLocation.employment_history[0].location,
+  "Example City, Malaysia",
+);
+assert.equal(explicitUndatedLocation.employment_history[0].start_date, "");
+assert.equal(explicitUndatedLocation.employment_history[0].end_date, "");

@@ -1,4 +1,16 @@
 name: Production Trust Authenticated Acceptance
+run-name: >-
+  ${{ inputs.acceptance_scope == 'cleanup_run66'
+      && 'Recover acceptance run 66 residue'
+      || inputs.acceptance_scope == 'cleanup_run42'
+      && 'Recover acceptance run 42 residue'
+      || inputs.acceptance_scope == 'cleanup_run40'
+      && 'Recover acceptance run 40 residue'
+      || inputs.acceptance_scope == 'cleanup_run37'
+      && 'Recover acceptance run 37 residue'
+      || inputs.acceptance_scope == 'internal_only'
+      && format('Internal Talent Hub acceptance · {0}', inputs.tested_sha)
+      || format('Full-scope acceptance · {0}', inputs.tested_sha) }}
 
 on:
   workflow_dispatch:
@@ -7,11 +19,26 @@ on:
         description: Exact deployed commit SHA to verify
         required: true
         type: string
-      external_mode:
-        description: Acceptance launch scope
+      acceptance_scope:
+        description: Explicit acceptance scope
         required: true
         type: choice
-        options: [required, disabled]
+        default: internal_only
+        options:
+          [
+            internal_only,
+            full_scope,
+            cleanup_run37,
+            cleanup_run40,
+            cleanup_run42,
+            cleanup_run66,
+          ]
+
+      include_signup:
+        description: Include live candidate signup and exact run-owned Gmail cleanup
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -22,8 +49,8 @@ concurrency:
 
 jobs:
   authenticated-acceptance:
-    if: startsWith(github.ref_name, 'codex/authenticated-acceptance-')
-    name: Exact-build authenticated acceptance
+    if: inputs.acceptance_scope != 'cleanup_run66' && inputs.acceptance_scope != 'cleanup_run42' && inputs.acceptance_scope != 'cleanup_run37' && inputs.acceptance_scope != 'cleanup_run40' && startsWith(github.ref_name, 'codex/authenticated-acceptance-')
+    name: ${{ inputs.acceptance_scope == 'internal_only' && 'Exact-build internal Talent Hub acceptance' || 'Exact-build full-scope acceptance' }}
     runs-on: ubuntu-latest
     timeout-minutes: 55
     environment: acceptance
@@ -32,8 +59,10 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
       ACCEPTANCE_TEST_MODE: "true"
       APP_ENV: acceptance
+      ACCEPTANCE_REGISTRATION_JOURNEY_ENABLED: ${{ inputs.include_signup && 'true' || 'false' }}
+      ACCEPTANCE_REGISTRATION_CAPTURE_EMAIL: ${{ inputs.include_signup && 'lekhanhha3005@gmail.com' || '' }}
       ACCEPTANCE_DEPLOYMENT_PROTECTION_REQUIRED: "true"
-      ACCEPTANCE_EXTERNAL_MODE: ${{ inputs.external_mode }}
+      ACCEPTANCE_EXTERNAL_MODE: ${{ inputs.acceptance_scope == 'full_scope' && 'required' || 'disabled' }}
       ACCEPTANCE_BASE_URL: ${{ secrets.ACCEPTANCE_BASE_URL }}
       ACCEPTANCE_DEPLOYMENT_BYPASS_SECRET: ${{ secrets.ACCEPTANCE_DEPLOYMENT_BYPASS_SECRET }}
       ACCEPTANCE_EXPECTED_SHA: ${{ inputs.tested_sha }}
@@ -60,6 +89,11 @@ jobs:
           set -euo pipefail
           test "${{ inputs.tested_sha }}" = "${{ github.sha }}"
           test "$(git rev-parse HEAD)" = "$ACCEPTANCE_EXPECTED_SHA"
+          case "${{ inputs.acceptance_scope }}" in
+            internal_only) test "$ACCEPTANCE_EXTERNAL_MODE" = "disabled" ;;
+            full_scope) test "$ACCEPTANCE_EXTERNAL_MODE" = "required" ;;
+            *) exit 1 ;;
+          esac
           case "$ACCEPTANCE_BASE_URL" in https://*) ;; *) exit 1 ;; esac
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -73,11 +107,36 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Verify durable recruiter storage contracts
         run: npm run test:recruiter-runtime-storage
+      - name: Verify remaining product authorization contracts
+        run: |
+          node --import tsx scripts/candidateChatConsentBoundary.test.ts
+          node --import tsx scripts/chatAuthorizationCore.test.ts
+          node --import tsx scripts/chatClientCandidateEntryBoundary.test.ts
+          node --import tsx scripts/chatClientRecruiterBoundary.test.ts
+          node --import tsx scripts/chatConversationCreateBoundary.test.ts
+          node --import tsx scripts/chatInternalConversationBoundary.test.ts
+          node --import tsx scripts/chatMessageApiBoundary.test.ts
+          node --import tsx scripts/chatReceiptApiBoundary.test.ts
+          node --import tsx scripts/chatRecruiterAdminEntryBoundary.test.ts
+          node --import tsx scripts/chatRecruiterCandidateBoundary.test.ts
+          node scripts/authenticatedAcceptanceOriginalCvCleanup.test.cjs
+          node scripts/acceptanceOriginalCvApprovalCleanupContract.test.cjs
+          node --import tsx scripts/originalCvArchiveContract.test.ts
+          node --import tsx scripts/originalCvReadAccess.test.ts
+          node --import tsx scripts/acceptanceComparisonPackFixture.test.ts
+          node --import tsx scripts/acceptanceComparisonPackRuntime.test.ts
+          node --import tsx scripts/searchV2JobComparison.test.ts
+          node --import tsx scripts/recruiterDashboard.test.ts
+          node --import tsx scripts/recruiterWorkflowAnalytics.test.ts
+          node --import tsx scripts/clientExecutiveReportRequest.test.ts
+          node --import tsx scripts/clientExecutiveReport.test.ts
+          node --import tsx scripts/executiveCompareState.test.ts
       - name: Verify canonical synthetic name lookup
         run: |
           node --import tsx scripts/authenticatedAcceptanceSyntheticPreflight.test.ts
           node --import tsx scripts/authenticatedAcceptanceFixtureLease.test.ts
           node --import tsx scripts/authenticatedAcceptanceHarness.test.ts
+          node --import tsx scripts/candidateUploadLifecycleAcceptance.test.ts
           node --import tsx scripts/searchV2CandidateDetailCachePrivacy.test.ts
       - name: Create run-owned acceptance metadata
         shell: bash
@@ -111,18 +170,26 @@ jobs:
       - name: Provision controlled synthetic identities
         run: npm run acceptance:provision
       - name: Run authenticated browser and API acceptance
+        env:
+          ACCEPTANCE_GMAIL_CLEANUP_ENABLED: ${{ inputs.include_signup && 'true' || 'false' }}
+          ACCEPTANCE_GMAIL_CREDENTIAL_MODE: dedicated-cleanup-preflight
+          ACCEPTANCE_GMAIL_CLIENT_ID: ${{ inputs.include_signup && secrets.ACCEPTANCE_GMAIL_CLIENT_ID || '' }}
+          ACCEPTANCE_GMAIL_CLIENT_SECRET: ${{ inputs.include_signup && secrets.ACCEPTANCE_GMAIL_CLIENT_SECRET || '' }}
+          ACCEPTANCE_GMAIL_REFRESH_TOKEN: ${{ inputs.include_signup && secrets.ACCEPTANCE_GMAIL_REFRESH_TOKEN || '' }}
         run: npm run acceptance:e2e
       - name: Generate pre-cleanup sanitized evidence
         if: always() && steps.dependencies.outcome == 'success'
         run: npm run acceptance:report:initial
       - name: Clean identities and controlled mutations
+        id: identity_cleanup
         if: always() && env.ACCEPTANCE_IDENTITY_CLEANUP_ARMED == 'true'
         run: npm run acceptance:cleanup
       - name: Verify identity and mutation cleanup
+        id: identity_cleanup_verification
         if: always() && env.ACCEPTANCE_IDENTITY_CLEANUP_ARMED == 'true'
         run: npm run acceptance:cleanup:verify
       - name: Remove candidate search index, registry lease and candidate
-        if: always() && env.ACCEPTANCE_FIXTURE_CLEANUP_ARMED == 'true'
+        if: always() && env.ACCEPTANCE_FIXTURE_CLEANUP_ARMED == 'true' && (env.ACCEPTANCE_IDENTITY_CLEANUP_ARMED != 'true' || (steps.identity_cleanup.outcome == 'success' && steps.identity_cleanup_verification.outcome == 'success'))
         run: npm run acceptance:synthetic:remove
       - name: Verify zero per-run residue
         if: always() && env.ACCEPTANCE_FIXTURE_CLEANUP_ARMED == 'true'
@@ -136,6 +203,8 @@ jobs:
         run: |
           if [ -n "${ACCEPTANCE_CREDENTIAL_BUNDLE_PATH:-}" ]; then
             rm -f -- "$ACCEPTANCE_CREDENTIAL_BUNDLE_PATH"
+            rm -f -- "$ACCEPTANCE_CREDENTIAL_BUNDLE_PATH.original-cv-ledger.jsonl"
+            rm -f -- "$ACCEPTANCE_CREDENTIAL_BUNDLE_PATH.candidate-registration-intent.json"
           fi
       - name: Upload sanitized acceptance evidence
         if: always() && steps.dependencies.outcome == 'success'
@@ -147,3 +216,104 @@ jobs:
             artifacts/acceptance-evidence/*.png
           if-no-files-found: error
           retention-days: 7
+
+  recover-run37:
+    if: (inputs.acceptance_scope == 'cleanup_run66' || inputs.acceptance_scope == 'cleanup_run37' || inputs.acceptance_scope == 'cleanup_run40' || inputs.acceptance_scope == 'cleanup_run42') && startsWith(github.ref_name, 'codex/authenticated-acceptance-')
+    name: Recover exact run-owned acceptance residue
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: acceptance
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      ACCEPTANCE_TEST_MODE: "true"
+      APP_ENV: acceptance
+      ACCEPTANCE_DEPLOYMENT_PROTECTION_REQUIRED: "true"
+      ACCEPTANCE_EXTERNAL_MODE: disabled
+      ACCEPTANCE_BASE_URL: ${{ secrets.ACCEPTANCE_BASE_URL }}
+      ACCEPTANCE_EXPECTED_SHA: ${{ inputs.tested_sha }}
+      ACCEPTANCE_SUPABASE_URL: ${{ secrets.ACCEPTANCE_SUPABASE_URL }}
+      ACCEPTANCE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.ACCEPTANCE_SUPABASE_SERVICE_ROLE_KEY }}
+      ACCEPTANCE_SUPABASE_PROJECT_REF: ${{ secrets.ACCEPTANCE_SUPABASE_PROJECT_REF }}
+      ACCEPTANCE_SUPABASE_PROJECT_REF_ALLOWLIST: ${{ secrets.ACCEPTANCE_SUPABASE_PROJECT_REF_ALLOWLIST }}
+      ACCEPTANCE_PRODUCTION_PROJECT_REF_DENYLIST: ${{ secrets.ACCEPTANCE_PRODUCTION_PROJECT_REF_DENYLIST }}
+      ACCEPTANCE_ENVIRONMENT_ID: ${{ secrets.ACCEPTANCE_ENVIRONMENT_ID }}
+      ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER: Synthetic PTF Tester
+    steps:
+      - name: Checkout exact recovery revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+      - name: Verify exact revision and protected recovery scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ inputs.tested_sha }}" = "${{ github.sha }}"
+          test "$(git rev-parse HEAD)" = "$ACCEPTANCE_EXPECTED_SHA"
+          case "${{ inputs.acceptance_scope }}" in
+            cleanup_run37|cleanup_run40|cleanup_run42|cleanup_run66) ;;
+            *) exit 1 ;;
+          esac
+          case "$ACCEPTANCE_BASE_URL" in https://*) ;; *) exit 1 ;; esac
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Clean dependency installation
+        run: npm ci
+      - name: Verify fail-closed cleanup recovery regressions
+        run: |
+          node scripts/authenticatedAcceptanceOriginalCvCleanup.test.cjs
+          node scripts/acceptanceMissingChatFixtureCleanup.test.cjs
+          node scripts/acceptanceAbsentApprovalFixture.test.cjs
+          node scripts/acceptanceRun66FixtureRecovery.test.cjs
+      - name: Bind only the failed run's synthetic namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ inputs.acceptance_scope }}" in
+            cleanup_run37) run_id="ptf1c2-gh-37236641902-1" ;;
+            cleanup_run40) run_id="ptf1c2-gh-37409506068-1" ;;
+            cleanup_run42) run_id="ptf1c2-gh-37439551708-1" ;;
+            cleanup_run66) run_id="ptf1c2-gh-37940009098-1" ;;
+            *) exit 1 ;;
+          esac
+          expires_at="$(date -u -d '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')"
+          {
+            echo "ACCEPTANCE_RUN_ID=$run_id"
+            echo "ACCEPTANCE_SYNTHETIC_NAMESPACE=ptf1c2/$run_id"
+            echo "ACCEPTANCE_CLEANUP_OWNER=github-actions"
+            echo "ACCEPTANCE_EXPIRES_AT=$expires_at"
+            echo "ACCEPTANCE_CREDENTIAL_BUNDLE_PATH=$RUNNER_TEMP/acceptance-recovery-credentials.json"
+          } >> "$GITHUB_ENV"
+      - name: Verify acceptance environment and database marker
+        run: npm run acceptance:environment:verify
+      - name: Recover only run 66's validated orphan fixture lease
+        if: inputs.acceptance_scope == 'cleanup_run66'
+        run: npm exec -- tsx scripts/authenticatedAcceptanceSyntheticFixture.ts recover-run66-lease
+      - name: Clean only the failed run's identities and mutations
+        id: identity_cleanup
+        run: npm run acceptance:cleanup
+      - name: Verify identity and mutation cleanup
+        id: identity_cleanup_verification
+        if: always()
+        run: npm run acceptance:cleanup:verify
+      - name: Remove any remaining exact-run search fixture
+        if: always() && steps.identity_cleanup.outcome == 'success' && steps.identity_cleanup_verification.outcome == 'success'
+        shell: bash
+        run: |
+          case "${{ inputs.acceptance_scope }}" in
+            cleanup_run66) npm run acceptance:synthetic:recover-orphan ;;
+            *) npm run acceptance:synthetic:remove ;;
+          esac
+      - name: Verify zero exact-run residue
+        if: always()
+        run: npm run acceptance:synthetic:residue
+      - name: Remove temporary recovery credentials
+        if: always()
+        shell: bash
+        run: |
+          rm -f -- "${ACCEPTANCE_CREDENTIAL_BUNDLE_PATH:-/nonexistent}"
+          rm -f -- "${ACCEPTANCE_CREDENTIAL_BUNDLE_PATH:-/nonexistent}.original-cv-ledger.jsonl"

@@ -39,7 +39,13 @@ function validate(
   start: string,
   end: string,
 ) {
-  const company = cleaned(companyInput);
+  // OCR can append a neighboring parent-brand logo after a complete legal
+  // entity ("Example Sdn. Bhd. the XYZ group"). Keep it in the excerpt while
+  // preserving the employer's printed legal name as the canonical company.
+  const company = cleaned(companyInput).replace(
+    /(\b(?:Sdn\.?\s*Bhd\.?|Pte\.?\s*Ltd\.?|Ltd\.?|Limited|Inc\.?|Corporation|Corp\.?|Berhad))\s+the\s+[A-Za-z0-9]{1,16}\s+group$/i,
+    "$1",
+  );
   const title = cleaned(titleInput);
   const first = careerMonthIndex(start);
   const last = careerMonthIndex(end, /^(?:Present|Current|Now)$/i.test(end));
@@ -80,6 +86,110 @@ type CardMatch = {
  * date. Other cards remain in review until their own row boundary is proven.
  */
 export function headedCareerCards(input: string): HeadedCareerCard[] {
+  const rolePeriodCard = new RegExp(
+    `(?:^|\\n)\\s*(?:Employment History|Work(?:ing)? Experiences?|Professional Experiences?)\\s*:?\\s*\\n\\s*([^\\n]{3,90})\\n\\s*([^\\n|]{3,105}?)\\s*\\|\\s*${period}\\s*(?=\\n|$)`,
+    "i",
+  ).exec(input.normalize("NFKC"));
+  if (
+    rolePeriodCard &&
+    /\b(?:Consulting|Technologies|Solutions|Systems|Limited|Ltd|Inc|Corporation|Berhad|Sdn|Pte)\b/i.test(
+      rolePeriodCard[1],
+    ) &&
+    /\bSAP\b/i.test(rolePeriodCard[2])
+  ) {
+    const owned = validate(
+      rolePeriodCard[1],
+      rolePeriodCard[2],
+      rolePeriodCard[3],
+      rolePeriodCard[4],
+    );
+    if (owned)
+      return [
+        {
+          ...owned,
+          start: rolePeriodCard[3],
+          end: rolePeriodCard[4],
+          excerpt: rolePeriodCard[0].trim().slice(0, 280),
+        },
+      ];
+  }
+  // Two-column exports may put the ongoing endpoint after the next-line role.
+  // Require the exact heading, employer/start row and explicit SAP role row.
+  const splitCurrentCard = new RegExp(
+    `(?:^|\\n)\\s*(?:Employment History|Work(?:ing)? Experiences?|Professional Experiences?)\\s*:?\\s*\\n\\s*([^\\n]{3,90}?)\\s+(${date})\\s*[-–—]\\s*\\n\\s*(SAP\\s+${role})\\s+(Present|Current|Now)\\s*(?=\\n|$)`,
+    "i",
+  ).exec(input.normalize("NFKC"));
+  if (splitCurrentCard) {
+    const owned = validate(
+      splitCurrentCard[1],
+      splitCurrentCard[3],
+      splitCurrentCard[2],
+      splitCurrentCard[5],
+    );
+    if (owned)
+      return [
+        {
+          ...owned,
+          start: splitCurrentCard[2],
+          end: splitCurrentCard[5],
+          excerpt: splitCurrentCard[0].trim().slice(0, 280),
+        },
+      ];
+  }
+  const parenthesizedCard = new RegExp(
+    `(?:^|\\n)\\s*(?:Employment History(?:\\s*&\\s*Key Accomplishments)?|Work(?:ing)? Experiences?|Professional Experiences?)\\s*:?\\s*\\n\\s*([^\\n]{3,90}?)\\s*\\(${period}\\)\\s*\\n\\s*([^\\n]{3,105})`,
+    "i",
+  ).exec(input.normalize("NFKC"));
+  if (
+    parenthesizedCard &&
+    /\b(?:Consulting|Technologies|Solutions|Systems|Limited|Ltd|Inc|Corporation|Berhad|Sdn|Pte)\b/i.test(
+      parenthesizedCard[1],
+    )
+  ) {
+    const owned = validate(
+      parenthesizedCard[1],
+      parenthesizedCard[4],
+      parenthesizedCard[2],
+      parenthesizedCard[3],
+    );
+    if (owned)
+      return [
+        {
+          ...owned,
+          start: parenthesizedCard[2],
+          end: parenthesizedCard[3],
+          excerpt: parenthesizedCard[0].trim().slice(0, 280),
+        },
+      ];
+  }
+  // Preserve line boundaries for an explicit employer / year range / role card.
+  // A lone year or a project heading is insufficient evidence of employment.
+  const lineCard =
+    /(?:^|\n)\s*(?:Work(?:ing)? Experiences?|Professional Experiences?|Employment History|Career History)\s*\n\s*([^\n]{3,90})\n\s*((?:19|20)\d{2})\s*[-–—]\s*((?:19|20)\d{2}|Present|Current|Now)\s*\n\s*([^\n]{3,105})/i.exec(
+      input.normalize("NFKC"),
+    );
+  if (
+    lineCard &&
+    /\b(?:SDN BHD|Sdn\.?|Bhd\.?|Limited|Ltd\.?|Inc\.?|Corporation|Corp\.?|Pte\.?|Berhad)\b/i.test(
+      lineCard[1],
+    )
+  ) {
+    const title = cleaned(lineCard[4]);
+    const titleWithJob = /\bFunctional\s*(?:\([^)]*\))?$/i.test(title)
+      ? `${title} Consultant`
+      : title;
+    const owned = validate(lineCard[1], titleWithJob, lineCard[2], lineCard[3]);
+    if (owned)
+      return [
+        {
+          company: owned.company,
+          title,
+          start: lineCard[2],
+          end: lineCard[3],
+          excerpt: lineCard[0].trim().slice(0, 280),
+        },
+      ];
+  }
   const text = input.normalize("NFKC").replace(/\s+/g, " ");
   for (const foundHeading of text.matchAll(heading)) {
     if (
@@ -227,16 +337,26 @@ export function headedCareerCards(input: string): HeadedCareerCard[] {
 /** Repeated employer / YEAR MONTH / role cards under one employment heading. */
 export function reversedMonthCareerCards(input: string): HeadedCareerCard[] {
   const text = input.normalize("NFKC").replace(/\s+/g, " ");
-  const heading = /\b(?:Employment History|Career History|Work(?:ing)? Experiences?|Professional Experiences?)\b/i.exec(text);
+  const heading =
+    /\b(?:Employment History|Career History|Work(?:ing)? Experiences?|Professional Experiences?)\b/i.exec(
+      text,
+    );
   if (!heading) return [];
   const raw = text.slice(heading.index + heading[0].length);
   const end = raw.search(stop);
-  const section = raw.slice(0, end < 0 ? 2200 : Math.min(end, 2200)).trimStart().replace(/^[:|–—-]+\s*/, "");
+  const section = raw
+    .slice(0, end < 0 ? 2200 : Math.min(end, 2200))
+    .trimStart()
+    .replace(/^[:|–—-]+\s*/, "");
   const company = "([A-Z][a-z]+(?:\\s+(?:[A-Z][a-z]+|Of)){1,5})";
   const reverseDate = `((?:19|20)\\d{2})\\s+(${month})`;
   const reversePeriod = `${reverseDate}\\s+(?:to|[-–—])\\s+(?:((?:19|20)\\d{2})\\s+(${month})|(present|current|now))`;
-  const title = "(Chiropractor(?:\\s+and\\s+(?:[A-Z][a-z]+\\s+){0,2}Manager)?|(?:[A-Za-z]+\\s+){0,5}(?:Consultant|Engineer|Developer|Analyst|Specialist|Manager|Therapist))";
-  const card = new RegExp(`(?:^|\\s)${company}\\s*[-–—]\\s*${reversePeriod}\\s+${title}(?=\\s+${duty}\\b)`, "g");
+  const title =
+    "(Chiropractor(?:\\s+and\\s+(?:[A-Z][a-z]+\\s+){0,2}Manager)?|(?:[A-Za-z]+\\s+){0,5}(?:Consultant|Engineer|Developer|Analyst|Specialist|Manager|Therapist))";
+  const card = new RegExp(
+    `(?:^|\\s)${company}\\s*[-–—]\\s*${reversePeriod}\\s+${title}(?=\\s+${duty}\\b)`,
+    "g",
+  );
   const matches = [...section.matchAll(card)];
   // A later card cannot prove that preceding unstructured text was employment.
   if (!matches.length || (matches[0].index || 0) > 5) return [];
@@ -246,7 +366,12 @@ export function reversedMonthCareerCards(input: string): HeadedCareerCard[] {
     const endDate = match[6] || `${match[5]} ${match[4]}`;
     const owned = validate(match[1], match[7], start, endDate);
     if (!owned) break;
-    result.push({ ...owned, start, end: endDate, excerpt: match[0].trim().slice(0, 280) });
+    result.push({
+      ...owned,
+      start,
+      end: endDate,
+      excerpt: match[0].trim().slice(0, 280),
+    });
   }
   return result;
 }

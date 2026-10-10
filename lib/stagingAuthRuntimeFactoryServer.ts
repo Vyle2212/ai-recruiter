@@ -8,6 +8,11 @@ import { buildStagingAuthRuntimeAdapter } from "./stagingAuthRuntimeFactory";
 import type { SupabaseStagingAuthClient } from "./stagingAuthSupabaseRuntimeAdapter";
 import type { StagingAuthRuntimeAdapter } from "./stagingAuthRuntimeAdapterTypes";
 import { createClient as createSupabaseServerClient } from "../utils/supabase/server";
+import {
+  readVerifiedCandidateRegistrationIdentity,
+  provisionCandidateRegistration,
+} from "./candidateRegistrationCallback";
+import { createLazySupabaseServiceClient } from "./runtimeClients";
 
 async function createInjectedSupabaseClient(): Promise<SupabaseStagingAuthClient> {
   const client = await createSupabaseServerClient();
@@ -22,6 +27,29 @@ export function buildCurrentStagingAuthRuntimeAdapter(): StagingAuthRuntimeAdapt
     const adapter = createSupabaseStagingRuntimeAdapter({
       explicitlyEnabled: true,
       createClient: createInjectedSupabaseClient,
+      recoverCandidateRegistration: async (client, userId) => {
+        if (
+          process.env.CANDIDATE_REGISTRATION_ENABLED !== "true" ||
+          process.env.CANDIDATE_REGISTRATION_SUPABASE_PROJECT_REF !==
+            "iujucosewivndjpcjbuz"
+        )
+          return false;
+        const identity = await readVerifiedCandidateRegistrationIdentity(() =>
+          client.auth.getUser(),
+        );
+        if (!identity.verified || identity.userId !== userId) return false;
+        const service = createLazySupabaseServiceClient();
+        return (
+          (await provisionCandidateRegistration(
+            identity,
+            async (args) =>
+              await service.rpc(
+                "provision_verified_candidate_registration",
+                args,
+              ),
+          )) === "ready"
+        );
+      },
     });
     // Acceptance identities are provisioned by the test harness. No reset emails.
     adapter.requestPasswordReset = async () => ({

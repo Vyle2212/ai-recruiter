@@ -364,14 +364,14 @@ export default function RecruiterWorkflowAnalyticsPage() {
 
             <div className="flex flex-wrap gap-2">
               <Link
-                className="rounded-md border border-cyan-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-cyan-100 hover:bg-cyan-500/10"
+                className="rounded-md border border-cyan-500/30 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-cyan-100 hover:bg-cyan-500/10"
                 href="/recruiter/workflow"
               >
                 Open workflow
               </Link>
 
               <Link
-                className="rounded-md border border-slate-700 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-slate-300 hover:border-slate-500"
+                className="rounded-md border border-slate-700 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-slate-300 hover:border-slate-500"
                 href="/recruiter/dashboard"
               >
                 Recruiter portal

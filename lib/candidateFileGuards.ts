@@ -14,7 +14,7 @@ const SAP_MODULE_PATTERNS: Array<[string, RegExp]> = [
   ["FICO", /\b(SAP\s+FI\s*\/\s*CO|SAP\s+FICO|FI\s*\/\s*CO|FICO|SAP\s+FI\b|SAP\s+CO\b|FINANCIAL\s+ACCOUNTING|CONTROLLING)\b/i],
   ["SD", /\b(SAP\s+SD|SD\s+CONSULTANT|SALES\s+AND\s+DISTRIBUTION|ORDER\s+TO\s+CASH|\bO2C\b|\bOTC\b)\b/i],
   ["MM", /\b(SAP\s+MM|MM\s+CONSULTANT|MATERIALS?\s+MANAGEMENT|PROCURE\s+TO\s+PAY|\bP2P\b|PURCHASING|PROCUREMENT)\b/i],
-  ["ABAP", /\b(SAP\s+ABAP|ABAP\b|RICEF|WRICEF|BAPI|BADI|IDOC|SMARTFORMS?|SAPSCRIPT|TECHNICAL\s+CONSULTANT)\b/i],
+  ["ABAP", /\b(SAP\s+ABAP|ABAP\b|RICEF|WRICEF|BAPI|BADI|IDOC|SMARTFORMS?|SAPSCRIPT)\b/i],
   ["BASIS", /\b(SAP\s+BASIS|BASIS\b|NETWEAVER|SOLUTION\s+MANAGER|SOLMAN|SAP\s+ADMIN)\b/i],
   ["SUCCESSFACTORS", /\b(SAP\s+SUCCESSFACTORS|SUCCESS\s*FACTORS|EMPLOYEE\s+CENTRAL|\bEC\b|\bECP\b|\bRCM\b|ONBOARDING|SAP\s+HCM|SAP\s+HR|HXM)\b/i],
   ["BTP", /\b(SAP\s+BTP|BUSINESS\s+TECHNOLOGY\s+PLATFORM|SAP\s+CLOUD\s+PLATFORM|INTEGRATION\s+SUITE|SAP\s+CPI|\bCPI\b|CAP\s+MODEL|SAP\s+UI5|FIORI)\b/i],
@@ -27,6 +27,8 @@ const SAP_MODULE_PATTERNS: Array<[string, RegExp]> = [
   ["ARIBA", /\b(SAP\s+ARIBA|ARIBA\b)\b/i],
   ["CONCUR", /\b(SAP\s+CONCUR|CONCUR\b)\b/i],
   ["MDG", /\b(SAP\s+MDG|MASTER\s+DATA\s+GOVERNANCE|\bMDG\b)\b/i],
+  ["C4C", /\b(?:SAP\s+Cloud\s+for\s+Customer|SAP\s+C4C|C4C|SAP\s+CX)\b/i],
+  ["B1", /\bSAP\s+(?:B1|Business\s+One)\b/i],
   ["GRC", /\b(SAP\s+GRC|GRC\b|AUTHORI[ZS]ATION|SAP\s+SECURITY)\b/i],
   ["SCM", /\b(SAP\s+SCM|SUPPLY\s+CHAIN\s+MANAGEMENT|APO|IBP|PPDS|PP\/DS)\b/i],
 ];
@@ -229,13 +231,24 @@ export function classifyCandidateText(rawText: string, fileName?: string): Candi
     return { recordType: "JD", isSapProfile: false, shouldSave: false, reason: "Job description detected. This file was not saved as a candidate.", confidence: 0.96, signals: [`jd_hits:${jdHits}`] };
   }
 
+  // An explicit SAP career title confirms the product, not a specific module.
+  // Generic Technical Consultant can mean any ERP and cannot imply ABAP.
+  const explicitSapCareerRole = /\bworking as (?:an? )?SAP (?:certified )?solutions? advisor\b/i.test(text) || String(rawText || "").split(/\r?\n/).some(line =>
+    /^\s*(?:career history\s+|(?:title|position|current role)\s*:\s*)?SAP\s+(?:(?:senior|sr\.?|lead|principal|junior|associate)\s+)?(?:(?:technical|functional|support)\s+)?(?:consultant|developer|architect|administrator|engineer|analyst|specialist|manager)\b/i.test(line),
+  );
+
   if (moduleHits.length) signals.push(`sap_modules:${Array.from(new Set(moduleHits)).join(",")}`);
   if (/\b(SAP|S\/4HANA|S4HANA|ECC|FIORI|ABAP|BASIS)\b/i.test(upper)) signals.push("sap_keyword");
-  if (/\b(IMPLEMENTATION|ROLLOUT|SUPPORT|AMS|HYPERCARE|MIGRATION|GREENFIELD|BROWNFIELD)\b/i.test(upper)) signals.push("sap_delivery_keyword");
+  const sapDeliverySegment = String(rawText || "").split(/\n|[.!?](?:\s|$)/).some(segment =>
+    /\b(?:SAP|S\/4HANA|S4HANA|ECC)\b/i.test(segment) &&
+    /\b(?:implement(?:ation|ed|ing)?|roll[ -]?out|support(?:ed|ing)?|AMS|hypercare|migrat(?:e|ed|ing|ion)|greenfield|brownfield)\b/i.test(segment),
+  );
+  if (sapDeliverySegment) signals.push("sap_delivery_keyword");
 
   const sapScore = moduleHits.length * 2 + (signals.includes("sap_keyword") ? 1 : 0) + (signals.includes("sap_delivery_keyword") ? 1 : 0);
 
-  if (sapScore >= 2) {
+  if (sapScore >= 2 || (explicitSapCareerRole && cvHits >= 2)) {
+    if (!moduleHits.length) signals.push("sap_career_role_module_unspecified");
     return { recordType: "SAP_CV", isSapProfile: true, shouldSave: true, reason: "SAP candidate profile detected.", confidence: Math.min(0.98, 0.65 + sapScore * 0.08), signals };
   }
 

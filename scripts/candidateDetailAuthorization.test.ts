@@ -4,14 +4,35 @@ import fs from "node:fs";
 const route = fs.readFileSync("app/api/candidates/[id]/route.ts", "utf8");
 const page = fs.readFileSync("app/candidates/[id]/page.tsx", "utf8");
 const listRoute = fs.readFileSync("app/api/candidates/route.ts", "utf8");
-const searchRoute = fs.readFileSync("app/api/search-candidates/route.ts", "utf8");
-const getCandidatesRoute = fs.readFileSync("app/api/get-candidates/route.ts", "utf8");
-const resumeRoute = fs.readFileSync("app/api/candidate360/[candidateId]/resume/route.ts", "utf8");
+const searchRoute = fs.readFileSync(
+  "app/api/search-candidates/route.ts",
+  "utf8",
+);
+const getCandidatesRoute = fs.readFileSync(
+  "app/api/get-candidates/route.ts",
+  "utf8",
+);
+const resumeRoute = fs.readFileSync(
+  "app/api/candidate360/[candidateId]/resume/route.ts",
+  "utf8",
+);
 const dashboardRoute = fs.readFileSync("app/api/dashboard/route.ts", "utf8");
-const validationRoute = fs.readFileSync("app/api/candidate-validation/route.ts", "utf8");
-const statusRoute = fs.readFileSync("app/api/update-candidate-status/route.ts", "utf8");
-const shortlistedRoute = fs.readFileSync("app/api/shortlisted/route.ts", "utf8");
-const profileUpdateRoute = fs.readFileSync("app/api/update-candidate-profile/route.ts", "utf8");
+const validationRoute = fs.readFileSync(
+  "app/api/candidate-validation/route.ts",
+  "utf8",
+);
+const statusRoute = fs.readFileSync(
+  "app/api/update-candidate-status/route.ts",
+  "utf8",
+);
+const shortlistedRoute = fs.readFileSync(
+  "app/api/shortlisted/route.ts",
+  "utf8",
+);
+const profileUpdateRoute = fs.readFileSync(
+  "app/api/update-candidate-profile/route.ts",
+  "utf8",
+);
 
 for (const source of [route, page]) {
   assert.match(source, /requireRecruiterSearchAuthorization/);
@@ -24,6 +45,9 @@ assert.doesNotMatch(route, /searchParams\.get\("adminApproved"/);
 assert.doesNotMatch(route, /searchParams\.get\("subscription"/);
 assert.match(route, /redacted\.email = ""/);
 assert.match(route, /redacted\.phone = ""/);
+assert.match(route, /originalCvReference\(candidate\.source_file\)/);
+assert.match(route, /"raw_text"/);
+assert.match(route, /"source_file"/);
 assert.match(route, /Candidate id must be a UUID/);
 assert.match(page, /const contactUnlocked = false/);
 for (const source of [listRoute, searchRoute]) {
@@ -32,7 +56,10 @@ for (const source of [listRoute, searchRoute]) {
   assert.doesNotMatch(source, /from "@\/lib\/supabase"/);
 }
 assert.doesNotMatch(listRoute, /\.select\("\*"\)/);
-assert.doesNotMatch(searchRoute, /requestedRole:\s*firstParam\(url, \["viewerRole", "role"\]/);
+assert.doesNotMatch(
+  searchRoute,
+  /requestedRole:\s*firstParam\(url, \["viewerRole", "role"\]/,
+);
 for (const source of [getCandidatesRoute, dashboardRoute]) {
   assert.match(source, /requireRecruiterSearchAuthorization/);
   assert.match(source, /permission: "search:read"/);

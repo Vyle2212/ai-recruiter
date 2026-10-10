@@ -1,0 +1,325 @@
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { originalCvReadGrant } from "../lib/originalCvAccess";
+import {
+  recruiterOriginalCvAllowed,
+  recruiterOriginalCvCandidateAvailable,
+} from "../lib/recruiterOriginalCvPolicy";
+import { recruiterApiPolicyForRequest } from "../lib/recruiterApiPolicyRegistry";
+import { recruiterApiRoleHasPermission } from "../lib/recruiterApiAuthorizationCore";
+
+const id = "11111111-1111-4111-8111-111111111111";
+const reference = `candidate-original-cvs/${id}.pdf`;
+assert.equal(originalCvReadGrant("client", reference), null);
+assert.equal(originalCvReadGrant("recruiter", reference), null);
+assert.equal(originalCvReadGrant("client", reference, true), null);
+assert.equal(originalCvReadGrant("admin", "https://example.com/cv.pdf"), null);
+assert.equal(
+  originalCvReadGrant("admin", "candidate-original-cvs/../secret.pdf"),
+  null,
+);
+assert.deepEqual(originalCvReadGrant("admin", reference), {
+  objectKey: `${id}.pdf`,
+  contentType: "application/pdf",
+  disposition: 'inline; filename="candidate-cv.pdf"',
+});
+assert.equal(
+  originalCvReadGrant("admin", `candidate-original-cvs/${id}.docx`)
+    ?.disposition,
+  'attachment; filename="candidate-cv.docx"',
+);
+const recruiterId = "22222222-2222-4222-8222-222222222222";
+const approvedBy = "33333333-3333-4333-8333-333333333333";
+const now = new Date("2026-09-26T12:00:00.000Z");
+const grant = {
+  id: "44444444-4444-4444-8444-444444444444",
+  candidate_id: id,
+  recruiter_profile_id: recruiterId,
+  approved_by_profile_id: approvedBy,
+  purpose: "headhunting" as const,
+  client_id: null,
+  approved_at: "2026-09-25T12:00:00.000Z",
+  expires_at: "2026-10-26T12:00:00.000Z",
+  revoked_at: null,
+  status: "active",
+};
+const evidence = {
+  candidateId: id,
+  recruiterProfileId: recruiterId,
+  grant,
+  now,
+};
+assert.equal(recruiterOriginalCvAllowed(evidence), true);
+assert.ok(originalCvReadGrant("recruiter", reference, true));
+assert.equal(recruiterOriginalCvAllowed({ ...evidence, grant: null }), false);
+assert.equal(
+  recruiterOriginalCvAllowed({ ...evidence, recruiterProfileId: approvedBy }),
+  false,
+);
+assert.equal(
+  recruiterOriginalCvAllowed({ ...evidence, candidateId: approvedBy }),
+  false,
+);
+assert.equal(
+  recruiterOriginalCvAllowed({
+    ...evidence,
+    grant: { ...grant, revoked_at: now.toISOString() },
+  }),
+  false,
+);
+assert.equal(
+  recruiterOriginalCvAllowed({
+    ...evidence,
+    grant: { ...grant, expires_at: now.toISOString() },
+  }),
+  false,
+);
+const scoped = {
+  ...grant,
+  purpose: "client_support" as const,
+  client_id: approvedBy,
+};
+assert.equal(recruiterOriginalCvAllowed({ ...evidence, grant: scoped }), false);
+for (const missing of [
+  "assigned",
+  "candidateShared",
+  "candidateVisible",
+  "featureActive",
+] as const) {
+  const support = {
+    assigned: true,
+    candidateShared: true,
+    candidateVisible: true,
+    featureActive: true,
+  };
+  support[missing] = false;
+  assert.equal(
+    recruiterOriginalCvAllowed({ ...evidence, grant: scoped, support }),
+    false,
+  );
+}
+assert.equal(
+  recruiterOriginalCvAllowed({
+    ...evidence,
+    grant: scoped,
+    support: {
+      assigned: true,
+      candidateShared: true,
+      candidateVisible: true,
+      featureActive: true,
+    },
+  }),
+  true,
+);
+assert.equal(recruiterOriginalCvCandidateAvailable({ status: "active" }), true);
+assert.equal(
+  recruiterOriginalCvCandidateAvailable({ status: "needs_review" }),
+  true,
+);
+for (const status of [
+  "deleted",
+  "non_sap",
+  "rejected_noise",
+  "hidden",
+  "archived",
+]) {
+  assert.equal(
+    recruiterOriginalCvCandidateAvailable({ status }),
+    false,
+    `${status} must invalidate recruiter original-CV access`,
+  );
+}
+
+const route = readFileSync(
+  "app/api/candidate360/[candidateId]/resume/route.ts",
+  "utf8",
+);
+assert.ok(
+  route.indexOf('scope.role !== "admin"') <
+    route.indexOf('.from("candidates")'),
+);
+assert.match(route, /\.from\("recruiter_original_cv_grants"\)/);
+assert.match(route, /recruiterOriginalCvAllowed/);
+assert.match(route, /\.from\("client_candidate_access"\)/);
+assert.match(route, /\.select\("source_file,status"\)/);
+assert.match(route, /recruiterOriginalCvCandidateAvailable/);
+assert.match(route, /\.from\(ORIGINAL_CV_BUCKET\)/);
+assert.match(route, /\.from\("recruiter_original_cv_access_events"\)/);
+assert.match(route, /original_cv_audit_unavailable/);
+assert.ok(
+  route.indexOf(".download(grant.objectKey)") <
+    route.indexOf('.from("recruiter_original_cv_access_events")'),
+);
+assert.ok(
+  route.indexOf('.from("recruiter_original_cv_access_events")') <
+    route.indexOf("return new Response(downloaded.data"),
+);
+assert.match(route, /"X-Content-Type-Options": "nosniff"/);
+assert.doesNotMatch(route, /getPublicUrl|createSignedUrl/);
+const approvalRoute = readFileSync(
+  "app/api/admin/original-cv-grants/route.ts",
+  "utf8",
+);
+assert.match(approvalRoute, /validateRecruiterApiWriteRequest/);
+assert.match(approvalRoute, /scope\.role !== "admin"/);
+assert.match(
+  approvalRoute,
+  /originalCvReference\(candidate\.data\?\.source_file\)/,
+);
+assert.match(approvalRoute, /recruiterOriginalCvCandidateAvailable/);
+assert.match(approvalRoute, /\.from\("recruiter_original_cv_grants"\)/);
+assert.match(
+  approvalRoute,
+  /\.rpc\(\s*"approve_recruiter_original_cv_request"/,
+);
+assert.match(approvalRoute, /pending_request_required/);
+const requestRoute = readFileSync(
+  "app/api/recruiter/original-cv-requests/route.ts",
+  "utf8",
+);
+assert.match(requestRoute, /requireRecruiterSearchAuthorization/);
+assert.match(requestRoute, /scope\.role === "admin"/);
+assert.match(requestRoute, /client_candidate_access/);
+assert.match(requestRoute, /client_feature_entitlements/);
+assert.match(requestRoute, /recruiter_original_cv_requests/);
+assert.match(requestRoute, /recruiterOriginalCvCandidateAvailable/);
+const sharingRoute = readFileSync(
+  "app/api/client/recruiter-shares/route.ts",
+  "utf8",
+);
+assert.match(sharingRoute, /auth\.auth\.getUser\(\)/);
+assert.match(sharingRoute, /client_memberships/);
+assert.match(sharingRoute, /client_candidate_access/);
+assert.match(sharingRoute, /client_job_ownership/);
+assert.doesNotMatch(sharingRoute, /recruiter_original_cv_grants/);
+const schema = readFileSync(
+  "supabase/manual/202609260006_recruiter_client_entitlements.sql",
+  "utf8",
+);
+assert.match(schema, /recruiter_original_cv_grant_event_immutable/);
+assert.match(schema, /force row level security/g);
+assert.match(schema, /from public, anon, authenticated/);
+const requestSchema = readFileSync(
+  "supabase/manual/202609260007_original_cv_approval_requests.sql",
+  "utf8",
+);
+assert.match(
+  requestSchema,
+  /where id = p_request_id and status = 'pending' for update/,
+);
+assert.match(
+  requestSchema,
+  /on conflict \(candidate_id, recruiter_profile_id\) do update/,
+);
+assert.match(requestSchema, /force row level security/);
+assert.match(
+  requestSchema,
+  /grant execute on function public\.approve_recruiter_original_cv_request/,
+);
+const accessAuditSchema = readFileSync(
+  "supabase/manual/202609260008_original_cv_access_audit.sql",
+  "utf8",
+);
+assert.match(accessAuditSchema, /recruiter_original_cv_access_events/);
+assert.match(accessAuditSchema, /original_cv_access_audit_dependencies_missing/);
+assert.match(accessAuditSchema, /original_cv_access_audit_already_installed/);
+assert.ok(
+  accessAuditSchema.indexOf("do $preflight$") <
+    accessAuditSchema.indexOf("create table public.recruiter_original_cv_access_events"),
+);
+assert.match(accessAuditSchema, /validate_recruiter_original_cv_access_event/);
+assert.match(accessAuditSchema, /client_recruiter_assignments/);
+assert.match(accessAuditSchema, /client_candidate_shares/);
+assert.match(accessAuditSchema, /client_candidate_access/);
+assert.match(accessAuditSchema, /client_feature_entitlements/);
+assert.match(accessAuditSchema, /from public\.candidates c/);
+assert.match(accessAuditSchema, /Current candidate required for original CV access/);
+assert.match(accessAuditSchema, /for share of c/);
+for (const status of [
+  "deleted",
+  "non_sap",
+  "rejected_noise",
+  "hidden",
+  "archived",
+]) {
+  assert.match(
+    accessAuditSchema,
+    new RegExp(`'${status}'`),
+    `${status} must be rechecked by the audit trigger`,
+  );
+}
+assert.match(accessAuditSchema, /recruiter_original_cv_access_event_immutable/);
+assert.match(accessAuditSchema, /force row level security/);
+assert.match(accessAuditSchema, /from public, anon, authenticated/);
+const accessAuditReadback = readFileSync(
+  "supabase/manual/202609260009_original_cv_access_audit_readback.sql",
+  "utf8",
+);
+assert.match(
+  accessAuditReadback,
+  /begin transaction isolation level repeatable read read only/i,
+);
+assert.match(accessAuditReadback, /original_cv_access_audit_readback_passed/);
+assert.match(
+  accessAuditReadback,
+  /original_cv_access_audit_candidate_lifecycle_readback_failed/,
+);
+assert.match(
+  accessAuditReadback,
+  /original_cv_access_audit_admin_candidate_readback_failed/,
+);
+assert.doesNotMatch(
+  accessAuditReadback,
+  /^\s*(?:alter|create|delete|drop|grant|insert|revoke|truncate|update)\b/im,
+);
+const acceptanceAuditProbe = readFileSync(
+  "supabase/manual/202609270005_acceptance_original_cv_audit_transaction_probe.sql",
+  "utf8",
+);
+assert.match(acceptanceAuditProbe, /^-- ACCEPTANCE ONLY/m);
+assert.match(acceptanceAuditProbe, /hidden_candidate_audit_was_not_denied/);
+assert.match(acceptanceAuditProbe, /revoked_client_support_audit_was_not_denied/);
+assert.match(acceptanceAuditProbe, /where candidate_id = v_support_candidate/);
+assert.match(acceptanceAuditProbe, /\nrollback;\s*$/);
+const approvalPolicy = recruiterApiPolicyForRequest(
+  "/api/admin/original-cv-grants",
+  "POST",
+);
+assert.equal(
+  approvalPolicy?.requiredPermission,
+  "recruiter.data_quality.apply",
+);
+assert.equal(
+  recruiterApiRoleHasPermission(
+    "recruiter",
+    approvalPolicy!.requiredPermission,
+  ),
+  false,
+);
+assert.equal(
+  recruiterApiRoleHasPermission("admin", approvalPolicy!.requiredPermission),
+  true,
+);
+assert.equal(
+  recruiterApiPolicyForRequest(`/api/candidate360/${id}/resume`, "GET")
+    ?.requiredPermission,
+  "recruiter.candidate.read",
+);
+assert.equal(
+  recruiterApiPolicyForRequest("/api/recruiter/original-cv-requests", "POST")
+    ?.requiredPermission,
+  "recruiter.workflow.write",
+);
+const proxy = readFileSync("proxy.ts", "utf8");
+assert.match(
+  proxy,
+  /clientShareApi\) \{\s*return updateClientShareApiSession\(request\)/,
+);
+execFileSync(process.execPath, ["scripts/originalCvResumeRoute.test.cjs"], {
+  stdio: "inherit",
+});
+execFileSync(process.execPath, ["scripts/acceptanceOriginalCvCleanupContract.test.cjs"], {
+  stdio: "inherit",
+});
+console.log("originalCvReadAccess.test.ts passed");

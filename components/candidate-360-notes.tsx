@@ -434,7 +434,7 @@ export default function Candidate360Notes({
                     onChange={(event) => setWorkflowNotes((current) => ({ ...current, [item.id]: event.target.value }))}
                     onKeyDown={handleShortcut}
                     placeholder="Add validation note"
-                    className="c360-focus-ring mt-2 min-h-16 w-full rounded-xl border border-slate-800/50 bg-[#0B1118] px-3 py-2 text-xs text-slate-200 outline-none transition-all duration-200 placeholder:text-slate-600 focus:border-cyan-500/35"
+                    className="c360-focus-ring mt-2 min-h-16 w-full rounded-xl border border-slate-800/50 bg-[#0B1118] px-3 py-2 text-xs text-slate-200 outline-hidden transition-all duration-200 placeholder:text-slate-600 focus:border-cyan-500/35"
                   />
                 ) : (
                   <button type="button" onClick={() => toggleValidationNote(item.id)} className="c360-focus-ring mt-2 text-xs font-semibold text-cyan-100 transition hover:text-white">+ Add validation note</button>

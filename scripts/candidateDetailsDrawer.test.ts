@@ -29,6 +29,12 @@ assert.match(drawer, /sm:w-\[min\(48vw,880px\)\]/);
 assert.match(drawer, /h-\[100dvh\] w-full/);
 assert.match(drawer, /flex-1 overflow-y-auto/);
 assert.match(drawer, /event\.key === "Escape"/);
+assert.match(drawer, /onCloseRef\.current\(\)/);
+assert.match(drawer, /onCloseRef\.current = onClose/);
+assert.match(
+  drawer,
+  /document\.removeEventListener\("keydown", onKeyDown\);\s*};\s*}, \[\]\);/,
+);
 assert.match(drawer, /event\.key !== "Tab"/);
 assert.match(drawer, /Previous visible candidate/);
 assert.match(drawer, /Next visible candidate/);
@@ -88,9 +94,14 @@ assert.doesNotMatch(drawer, /item\.provenance/);
 assert.match(drawer, /<ProjectSummary/);
 assert.doesNotMatch(drawer, /return normalized\.slice\(0, max\)/);
 assert.doesNotMatch(drawer, /Notes remain read-only/);
-assert.match(drawer, /diagnostic\.requirements\.map/);
+assert.match(drawer, /diagnostic\.requirements\.slice\(0, 4\)\.map/);
+assert.match(drawer, /diagnostic\.requirements\.slice\(4\)\.map/);
 assert.doesNotMatch(drawer, /historical search/);
-assert.match(drawer, /Open full profile/);
+assert.match(drawer, /RequestOriginalCvButton/);
+assert.doesNotMatch(drawer, /Open original CV/);
+assert.match(drawer, /aria-label="Compare this candidate"/);
+assert.equal((drawer.match(/aria-pressed=\{shortlisted\}/g) || []).length, 1);
+assert.doesNotMatch(drawer, /Open full profile/);
 assert.doesNotMatch(drawer, />Decision</);
 assert.doesNotMatch(drawer, />Candidate ?360</i);
 
@@ -103,6 +114,11 @@ assert.match(search, /trigger\?\.focus\(\)/);
 assert.match(search, /onSelect=\{\(candidateId\) => \{/);
 assert.match(search, /setDrawerInitialTab\("Overview"\)/);
 assert.match(search, /setExpandedCandidateId\(candidateId\)/);
+assert.match(search, /setCompareAnchorCandidateId\(/);
+assert.match(
+  search,
+  /Comparing from \{cleanCandidateName\(compareAnchorCandidate\)\}/,
+);
 
 assert.match(route, /requireRecruiterSearchAuthorization/);
 assert.match(route, /loadSearchV2CandidateDetail/);

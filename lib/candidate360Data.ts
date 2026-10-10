@@ -1,3 +1,4 @@
+import { canonicalJobPreferences } from "./candidateJobPreferences";
 import "server-only";
 
 import fs from "node:fs";
@@ -8,6 +9,8 @@ import { redactCandidate360Contact } from "./candidate360ContactBoundary";
 
 import { buildCandidate360Profile } from "./candidate360Profile";
 import { normalizeActualCandidateSchema } from "./candidate360SchemaNormalize";
+import { contactHeaderPhone } from "./candidatePortalEditEvidence";
+import { candidateLanguageRecords } from "./candidateLanguageEvidence";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -133,7 +136,18 @@ function deepFindValue(root: unknown, keys: string[]): CandidateValue {
       }
     }
 
-    for (const value of Object.values(parsedValue)) {
+    for (const [key, value] of Object.entries(parsedValue)) {
+      // Provenance labels describe fields; they are never candidate values.
+      if (
+        [
+          "profile_source_state",
+          "field_sources",
+          "field_metadata",
+          "candidate360_fields",
+          "confirmed_fields",
+        ].includes(key)
+      )
+        continue;
       queue.push({
         value,
         depth: item.depth + 1,
@@ -182,7 +196,7 @@ function splitTextList(value: string): string[] {
     .filter(Boolean);
 }
 
-function toStringArray(value: unknown): string[] {
+function toStringArray(value: unknown, preserveRecord = false): string[] {
   const parsedValue = parseJsonValue(value);
 
   const result: string[] = [];
@@ -192,7 +206,9 @@ function toStringArray(value: unknown): string[] {
       return;
     }
 
-    for (const item of splitTextList(text)) {
+    for (const item of preserveRecord
+      ? [text.trim()].filter(Boolean)
+      : splitTextList(text)) {
       if (!result.includes(item)) {
         result.push(item);
       }
@@ -463,20 +479,25 @@ function normalizeCandidate(rawCandidate: UnknownRecord): UnknownRecord {
     "industry",
   ]);
 
-  const languages = findArray(rawCandidate, [
-    "languageSkills",
-    "language_skills",
-    "languages",
-    "language",
-  ]);
+  const languages = candidateLanguageRecords(
+    deepFindValue(rawCandidate, [
+      "languageSkills",
+      "language_skills",
+      "languages",
+      "language",
+    ]),
+  );
 
-  const certifications = findArray(rawCandidate, [
-    "professionalCertifications",
-    "professional_certifications",
-    "certifications",
-    "certificates",
-    "certification",
-  ]);
+  const certifications = toStringArray(
+    deepFindValue(rawCandidate, [
+      "professionalCertifications",
+      "professional_certifications",
+      "certifications",
+      "certificates",
+      "certification",
+    ]),
+    true,
+  );
 
   const availability = findText(rawCandidate, [
     "availability",
@@ -642,6 +663,7 @@ export type Candidate360LoadTimings = {
 async function loadCandidate360ProfileInternal(
   candidateId: string,
   stageTimings: Candidate360LoadTimings | undefined,
+  ownerContactSuggestions = false,
 ) {
   const totalStartedAt = performance.now();
   const supabase = createCandidateSupabaseAdminClient();
@@ -733,6 +755,18 @@ async function loadCandidate360ProfileInternal(
   );
   const result = {
     ...profile,
+    jobPreferences: canonicalJobPreferences(
+      (data.profile_source_state as Record<string, unknown> | null)
+        ?.job_preferences,
+    ),
+    ...(ownerContactSuggestions
+      ? {
+          cvPhoneSuggestion:
+            contactHeaderPhone(
+              String(data.raw_text || data.resume_text || ""),
+            ) || "",
+        }
+      : {}),
     sourceResumeAvailable: [data.resume_text, data.raw_text, data.raw_cv].some(
       (value) => typeof value === "string" && value.trim().length > 0,
     ),
@@ -775,5 +809,5 @@ export function loadCandidate360ProfileForOwner(
   candidateId: string,
   stageTimings?: Candidate360LoadTimings,
 ) {
-  return loadCandidate360ProfileInternal(candidateId, stageTimings);
+  return loadCandidate360ProfileInternal(candidateId, stageTimings, true);
 }

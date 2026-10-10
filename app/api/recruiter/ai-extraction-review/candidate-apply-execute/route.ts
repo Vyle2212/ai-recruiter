@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createLazySupabaseServiceClient } from "@/lib/runtimeClients";
 import { loadRealTalentPoolCandidates } from "@/lib/candidateAudit";
 import {
   buildCandidateApplyBackup,
@@ -25,14 +25,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function supabaseClient() {
-  const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseKey)
-    throw new Error("Candidate apply failed: missing Supabase URL/key.");
-  return createClient(supabaseUrl, supabaseKey);
+  return createLazySupabaseServiceClient();
 }
 
 export async function POST(req: NextRequest) {

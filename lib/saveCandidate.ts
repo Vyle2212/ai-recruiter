@@ -22,6 +22,11 @@ import {
 } from "./resumeQualityGate";
 import { originalCvReference } from "./originalCvArchiveKey";
 import { resolveCandidateIngestion } from "./candidateProfileIngestion";
+import {
+  contactHeaderName,
+  trackedHeaderName,
+} from "./positionedResumeEvidence";
+import { candidateLanguagesForStorage } from "./candidateLanguageEvidence";
 
 type AnyRecord = Record<string, any>;
 
@@ -1885,15 +1890,23 @@ export async function saveCandidate(candidate: any) {
     cleanCandidate.email || signals.email,
   );
 
+  const verifiedContactName = contactHeaderName(rawText);
   const finalName =
-    !isWeakCandidateName(strictName) && strictName !== "Profile Under Review"
+    verifiedContactName ||
+    trackedHeaderName(
+      rawText,
+      String(cleanCandidate.file_name || cleanCandidate.source_file || ""),
+    ) ||
+    (!isWeakCandidateName(strictName) && strictName !== "Profile Under Review"
       ? strictName
       : isWeakCandidateNameProduction(signals.name) && emailNameFallback
         ? emailNameFallback
-        : signals.name;
+        : signals.name);
 
   const weakCandidateName =
-    isWeakCandidateNameProduction(finalName) || isWeakCandidateName(finalName);
+    !verifiedContactName &&
+    (isWeakCandidateNameProduction(finalName) ||
+      isWeakCandidateName(finalName));
 
   const safeProfileQualityScore = weakCandidateName
     ? Math.min(Number(signals.profileQualityScore || 60), 60)
@@ -2057,8 +2070,10 @@ export async function saveCandidate(candidate: any) {
       cleanCandidate.experience || cleanCandidate.employment_history || [],
     education: cleanCandidate.education || [],
     certifications: cleanArray(cleanCandidate.certifications),
-    languages: cleanArray(cleanCandidate.languages),
-    language_skills: cleanArray(cleanCandidate.language_skills),
+    languages: candidateLanguagesForStorage(cleanCandidate.languages),
+    language_skills: candidateLanguagesForStorage(
+      cleanCandidate.language_skills,
+    ),
     projects: cleanCandidate.projects || cleanCandidate.project_history || [],
     project_types: cleanArray(cleanCandidate.project_types),
 

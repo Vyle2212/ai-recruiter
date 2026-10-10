@@ -18,6 +18,7 @@ type ProfileRow = {
 };
 
 type MockOptions = {
+  expectedCaptchaToken?: string;
   profile?: ProfileRow | null;
   authUserId?: string;
   email?: string;
@@ -32,10 +33,9 @@ function createMockClient(options: MockOptions = {}) {
   const authUserId =
     options.authUserId || "11111111-1111-1111-1111-111111111111";
 
-  const email =
-    options.email || "admin.user@example.invalid";
+  const email = options.email || "admin.user@example.invalid";
 
-  const profile =
+  let profile =
     options.profile === undefined
       ? {
           id: "22222222-2222-2222-2222-222222222222",
@@ -43,8 +43,7 @@ function createMockClient(options: MockOptions = {}) {
           email,
           role: "admin",
           status: "active",
-          organization_id:
-            "33333333-3333-3333-3333-333333333333",
+          organization_id: "33333333-3333-3333-3333-333333333333",
           client_id: null,
           candidate_id: null,
         }
@@ -96,6 +95,11 @@ function createMockClient(options: MockOptions = {}) {
 
       async signInWithPassword(_input) {
         counters.signIn += 1;
+        if (options.expectedCaptchaToken)
+          assert.equal(
+            _input.options?.captchaToken,
+            options.expectedCaptchaToken,
+          );
 
         return {
           data: {
@@ -172,6 +176,9 @@ function createMockClient(options: MockOptions = {}) {
     counters,
     authUserId,
     email,
+    setProfile: (value: ProfileRow | null) => {
+      profile = value;
+    },
   };
 }
 
@@ -220,10 +227,9 @@ async function testDisabledByDefault() {
 }
 
 async function testEnabledWithoutInjectedClient() {
-  const adapter =
-    createSupabaseStagingRuntimeAdapter({
-      explicitlyEnabled: true,
-    });
+  const adapter = createSupabaseStagingRuntimeAdapter({
+    explicitlyEnabled: true,
+  });
 
   assert.equal(adapter.provider, "disabled");
 
@@ -231,21 +237,16 @@ async function testEnabledWithoutInjectedClient() {
 
   assert.equal(result.status, "blocked");
   assert.equal(result.realActionExecuted, false);
-  assert(
-    result.blockerKeys.includes(
-      "supabase_staging_runtime_disabled",
-    ),
-  );
+  assert(result.blockerKeys.includes("supabase_staging_runtime_disabled"));
 }
 
 async function testActiveAdminProfileMapping() {
   const mock = createMockClient();
 
-  const adapter =
-    createSupabaseStagingRuntimeAdapter({
-      explicitlyEnabled: true,
-      createClient: async () => mock.client,
-    });
+  const adapter = createSupabaseStagingRuntimeAdapter({
+    explicitlyEnabled: true,
+    createClient: async () => mock.client,
+  });
 
   assert.equal(adapter.provider, "supabase_staging");
 
@@ -264,10 +265,7 @@ async function testActiveAdminProfileMapping() {
   );
   assert.equal(userResult.data?.clientId, undefined);
   assert.equal(userResult.data?.candidateId, undefined);
-  assert.equal(
-    userResult.data?.emailMasked,
-    "a***@***.invalid",
-  );
+  assert.equal(userResult.data?.emailMasked, "a***@***.invalid");
 
   const profileResult = await adapter.getProfile();
 
@@ -275,8 +273,7 @@ async function testActiveAdminProfileMapping() {
   assert.deepEqual(profileResult.data, {
     userId: mock.authUserId,
     role: "admin",
-    organizationId:
-      "33333333-3333-3333-3333-333333333333",
+    organizationId: "33333333-3333-3333-3333-333333333333",
     clientId: null,
     candidateId: null,
   });
@@ -288,35 +285,25 @@ async function testActiveAdminProfileMapping() {
 async function testSessionAndRefreshDoNotExposeTokens() {
   const mock = createMockClient();
 
-  const adapter =
-    createSupabaseStagingRuntimeAdapter({
-      explicitlyEnabled: true,
-      createClient: async () => mock.client,
-    });
+  const adapter = createSupabaseStagingRuntimeAdapter({
+    explicitlyEnabled: true,
+    createClient: async () => mock.client,
+  });
 
   const sessionResult = await adapter.getSession();
 
   assert.equal(sessionResult.ok, true);
-  assert.equal(
-    sessionResult.data?.status,
-    "authenticated",
-  );
+  assert.equal(sessionResult.data?.status, "authenticated");
   assert.equal(sessionResult.data?.realSession, true);
   assert.equal(sessionResult.data?.cookieUsed, true);
   assert.equal(sessionResult.data?.tokenExposed, false);
   assert.equal(sessionResult.tokenReturned, false);
-  assert.equal(
-    sessionResult.data?.identity?.role,
-    "admin",
-  );
+  assert.equal(sessionResult.data?.identity?.role, "admin");
 
   const refreshResult = await adapter.refreshSession();
 
   assert.equal(refreshResult.ok, true);
-  assert.equal(
-    refreshResult.data?.status,
-    "authenticated",
-  );
+  assert.equal(refreshResult.data?.status, "authenticated");
   assert.equal(refreshResult.data?.tokenExposed, false);
   assert.equal(refreshResult.tokenReturned, false);
 
@@ -325,29 +312,26 @@ async function testSessionAndRefreshDoNotExposeTokens() {
     refreshResult,
   });
 
-  assert.doesNotMatch(
-    serialized,
-    /access_token|refresh_token|bearer/i,
-  );
+  assert.doesNotMatch(serialized, /access_token|refresh_token|bearer/i);
 }
 
 async function testSuccessfulSignInAndSensitiveRedaction() {
   const mock = createMockClient({
     email: "sensitive.admin@example.invalid",
+    expectedCaptchaToken: "private-captcha-token",
   });
 
-  const adapter =
-    createSupabaseStagingRuntimeAdapter({
-      explicitlyEnabled: true,
-      createClient: async () => mock.client,
-    });
+  const adapter = createSupabaseStagingRuntimeAdapter({
+    explicitlyEnabled: true,
+    createClient: async () => mock.client,
+  });
 
-  const password =
-    "Sensitive-Password-That-Must-Not-Be-Returned";
+  const password = "Sensitive-Password-That-Must-Not-Be-Returned";
 
   const result = await adapter.signIn({
     email: mock.email,
     password,
+    captchaToken: "private-captcha-token",
   });
 
   assert.equal(result.ok, true);
@@ -360,48 +344,36 @@ async function testSuccessfulSignInAndSensitiveRedaction() {
   const serialized = JSON.stringify(result);
 
   assert(!serialized.includes(password));
+  assert(!serialized.includes("private-captcha-token"));
   assert(!serialized.includes(mock.email));
-  assert.equal(
-    result.data?.identity?.emailMasked,
-    "s***@***.invalid",
-  );
+  assert.equal(result.data?.identity?.emailMasked, "s***@***.invalid");
 }
 
 async function testInactiveProfileRejected() {
   const mock = createMockClient({
     profile: {
       id: "22222222-2222-2222-2222-222222222222",
-      auth_user_id:
-        "11111111-1111-1111-1111-111111111111",
+      auth_user_id: "11111111-1111-1111-1111-111111111111",
       email: "inactive@example.invalid",
       role: "admin",
       status: "disabled",
-      organization_id:
-        "33333333-3333-3333-3333-333333333333",
+      organization_id: "33333333-3333-3333-3333-333333333333",
       client_id: null,
       candidate_id: null,
     },
   });
 
-  const adapter =
-    createSupabaseStagingRuntimeAdapter({
-      explicitlyEnabled: true,
-      createClient: async () => mock.client,
-    });
+  const adapter = createSupabaseStagingRuntimeAdapter({
+    explicitlyEnabled: true,
+    createClient: async () => mock.client,
+  });
 
   const result = await adapter.getUser();
 
   assert.equal(result.ok, false);
   assert.equal(result.status, "failed_safe");
-  assert.equal(
-    result.errorCode,
-    "active_profile_not_found",
-  );
-  assert(
-    result.blockerKeys.includes(
-      "active_profile_required",
-    ),
-  );
+  assert.equal(result.errorCode, "active_profile_not_found");
+  assert(result.blockerKeys.includes("active_profile_required"));
   assert.equal(result.data, null);
 }
 
@@ -410,11 +382,10 @@ async function testMissingProfileTriggersSignOutCleanup() {
     profile: null,
   });
 
-  const adapter =
-    createSupabaseStagingRuntimeAdapter({
-      explicitlyEnabled: true,
-      createClient: async () => mock.client,
-    });
+  const adapter = createSupabaseStagingRuntimeAdapter({
+    explicitlyEnabled: true,
+    createClient: async () => mock.client,
+  });
 
   const result = await adapter.signIn({
     email: "missing.profile@example.invalid",
@@ -423,10 +394,7 @@ async function testMissingProfileTriggersSignOutCleanup() {
 
   assert.equal(result.ok, false);
   assert.equal(result.status, "failed_safe");
-  assert.equal(
-    result.errorCode,
-    "active_profile_not_found",
-  );
+  assert.equal(result.errorCode, "active_profile_not_found");
   assert.equal(mock.counters.signIn, 1);
   assert.equal(mock.counters.signOut, 1);
   assert.equal(result.data?.status, "no_session");
@@ -437,17 +405,15 @@ async function testSafeAuthErrorHandling() {
   const mock = createMockClient({
     authError: {
       code: "invalid_credentials",
-      message:
-        "Unsafe raw error containing user@example.invalid",
+      message: "Unsafe raw error containing user@example.invalid",
       status: 400,
     },
   });
 
-  const adapter =
-    createSupabaseStagingRuntimeAdapter({
-      explicitlyEnabled: true,
-      createClient: async () => mock.client,
-    });
+  const adapter = createSupabaseStagingRuntimeAdapter({
+    explicitlyEnabled: true,
+    createClient: async () => mock.client,
+  });
 
   const result = await adapter.signIn({
     email: "user@example.invalid",
@@ -468,11 +434,10 @@ async function testSafeAuthErrorHandling() {
 async function testPasswordResetAndSignOut() {
   const mock = createMockClient();
 
-  const adapter =
-    createSupabaseStagingRuntimeAdapter({
-      explicitlyEnabled: true,
-      createClient: async () => mock.client,
-    });
+  const adapter = createSupabaseStagingRuntimeAdapter({
+    explicitlyEnabled: true,
+    createClient: async () => mock.client,
+  });
 
   const reset = await adapter.requestPasswordReset({
     email: "reset@example.invalid",
@@ -481,11 +446,7 @@ async function testPasswordResetAndSignOut() {
   assert.equal(reset.ok, true);
   assert.equal(reset.status, "success");
   assert.equal(mock.counters.passwordReset, 1);
-  assert(
-    !JSON.stringify(reset).includes(
-      "reset@example.invalid",
-    ),
-  );
+  assert(!JSON.stringify(reset).includes("reset@example.invalid"));
 
   const signOut = await adapter.signOut();
 
@@ -497,14 +458,12 @@ async function testPasswordResetAndSignOut() {
 async function testInvitationRemainsBlocked() {
   const mock = createMockClient();
 
-  const adapter =
-    createSupabaseStagingRuntimeAdapter({
-      explicitlyEnabled: true,
-      createClient: async () => mock.client,
-    });
+  const adapter = createSupabaseStagingRuntimeAdapter({
+    explicitlyEnabled: true,
+    createClient: async () => mock.client,
+  });
 
-  const token =
-    "Invitation-Token-Must-Not-Be-Returned";
+  const token = "Invitation-Token-Must-Not-Be-Returned";
 
   const result = await adapter.acceptInvitation({
     invitationToken: token,
@@ -514,9 +473,7 @@ async function testInvitationRemainsBlocked() {
   assert.equal(result.status, "blocked");
   assert.equal(result.realActionExecuted, false);
   assert(
-    result.blockerKeys.includes(
-      "supabase_invitation_runtime_not_implemented",
-    ),
+    result.blockerKeys.includes("supabase_invitation_runtime_not_implemented"),
   );
   assert(!JSON.stringify(result).includes(token));
 }
@@ -532,23 +489,73 @@ function testProviderSourceBoundary() {
     /from\s+["']@supabase\/ssr["']|from\s+["']@supabase\/supabase-js["']|createServerClient|cookies\s*\(|process\.env/,
   );
 
-  assert.match(
-    providerSource,
-    /createClient\?:\s*\(\)\s*=>\s*Promise/,
-  );
+  assert.match(providerSource, /createClient\?:\s*\(\)\s*=>\s*Promise/);
 
-  assert.match(
-    providerSource,
-    /\.from\("user_profiles"\)/,
-  );
+  assert.match(providerSource, /\.from\("user_profiles"\)/);
 
-  assert.match(
-    providerSource,
-    /\.eq\("auth_user_id",\s*user\.id\)/,
-  );
+  assert.match(providerSource, /\.eq\("auth_user_id",\s*user\.id\)/);
 }
 
 async function main() {
+  const recoverable = createMockClient({ profile: null });
+  let recoveryCalls = 0;
+  const recovering = createSupabaseStagingRuntimeAdapter({
+    explicitlyEnabled: true,
+    createClient: async () => recoverable.client,
+    recoverCandidateRegistration: async (client, userId) => {
+      recoveryCalls++;
+      assert.equal(client, recoverable.client);
+      assert.equal(userId, recoverable.authUserId);
+      recoverable.setProfile({
+        id: "22222222-2222-2222-2222-222222222222",
+        auth_user_id: userId,
+        email: recoverable.email,
+        role: "candidate",
+        status: "active",
+        organization_id: null,
+        client_id: null,
+        candidate_id: "44444444-4444-4444-4444-444444444444",
+      });
+      return true;
+    },
+  });
+  const recovered = await recovering.signIn({
+    email: recoverable.email,
+    password: "synthetic-password",
+  });
+  assert.equal(recovered.ok, true);
+  assert.equal(recovered.data?.identity?.role, "candidate");
+  assert.equal(recoveryCalls, 1);
+  assert.equal(recoverable.counters.profileReads, 2);
+  assert.equal(recoverable.counters.signOut, 0);
+  for (const recover of [
+    async () => false,
+    async () => {
+      throw new Error("private");
+    },
+    async () => true,
+  ]) {
+    const blocked = createMockClient({ profile: null });
+    const adapter = createSupabaseStagingRuntimeAdapter({
+      explicitlyEnabled: true,
+      createClient: async () => blocked.client,
+      recoverCandidateRegistration: recover,
+    });
+    assert.equal(
+      (
+        await adapter.signIn({
+          email: blocked.email,
+          password: "synthetic-password",
+        })
+      ).ok,
+      false,
+    );
+    assert.equal(
+      blocked.counters.signOut,
+      1,
+      "failed recovery and missing readback must clean up the session",
+    );
+  }
   await testDisabledByDefault();
   await testEnabledWithoutInjectedClient();
   await testActiveAdminProfileMapping();
@@ -561,9 +568,7 @@ async function main() {
   await testInvitationRemainsBlocked();
   testProviderSourceBoundary();
 
-  console.log(
-    "stagingAuthSupabaseRuntimeAdapter.test.ts passed",
-  );
+  console.log("stagingAuthSupabaseRuntimeAdapter.test.ts passed");
 }
 
 main().catch((error: unknown) => {

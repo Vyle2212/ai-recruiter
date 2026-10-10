@@ -1,9 +1,124 @@
+import {
+  candidateProfileRequiredReasons,
+  candidateProfileRowIssues,
+} from "../lib/candidateSelfConfirmSubmission";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import {
+  contactHeaderPhone,
+  candidateLanguageLevels,
+  candidateDateParts,
+  sapProjectTypeEvidence,
+} from "../lib/candidatePortalEditEvidence";
 import { buildCandidatePortalAudit } from "./auditCandidatePortal";
+import {
+  candidateCountries,
+  splitCandidateLocation,
+  joinCandidateLocation,
+} from "../lib/candidateEditOptions";
 import { recruiterRouteRegistry } from "../lib/recruiterRouteRegistry";
 
 async function main() {
+  assert.equal(candidateCountries.length, 249);
+  for (const location of [
+    "Manila, Philippines",
+    "Singapore",
+    "Perth, Australia",
+    "Łódź, Poland",
+    "City not listed, Philippines",
+  ]) {
+    const parts = splitCandidateLocation(location);
+    assert.equal(
+      joinCandidateLocation(parts.city, parts.country),
+      location,
+      "Changing presentation must preserve existing location",
+    );
+  }
+  assert.equal(
+    splitCandidateLocation("Unrecognised location text").city,
+    "Unrecognised location text",
+  );
+  assert.equal(splitCandidateLocation("HCMC, Vietnam").country, "Vietnam");
+  assert.equal(
+    contactHeaderPhone(
+      "Aruna\n+61 435189635 | email@example.invalid\nPROFILE SUMMARY\nFinance",
+    ),
+    "+61435189635",
+  );
+  assert.equal(
+    contactHeaderPhone(
+      "Aruna\nPROFILE SUMMARY\nA project had phone +6591234567",
+    ),
+    undefined,
+    "A number in project text must not become contact",
+  );
+  assert.equal(
+    contactHeaderPhone("Aruna\n+6591234567 | +84912345678\nPROFILE SUMMARY"),
+    undefined,
+    "Ambiguous phones require candidate choice",
+  );
+  assert.ok(candidateLanguageLevels("Japanese").includes("JLPT N2"));
+  assert.ok(!candidateLanguageLevels("French").includes("JLPT N2"));
+  assert.ok(candidateLanguageLevels("Korean").includes("TOPIK 6"));
+  for (const marker of [
+    "Current",
+    "Present",
+    "Curr",
+    "Now",
+    "Until Now",
+    "At the present",
+    "To date",
+  ]) {
+    assert.deepEqual(candidateDateParts(marker), {
+      year: "Current",
+      month: "Current",
+    });
+    assert.deepEqual(
+      candidateProfileRowIssues("workExperience", {
+        employer: "Example Consulting",
+        title: "SAP Consultant",
+        start_date: "Jul 2025",
+        end_date: marker,
+      }),
+      {},
+    );
+  }
+  assert.ok(candidateProfileRequiredReasons({ phone: "" }).phone);
+  assert.ok(
+    candidateProfileRowIssues("projectExperience", {
+      client: "Client",
+      role: "Consultant",
+      start_date: "2024-01",
+      end_date: "Present",
+    }).project_type,
+  );
+  assert.deepEqual(
+    candidateProfileRowIssues("projectExperience", {
+      client: "Client",
+      role: "Consultant",
+      project_type: "Custom delivery",
+      start_date: "2024-01",
+      end_date: "Curr",
+    }),
+    {},
+  );
+  assert.ok(
+    candidateProfileRowIssues("workExperience", {
+      employer: "E",
+      title: "SAP Consultant",
+      start_date: "2025-06",
+      end_date: "2024-01",
+    }).end_date,
+  );
+  assert.deepEqual(candidateDateParts("1998"), { year: "1998", month: "" });
+  assert.deepEqual(candidateDateParts("September 2025"), {
+    year: "2025",
+    month: "09",
+  });
+  assert.equal(
+    sapProjectTypeEvidence("SAP BPC implementation with post-go-live support"),
+    "Implementation, Support",
+  );
   const audit = await buildCandidatePortalAudit();
   assert.equal(audit.ownershipResolvedServerSide, true);
   assert.equal(audit.arbitraryCandidateIdInputRemoved, true);

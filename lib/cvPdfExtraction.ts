@@ -1,5 +1,6 @@
+import { pdfStandardFontDataUrl } from "./cvPdfRuntime";
 import { extractCanonicalEmploymentFromResume } from "./candidate360Employment";
-import { CvSourceError, googlePdfOcr } from "./cvPdfOcr";
+import { CvSourceError, configuredPdfOcr } from "./cvPdfOcr";
 import { createCvPdfRenderer } from "./pdfTextLayout";
 
 export type PdfExtractionOptions = {
@@ -48,7 +49,10 @@ export async function extractCvPdf(
   const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
   // PDF.js may transfer/detach the supplied typed array. Always give it an
   // isolated copy so the original bytes remain available for OCR/archive.
-  const loadingTask = getDocument({ data: Uint8Array.from(buffer) });
+  const loadingTask = getDocument({
+    data: Uint8Array.from(buffer),
+    standardFontDataUrl: pdfStandardFontDataUrl(),
+  });
   try {
     const document = await loadingTask.promise;
     if (
@@ -93,7 +97,7 @@ export async function extractCvPdf(
       (_, index) => index + 1,
     );
     const runOcr: NonNullable<PdfExtractionOptions["ocr"]> =
-      options.ocr || googlePdfOcr;
+      options.ocr || configuredPdfOcr;
     const text = await runOcr(
       buffer,
       document.numPages,

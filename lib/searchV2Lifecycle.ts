@@ -7,7 +7,7 @@ import { redactSearchV2VisibleEvidence } from "./searchV2VisibleEvidence";
 import { conceptsInText, searchConcept } from "./candidateSearchConcepts";
 
 export const SEARCH_V2_LIFECYCLE_INDEX_VERSION =
-  "candidate360-canonical-lifecycle-index-v20-strict-assignment-boundaries";
+  "candidate360-canonical-lifecycle-index-v21-sap-fi-co-family";
 
 type LifecycleEvidence = NonNullable<
   CandidateSearchV2Document["lifecycleEvidence"]
@@ -33,18 +33,43 @@ export type TargetModuleDeliveryEvidence = Readonly<{
   unsupportedAssignments: readonly TargetModuleDeliveryAssignment[];
 }>;
 
-const normalized = (value: unknown) => String(value || "").normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
-function recordContextConceptIds(project: EnterpriseProject, source: string, includeStructuredModules = false) {
+const normalized = (value: unknown) =>
+  String(value || "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+function recordContextConceptIds(
+  project: EnterpriseProject,
+  source: string,
+  includeStructuredModules = false,
+) {
   const concepts = new Set<string>();
-  for (const value of [...(includeStructuredModules ? project.modules : []), source])
+  for (const value of [
+    ...(includeStructuredModules ? project.modules : []),
+    source,
+  ])
     for (const conceptId of conceptsInText(value)) concepts.add(conceptId);
   const text = normalized(source);
-  const sapGrounded = /\bsap\b|\bs\/4hana\b|\becc\b/.test(text) || project.modules.some(value => /\bsap\b|\b(?:fi|co|fico)\b/i.test(value));
-  if (sapGrounded && /\b(?:fi\/?co|fico|sap finance|sap controlling|general ledger|accounts payable|accounts receivable|asset accounting|cost center accounting|profit center accounting)\b/i.test(source))
+  const sapGrounded =
+    /\bsap\b|\bs\/4hana\b|\becc\b/.test(text) ||
+    project.modules.some((value) => /\bsap\b|\b(?:fi|co|fico)\b/i.test(value));
+  if (
+    sapGrounded &&
+    /\b(?:sap\s+(?:fi|co)|fi\/?co|fico|sap finance|sap controlling|general ledger|accounts payable|accounts receivable|asset accounting|cost center accounting|profit center accounting)\b/i.test(
+      source,
+    )
+  )
     concepts.add("FICO");
   return [...concepts].sort();
 }
-const assignmentClauses=(value:string)=>value.split(/(?:\r?\n)+|(?<=[.!?;])\s+|\s+(?=(?:in charge|duties|responsibilities|deliverables|project\s*:|client\s*:)[\s:])/i).map(item=>item.trim()).filter(Boolean);
+const assignmentClauses = (value: string) =>
+  value
+    .split(
+      /(?:\r?\n)+|(?<=[.!?;])\s+|\s+(?=(?:in charge|duties|responsibilities|deliverables|project\s*:|client\s*:)[\s:])/i,
+    )
+    .map((item) => item.trim())
+    .filter(Boolean);
 
 export function canonicalLifecycleAssignmentId(
   item: NonNullable<CandidateSearchV2Document["lifecycleEvidence"]>[number],
@@ -64,7 +89,7 @@ const regexEscape = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 function targetLiteralPattern(targetConcept: string) {
   if (targetConcept === "FICO")
-    return /\b(?:sap\s+)?(?:fi\s*[/&-]\s*co|fico|fi\s+and\s+co|financial accounting|controlling|general ledger|accounts payable|accounts receivable|asset accounting|financial closing)\b/i;
+    return /\b(?:sap\s+(?:fi|co)|(?:sap\s+)?(?:fi\s*[/&-]\s*co|fico|fi\s+and\s+co|financial accounting|controlling|general ledger|accounts payable|accounts receivable|asset accounting|financial closing))\b/i;
   const concept = searchConcept(targetConcept);
   const values = [
     concept?.label,
@@ -74,8 +99,14 @@ function targetLiteralPattern(targetConcept: string) {
     .filter((value): value is string => Boolean(value && value.length >= 2))
     .sort((left, right) => right.length - left.length);
   return values.length
-    ? new RegExp(`(?:^|[^a-z0-9])(?:${values.map(regexEscape).join("|")})(?:$|[^a-z0-9])`, "i")
-    : new RegExp(`(?:^|[^a-z0-9])${regexEscape(targetConcept)}(?:$|[^a-z0-9])`, "i");
+    ? new RegExp(
+        `(?:^|[^a-z0-9])(?:${values.map(regexEscape).join("|")})(?:$|[^a-z0-9])`,
+        "i",
+      )
+    : new RegExp(
+        `(?:^|[^a-z0-9])${regexEscape(targetConcept)}(?:$|[^a-z0-9])`,
+        "i",
+      );
 }
 
 /**
@@ -94,23 +125,39 @@ export function targetModuleDeliveryEvidence(
   const targetPattern = targetLiteralPattern(targetConcept);
   const assignments: TargetModuleDeliveryAssignment[] = [];
   for (const [assignmentId, records] of byAssignment) {
-    const text = [...new Set(records.map((item) => item.excerpt).filter(Boolean))].join(" ");
+    const text = [
+      ...new Set(records.map((item) => item.excerpt).filter(Boolean)),
+    ].join(" ");
     const targetMentioned = targetPattern.test(text);
     const securityContext =
-      /\b(?:security|grc|authori[sz]ation|user administration|role maintenance|maintain roles?|access control|segregation of duties|\bsod\b|fire fighter)\b/i.test(text);
+      /\b(?:security|grc|authori[sz]ation|user administration|role maintenance|maintain roles?|access control|segregation of duties|\bsod\b|fire fighter)\b/i.test(
+        text,
+      );
     const crossModuleIntegration =
-      /\b(?:integration|integrating|integrated|interface|touchpoint)\b[^.]{0,100}\b(?:fi\s*[/&-]\s*co|fico|sap\s+fi|sap\s+co)\b/i.test(text) &&
-      /\b(?:mm|material management|procurement|purchasing|ptp|ariba|sd|pp)\b/i.test(text);
+      /\b(?:integration|integrating|integrated|interface|touchpoint)\b[^.]{0,100}\b(?:fi\s*[/&-]\s*co|fico|sap\s+fi|sap\s+co)\b/i.test(
+        text,
+      ) &&
+      /\b(?:mm|material management|procurement|purchasing|ptp|ariba|sd|pp)\b/i.test(
+        text,
+      );
     const directRole =
-      /\b(?:role|position)\s*:\s*[^.;\n]{0,70}\b(?:fi\s*[/&-]\s*co|fico|sap\s+fi|sap\s+co)\b[^.;\n]{0,50}\b(?:consultant|analyst|lead|specialist|conversion|migration)\b/i.test(text) ||
-      /\b(?:sap\s+)?(?:fi\s*[/&-]\s*co|fico)\s+(?:functional\s+)?(?:consultant|analyst|lead|specialist|conversion|data migration)\b/i.test(text);
+      /\b(?:role|position)\s*:\s*[^.;\n]{0,70}\b(?:fi\s*[/&-]\s*co|fico|sap\s+fi|sap\s+co)\b[^.;\n]{0,50}\b(?:consultant|analyst|lead|specialist|conversion|migration)\b/i.test(
+        text,
+      ) ||
+      /\b(?:sap\s+)?(?:fi\s*[/&-]\s*co|fico)\s+(?:functional\s+)?(?:consultant|analyst|lead|specialist|conversion|data migration)\b/i.test(
+        text,
+      );
     const targetDeliveryPhrase = new RegExp(
       `(?:${targetPattern.source})[^.]{0,90}\\b(?:implement(?:ation|ed|ing)?|configur(?:ation|ed|ing)?|conversion|migrat(?:ion|ed|ing)?|test(?:ing|ed)?|cutover|go[ -]?live|rollout|support(?:ed|ing)?|process design|deliver(?:y|ed|ing)?|own(?:ed|ership)?)\\b|\\b(?:implement(?:ation|ed|ing)?|configur(?:ation|ed|ing)?|conversion|migrat(?:ion|ed|ing)?|test(?:ing|ed)?|cutover|go[ -]?live|rollout|support(?:ed|ing)?|process design|deliver(?:y|ed|ing)?|own(?:ed|ership)?)\\b[^.]{0,90}(?:${targetPattern.source})`,
       "i",
     );
     const financialAreaDelivery =
-      /\b(?:implement(?:ed|ation|ing)?|configur(?:ed|ation|ing)?|conversion|migrat(?:ed|ion|ing)?|test(?:ed|ing)?|cutover|go[ -]?live|support(?:ed|ing)?|design(?:ed|ing)?|owned?)\b[^.]{0,90}\b(?:general ledger|accounts payable|accounts receivable|asset accounting|financial closing|cost center accounting|profit center accounting)\b/i.test(text) ||
-      /\b(?:general ledger|accounts payable|accounts receivable|asset accounting|financial closing|cost center accounting|profit center accounting)\b[^.]{0,90}\b(?:implement(?:ed|ation|ing)?|configur(?:ed|ation|ing)?|conversion|migrat(?:ed|ion|ing)?|test(?:ed|ing)?|cutover|go[ -]?live|support(?:ed|ing)?|design(?:ed|ing)?|owned?)\b/i.test(text);
+      /\b(?:implement(?:ed|ation|ing)?|configur(?:ed|ation|ing)?|conversion|migrat(?:ed|ion|ing)?|test(?:ed|ing)?|cutover|go[ -]?live|support(?:ed|ing)?|design(?:ed|ing)?|owned?)\b[^.]{0,90}\b(?:general ledger|accounts payable|accounts receivable|asset accounting|financial closing|cost center accounting|profit center accounting)\b/i.test(
+        text,
+      ) ||
+      /\b(?:general ledger|accounts payable|accounts receivable|asset accounting|financial closing|cost center accounting|profit center accounting)\b[^.]{0,90}\b(?:implement(?:ed|ation|ing)?|configur(?:ed|ation|ing)?|conversion|migrat(?:ed|ion|ing)?|test(?:ed|ing)?|cutover|go[ -]?live|support(?:ed|ing)?|design(?:ed|ing)?|owned?)\b/i.test(
+        text,
+      );
     const meaningfulDelivery =
       directRole ||
       targetDeliveryPhrase.test(text) ||
@@ -134,8 +181,12 @@ export function targetModuleDeliveryEvidence(
       records.find(
         (item) =>
           targetPattern.test(item.excerpt) &&
-          !/^\s*(implementation|integration|migration|rollout|support(?: \/ enhancement)?|configuration)(?:\s+\1)?\s*$/i.test(item.excerpt),
-      ) || records.find((item) => targetPattern.test(item.excerpt)) || records[0];
+          !/^\s*(implementation|integration|migration|rollout|support(?: \/ enhancement)?|configuration)(?:\s+\1)?\s*$/i.test(
+            item.excerpt,
+          ),
+      ) ||
+      records.find((item) => targetPattern.test(item.excerpt)) ||
+      records[0];
     const classification =
       targetMentioned && meaningfulDelivery && !disqualifiedContext
         ? "direct"
@@ -161,14 +212,22 @@ export function targetModuleDeliveryEvidence(
       reasonCode,
       evidence: representative,
       lifecycleEvidence: records,
-      lifecycleTypes: [...new Set(records.map((item) => item.lifecycleType))].sort(),
+      lifecycleTypes: [
+        ...new Set(records.map((item) => item.lifecycleType)),
+      ].sort(),
     });
   }
   return {
     totalGroundedProjects: byAssignment.size,
-    directTargetAssignments: assignments.filter((item) => item.classification === "direct"),
-    adjacentAssignments: assignments.filter((item) => item.classification === "adjacent"),
-    unsupportedAssignments: assignments.filter((item) => item.classification === "unsupported"),
+    directTargetAssignments: assignments.filter(
+      (item) => item.classification === "direct",
+    ),
+    adjacentAssignments: assignments.filter(
+      (item) => item.classification === "adjacent",
+    ),
+    unsupportedAssignments: assignments.filter(
+      (item) => item.classification === "unsupported",
+    ),
   };
 }
 
@@ -177,26 +236,46 @@ export function readableLifecycleEvidenceLabel(
   targetLabel: string,
 ) {
   const cleaned = redactSearchV2VisibleEvidence(evidence.excerpt)
-    .replace(/^\s*(implementation|integration|migration|rollout|support \/ enhancement|configuration)\s+\1\s+/i, "$1 ")
+    .replace(
+      /^\s*(implementation|integration|migration|rollout|support \/ enhancement|configuration)\s+\1\s+/i,
+      "$1 ",
+    )
     .replace(/\s*[?]+\s*$/g, "")
     .trim();
-  if (!cleaned || /^(?:implementation|integration|migration|rollout|support \/ enhancement|configuration)(?:\s+(?:fi|co|fico))?$/i.test(cleaned))
+  if (
+    !cleaned ||
+    /^(?:implementation|integration|migration|rollout|support \/ enhancement|configuration)(?:\s+(?:fi|co|fico))?$/i.test(
+      cleaned,
+    )
+  )
     return `${targetLabel} ${evidence.lifecycleType.toLowerCase()} assignment`;
   return cleaned.slice(0, 220);
 }
 
 const lifecycleRules: ReadonlyArray<readonly [string, RegExp]> = [
-  ["Implementation", /\b(?:implementation|implemented|greenfield|brownfield|full[ -]?life[ -]?cycle)\b/i],
+  [
+    "Implementation",
+    /\b(?:implementation|implemented|greenfield|brownfield|full[ -]?life[ -]?cycle)\b/i,
+  ],
   ["Rollout", /\b(?:rollout|roll-out|rolled out)\b/i],
   ["Migration", /\b(?:migration|migrated|migrating)\b/i],
   ["Integration", /\b(?:integration|integrated|integrating)\b/i],
-  ["Support / Enhancement", /\b(?:support|supported|enhancement|enhanced|ams)\b/i],
+  [
+    "Support / Enhancement",
+    /\b(?:support|supported|enhancement|enhanced|ams)\b/i,
+  ],
   ["Configuration", /\b(?:configuration|configured|configuring)\b/i],
   ["Upgrade", /\b(?:upgrade|upgraded|upgrading)\b/i],
   ["Transformation", /\b(?:transformation|transformed|transforming)\b/i],
   ["Go-live", /\b(?:go-live|go live|cutover)\b/i],
-  ["Delivery responsibility", /\b(?:delivered|delivery|responsible for|owned|ownership)\b/i],
-  ["Project leadership", /\b(?:led|lead|managed|project manager|program manager)\b/i],
+  [
+    "Delivery responsibility",
+    /\b(?:delivered|delivery|responsible for|owned|ownership)\b/i,
+  ],
+  [
+    "Project leadership",
+    /\b(?:led|lead|managed|project manager|program manager)\b/i,
+  ],
 ];
 
 const criterionScopedLifecycleLabels = new Set([
@@ -216,7 +295,8 @@ export function lifecycleScopeFromCriterion(label: string) {
   return lifecycleRules
     .filter(
       ([lifecycleType, pattern]) =>
-        criterionScopedLifecycleLabels.has(lifecycleType) && pattern.test(label),
+        criterionScopedLifecycleLabels.has(lifecycleType) &&
+        pattern.test(label),
     )
     .map(([lifecycleType]) => lifecycleType);
 }
@@ -237,7 +317,9 @@ export function canonicalLifecycleEvidence(
   candidateId: string,
   projects: readonly EnterpriseProject[],
 ): NonNullable<CandidateSearchV2Document["lifecycleEvidence"]> {
-  const indexed: NonNullable<CandidateSearchV2Document["lifecycleEvidence"]>[number][] = [];
+  const indexed: NonNullable<
+    CandidateSearchV2Document["lifecycleEvidence"]
+  >[number][] = [];
   for (const project of projects) {
     const source = [
       project.projectType,
@@ -252,20 +334,53 @@ export function canonicalLifecycleEvidence(
       .flatMap((field) => field?.provenance || [])
       .find((item) => item.sourceRef || item.fieldPath);
     if (!source || !provenance) continue;
-    const structuredContext=[project.projectType,project.implementationType,project.name,project.role].filter(Boolean).join(" ");
-    const clauses=[structuredContext,...project.responsibilities.flatMap(assignmentClauses)].filter(Boolean);
+    const structuredContext = [
+      project.projectType,
+      project.implementationType,
+      project.name,
+      project.role,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const clauses = [
+      structuredContext,
+      ...project.responsibilities.flatMap(assignmentClauses),
+    ].filter(Boolean);
     for (const [lifecycleType, pattern] of lifecycleRules) {
-      const matchingClauses=clauses.map((clause,index)=>({clause,index})).filter(item=>pattern.test(item.clause));
+      const matchingClauses = clauses
+        .map((clause, index) => ({ clause, index }))
+        .filter((item) => pattern.test(item.clause));
       if (!matchingClauses.length) continue;
-      const contextConceptIds=[...new Set(matchingClauses.flatMap(item=>recordContextConceptIds(project,item.clause,item.index===0)))].sort();
-      const strongestClause = (lifecycleType === "Support / Enhancement" ? [...matchingClauses].sort((left, right) => {
-        const strength = (item: { clause: string; index: number }) =>
-          recordContextConceptIds(project, item.clause, item.index === 0).length * 20 +
-          Number(/\b(?:configur|implement|migrat|support|cutover|go-live|deliver|responsible|provide|troubleshoot|break\s*\/\s*fix)/i.test(item.clause)) * 10 +
-          Math.min(9, Math.floor(item.clause.length / 40));
-        return strength(right) - strength(left) || left.index - right.index;
-      }) : matchingClauses)[0];
-      const excerpt=redactSearchV2VisibleEvidence(strongestClause.clause).slice(0,320);
+      const contextConceptIds = [
+        ...new Set(
+          matchingClauses.flatMap((item) =>
+            recordContextConceptIds(project, item.clause, item.index === 0),
+          ),
+        ),
+      ].sort();
+      const strongestClause = (
+        lifecycleType === "Support / Enhancement"
+          ? [...matchingClauses].sort((left, right) => {
+              const strength = (item: { clause: string; index: number }) =>
+                recordContextConceptIds(project, item.clause, item.index === 0)
+                  .length *
+                  20 +
+                Number(
+                  /\b(?:configur|implement|migrat|support|cutover|go-live|deliver|responsible|provide|troubleshoot|break\s*\/\s*fix)/i.test(
+                    item.clause,
+                  ),
+                ) *
+                  10 +
+                Math.min(9, Math.floor(item.clause.length / 40));
+              return (
+                strength(right) - strength(left) || left.index - right.index
+              );
+            })
+          : matchingClauses
+      )[0];
+      const excerpt = redactSearchV2VisibleEvidence(
+        strongestClause.clause,
+      ).slice(0, 320);
       indexed.push({
         projectId: `${candidateId}:${project.id}`,
         lifecycleType,
@@ -275,7 +390,8 @@ export function canonicalLifecycleEvidence(
           provenance.sourceType === "system_derived"
             ? "candidate_field"
             : provenance.sourceType,
-        sourceField: provenance.fieldPath || provenance.sourceRef || "candidate.projects",
+        sourceField:
+          provenance.fieldPath || provenance.sourceRef || "candidate.projects",
         sourceRecordId: candidateId,
         excerpt,
         evidenceLevel:
@@ -285,7 +401,11 @@ export function canonicalLifecycleEvidence(
       });
     }
   }
-  return [...new Map(indexed.map((item) => [`${item.projectId}:${item.lifecycleType}`, item])).values()];
+  return [
+    ...new Map(
+      indexed.map((item) => [`${item.projectId}:${item.lifecycleType}`, item]),
+    ).values(),
+  ];
 }
 
 export function lifecycleRecordSupportsRequirement(
@@ -294,15 +414,27 @@ export function lifecycleRecordSupportsRequirement(
   operator: "any" | "all",
   contextConceptIds: readonly string[] = [],
 ) {
-  const lifecycleMatches = lifecycleValues.map(value => normalized(item.lifecycleType) === normalized(value));
-  const lifecyclePasses = operator === "all" ? lifecycleMatches.every(Boolean) : lifecycleMatches.some(Boolean);
+  const lifecycleMatches = lifecycleValues.map(
+    (value) => normalized(item.lifecycleType) === normalized(value),
+  );
+  const lifecyclePasses =
+    operator === "all"
+      ? lifecycleMatches.every(Boolean)
+      : lifecycleMatches.some(Boolean);
   if (!lifecyclePasses) return false;
   if (!contextConceptIds.length) return true;
-  const recordConcepts = new Set(item.contextConceptIds || item.modules.flatMap(value => conceptsInText(value)));
-  return contextConceptIds.some(conceptId => recordConcepts.has(conceptId));
+  const recordConcepts = new Set(
+    item.contextConceptIds ||
+      item.modules.flatMap((value) => conceptsInText(value)),
+  );
+  return contextConceptIds.some((conceptId) => recordConcepts.has(conceptId));
 }
 
-export type ProjectRequirementStatus = "supports" | "related_context" | "related_lifecycle" | "unrelated";
+export type ProjectRequirementStatus =
+  | "supports"
+  | "related_context"
+  | "related_lifecycle"
+  | "unrelated";
 export type CanonicalProjectRequirementClassification = Readonly<{
   assignmentId: string;
   targetConcept: string | null;
@@ -325,10 +457,17 @@ export function canonicalProjectRequirementClassification(
   const targetConcept = conceptsInText(requirementLabel)[0] || null;
   const lifecycleValues = lifecycleRules
     .map(([label]) => label)
-    .filter((label) => normalized(requirementLabel).includes(normalized(label)));
-  const lifecycleTypes = [...new Set(indexed.map((item) => item.lifecycleType))];
+    .filter((label) =>
+      normalized(requirementLabel).includes(normalized(label)),
+    );
+  const lifecycleTypes = [
+    ...new Set(indexed.map((item) => item.lifecycleType)),
+  ];
   const targetEvidence = targetConcept
-    ? targetModuleDeliveryEvidence({ lifecycleEvidence: indexed }, targetConcept)
+    ? targetModuleDeliveryEvidence(
+        { lifecycleEvidence: indexed },
+        targetConcept,
+      )
     : null;
   const targetDecision = targetEvidence
     ? [
@@ -337,20 +476,33 @@ export function canonicalProjectRequirementClassification(
         ...targetEvidence.unsupportedAssignments,
       ][0]
     : undefined;
-  const deliveryClassification = targetDecision?.classification || "unsupported";
-  const lifecycleSupported = !lifecycleValues.length || lifecycleValues.some(
-    (required) => lifecycleTypes.some((actual) => normalized(actual) === normalized(required)),
-  );
-  const satisfiesRequirement = deliveryClassification === "direct" && lifecycleSupported;
+  const deliveryClassification =
+    targetDecision?.classification || "unsupported";
+  const lifecycleSupported =
+    !lifecycleValues.length ||
+    lifecycleValues.some((required) =>
+      lifecycleTypes.some(
+        (actual) => normalized(actual) === normalized(required),
+      ),
+    );
+  const satisfiesRequirement =
+    deliveryClassification === "direct" && lifecycleSupported;
   const status: ProjectRequirementStatus = satisfiesRequirement
     ? "supports"
-    : deliveryClassification === "direct" || deliveryClassification === "adjacent"
+    : deliveryClassification === "direct" ||
+        deliveryClassification === "adjacent"
       ? "related_context"
-      : lifecycleValues.some((required) => lifecycleTypes.some((actual) => normalized(actual) === normalized(required)))
+      : lifecycleValues.some((required) =>
+            lifecycleTypes.some(
+              (actual) => normalized(actual) === normalized(required),
+            ),
+          )
         ? "related_lifecycle"
         : "unrelated";
-  const reasonCode = targetDecision?.reasonCode || "generic_lifecycle_without_target";
-  const targetLabel = targetConcept === "FICO" ? "SAP FICO" : targetConcept || "target module";
+  const reasonCode =
+    targetDecision?.reasonCode || "generic_lifecycle_without_target";
+  const targetLabel =
+    targetConcept === "FICO" ? "SAP FICO" : targetConcept || "target module";
   const explanation = satisfiesRequirement
     ? `Direct ${targetLabel} delivery and the required lifecycle are grounded in this assignment.`
     : deliveryClassification === "direct"
@@ -361,7 +513,9 @@ export function canonicalProjectRequirementClassification(
           ? `The lifecycle is grounded, but direct ${targetLabel} delivery is not established in this assignment.`
           : `Neither direct ${targetLabel} delivery nor the required lifecycle is grounded in this assignment.`;
   return {
-    assignmentId: indexed[0] ? canonicalLifecycleAssignmentId(indexed[0]) : `${candidateId}:${project.id}`,
+    assignmentId: indexed[0]
+      ? canonicalLifecycleAssignmentId(indexed[0])
+      : `${candidateId}:${project.id}`,
     targetConcept,
     deliveryClassification,
     reasonCode,
@@ -378,7 +532,11 @@ export function projectRequirementStatus(
   project: EnterpriseProject,
   requirementLabel: string,
 ): ProjectRequirementStatus {
-  return canonicalProjectRequirementClassification(candidateId, project, requirementLabel).status;
+  return canonicalProjectRequirementClassification(
+    candidateId,
+    project,
+    requirementLabel,
+  ).status;
 }
 
 // Snapshot-construction route only. Interactive hard filters consume the

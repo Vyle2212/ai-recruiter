@@ -214,7 +214,7 @@ export default function DailyCopilotPage() {
   return (
     <main className="min-h-screen bg-[#080d12] p-4 text-white md:p-6 xl:p-8">
       <div className="mx-auto max-w-7xl space-y-7">
-        <header className="rounded-[28px] bg-gradient-to-br from-[#111820] via-[#0d141c] to-[#091018] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.32)] ring-1 ring-slate-800/45">
+        <header className="rounded-[28px] bg-linear-to-br from-[#111820] via-[#0d141c] to-[#091018] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.32)] ring-1 ring-slate-800/45">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="text-xs font-black uppercase tracking-[0.22em] text-cyan-300">Good Morning</div>

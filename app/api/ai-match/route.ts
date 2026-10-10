@@ -1,7 +1,13 @@
-import { recruiterSearchAuthorizationDenied, requireRecruiterSearchAuthorization } from "@/lib/recruiterSearchAuthorization";
+import {
+  recruiterSearchAuthorizationDenied,
+  requireRecruiterSearchAuthorization,
+} from "@/lib/recruiterSearchAuthorization";
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { candidateSearchLifecycleDecision } from "@/lib/candidateSearchLifecycle";
+import {
+  candidateSearchLifecycleDecision,
+  selectCandidateLifecycleCompatible,
+} from "@/lib/candidateSearchLifecycle";
 
 export async function POST(req: Request) {
   const authorization = await requireRecruiterSearchAuthorization({
@@ -15,13 +21,16 @@ export async function POST(req: Request) {
 
     const { candidate_id, job_id, score, reason } = body;
 
-    const { data: candidate, error: candidateError } = await supabase
-      .from("candidates")
-      .select(
+    const { data: candidate, error: candidateError } =
+      await selectCandidateLifecycleCompatible<any>(
         "id,status,extraction_coverage_status,profile_confirmation_status",
-      )
-      .eq("id", candidate_id)
-      .single();
+        (columns) =>
+          supabase
+            .from("candidates")
+            .select(columns)
+            .eq("id", candidate_id)
+            .single(),
+      );
 
     if (
       candidateError ||

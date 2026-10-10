@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import Module from "node:module";
 import { NextRequest } from "next/server";
@@ -237,6 +238,7 @@ async function main() {
   const providerRuntime = await import("../lib/externalTalentProviderRegistry");
   const lifecycleRuntime = await import("../lib/searchV2CandidateLifecycle");
   const searchRoute = await import("../app/api/recruiter/search-v2/route");
+  const legacyMatchesRoute = await import("../app/api/get-matches/route");
   const detailRoute = await import(
     "../app/api/recruiter/search-v2/candidate-details/[candidateId]/route"
   );
@@ -290,6 +292,19 @@ async function main() {
     status: 401,
     code: "authentication_required",
   }));
+
+  const anonymousLegacyMatches = await legacyMatchesRoute.GET();
+  assert.equal(anonymousLegacyMatches.status, 401);
+  assert.equal(
+    anonymousLegacyMatches.headers.get("cache-control"),
+    "private, no-store",
+  );
+  assert.deepEqual(await anonymousLegacyMatches.json(), {
+    error: {
+      code: "authentication_required",
+      message: "Authentication is required.",
+    },
+  });
 
   const anonymousReadiness = await searchRoute.GET(
     new NextRequest("http://localhost/api/recruiter/search-v2"),
@@ -473,6 +488,7 @@ async function main() {
   authRuntime.setRecruiterSearchAuthorizationResolverForTests(null);
   providerRuntime.setExternalTalentProviderForTests(null);
   runtime._load = originalLoad;
+  execFileSync(process.execPath, ["--import", "tsx", "scripts/searchProfilePrefetch.test.ts"], { stdio: "inherit" });
   console.log("Search V2 authorization boundary regressions passed.");
 }
 

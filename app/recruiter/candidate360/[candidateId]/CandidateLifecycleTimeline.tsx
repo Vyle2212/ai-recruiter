@@ -108,7 +108,7 @@ export function CandidateLifecycleTimeline({
                 key={event.eventId}
               >
                 <span
-                  className={`absolute -left-[31px] top-1 h-3 w-3 rounded-full border-2 ${tone.dot}`}
+                  className={`absolute left-[-31px] top-1 h-3 w-3 rounded-full border-2 ${tone.dot}`}
                 />
 
                 <div className="rounded-lg border border-slate-800 bg-[#0B0F16] p-4">

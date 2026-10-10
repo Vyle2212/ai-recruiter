@@ -6,7 +6,7 @@ import type { Candidate360Profile } from "@/lib/candidate360Types";
 
 type FormValues = Record<string, string | boolean>;
 const inputClass =
-  "mt-1 w-full rounded-md border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-white outline-none focus:border-cyan-400";
+  "mt-1 w-full rounded-md border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-white outline-hidden focus:border-cyan-400";
 
 function present(value: unknown) {
   return Boolean(String(value ?? "").trim());
@@ -194,7 +194,7 @@ export default function CandidateSelfConfirmPage({
               ) : null}
             </div>
             <div className="text-right">
-              <span className="rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-bold uppercase text-amber-100">
+              <span className="rounded-sm border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-bold uppercase text-amber-100">
                 Preview only
               </span>
               {profile ? (
@@ -456,7 +456,7 @@ export default function CandidateSelfConfirmPage({
               <div className="border border-slate-700 bg-[#0B0F16] p-5">
                 <h2 className="font-semibold">Change preview</h2>
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-3">
+                  <div className="rounded-sm border border-emerald-500/20 bg-emerald-500/5 p-3">
                     <div className="text-xs text-emerald-100">
                       Safe confirmations
                     </div>
@@ -464,7 +464,7 @@ export default function CandidateSelfConfirmPage({
                       {preview.safeConfirmations?.length ?? 0}
                     </div>
                   </div>
-                  <div className="rounded border border-amber-500/20 bg-amber-500/5 p-3">
+                  <div className="rounded-sm border border-amber-500/20 bg-amber-500/5 p-3">
                     <div className="text-xs text-amber-100">
                       Needs recruiter review
                     </div>
@@ -472,7 +472,7 @@ export default function CandidateSelfConfirmPage({
                       {preview.needsRecruiterReview?.length ?? 0}
                     </div>
                   </div>
-                  <div className="rounded border border-red-500/20 bg-red-500/5 p-3">
+                  <div className="rounded-sm border border-red-500/20 bg-red-500/5 p-3">
                     <div className="text-xs text-red-100">Blocked changes</div>
                     <div className="mt-1 text-2xl">
                       {preview.blockedChanges?.length ?? 0}

@@ -41,7 +41,44 @@ async function main() {
   assert.doesNotMatch(workflow, /ACCEPTANCE_SYNTHETIC_FIXTURE_OWNER_RUN_ID/);
   assert.match(
     workflow,
-    /external_mode:[\s\S]*options: \[required, disabled\]/,
+    /acceptance_scope:[\s\S]*default: internal_only[\s\S]*options:\s*\[\s*internal_only,\s*full_scope,\s*cleanup_run37,\s*cleanup_run40,\s*cleanup_run42,\s*cleanup_run66,?\s*\]/,
+  );
+  assert.match(workflow, /cleanup_run66\) run_id="ptf1c2-gh-37940009098-1"/);
+  assert.match(
+    workflow,
+    /Recover only run 66's validated orphan fixture lease\s+if: inputs\.acceptance_scope == 'cleanup_run66'\s+run: npm exec -- tsx scripts\/authenticatedAcceptanceSyntheticFixture\.ts recover-run66-lease/,
+  );
+  assert.match(
+    workflow,
+    /Remove any remaining exact-run search fixture\s+if: always\(\) && steps\.identity_cleanup\.outcome == 'success' && steps\.identity_cleanup_verification\.outcome == 'success'/,
+  );
+  assert.match(
+    workflow,
+    /ACCEPTANCE_IDENTITY_CLEANUP_ARMED != 'true' \|\| \(steps\.identity_cleanup\.outcome == 'success' && steps\.identity_cleanup_verification\.outcome == 'success'\)/,
+  );
+  assert.match(
+    workflow,
+    /cleanup_run66\) npm run acceptance:synthetic:recover-orphan/,
+  );
+  assert.match(workflow, /cleanup_run42\) run_id="ptf1c2-gh-37439551708-1"/);
+  assert.match(workflow, /cleanup_run40\) run_id="ptf1c2-gh-37409506068-1"/);
+  assert.match(workflow, /cleanup_run37\) run_id="ptf1c2-gh-37236641902-1"/);
+  assert.doesNotMatch(workflow, /^\s+external_mode:/m);
+  assert.match(
+    workflow,
+    /Internal Talent Hub acceptance[^\n]*inputs\.tested_sha/,
+  );
+  assert.match(
+    workflow,
+    /ACCEPTANCE_EXTERNAL_MODE:.*inputs\.acceptance_scope == 'full_scope'.*'required'.*'disabled'/,
+  );
+  assert.match(
+    workflow,
+    /internal_only\) test "\$ACCEPTANCE_EXTERNAL_MODE" = "disabled"/,
+  );
+  assert.match(
+    workflow,
+    /full_scope\) test "\$ACCEPTANCE_EXTERNAL_MODE" = "required"/,
   );
   assert.match(workflow, /ACCEPTANCE_FIXTURE_CLEANUP_ARMED == 'true'/);
   assert.match(workflow, /ACCEPTANCE_DEPLOYMENT_BYPASS_SECRET:.*secrets\./);
@@ -70,6 +107,14 @@ async function main() {
     "utf8",
   );
   assert.match(provision, /acceptance_run_hash/);
+  assert.match(
+    provision,
+    /create_recruiter_candidate_chat_conversation[\s\S]*preconfirmationProjectionDenied: true/,
+  );
+  assert.match(
+    provision,
+    /verifyAcceptanceAuthConfirmation[\s\S]*setConsent: async \(consent\)/,
+  );
   assert.match(provision, /acceptance_partial_provision_discovery_failed/);
   assert.match(provision, /acceptance_identity_table_residue_detected/);
   assert.doesNotMatch(

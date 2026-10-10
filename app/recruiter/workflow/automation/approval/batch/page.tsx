@@ -799,7 +799,7 @@ export default function WorkflowAutomationBatchApprovalPage() {
         <section className="mt-6 rounded-xl border border-slate-800 bg-[#090C11] p-4">
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_220px]">
             <input
-              className="rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-none focus:border-indigo-500"
+              className="rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-hidden focus:border-indigo-500"
               onChange={(
                 event,
               ) =>
@@ -812,7 +812,7 @@ export default function WorkflowAutomationBatchApprovalPage() {
             />
 
             <select
-              className="rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-none"
+              className="rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-hidden"
               onChange={(
                 event,
               ) =>
@@ -845,7 +845,7 @@ export default function WorkflowAutomationBatchApprovalPage() {
             </select>
 
             <select
-              className="rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-none"
+              className="rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-200 outline-hidden"
               onChange={(
                 event,
               ) =>
@@ -931,7 +931,7 @@ export default function WorkflowAutomationBatchApprovalPage() {
           </div>
         </section>
 
-        <section className="sticky top-3 z-20 mt-5 rounded-xl border border-indigo-500/30 bg-[#090C11]/95 p-4 shadow-xl backdrop-blur">
+        <section className="sticky top-3 z-20 mt-5 rounded-xl border border-indigo-500/30 bg-[#090C11]/95 p-4 shadow-xl backdrop-blur-sm">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <div className="text-sm font-semibold text-white">

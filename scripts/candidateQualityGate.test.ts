@@ -250,7 +250,4 @@ assert.equal(routeSource.includes("duplicateIndexRows"), true, "Search API debug
 assert.equal(routeSource.includes("hiddenByPlaceholder"), true, "Search API debug should include placeholder visibility diagnostics");
 
 const searchPageSource = fs.readFileSync(new URL("../app/search/page.tsx", import.meta.url), "utf8");
-assert.equal(searchPageSource.includes("Previous Employer:"), true, "Talent Search card should render Previous Employer in SEEK-style card");
-assert.equal(searchPageSource.includes("Current Employer:"), true, "Talent Search card should render Current Employer in SEEK-style card");
-assert.equal(searchPageSource.includes("Current Company"), false, "Talent Search card should not render Current Company chips");
-assert.equal(searchPageSource.includes("Previous Company"), false, "Talent Search card should not render Previous Company chips");
+assert.match(searchPageSource, /redirect\("\/recruiter\/talent-search\/v2"\)/, "legacy search must use the canonical search route");

@@ -47,7 +47,7 @@ async function main() {
   const args = process.argv.slice(2);
   const allowOcr = args.includes("--allow-ocr");
   const directory = option(args, "--directory");
-  const minimumUnique = Number(option(args, "--minimum-unique") || "892");
+  const minimumUnique = Number(option(args, "--minimum-unique") || "970");
   const baselinePath = option(args, "--baseline");
   const known = new Set([
     "--directory",

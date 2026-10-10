@@ -23,12 +23,12 @@ assert.match(
 
 assert.match(
   source,
-  /actions\/checkout@v6/,
+  /actions\/checkout@[a-f0-9]{40}\s+# v6/,
 );
 
 assert.match(
   source,
-  /actions\/setup-node@v7/,
+  /actions\/setup-node@[a-f0-9]{40}\s+# v7/,
 );
 
 assert.match(

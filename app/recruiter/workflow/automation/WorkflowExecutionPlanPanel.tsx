@@ -64,7 +64,7 @@ function PlanContent({
     <section className="mt-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.1em] text-cyan-200">
+          <div className="text-xs font-semibold uppercase tracking-widest text-cyan-200">
             Execution Plan
           </div>
 
@@ -77,7 +77,7 @@ function PlanContent({
           </p>
         </div>
 
-        <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-emerald-100">
+        <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-emerald-100">
           Readiness: READY
         </span>
       </div>
@@ -403,7 +403,7 @@ export function WorkflowExecutionPlanPanel({
   if (skipped) {
     return (
       <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-        <div className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-100">
+        <div className="text-xs font-semibold uppercase tracking-widest text-amber-100">
           Execution plan not created
         </div>
 

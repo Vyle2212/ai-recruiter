@@ -1,4 +1,4 @@
-﻿import { candidateProfileTimestampLabels } from "./candidateDuplicateIdentity";
+import { candidateProfileTimestampLabels } from "./candidateDuplicateIdentity";
 type AnyRecord = Record<string, any>;
 
 export type Candidate360Section = {
@@ -339,8 +339,8 @@ function deriveConsultingLevel(careerLevel: string, d: AnyRecord): string {
 function cleanExecutiveTitle(value: any): string {
   return String(value || "")
     .replace(/\s+/g, " ")
-    .replace(/[ï¼š:]+$/g, "")
-    .replace(/\s+in\s+the\s+domain\s+of\s+/i, " â€“ ")
+    .replace(/[::]+$/g, "")
+    .replace(/\s+in\s+the\s+domain\s+of\s+/i, " – ")
     .trim();
 }
 
@@ -369,7 +369,7 @@ function buildExecutivePositioning(input: {
   const yearsLabel = input.years
     ? `${input.years} Years SAP Experience`
     : "SAP Experience to Validate";
-  const heroLine = `${input.location || "APAC"} â€¢ ${primary === "UNKNOWN" ? "SAP" : `SAP ${primary}`} â€¢ ${yearsLabel}`;
+  const heroLine = `${input.location || "APAC"} • ${primary === "UNKNOWN" ? "SAP" : `SAP ${primary}`} • ${yearsLabel}`;
 
   return { displayTitle, leadershipHeadline, heroLine };
 }
@@ -919,7 +919,7 @@ function deriveMarketBenchmark(input: {
         explicit.marketBasis,
         explicit.basis,
         explicit.sourceSummary,
-        `${country} â€¢ SAP ${moduleKey} â€¢ ${careerLevel}\nBenchmark Sample Pending\nLive Internal Pool`,
+        `${country} • SAP ${moduleKey} • ${careerLevel}\nBenchmark Sample Pending\nLive Internal Pool`,
       ),
     ),
     marketPosition: String(
@@ -1048,7 +1048,7 @@ export function buildCandidate360(
   const mobility = inferMobilitySignal(countryCoverage, years);
   const regionalSignal =
     countryCoverage.length > 1
-      ? `Regional Coverage: ${regionalCoverage} Â· Countries Served: ${countryCoverage.length}`
+      ? `Regional Coverage: ${regionalCoverage} · Countries Served: ${countryCoverage.length}`
       : `${country} market exposure`;
   const scoreBreakdown = buildScoreBreakdown(d, matchScore);
   const totalContribution = scoreBreakdown.reduce(
@@ -1122,7 +1122,7 @@ export function buildCandidate360(
             lower.includes("mobility")
           )
             return "Mobility & Travel Alignment";
-          return String(item || "").replace(/[.â€¢]+$/g, "");
+          return String(item || "").replace(/[.•]+$/g, "");
         })
       : buildWatchouts([], implementation, s4hana, Boolean(email || phone));
 

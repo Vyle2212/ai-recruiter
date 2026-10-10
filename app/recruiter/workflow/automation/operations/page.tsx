@@ -953,7 +953,7 @@ export default function WorkflowAutomationOperationsPage() {
         <section className="mt-6 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.1em] text-emerald-200">
+              <div className="text-xs font-semibold uppercase tracking-widest text-emerald-200">
                 Platform safety
               </div>
 
@@ -966,7 +966,7 @@ export default function WorkflowAutomationOperationsPage() {
               </p>
             </div>
 
-            <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-emerald-100">
+            <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-emerald-100">
               Read only
             </span>
           </div>
@@ -1121,9 +1121,9 @@ export default function WorkflowAutomationOperationsPage() {
         </section>
 
         <div className="mt-6 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-xs leading-6 text-slate-400">
-          Operations dashboard only Ã‚Â· Candidate DB writes: 0 Ã‚Â· Workflow writes: 0 Ã‚Â· Audit writes: 0 Ã‚Â· Email sends: 0 Ã‚Â· Releases performed: 0 Ã‚Â· Execution enabled: false
+          Operations dashboard only · Candidate DB writes: 0 · Workflow writes: 0 · Audit writes: 0 · Email sends: 0 · Releases performed: 0 · Execution enabled: false
           {loadedAt
-            ? ` Ã‚Â· Refreshed at: ${loadedAt}`
+            ? ` · Refreshed at: ${loadedAt}`
             : ""}
         </div>
       </div>

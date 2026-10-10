@@ -84,7 +84,7 @@ export default function SearchPreparationReview({
             onClick={() =>
               dispatch({ type: "retry", identity: state.identity })
             }
-            className="rounded border border-slate-700 px-3 py-2 text-sm text-white"
+            className="rounded-sm border border-slate-700 px-3 py-2 text-sm text-white"
           >
             Retry
           </button>
@@ -93,7 +93,7 @@ export default function SearchPreparationReview({
             onClick={() =>
               dispatch({ type: "manual", identity: state.identity })
             }
-            className="rounded bg-cyan-300 px-3 py-2 text-sm font-semibold text-slate-950"
+            className="rounded-sm bg-cyan-300 px-3 py-2 text-sm font-semibold text-slate-950"
           >
             Continue manually
           </button>
@@ -160,7 +160,7 @@ export default function SearchPreparationReview({
             type="button"
             disabled={state.currentIndex === 0}
             onClick={() => dispatch({ type: "back", identity: state.identity })}
-            className="rounded border border-slate-700 px-3 py-2 text-sm text-slate-200 disabled:opacity-40"
+            className="rounded-sm border border-slate-700 px-3 py-2 text-sm text-slate-200 disabled:opacity-40"
           >
             Back
           </button>
@@ -174,7 +174,7 @@ export default function SearchPreparationReview({
                   questionId: question.id,
                 })
               }
-              className="rounded border border-slate-700 px-3 py-2 text-sm text-slate-300"
+              className="rounded-sm border border-slate-700 px-3 py-2 text-sm text-slate-300"
             >
               Skip
             </button>
@@ -182,7 +182,7 @@ export default function SearchPreparationReview({
               type="button"
               disabled={!selected.length && !other.trim()}
               onClick={answer}
-              className="rounded bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-40"
+              className="rounded-sm bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-40"
             >
               Continue
             </button>
@@ -339,7 +339,7 @@ export default function SearchPreparationReview({
           aria-describedby={
             !searchReady ? "search-readiness-message" : undefined
           }
-          className="rounded-lg bg-cyan-300 px-5 py-2 text-sm font-semibold text-slate-950 outline-none hover:bg-cyan-200 focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-wait disabled:opacity-50"
+          className="rounded-lg bg-cyan-300 px-5 py-2 text-sm font-semibold text-slate-950 outline-hidden hover:bg-cyan-200 focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-wait disabled:opacity-50"
         >
           {!resolvedSearchIntent.searchable
             ? "Revise Search"
@@ -357,12 +357,14 @@ export default function SearchPreparationReview({
               {sourceReadiness.message}
             </span>
             {!isExternal &&
-            sourceReadiness.status === "failed" &&
-            onRetryReadiness ? (
+    sourceReadiness.status === "failed" &&
+    sourceReadiness.message !==
+      "No candidate profiles have been loaded into this environment yet." &&
+    onRetryReadiness ? (
               <button
                 type="button"
                 onClick={onRetryReadiness}
-                className="rounded border border-amber-700 px-2 py-1 text-xs text-amber-200"
+                className="rounded-sm border border-amber-700 px-2 py-1 text-xs text-amber-200"
               >
                 Retry
               </button>

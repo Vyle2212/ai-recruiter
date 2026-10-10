@@ -1,5 +1,10 @@
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import {
+  installAcceptanceComparisonPack,
+  removeAcceptanceComparisonPack,
+  verifyAcceptanceComparisonPackAbsent,
+} from "../lib/acceptanceComparisonPackRuntime";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import {
@@ -120,18 +125,148 @@ async function presence(
   };
 }
 
+async function recoverRun66FixtureLease(
+  client: SupabaseClient,
+  expected: AcceptanceFixtureLeaseExpectation,
+) {
+  const runId = "ptf1c2-gh-37940009098-1";
+  if (
+    expected.runId !== runId ||
+    expected.syntheticNamespace !== `ptf1c2/${runId}` ||
+    expected.environmentId !== "ai-recruiter-acceptance-a0123c9" ||
+    expected.projectRef !== "iujucosewivndjpcjbuz"
+  )
+    throw new Error("acceptance_run66_recovery_scope_invalid");
+  const found = await presence(client);
+  if (found.registry) {
+    // Resume only this recovery revision's intact lease. Never overwrite a
+    // foreign lease, or extend its expiry to match a new workflow attempt.
+    const resumed = {
+      ...expected,
+      expiresAt: String(found.registry.expires_at),
+    };
+    if (
+      !["owned_complete", "owned_partial"].includes(
+        acceptanceFixtureState(found, resumed),
+      )
+    )
+      throw new Error("acceptance_run66_recovery_lease_conflict");
+    await githubFlag("ACCEPTANCE_EXPIRES_AT", resumed.expiresAt);
+    return;
+  }
+  if (!found.candidateById || !found.candidateByMarker)
+    throw new Error("acceptance_run66_recovery_candidate_missing");
+  const { data: run, error: runError } = await client
+    .from("acceptance_test_runs")
+    .select(
+      "run_id,synthetic_namespace,owner_hash,status,created_at,expires_at",
+    )
+    .eq("run_id", runId)
+    .single();
+  if (
+    runError ||
+    !run ||
+    run.status !== "ready" ||
+    run.synthetic_namespace !== expected.syntheticNamespace ||
+    run.owner_hash !== "86e299fb5e1494bf" ||
+    Date.parse(run.created_at) !== Date.parse("2026-10-09T13:55:11.848344Z") ||
+    Date.parse(run.expires_at) !== Date.parse("2026-10-09T15:54:53Z")
+  )
+    throw new Error("acceptance_run66_recovery_run_mismatch");
+  const { data: candidate, error: candidateError } = await client
+    .from("candidates")
+    .select("*")
+    .eq("id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID)
+    .single();
+  if (
+    candidateError ||
+    !candidate ||
+    !validateAcceptanceSyntheticCandidate(candidate).valid
+  )
+    throw new Error("acceptance_run66_recovery_candidate_mismatch");
+  const { data: profiles, error: profileError } = await client
+    .from("acceptance_test_entities")
+    .select("entity_id")
+    .eq("run_id", runId)
+    .eq("entity_type", "user_profile");
+  const profileIds = new Set((profiles || []).map((p) => String(p.entity_id)));
+  if (profileError || profiles?.length !== 6 || profileIds.size !== 6)
+    throw new Error("acceptance_run66_recovery_ledger_mismatch");
+  for (const [table, timeField, expectedCount] of [
+    ["candidate_chat_contact_consents", "updated_at", 1],
+    ["candidate_chat_contact_consent_events", "changed_at", 2],
+  ] as const) {
+    const { data: rows, error } = await client
+      .from(table)
+      .select(`candidate_id,user_profile_id,${timeField}`)
+      .eq("candidate_id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID);
+    if (
+      error ||
+      !rows ||
+      rows.length !== expectedCount ||
+      rows.some((row) => {
+        const recordedAt =
+          timeField === "updated_at" && "updated_at" in row
+            ? row.updated_at
+            : timeField === "changed_at" && "changed_at" in row
+              ? row.changed_at
+              : undefined;
+        const timestamp = Date.parse(String(recordedAt));
+        return (
+          row.candidate_id !== ACCEPTANCE_SYNTHETIC_CANDIDATE_ID ||
+          !profileIds.has(String(row.user_profile_id)) ||
+          !Number.isFinite(timestamp) ||
+          timestamp < Date.parse(run.created_at) ||
+          timestamp > Date.parse("2026-10-09T13:55:24Z")
+        );
+      })
+    )
+      throw new Error("acceptance_run66_recovery_consent_scope_invalid");
+  }
+  // Reconstitute only the lost lease for the existing, validated fixture.
+  // The recovery revision and expiry bind all subsequent cleanup commands;
+  // no candidate, identity, permission, trigger or audit policy is changed.
+  const { error: insertError } = await client
+    .from("acceptance_synthetic_candidates")
+    .insert(acceptanceFixtureLeaseRecord(expected));
+  if (insertError)
+    throw new Error("acceptance_run66_recovery_lease_create_failed");
+}
+
 async function deleteExact(
   client: SupabaseClient,
   expected: AcceptanceFixtureLeaseExpectation,
   protectedExpiredCleanup = false,
+  protectedOrphanCleanup = false,
 ) {
   const found = await presence(client);
   const state = acceptanceFixtureState(found, expected);
+  let orphanCandidateVerified = false;
+  if (
+    protectedOrphanCleanup &&
+    state === "orphan_candidate" &&
+    found.registry === null &&
+    found.candidateById &&
+    found.candidateByMarker &&
+    !found.indexByCandidateId
+  ) {
+    const { data, error } = await client
+      .from("candidates")
+      .select(
+        "id,name,email,phone,linkedin_url,title,current_title,current_company,headline,summary,current_location,raw_text,resume_text,location,country,experience,education,skills,sap_modules,primary_module,secondary_modules,status,profile_confirmation_status",
+      )
+      .eq("id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID)
+      .single();
+    orphanCandidateVerified =
+      !error && validateAcceptanceSyntheticCandidate(data).valid;
+  }
   const permission = fixtureRemovalAllowed({
     state,
     registry: found.registry,
     expected,
     protectedExpiredCleanup,
+    protectedOrphanCleanup,
+    orphanCandidateVerified,
   });
   if (!permission.allowed)
     throw new Error(`acceptance_fixture_cleanup_ownership_denied:${state}`);
@@ -142,13 +277,14 @@ async function deleteExact(
       .delete()
       .eq("candidate_id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID),
     client
-      .from("acceptance_synthetic_candidates")
-      .delete()
-      .eq("marker", ACCEPTANCE_SYNTHETIC_REGISTRY_MARKER),
-    client
       .from("candidates")
       .delete()
       .eq("id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID),
+    client
+      .from("acceptance_synthetic_candidates")
+      .delete()
+      .eq("marker", ACCEPTANCE_SYNTHETIC_REGISTRY_MARKER)
+      .eq("owner_run_id", String(found.registry?.owner_run_id)),
   ]) {
     const { error } = await operation;
     if (error) throw new Error("acceptance_fixture_cleanup_failed");
@@ -165,7 +301,7 @@ async function verifyCandidate(
   const { data, error } = await client
     .from("candidates")
     .select(
-      "id,name,email,phone,linkedin_url,title,current_title,current_company,headline,summary,current_location,raw_text,resume_text,location,country,experience,education,skills,sap_modules,primary_module,secondary_modules,status",
+      "id,name,email,phone,linkedin_url,title,current_title,current_company,headline,summary,current_location,raw_text,resume_text,location,country,experience,education,skills,sap_modules,primary_module,secondary_modules,status,profile_confirmation_status",
     )
     .eq("id", ACCEPTANCE_SYNTHETIC_CANDIDATE_ID)
     .single();
@@ -216,9 +352,11 @@ async function main() {
     "install",
     "verify",
     "remove",
+    "remove-protected-orphan",
     "residue-verify",
     "admin-verify",
     "remove-expired-fixed-fixture",
+    "recover-run66-lease",
   ];
   if (!valid.includes(action))
     throw new Error("acceptance_synthetic_action_invalid");
@@ -236,7 +374,14 @@ async function main() {
     expectedCommitSha: decision.value.expectedCommitSha,
     expiresAt: decision.value.expiresAt,
   };
-  if (!["remove", "residue-verify"].includes(action))
+  if (
+    ![
+      "remove",
+      "remove-protected-orphan",
+      "residue-verify",
+      "recover-run66-lease",
+    ].includes(action)
+  )
     await fetchAcceptanceReleaseEvidence(
       fetch,
       acceptanceBridgeConfigurationFromProcess(),
@@ -258,6 +403,17 @@ async function main() {
     },
   );
   await marker(client, environmentId, expected.projectRef);
+  if (action === "recover-run66-lease") {
+    await recoverRun66FixtureLease(client, expected);
+    console.log(
+      JSON.stringify({
+        ok: true,
+        action,
+        runHash: pseudonymousAcceptanceIdentifier(expected.runId),
+      }),
+    );
+    return;
+  }
   const found = await presence(client);
   const state = acceptanceFixtureState(found, expected);
 
@@ -290,13 +446,22 @@ async function main() {
       .insert(index);
     if (indexError)
       throw new Error("acceptance_synthetic_index_install_failed");
+    // Install the complete run dataset before preflight warms the 15-minute
+    // Search projection cache. Later tests select their own query and job.
+    await installAcceptanceComparisonPack(client, expected);
     await githubFlag("ACCEPTANCE_FIXTURE_INSTALLED");
   } else if (action === "verify") {
     await verifyCandidate(client, expected);
   } else if (action === "remove") {
+    await removeAcceptanceComparisonPack(client, expected);
     await deleteExact(client, expected);
     await githubFlag("ACCEPTANCE_FIXTURE_REMOVED");
+  } else if (action === "remove-protected-orphan") {
+    await removeAcceptanceComparisonPack(client, expected);
+    await deleteExact(client, expected, false, true);
+    await githubFlag("ACCEPTANCE_FIXTURE_REMOVED");
   } else if (action === "residue-verify") {
+    await verifyAcceptanceComparisonPackAbsent(client, expected);
     if (
       acceptanceFixtureState(await presence(client), expected) !== "available"
     )

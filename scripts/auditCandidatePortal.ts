@@ -29,7 +29,7 @@ export async function buildCandidatePortalAudit() {
     twoConsentsRequired:
       /confirmAccuracy:\s*accuracy/.test(portalSource) &&
       /consentToShare:\s*sharing/.test(portalSource) &&
-      /disabled=\{!accuracy \|\| !sharing/.test(portalSource),
+      /disabled=\{\s*!accuracy\s*\|\|\s*!sharing/.test(portalSource),
     confirmationFeatureFlagged: /CANDIDATE_PROFILE_CONFIRMATION_ENABLED/.test(
       confirmationRoute,
     ),

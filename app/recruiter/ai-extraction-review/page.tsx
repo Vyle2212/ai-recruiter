@@ -629,7 +629,7 @@ export default function AiExtractionReviewPage() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <span className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-amber-100">Dry-run only</span>
-            <Link href="/search" className="rounded-md border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-200 hover:border-cyan-500 hover:text-cyan-100">Talent Search</Link>
+            <Link href="/recruiter/talent-search/v2" className="rounded-md border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-200 hover:border-cyan-500 hover:text-cyan-100">Talent Search</Link>
             <Link href="/validation-queue" className="rounded-md border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-200 hover:border-cyan-500 hover:text-cyan-100">Validation Queue</Link>
           </div>
         </div>
@@ -666,7 +666,7 @@ export default function AiExtractionReviewPage() {
                   {item.label}
                 </button>
               ))}
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search candidate, reason, blocker" className="min-w-72 flex-1 rounded-md border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search candidate, reason, blocker" className="min-w-72 flex-1 rounded-md border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-100 outline-hidden focus:border-cyan-400" />
             </div>
 
             <div className="mt-5 grid items-start gap-5 xl:grid-cols-[380px_minmax(0,1fr)] 2xl:grid-cols-[420px_minmax(0,1fr)]">
@@ -741,8 +741,8 @@ function BatchReviewDecisionsPanel({ audit, preview, loading, status, onRefresh,
       </div>
       <div className="flex flex-wrap items-center gap-2 border-y border-slate-800 p-4">
         {filters.map(([key, label]) => <button key={key} onClick={() => setFilter(key)} className={`rounded-md border px-3 py-2 text-sm font-semibold ${filter === key ? "border-amber-400 bg-amber-500/15 text-amber-100" : "border-slate-700 bg-[#070A0F] text-slate-300 hover:border-slate-500"}`}>{label}</button>)}
-        <select value={field} onChange={(event) => setField(event.target.value)} className="rounded-md border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-100 outline-none"><option value="all">All fields</option>{fields.filter((item) => item !== "all").map((item) => <option key={item} value={item}>{item}</option>)}</select>
-        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search candidate, field, value" className="min-w-64 flex-1 rounded-md border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-400" />
+        <select value={field} onChange={(event) => setField(event.target.value)} className="rounded-md border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-100 outline-hidden"><option value="all">All fields</option>{fields.filter((item) => item !== "all").map((item) => <option key={item} value={item}>{item}</option>)}</select>
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search candidate, field, value" className="min-w-64 flex-1 rounded-md border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-100 outline-hidden focus:border-amber-400" />
       </div>
       <div className="grid gap-3 border-b border-slate-800 p-4 md:grid-cols-2 xl:grid-cols-4">
         <button onClick={() => onPreview("approve_safe")} disabled={loading} className="rounded-md border border-emerald-500/40 px-4 py-3 text-sm font-bold text-emerald-100 disabled:opacity-50">Preview bulk approve safe items</button>
@@ -753,7 +753,7 @@ function BatchReviewDecisionsPanel({ audit, preview, loading, status, onRefresh,
       {preview ? <div className="mx-4 mt-4 border border-cyan-500/20 bg-cyan-500/10 p-3 text-sm text-cyan-100">Preview selected {preview.summary.candidateFieldsSelected} fields, excluded {preview.summary.candidateFieldsExcluded}, preserves {preview.summary.wouldPreserveExistingApprovalsCount} existing approvals.</div> : null}
       {status ? <div className="mx-4 mt-4 text-sm text-amber-100">{status}</div> : null}
       <div className="overflow-auto p-4"><table className="min-w-[1200px] w-full border-collapse text-left text-sm"><thead className="text-xs uppercase text-slate-500"><tr className="border-b border-slate-800">{["Candidate", "Candidate ID", "Field", "Existing value", "Suggested value", "Evidence", "Confidence", "Risk level", "Decision status", "Safety note", "Actions"].map((head) => <th key={head} className="px-3 py-2 font-semibold">{head}</th>)}</tr></thead><tbody className="divide-y divide-slate-800">
-        {items.slice(0, 80).map((item) => <tr key={item.decisionItemId} className="align-top hover:bg-slate-900/40"><td className="px-3 py-3 text-slate-100">{item.candidateName}</td><td className="px-3 py-3 text-xs text-slate-400">{item.candidateId}</td><td className="px-3 py-3 text-cyan-100">{item.fieldName}</td><td className="px-3 py-3 text-slate-300">{empty(item.currentValue)}</td><td className="px-3 py-3 text-slate-100">{empty(item.suggestedValue)}</td><td className="px-3 py-3 text-slate-400">{empty(item.evidence)}</td><td className="px-3 py-3 text-slate-300">{item.confidence}</td><td className="px-3 py-3 text-slate-300">{item.riskLevel}</td><td className="px-3 py-3 text-slate-300">{item.existingApproval ? "Existing approval preserved" : item.decisionStatus}</td><td className="px-3 py-3 text-slate-400">{item.safetyNote}: {item.reasons.slice(0, 2).join("; ")}</td><td className="px-3 py-3"><div className="grid min-w-44 gap-1"><button onClick={() => onLocalDecision(item, "approve")} disabled={!item.bulkApproveEligible} className="rounded border border-emerald-500/30 px-2 py-1 text-xs text-emerald-100 disabled:text-slate-600">Approve this field</button><button onClick={() => onLocalDecision(item, "reject")} className="rounded border border-red-500/30 px-2 py-1 text-xs text-red-100">Reject this field</button><button onClick={() => onLocalDecision(item, "keep")} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">Keep existing</button><button onClick={() => onLocalDecision(item, "manual_review")} className="rounded border border-amber-500/30 px-2 py-1 text-xs text-amber-100">Mark manual review</button></div></td></tr>)}
+        {items.slice(0, 80).map((item) => <tr key={item.decisionItemId} className="align-top hover:bg-slate-900/40"><td className="px-3 py-3 text-slate-100">{item.candidateName}</td><td className="px-3 py-3 text-xs text-slate-400">{item.candidateId}</td><td className="px-3 py-3 text-cyan-100">{item.fieldName}</td><td className="px-3 py-3 text-slate-300">{empty(item.currentValue)}</td><td className="px-3 py-3 text-slate-100">{empty(item.suggestedValue)}</td><td className="px-3 py-3 text-slate-400">{empty(item.evidence)}</td><td className="px-3 py-3 text-slate-300">{item.confidence}</td><td className="px-3 py-3 text-slate-300">{item.riskLevel}</td><td className="px-3 py-3 text-slate-300">{item.existingApproval ? "Existing approval preserved" : item.decisionStatus}</td><td className="px-3 py-3 text-slate-400">{item.safetyNote}: {item.reasons.slice(0, 2).join("; ")}</td><td className="px-3 py-3"><div className="grid min-w-44 gap-1"><button onClick={() => onLocalDecision(item, "approve")} disabled={!item.bulkApproveEligible} className="rounded-sm border border-emerald-500/30 px-2 py-1 text-xs text-emerald-100 disabled:text-slate-600">Approve this field</button><button onClick={() => onLocalDecision(item, "reject")} className="rounded-sm border border-red-500/30 px-2 py-1 text-xs text-red-100">Reject this field</button><button onClick={() => onLocalDecision(item, "keep")} className="rounded-sm border border-slate-700 px-2 py-1 text-xs text-slate-300">Keep existing</button><button onClick={() => onLocalDecision(item, "manual_review")} className="rounded-sm border border-amber-500/30 px-2 py-1 text-xs text-amber-100">Mark manual review</button></div></td></tr>)}
       </tbody></table>{!items.length ? <div className="border border-slate-800 p-4 text-sm text-slate-400">No batch decision items match this view.</div> : null}</div>
     </section>
   );
@@ -998,7 +998,7 @@ function ApplyHistoryPanel({ history, loading, error, filter, setFilter, query, 
             {filters.map(([key, label]) => (
               <button key={key} onClick={() => setFilter(key)} className={`rounded-md border px-3 py-2 text-sm font-semibold ${filter === key ? "border-cyan-400 bg-cyan-500/15 text-cyan-100" : "border-slate-700 bg-[#070A0F] text-slate-300 hover:border-slate-500"}`}>{label}</button>
             ))}
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search candidate, field, company, approved value" className="min-w-72 flex-1 rounded-md border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search candidate, field, company, approved value" className="min-w-72 flex-1 rounded-md border border-slate-700 bg-[#05070A] px-3 py-2 text-sm text-slate-100 outline-hidden focus:border-cyan-400" />
           </div>
           <div className="overflow-auto p-4">
             <table className="min-w-[1200px] w-full border-collapse text-left text-sm">
@@ -1063,7 +1063,7 @@ function StickyApprovalSummary({ summary, previewLoading, stagingLoading, candid
     ["Ready for apply preview", summary.readyForApplyPreview],
   ];
   return (
-    <div className="sticky top-0 z-20 mt-5 border border-slate-800 bg-[#080B10]/95 p-3 backdrop-blur">
+    <div className="sticky top-0 z-20 mt-5 border border-slate-800 bg-[#080B10]/95 p-3 backdrop-blur-sm">
       <div className="flex flex-wrap items-center gap-3">
         {items.map(([label, value]) => (
           <div key={String(label)} className="min-w-36 border border-slate-800 bg-[#05070A] px-3 py-2">
@@ -1149,7 +1149,7 @@ function CandidateDetail({
   const fields = filterFieldsForView(candidate.fields, fieldView);
   return (
     <div className="border border-slate-800 bg-[#0B0F16]">
-      <div className="sticky top-24 z-10 border-b border-slate-800 bg-[#0B0F16]/95 px-4 py-4 backdrop-blur">
+      <div className="sticky top-24 z-10 border-b border-slate-800 bg-[#0B0F16]/95 px-4 py-4 backdrop-blur-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold text-white">{candidate.candidateName}</h2>
@@ -1247,7 +1247,7 @@ function FieldReviewCard({
         </div>
       </details>
       {field.requiresOverride ? (
-        <textarea value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} placeholder="Manual override reason required before local approval" className="mt-3 min-h-16 w-full rounded-md border border-amber-500/30 bg-[#05070A] p-2 text-xs text-slate-100 outline-none focus:border-amber-400" />
+        <textarea value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} placeholder="Manual override reason required before local approval" className="mt-3 min-h-16 w-full rounded-md border border-amber-500/30 bg-[#05070A] p-2 text-xs text-slate-100 outline-hidden focus:border-amber-400" />
       ) : null}
     </article>
   );

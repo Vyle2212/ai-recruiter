@@ -1,8 +1,33 @@
 "use client";
 
+import { careerDateIsCurrent } from "@/lib/careerDateEvidence";
+import {
+  candidateProfileRequiredReasons,
+  candidateProfileRowIssues,
+} from "@/lib/candidateSelfConfirmSubmission";
 import { createClient } from "@supabase/supabase-js";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { finalizePossiblyCompletedSignedCvUpload } from "@/lib/signedCvUploadFinalization";
+import { MAX_ORIGINAL_BYTES } from "@/lib/cvUploadLimits";
+import CandidateFieldPicker from "./CandidateFieldPicker";
+import CandidateJobPreferencesEditor from "./CandidateJobPreferencesEditor";
+import { parseJobPreferences } from "@/lib/candidateJobPreferences";
+import { candidateProjectStatuses } from "@/lib/candidateProjectStatus";
+import CandidateDateEditor from "./CandidateDateEditor";
+import CandidatePhoneEditor from "./CandidatePhoneEditor";
+import {
+  candidateLanguageLevels,
+  candidateProjectTypes,
+  sapProjectTypeEvidence,
+} from "@/lib/candidatePortalEditEvidence";
+import CandidateLocationEditor from "./CandidateLocationEditor";
+import {
+  candidateLanguageSuggestions,
+  candidateProficiencySuggestions,
+  candidateQualificationSuggestions,
+} from "@/lib/candidateEditOptions";
+import { SAP_SKILL_TAXONOMY } from "@/lib/sapTalentTaxonomy";
+import CandidateChatConsent from "./CandidateChatConsent";
 
 type PortalResponse = {
   profile: any;
@@ -16,10 +41,13 @@ type PortalResponse = {
 
 const panel = "rounded-2xl border border-slate-800 bg-[#0B0F16] p-5";
 const input =
-  "mt-2 w-full rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm outline-none focus:border-cyan-400";
+  "mt-2 w-full rounded-lg border border-slate-700 bg-[#05070A] px-3 py-2 text-sm outline-hidden focus:border-cyan-400";
 
 function value(field: any) {
-  return String(field?.value ?? "").trim();
+  const scalar = field && typeof field === "object" ? field.value : field;
+  return typeof scalar === "string" || typeof scalar === "number"
+    ? String(scalar).trim()
+    : "";
 }
 function rows(value: any) {
   return Array.isArray(value) ? value : [];
@@ -57,20 +85,28 @@ function normalizeEmployment(items: any[]) {
     end_date: dateValue(row.endDate || row.end_date),
     current:
       row.current === true ||
-      /^(current|present|now)$/i.test(dateValue(row.endDate || row.end_date)),
+      careerDateIsCurrent(dateValue(row.endDate || row.end_date)),
   }));
 }
 
 function normalizeProjects(items: any[]) {
   return items.map((row) => ({
     project: value(row.name) || String(row.project ?? "").trim(),
+    employer: value(row.employer),
+    description: value(row.description),
+    project_type:
+      value(row.projectType) ||
+      value(row.project_type) ||
+      sapProjectTypeEvidence(
+        value(row.description) || value(row.name) || value(row.project),
+      ),
     client: value(row.client) || String(row.client ?? "").trim(),
     role: value(row.role) || String(row.title ?? "").trim(),
     start_date: dateValue(row.startDate || row.start_date),
     end_date: dateValue(row.endDate || row.end_date),
     current:
       row.current === true ||
-      /^(current|present|now)$/i.test(dateValue(row.endDate || row.end_date)),
+      careerDateIsCurrent(dateValue(row.endDate || row.end_date)),
   }));
 }
 
@@ -105,10 +141,7 @@ function normalizeLanguages(items: any[]) {
             value(row.language) ||
             value(row.name) ||
             String(row.language ?? row.name ?? ""),
-          proficiency:
-            value(row.proficiency) ||
-            value(row.level) ||
-            String(row.proficiency ?? row.level ?? ""),
+          proficiency: value(row.proficiency) || value(row.level),
         },
   );
 }
@@ -120,7 +153,37 @@ function normalizeCertifications(items: any[]) {
   }));
 }
 
-type EditorColumn = { key: string; label: string; placeholder: string };
+type EditorColumn = {
+  key: string;
+  label: string;
+  placeholder: string;
+  suggestions?: string[];
+};
+const fieldLabels: Record<string, string> = {
+  jobPreferences: "Job preferences & availability",
+  display_name: "Full name",
+  displayName: "Full name",
+  current_title: "Current title",
+  currentTitle: "Current title",
+  current_company: "Current employer",
+  currentCompany: "Current employer",
+  location: "Location / country",
+  phone: "Phone with country code",
+  project_details: "Project client, start date and end date / Current",
+  workExperience: "Employment history",
+  experience: "Employment history",
+  employment: "Employment history",
+  projectExperience: "SAP project history",
+  projects: "SAP project history",
+  education: "Education",
+  languages: "Languages",
+  sap_modules: "SAP modules",
+  sapModules: "SAP modules",
+  skills: "Skills",
+  techSkills: "Skills",
+  candidate_accuracy_confirmation: "Review and confirm accuracy",
+  candidate_sharing_consent: "Consent to profile sharing",
+};
 
 function StructuredEditor({
   title,
@@ -137,20 +200,56 @@ function StructuredEditor({
   required?: boolean;
   onChange: (rows: Record<string, any>[]) => void;
 }) {
+  const listId = useId();
+  const fieldName =
+    title === "Employment history"
+      ? "workExperience"
+      : title === "SAP project history"
+        ? "projectExperience"
+        : title === "Languages"
+          ? "languages"
+          : title === "Education"
+            ? "education"
+            : "certifications";
   const update = (index: number, key: string, next: unknown) =>
     onChange(
       rows.map((row, rowIndex) =>
-        rowIndex === index ? { ...row, [key]: next } : row,
+        rowIndex === index
+          ? {
+              ...row,
+              [key]: next,
+              ...(key === "end_date"
+                ? { current: careerDateIsCurrent(next) }
+                : {}),
+              ...(key === "language" && row.language !== next
+                ? { proficiency: "" }
+                : {}),
+            }
+          : row,
       ),
     );
+  const projectStatuses = currentable ? candidateProjectStatuses(rows) : [];
   return (
     <section className={panel}>
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold">{title}</h2>
+          <h2 className="text-xl font-semibold">
+            {title}
+            {required ? (
+              <span className="ml-2 text-sm text-amber-200">* Required</span>
+            ) : (
+              <span className="ml-2 text-sm text-slate-400">Optional</span>
+            )}
+          </h2>
           {required ? (
             <p className="mt-1 text-xs text-amber-100">
-              At least one complete row is required.
+              {title === "Employment history"
+                ? "Every row needs employer, job title and dates, or Current. Check all jobs against your CV."
+                : title === "SAP project history"
+                  ? "Every row needs client, role, project type and start date, plus end date or Current. Add missing details before confirming; never copy employment dates."
+                  : title === "Languages"
+                    ? "Choose a language and its level, or type your exact certificate/score. Test levels are not automatically converted into speaking fluency."
+                    : "Add at least one education record. Check the institution, qualification and year against your CV."}
             </p>
           ) : null}
         </div>
@@ -162,6 +261,15 @@ function StructuredEditor({
           Add row
         </button>
       </div>
+      {columns
+        .filter((column) => column.suggestions)
+        .map((column) => (
+          <datalist key={column.key} id={`${listId}-${column.key}`}>
+            {column.suggestions!.map((option) => (
+              <option key={option} value={option} />
+            ))}
+          </datalist>
+        ))}
       <div className="mt-4 space-y-4">
         {rows.length ? (
           rows.map((row, index) => (
@@ -169,32 +277,117 @@ function StructuredEditor({
               className="rounded-xl border border-slate-800 bg-[#070A0F] p-4"
               key={`${title}-${index}`}
             >
+              {currentable && projectStatuses[index] ? (
+                <span className="mb-3 inline-block rounded-full border border-cyan-600 px-2 py-1 text-xs text-cyan-200">
+                  {projectStatuses[index]}{" "}
+                  {title === "Employment history" ? "role" : "project"}
+                </span>
+              ) : null}
               <div className="grid gap-3 md:grid-cols-2">
-                {columns.map((column) => (
-                  <label className="text-sm" key={column.key}>
-                    {column.label}
-                    <input
-                      className={input}
-                      value={String(row[column.key] ?? "")}
-                      placeholder={column.placeholder}
-                      disabled={
-                        currentable &&
-                        column.key === "end_date" &&
-                        row.current === true
-                      }
-                      onChange={(event) =>
-                        update(index, column.key, event.target.value)
-                      }
-                    />
-                  </label>
-                ))}
+                {columns.map((column) => {
+                  const issue = required
+                    ? candidateProfileRowIssues(fieldName, row)[column.key]
+                    : undefined;
+                  const fieldInput = issue
+                    ? input.replace("border-slate-700", "border-red-400")
+                    : input;
+                  return (
+                    <label className="text-sm" key={column.key}>
+                      {column.label}
+                      {required &&
+                      ((title === "Employment history" &&
+                        [
+                          "employer",
+                          "title",
+                          "start_date",
+                          "end_date",
+                        ].includes(column.key)) ||
+                        (title === "SAP project history" &&
+                          [
+                            "role",
+                            "client",
+                            "project_type",
+                            "start_date",
+                            "end_date",
+                          ].includes(column.key)) ||
+                        (title === "Languages" &&
+                          column.key === "language")) ? (
+                        <span className="ml-1 text-amber-200">*</span>
+                      ) : null}
+                      {column.key === "start_date" ||
+                      column.key === "end_date" ? (
+                        <CandidateDateEditor
+                          label={column.label}
+                          inputClass={fieldInput}
+                          value={String(row[column.key] ?? "")}
+                          allowCurrent={
+                            currentable && column.key === "end_date"
+                          }
+                          current={
+                            currentable &&
+                            column.key === "end_date" &&
+                            row.current === true
+                          }
+                          onChange={(next) => update(index, column.key, next)}
+                        />
+                      ) : column.suggestions ||
+                        column.key === "graduation_year" ||
+                        column.key === "project_type" ||
+                        column.key === "proficiency" ? (
+                        <CandidateFieldPicker
+                          inputClass={fieldInput}
+                          value={String(row[column.key] ?? "")}
+                          placeholder={column.label}
+                          options={
+                            column.key === "proficiency"
+                              ? candidateLanguageLevels(
+                                  String(row.language || ""),
+                                )
+                              : column.key === "graduation_year"
+                                ? Array.from({ length: 100 }, (_, i) =>
+                                    String(new Date().getUTCFullYear() - i),
+                                  )
+                                : column.key === "project_type"
+                                  ? candidateProjectTypes
+                                  : column.suggestions || []
+                          }
+                          onChange={(next) => update(index, column.key, next)}
+                        />
+                      ) : (
+                        <input
+                          className={fieldInput}
+                          value={String(row[column.key] ?? "")}
+                          placeholder={column.placeholder}
+                          onChange={(event) =>
+                            update(index, column.key, event.target.value)
+                          }
+                        />
+                      )}
+                      {column.key === "client" ? (
+                        <span className="mt-1 block text-xs text-slate-400">
+                          If confidential, enter Confidential, Not disclosed or
+                          NA.
+                        </span>
+                      ) : null}
+                      {issue ? (
+                        <p className="mt-1 text-xs font-medium text-red-300">
+                          {issue}
+                        </p>
+                      ) : null}
+                    </label>
+                  );
+                })}
               </div>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                 {currentable ? (
                   <label className="flex gap-2 text-sm text-slate-300">
                     <input
                       type="checkbox"
-                      checked={row.current === true}
+                      checked={
+                        row.current === true ||
+                        projectStatuses[index] === "Latest"
+                      }
+                      disabled={projectStatuses[index] === "Latest"}
                       onChange={(event) => {
                         const next = rows.map((item, rowIndex) =>
                           rowIndex === index
@@ -202,15 +395,23 @@ function StructuredEditor({
                                 ...item,
                                 current: event.target.checked,
                                 end_date: event.target.checked
-                                  ? ""
-                                  : item.end_date,
+                                  ? careerDateIsCurrent(item.end_date)
+                                    ? item.end_date
+                                    : "Current"
+                                  : "",
                               }
                             : item,
                         );
                         onChange(next);
                       }}
                     />
-                    Current role/project
+                    {title === "Employment history"
+                      ? projectStatuses[index] === "Latest"
+                        ? "Latest role (from End date)"
+                        : "Current role"
+                      : projectStatuses[index] === "Latest"
+                        ? "Latest project (from End date)"
+                        : "Current project"}
                   </label>
                 ) : (
                   <span />
@@ -228,7 +429,11 @@ function StructuredEditor({
             </div>
           ))
         ) : (
-          <p className="text-sm text-amber-100">No record extracted.</p>
+          <p className="rounded-lg border border-red-400/60 p-3 text-sm text-red-300">
+            {required
+              ? "Required — add at least one record."
+              : "No record extracted."}
+          </p>
         )}
       </div>
     </section>
@@ -246,7 +451,11 @@ async function json(response: Response) {
   return body;
 }
 
-export default function CandidatePortalClient() {
+export default function CandidatePortalClient({
+  chatEnabled,
+}: {
+  chatEnabled: boolean;
+}) {
   const [data, setData] = useState<PortalResponse | null>(null);
   const [fields, setFields] = useState<Record<string, any>>({});
   const [file, setFile] = useState<File | null>(null);
@@ -264,9 +473,16 @@ export default function CandidatePortalClient() {
     const profile = next.profile;
     setData(next);
     setFields({
+      jobPreferences: JSON.stringify({
+        ...profile.jobPreferences,
+        workAuthorization: (
+          profile.jobPreferences?.workAuthorization || []
+        ).map((r: any) => ({ ...r, _rowId: crypto.randomUUID() })),
+      }),
       displayName: value(profile.displayName),
       email: next.verifiedEmail || value(profile.contactInfo?.email),
-      phone: value(profile.contactInfo?.phone),
+      phone:
+        value(profile.contactInfo?.phone) || value(profile.cvPhoneSuggestion),
       currentTitle: value(profile.currentTitle),
       currentCompany: value(profile.currentCompany),
       location: value(profile.location),
@@ -316,9 +532,9 @@ export default function CandidatePortalClient() {
     try {
       if (
         !/\.(pdf|docx|doc|rtf|txt)$/i.test(file.name) ||
-        file.size > 10 * 1024 * 1024
+        file.size > MAX_ORIGINAL_BYTES
       )
-        throw new Error("Use one PDF, DOCX, DOC, RTF, or TXT CV up to 10 MB.");
+        throw new Error("Use one PDF, DOCX, DOC, RTF, or TXT CV up to 20 MB.");
       const contentDigest = await cvContentDigest(file);
       const signed = await json(
         await fetch("/api/candidate/profile/cv/sign", {
@@ -375,13 +591,15 @@ export default function CandidatePortalClient() {
     }
   }
 
+  const requiredReasons = candidateProfileRequiredReasons(fields);
+  const requiredGaps = Object.keys(requiredReasons);
   async function confirmProfile() {
-    if (!data) return;
+    if (!data || requiredGaps.length || !accuracy || !sharing) return;
     setBusy("confirm");
     setError("");
     setMessage("");
     try {
-      await json(
+      const confirmed = await json(
         await fetch("/api/candidate/profile/confirmation", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -396,7 +614,18 @@ export default function CandidatePortalClient() {
         }),
       );
       setMessage("Profile confirmed and released to recruiter search.");
-      await load();
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              version: confirmed.version,
+              profileStatus: confirmed.profileStatus,
+              searchable: confirmed.searchable === true,
+              confirmationRequired: false,
+              missingRequiredFields: [],
+            }
+          : current,
+      );
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "Confirmation failed.",
@@ -434,12 +663,15 @@ export default function CandidatePortalClient() {
         ) : null}
         {data && profile ? (
           <>
+            {chatEnabled && <CandidateChatConsent />}
             <section className={panel}>
               <div className="flex flex-wrap justify-between gap-4">
                 <div>
                   <h2 className="text-xl font-semibold">Profile readiness</h2>
                   <p className="mt-2 text-sm text-slate-400">
-                    Status: {data.profileStatus || "Not confirmed"}
+                    {data.searchable
+                      ? "Profile confirmed"
+                      : "Review needed before recruiters can find you"}
                   </p>
                 </div>
                 <span
@@ -450,7 +682,12 @@ export default function CandidatePortalClient() {
               </div>
               {data.missingRequiredFields.length ? (
                 <p className="mt-4 text-sm text-amber-100">
-                  Required gaps: {data.missingRequiredFields.join(", ")}
+                  Complete or check:{" "}
+                  {data.missingRequiredFields
+                    .map(
+                      (field) => fieldLabels[field] || field.replace(/_/g, " "),
+                    )
+                    .join(", ")}
                 </p>
               ) : null}
             </section>
@@ -480,7 +717,12 @@ export default function CandidatePortalClient() {
             </section>
 
             <section className={panel}>
-              <h2 className="text-xl font-semibold">Required information</h2>
+              <h2 className="text-xl font-semibold">Review your information</h2>
+              <p className="mt-2 text-sm text-slate-300">
+                <span className="text-amber-200">* Required</span> · Check every
+                extracted value against your CV. Correct any mistakes before
+                confirming. Leave optional information blank if unknown.
+              </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 {[
                   ["displayName", "Full name"],
@@ -488,24 +730,111 @@ export default function CandidatePortalClient() {
                   ["phone", "Phone"],
                   ["currentTitle", "Current title"],
                   ["currentCompany", "Current employer"],
-                  ["location", "Location / country"],
                   ["sapModules", "SAP modules"],
                   ["techSkills", "Skills"],
                 ].map(([name, label]) => (
                   <label className="text-sm" key={name}>
                     {label}
-                    <input
-                      className={input}
-                      value={String(fields[name] ?? "")}
-                      disabled={name === "email"}
-                      onChange={(event) => set(name, event.target.value)}
-                    />
+                    {name !== "email" ? (
+                      <span className="ml-1 text-amber-200">*</span>
+                    ) : (
+                      <span className="ml-1 text-xs text-slate-400">
+                        {name === "email" ? "Verified" : "Optional"}
+                      </span>
+                    )}
+                    {name === "phone" ? (
+                      <CandidatePhoneEditor
+                        value={String(fields.phone || "")}
+                        onChange={(next) => set("phone", next)}
+                        inputClass={
+                          requiredReasons.phone
+                            ? input.replace(
+                                "border-slate-700",
+                                "border-red-400",
+                              )
+                            : input
+                        }
+                      />
+                    ) : (
+                      <input
+                        aria-required={name !== "email"}
+                        className={
+                          name !== "email" &&
+                          name !== "phone" &&
+                          Boolean(requiredReasons[name])
+                            ? input.replace(
+                                "border-slate-700",
+                                "border-red-400",
+                              )
+                            : input
+                        }
+                        value={String(fields[name] ?? "")}
+                        disabled={name === "email"}
+                        onChange={(event) => set(name, event.target.value)}
+                      />
+                    )}
+                    {requiredReasons[name] ? (
+                      <p className="mt-1 text-xs font-medium text-red-300">
+                        {requiredReasons[name]}
+                      </p>
+                    ) : null}
+                    {name === "sapModules" ? (
+                      <div
+                        className="mt-3 flex flex-wrap gap-2"
+                        aria-label="Add SAP module"
+                      >
+                        <select
+                          className={input}
+                          aria-label="Add SAP module"
+                          value=""
+                          onChange={(event) => {
+                            const next = event.target.value;
+                            if (next)
+                              set(
+                                "sapModules",
+                                Array.from(
+                                  new Set([
+                                    ...String(fields.sapModules || "")
+                                      .split(/[,;]+/)
+                                      .map((item) => item.trim())
+                                      .filter(Boolean),
+                                    next,
+                                  ]),
+                                ).join(", "),
+                              );
+                          }}
+                        >
+                          <option value="">Add SAP module…</option>
+                          {SAP_SKILL_TAXONOMY.map((module) => (
+                            <option key={module} value={module}>
+                              {module}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-slate-400">
+                          SAP specializations, e.g. FI, CO, MM or SD. Choose a
+                          module to add it, or type in the field above.
+                        </p>
+                      </div>
+                    ) : null}
+                    {name === "techSkills" ? (
+                      <p className="mt-2 text-xs text-slate-400">
+                        Technical and functional skills, e.g. ABAP, SQL, Fiori,
+                        integration or data migration. SAP modules may also
+                        appear here when extracted from your CV.
+                      </p>
+                    ) : null}
                   </label>
                 ))}
+                <CandidateLocationEditor
+                  value={String(fields.location ?? "")}
+                  onChange={(next) => set("location", next)}
+                  inputClass={input}
+                />
               </div>
               <p className="mt-3 text-xs text-slate-500">
-                At least one verified email or phone is required. Employer is
-                never taken from a project client field.
+                Verified sign-in email and phone with country code are required.
+                Employer is never taken from a project client field.
               </p>
             </section>
 
@@ -553,7 +882,7 @@ export default function CandidatePortalClient() {
                 {
                   key: "client",
                   label: "Client (not employer)",
-                  placeholder: "Customer/client, if stated",
+                  placeholder: "Client name, Confidential, Not disclosed or NA",
                 },
                 {
                   key: "role",
@@ -561,14 +890,19 @@ export default function CandidatePortalClient() {
                   placeholder: "Role on this project",
                 },
                 {
+                  key: "project_type",
+                  label: "Project type",
+                  placeholder: "Choose or type project type",
+                },
+                {
                   key: "start_date",
                   label: "Start date",
-                  placeholder: "YYYY-MM or source precision",
+                  placeholder: "YYYY-MM; required before confirmation",
                 },
                 {
                   key: "end_date",
                   label: "End date",
-                  placeholder: "YYYY-MM; leave blank only if Current",
+                  placeholder: "YYYY-MM; required before confirmation",
                 },
               ]}
               onChange={(next) => setStructured("projectExperience", next)}
@@ -587,7 +921,8 @@ export default function CandidatePortalClient() {
                 {
                   key: "qualification",
                   label: "Qualification",
-                  placeholder: "Degree or qualification",
+                  placeholder: "Choose or type qualification",
+                  suggestions: candidateQualificationSuggestions,
                 },
                 {
                   key: "field_of_study",
@@ -611,12 +946,14 @@ export default function CandidatePortalClient() {
                 {
                   key: "language",
                   label: "Language",
-                  placeholder: "Language",
+                  placeholder: "Choose or type language",
+                  suggestions: candidateLanguageSuggestions,
                 },
                 {
                   key: "proficiency",
                   label: "Proficiency",
-                  placeholder: "Only if known",
+                  placeholder: "Choose or type level; only if known",
+                  suggestions: candidateProficiencySuggestions,
                 },
               ]}
               onChange={(next) => setStructured("languages", next)}
@@ -635,15 +972,47 @@ export default function CandidatePortalClient() {
               onChange={(next) => setStructured("certifications", next)}
             />
 
+            <CandidateJobPreferencesEditor
+              value={parseJobPreferences(fields.jobPreferences)}
+              onChange={(update) =>
+                setFields((current) => ({
+                  ...current,
+                  jobPreferences: JSON.stringify(
+                    update(parseJobPreferences(current.jobPreferences)),
+                  ),
+                }))
+              }
+              inputClass={input}
+            />
+
             <section className={panel}>
               <h2 className="text-xl font-semibold">Confirm accuracy</h2>
+              {requiredGaps.length ? (
+                <div
+                  role="status"
+                  className="mt-3 rounded-lg border border-red-400/60 bg-red-950/20 p-3 text-sm text-red-200"
+                >
+                  <p className="font-semibold">
+                    Complete the highlighted fields before confirming:
+                  </p>
+                  <ul className="mt-2 list-disc pl-5">
+                    {requiredGaps.map((name) => (
+                      <li key={name}>
+                        {fieldLabels[name] || name}: {requiredReasons[name]}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               <label className="mt-4 flex gap-3 text-sm">
                 <input
                   type="checkbox"
                   checked={accuracy}
                   onChange={(event) => setAccuracy(event.target.checked)}
                 />
-                I reviewed the extracted profile and confirm it is accurate.
+                * I checked my name, employment, SAP projects, education and
+                skills against my CV, corrected errors, and confirm the
+                information is accurate.
               </label>
               <label className="mt-3 flex gap-3 text-sm">
                 <input
@@ -651,12 +1020,17 @@ export default function CandidatePortalClient() {
                   checked={sharing}
                   onChange={(event) => setSharing(event.target.checked)}
                 />
-                I consent to sharing this profile with relevant recruiters and
+                * I consent to sharing this profile with relevant recruiters and
                 clients.
               </label>
               <button
                 type="button"
-                disabled={!accuracy || !sharing || Boolean(busy)}
+                disabled={
+                  !accuracy ||
+                  !sharing ||
+                  requiredGaps.length > 0 ||
+                  Boolean(busy)
+                }
                 onClick={confirmProfile}
                 className="mt-5 rounded-lg bg-emerald-300 px-5 py-3 font-semibold text-slate-950 disabled:opacity-40"
               >
@@ -665,9 +1039,9 @@ export default function CandidatePortalClient() {
                   : "Confirm complete profile"}
               </button>
               <p className="mt-3 text-xs text-slate-500">
-                Confirmation fails closed if any required field, explicit date,
-                SAP evidence, ownership check, version check, or search-index
-                readback is missing.
+                Confirmation requires all mandatory fields, valid dates or
+                Current, SAP evidence, ownership, version, and search-index
+                readback.
               </p>
             </section>
           </>

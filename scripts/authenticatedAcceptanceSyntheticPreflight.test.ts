@@ -13,6 +13,7 @@ const fixture = acceptanceSyntheticCandidateRecord();
 const valid = validateAcceptanceSyntheticCandidate(fixture);
 assert.equal(valid.valid, true, valid.blockers.join(","));
 assert.equal(ACCEPTANCE_INTERNAL_SEARCH_QUERY, fixture.name);
+assert.equal(fixture.profile_confirmation_status, "candidate_confirmed");
 assert.equal(ACCEPTANCE_SYNTHETIC_CANDIDATE_MARKER, fixture.name);
 assert.equal(valid.canonical.employmentRecords, 2);
 assert.ok(valid.canonical.projectRecords >= 1);
@@ -27,6 +28,9 @@ for (const mutation of [
   { phone: "+1 555 555 5555" },
   { linkedin_url: "https://linkedin.com/in/example" },
   { resume_text: "Generic profile" },
+  { profile_confirmation_status: "not_claimed" },
+  { profile_confirmation_status: "claimed_incomplete" },
+  { profile_confirmation_status: undefined },
 ]) {
   const result = validateAcceptanceSyntheticCandidate({
     ...fixture,

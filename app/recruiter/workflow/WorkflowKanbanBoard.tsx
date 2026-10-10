@@ -304,7 +304,7 @@ export function WorkflowKanbanBoard({
                       >
                         <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-xl border-b border-slate-800 bg-[#070A0F] px-3 py-3">
                           <div>
-                            <div className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-300">
+                            <div className="text-xs font-semibold uppercase tracking-widest text-slate-300">
                               {PIPELINE_STAGE_LABELS[stage]}
                             </div>
 
@@ -333,7 +333,7 @@ export function WorkflowKanbanBoard({
                               >
                                 {(dragProvided, dragSnapshot) => (
                                   <article
-                                    className={`rounded-lg border bg-[#0B0F16] p-3 shadow-sm transition ${
+                                    className={`rounded-lg border bg-[#0B0F16] p-3 shadow-xs transition ${
                                       dragSnapshot.isDragging
                                         ? "border-cyan-400 shadow-xl"
                                         : "border-slate-700 hover:border-cyan-500/40"
@@ -348,7 +348,7 @@ export function WorkflowKanbanBoard({
                                         title="Drag candidate"
                                         {...dragProvided.dragHandleProps}
                                       >
-                                        ÃƒÂ¢Ã¢â‚¬Â¹Ã‚Â®ÃƒÂ¢Ã¢â‚¬Â¹Ã‚Â®
+                                        ⋮⋮
                                       </div>
 
                                       <Link
@@ -503,7 +503,7 @@ export function WorkflowKanbanBoard({
       {pendingMove ? (
         <div
           aria-modal="true"
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4"
+          className="fixed inset-0 z-100 flex items-center justify-center bg-black/75 p-4"
           role="dialog"
         >
           <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl border border-slate-700 bg-[#0B0F16] p-5 shadow-2xl">
@@ -518,7 +518,7 @@ export function WorkflowKanbanBoard({
                 </h3>
 
                 <p className="mt-1 text-sm text-slate-400">
-                  {PIPELINE_STAGE_LABELS[pendingMove.fromStage]} ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢{" "}
+                  {PIPELINE_STAGE_LABELS[pendingMove.fromStage]} →{" "}
                   {PIPELINE_STAGE_LABELS[pendingMove.toStage]}
                 </p>
               </div>
@@ -579,7 +579,7 @@ export function WorkflowKanbanBoard({
                 {preview.decision.blockers?.length ? (
                   <ul className="mt-3 space-y-1 text-sm text-red-100">
                     {preview.decision.blockers.map((blocker) => (
-                      <li key={blocker}>ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ {blocker}</li>
+                      <li key={blocker}>• {blocker}</li>
                     ))}
                   </ul>
                 ) : null}
@@ -587,7 +587,7 @@ export function WorkflowKanbanBoard({
                 {preview.decision.warnings?.length ? (
                   <ul className="mt-3 space-y-1 text-sm text-amber-100">
                     {preview.decision.warnings.map((warning) => (
-                      <li key={warning}>ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ {warning}</li>
+                      <li key={warning}>• {warning}</li>
                     ))}
                   </ul>
                 ) : null}

@@ -76,6 +76,8 @@ export function acceptanceSyntheticCandidateRecord() {
     raw_text: "",
     education: "[]",
     status: "ACTIVE",
+    // This searchable fixture represents an already-confirmed synthetic profile.
+    profile_confirmation_status: "candidate_confirmed",
     implementation_project_count: 1,
     s4hana_project_count: 1,
     extraction_confidence: "1",
@@ -125,6 +127,7 @@ export function validateAcceptanceSyntheticCandidate(value: unknown) {
     "primary_module",
     "secondary_modules",
     "status",
+    "profile_confirmation_status",
   ])
     if (!isDeepStrictEqual(candidate[field], expected[field]))
       blockers.push("synthetic_candidate_unapproved_field_value");

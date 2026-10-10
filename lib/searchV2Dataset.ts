@@ -18,6 +18,7 @@ import { buildCanonicalProfileOverview } from "./candidateProfileOverview";
 import { buildCandidateSearchV2ProfilePreview } from "./candidateSearchV2ProfilePreview";
 import { buildCandidate360Profile } from "./candidate360Profile";
 import { searchV2DatasetRevision } from "./searchV2Server";
+import { readSearchIndexPages } from "./searchV2IndexPagination";
 import type { CandidateSearchV2Document } from "./candidateSearchV2Types";
 import { languagesInText } from "./searchV2RequirementOntology";
 import { conceptsInText, searchConcept } from "./candidateSearchConcepts";
@@ -301,22 +302,24 @@ async function loadCandidateSource(forceRemote = false, signal?: AbortSignal) {
   }
   const supabase = createCandidateSupabaseAdminClient();
   const retrievalStartedAt = performance.now();
-  const indexQuery = supabase
-    .from("candidate_search_index")
-    .select(SEARCH_V2_PROJECTION_FIELDS)
-    .order("candidate_id", { ascending: true })
-    .limit(2000);
-  const indexResponse = await (signal
-    ? indexQuery.abortSignal(signal)
-    : indexQuery);
+  const rows = await readSearchIndexPages<
+    Record<string, unknown> & { candidate_id: unknown }
+  >(async (afterId, pageSize) => {
+    let query = supabase
+      .from("candidate_search_index")
+      .select(SEARCH_V2_PROJECTION_FIELDS)
+      .order("candidate_id", { ascending: true })
+      .limit(pageSize);
+    if (afterId) query = query.gt("candidate_id", afterId);
+    const response = await (signal ? query.abortSignal(signal) : query);
+    return {
+      data: (response.data || []) as unknown as Array<
+        Record<string, unknown> & { candidate_id: unknown }
+      >,
+      error: response.error,
+    };
+  });
   const retrievalMs = performance.now() - retrievalStartedAt;
-  if (indexResponse.error)
-    throw new Error(
-      "Candidate Supabase query failed: " + indexResponse.error.message,
-    );
-  const rows = (indexResponse.data || []) as unknown as Array<
-    Record<string, unknown>
-  >;
   const candidateIds = rows
     .map((row) => String(row.candidate_id))
     .filter(Boolean);
@@ -332,7 +335,7 @@ async function loadCandidateSource(forceRemote = false, signal?: AbortSignal) {
       const sourceQuery = supabase
         .from("candidates")
         .select(
-          "id,title,current_title,current_company,headline,summary,current_location,raw_text,resume_text,updated_at,name,email,phone,linkedin_url,location,country,cv_hash,experience,education,skills,sap_modules,primary_module,module_authorities,secondary_modules,languages,language_skills,extraction_confidence,profile_quality_score,confidence,work_authorization,visa_status,relocation,relocation_willingness,availability_timeline,notice_period_days",
+          "id,title,current_title,current_company,headline,summary,current_location,raw_text,resume_text,updated_at,name,email,phone,linkedin_url,location,country,cv_hash,experience,projects,education,certifications,skills,sap_modules,primary_module,module_authorities,secondary_modules,languages,language_skills,extraction_confidence,profile_quality_score,confidence,work_authorization,visa_status,relocation,relocation_willingness,availability_timeline,notice_period_days",
         )
         .in("id", ids);
       return signal ? sourceQuery.abortSignal(signal) : sourceQuery;
@@ -549,6 +552,7 @@ async function loadCandidateSource(forceRemote = false, signal?: AbortSignal) {
     document.lifecycleEvidence = lifecycleEvidence;
     document.linkedInProfileUrl = supportedLinkedInProfileUrl(
       sourceRecord?.linkedin_url,
+      sourceRecord?.raw_text || sourceRecord?.resume_text,
     );
     // A profile URL is not source provenance. The current production projection
     // has no authoritative LinkedIn-derived source marker, so fail closed.
@@ -689,18 +693,18 @@ async function candidateIdsForIdentityToken(
   if (!state.byToken.size) {
     state.promise ||= (async () => {
       state!.builds += 1;
-      const query = supabase
-        .from("candidate_search_index")
-        .select("candidate_id")
-        .order("candidate_id", { ascending: true })
-        .limit(2000);
-      const response = await (signal ? query.abortSignal(signal) : query);
-      if (response.error)
-        throw new Error(
-          "Candidate identity map failed: " + response.error.message,
-        );
+      const rows = await readSearchIndexPages(async (afterId, pageSize) => {
+        let query = supabase
+          .from("candidate_search_index")
+          .select("candidate_id")
+          .order("candidate_id", { ascending: true })
+          .limit(pageSize);
+        if (afterId) query = query.gt("candidate_id", afterId);
+        const response = await (signal ? query.abortSignal(signal) : query);
+        return { data: response.data || [], error: response.error };
+      });
       return populateIdentityTokenMap(
-        (response.data || [])
+        rows
           .map((row) => String(row.candidate_id || ""))
           .filter(Boolean),
       );
@@ -779,7 +783,7 @@ async function loadCandidateSourceByIdentityToken(
   const sourceQuery = supabase
     .from("candidates")
     .select(
-      "id,title,current_title,current_company,headline,summary,current_location,raw_text,resume_text,updated_at,name,email,phone,linkedin_url,location,country,cv_hash,experience,education,skills,sap_modules,primary_module,module_authorities,secondary_modules,languages,language_skills,extraction_confidence,profile_quality_score,confidence,work_authorization,visa_status,relocation,relocation_willingness,availability_timeline,notice_period_days",
+      "id,title,current_title,current_company,headline,summary,current_location,raw_text,resume_text,updated_at,name,email,phone,linkedin_url,location,country,cv_hash,experience,projects,education,certifications,skills,sap_modules,primary_module,module_authorities,secondary_modules,languages,language_skills,extraction_confidence,profile_quality_score,confidence,work_authorization,visa_status,relocation,relocation_willingness,availability_timeline,notice_period_days",
     )
     .in("id", candidateIds);
   const sourceResponse = await (signal
@@ -877,6 +881,7 @@ async function loadCandidateSourceByIdentityToken(
     );
     document.linkedInProfileUrl = supportedLinkedInProfileUrl(
       sourceRecord?.linkedin_url,
+      sourceRecord?.raw_text || sourceRecord?.resume_text,
     );
     document.talentPool = "internal_profiles";
     return [document];

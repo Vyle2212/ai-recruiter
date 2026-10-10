@@ -89,11 +89,7 @@ export function buildSelfConfirmForm(
             "Email",
             !profile.contactInfo.phone.value,
           ),
-          formField(
-            profile.contactInfo.phone,
-            "Phone",
-            !profile.contactInfo.email.value,
-          ),
+          formField(profile.contactInfo.phone, "Phone", true),
         ],
       },
       {

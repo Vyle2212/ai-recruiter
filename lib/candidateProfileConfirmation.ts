@@ -1,4 +1,7 @@
+import { canonicalJobPreferences } from "./candidateJobPreferences";
 import type { Candidate360Profile } from "./candidate360Types";
+import { careerMonthIndex } from "./candidateCareerExperience";
+import { careerDateIsCurrent } from "./careerDateEvidence";
 import { buildCandidateSearchIndexRow } from "./candidateSearchIndex";
 import {
   buildCandidateSelfConfirmSubmission,
@@ -40,16 +43,30 @@ function fieldText(value: unknown) {
   return text(value);
 }
 
+function confirmationDate(value: unknown) {
+  const source = fieldText(value);
+  // Keep ISO and year-only precision. Convert explicit month/year text without
+  // inventing a day or accepting invalid calendar dates.
+  if (!/^[A-Za-z]+[\s’'-]+\d{4}$/.test(source)) return source;
+  const month = careerMonthIndex(source);
+  return month === null
+    ? source
+    : `${Math.floor(month / 12)}-${String((month % 12) + 1).padStart(2, "0")}`;
+}
+
 function canonicalEmployment(value: unknown) {
   return rows(value).map((entry) => {
     const row = entry as Record<string, any>;
-    const end = fieldText(row.end_date ?? row.endDate);
+    const end =
+      fieldText(row.end_date ?? row.endDate) ||
+      fieldText(row.current_end_label);
     return {
       employer: fieldText(row.employer ?? row.company),
       title: fieldText(row.title ?? row.role),
-      start_date: fieldText(row.start_date ?? row.startDate),
-      end_date: /^(?:current|present|now)$/i.test(end) ? null : end || null,
-      current: row.current === true || /^(?:current|present|now)$/i.test(end),
+      start_date: confirmationDate(row.start_date ?? row.startDate),
+      end_date: careerDateIsCurrent(end) ? null : confirmationDate(end) || null,
+      current: row.current === true || careerDateIsCurrent(end),
+      ...(careerDateIsCurrent(end) ? { current_end_label: end } : {}),
     };
   });
 }
@@ -57,14 +74,20 @@ function canonicalEmployment(value: unknown) {
 function canonicalProjects(value: unknown) {
   return rows(value).map((entry) => {
     const row = entry as Record<string, any>;
-    const end = fieldText(row.end_date ?? row.endDate);
+    const end =
+      fieldText(row.end_date ?? row.endDate) ||
+      fieldText(row.current_end_label);
     return {
       project: fieldText(row.project ?? row.projectName ?? row.name),
       client: fieldText(row.client ?? row.customer) || null,
+      employer: fieldText(row.employer),
+      description: fieldText(row.description),
+      project_type: fieldText(row.project_type ?? row.projectType),
       role: fieldText(row.role ?? row.title),
-      start_date: fieldText(row.start_date ?? row.startDate),
-      end_date: /^(?:current|present|now)$/i.test(end) ? null : end || null,
-      current: row.current === true || /^(?:current|present|now)$/i.test(end),
+      start_date: confirmationDate(row.start_date ?? row.startDate),
+      end_date: careerDateIsCurrent(end) ? null : confirmationDate(end) || null,
+      current: row.current === true || careerDateIsCurrent(end),
+      ...(careerDateIsCurrent(end) ? { current_end_label: end } : {}),
     };
   });
 }
@@ -109,10 +132,19 @@ export function buildCandidateProfileConfirmation(params: {
   profile: Candidate360Profile;
   currentCandidate: Record<string, unknown>;
 }) {
+  const fields: Record<string, unknown> = {
+    ...params.submittedFields,
+    workExperience: JSON.stringify(
+      canonicalEmployment(params.submittedFields.workExperience),
+    ),
+    projectExperience: JSON.stringify(
+      canonicalProjects(params.submittedFields.projectExperience),
+    ),
+  };
   const submission = buildCandidateSelfConfirmSubmission(
     params.candidateId,
     {
-      ...params.submittedFields,
+      ...fields,
       confirmAccuracy: false,
       candidateConsent:
         (params.submittedFields.candidateConsent === true ||
@@ -129,11 +161,13 @@ export function buildCandidateProfileConfirmation(params: {
     return { accepted: false as const, submission, validation };
   }
 
-  const fields = params.submittedFields;
   const candidatePayload = {
+    ...(fields.jobPreferences !== undefined
+      ? { job_preferences: canonicalJobPreferences(fields.jobPreferences) }
+      : {}),
     name: text(fields.displayName),
     email: text(fields.email) || null,
-    phone: text(fields.phone) || null,
+    phone: text(fields.phone).replace(/[ ()\-.]/g, "") || null,
     current_title: text(fields.currentTitle),
     current_company: text(fields.currentCompany),
     location: text(fields.location),
@@ -144,6 +178,8 @@ export function buildCandidateProfileConfirmation(params: {
     projects: canonicalProjects(fields.projectExperience),
     education: canonicalEducation(fields.education),
     certifications: canonicalCertifications(fields.certifications),
+    // The confirmation RPC validates records before PostgreSQL converts them
+    // into the existing text[] column. Do not pre-encode its JSON contract.
     languages: canonicalLanguages(fields.languages),
   };
   const projectedCandidate = {

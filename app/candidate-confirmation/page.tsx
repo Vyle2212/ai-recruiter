@@ -29,11 +29,11 @@ function parseLanguages(value: any): string {
 }
 
 function Input({ label, value, onChange, type = "text", placeholder = "" }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string }) {
-  return <label className="block"><span className="mb-1 block text-xs font-black uppercase tracking-wide text-sky-200">{label}</span><input type={type} min={type === "number" ? 0 : undefined} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} className="h-11 w-full rounded-lg border border-slate-700 bg-black px-3 text-sm font-bold text-white outline-none focus:border-cyan-400" /></label>;
+  return <label className="block"><span className="mb-1 block text-xs font-black uppercase tracking-wide text-sky-200">{label}</span><input type={type} min={type === "number" ? 0 : undefined} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} className="h-11 w-full rounded-lg border border-slate-700 bg-black px-3 text-sm font-bold text-white outline-hidden focus:border-cyan-400" /></label>;
 }
 
 function Select({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
-  return <label className="block"><span className="mb-1 block text-xs font-black uppercase tracking-wide text-sky-200">{label}</span><select value={value} onChange={(e) => onChange(e.target.value)} className="h-11 w-full rounded-lg border border-slate-700 bg-black px-3 text-sm font-bold text-white outline-none focus:border-cyan-400">{options.map((option) => <option key={option}>{option}</option>)}</select></label>;
+  return <label className="block"><span className="mb-1 block text-xs font-black uppercase tracking-wide text-sky-200">{label}</span><select value={value} onChange={(e) => onChange(e.target.value)} className="h-11 w-full rounded-lg border border-slate-700 bg-black px-3 text-sm font-bold text-white outline-hidden focus:border-cyan-400">{options.map((option) => <option key={option}>{option}</option>)}</select></label>;
 }
 
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {

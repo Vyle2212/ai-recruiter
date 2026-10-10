@@ -132,12 +132,14 @@ for (const [text, expectedTotal, expectedSap] of [
   ["15+ years of experience", "15", ""],
   ["over 10 years of SAP experience", "", "10"],
   ["12 years in SAP FICO", "", "12"],
-  ["Overall 11+ years in SAP", "11", ""],
+  ["Overall 11+ years in SAP", "", "11"],
+  ["15 years of experience in SAP", "", "15"],
+  ["over 10 years of experience with SAP", "", "10"],
   ["having 5.1 years of SAP FICO", "", "5.1"],
 ] as Array<[string,string,string]>) {
   const item = extractFullCandidateProfile(cv({ id: `yoe-accept-${text}`, name: "Jane Fruelda", raw_text: `Jane Fruelda\nEmail: jane@example.com\nKuala Lumpur Malaysia\nSAP FICO Consultant\n${text}\nSAP FICO S/4HANA implementation support data migration UAT SIT project experience education skills` }));
-  if (expectedTotal) assert.equal(item.totalYearsExperience, expectedTotal, `${text} extracts total YOE`);
-  if (expectedSap) assert.equal(item.sapYearsExperience, expectedSap, `${text} extracts SAP YOE`);
+  assert.equal(item.totalYearsExperience, expectedTotal, `${text} separates total YOE`);
+  assert.equal(item.sapYearsExperience, expectedSap, `${text} separates SAP YOE`);
 }
 
 for (const text of ["over 1000 users", "13 subsidiaries", "RM70 mil over 5 years", "200 SAP team members", "2017 - 2020", "+60 12 345 6789"]) {
@@ -260,9 +262,9 @@ assert.equal(drJames.extractedFullName.includes("James Paul Asirvatham"), true, 
 assert.equal(drJames.extractedCurrentCompany, "EY Consulting", "Dr James Paul Asirvatham employer is extracted");
 assert.equal(drJames.primarySapModule, "FICO", "Dr James Paul Asirvatham SAP module is extracted");
 
-const mariaTeresa = extractFullCandidateProfile(cv({ id: "maria-teresa", name: "Maria Teresa Briñas", current_title: "SAP FICO Consultant", raw_text: "Maria Teresa Briñas\nEmail: maria@example.com\nManila Philippines\nSAP FICO Consultant\nSAP FICO finance controlling implementation support data migration UAT SIT project experience education skills" }));
-assert.equal(mariaTeresa.extractedCurrentTitle, "SAP FICO Consultant", "Maria Teresa Briñas title is SAP FICO Consultant");
-assert.equal(mariaTeresa.primarySapModule, "FICO", "Maria Teresa Briñas primary module is FICO");
+const mariaTeresa = extractFullCandidateProfile(cv({ id: "maria-teresa", name: "Maria Teresa BriÃ±as", current_title: "SAP FICO Consultant", raw_text: "Maria Teresa BriÃ±as\nEmail: maria@example.com\nManila Philippines\nSAP FICO Consultant\nSAP FICO finance controlling implementation support data migration UAT SIT project experience education skills" }));
+assert.equal(mariaTeresa.extractedCurrentTitle, "SAP FICO Consultant", "Maria Teresa BriÃ±as title is SAP FICO Consultant");
+assert.equal(mariaTeresa.primarySapModule, "FICO", "Maria Teresa BriÃ±as primary module is FICO");
 
 const abdulHadie = extractFullCandidateProfile(cv({ id: "abdul-hadie", name: "Abdul Hadie Bin Noorudin", current_title: "SAP FICO Consultant", raw_text: "Abdul Hadie Bin Noorudin\nEmail: abdul.hadie@example.com\nKuala Lumpur Malaysia\nSAP FICO Consultant at EY Consulting Jan 2021 - Present\nSAP FICO finance controlling S/4HANA implementation support data migration UAT SIT project experience education skills" }));
 assert.equal(abdulHadie.extractedCurrentCompany, "EY Consulting", "Abdul Hadie Bin Noorudin employer EY Consulting is extracted");

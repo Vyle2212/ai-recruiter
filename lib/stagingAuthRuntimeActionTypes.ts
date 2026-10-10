@@ -12,6 +12,7 @@ export type StagingAuthRuntimeActionInput =
       operation: "sign_in";
       email: string;
       password: string;
+      captchaToken?: string;
     }
   | {
       operation: "request_password_reset";

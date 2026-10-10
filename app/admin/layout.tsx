@@ -1,11 +1,12 @@
 import Link from "next/link";
 
-import {
-  StagingRuntimeSignOutButton,
-} from "../auth/staging/runtime/StagingRuntimeSignOutButton";
+import { StagingRuntimeSignOutButton } from "../auth/staging/runtime/StagingRuntimeSignOutButton";
+import { productionAuthConfigured } from "../../lib/productionAuthConfiguration";
+import { productionAdminSignOut } from "../auth/production/actions";
 
 const links = [
   ["Admin Portal", "/admin/portal"],
+  ["CV Approvals", "/admin/original-cv-approvals"],
   ["Platform Readiness", "/admin/platform-readiness"],
   ["Staging Readiness", "/admin/staging-readiness"],
   ["Staging Evidence", "/admin/staging-evidence"],
@@ -29,20 +30,37 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
+  if (productionAuthConfigured()) {
+    return (
+      <>
+        <nav className="border-b border-slate-800 bg-[#070A0F] px-6 py-3 text-slate-100">
+          <div className="mx-auto flex max-w-4xl items-center justify-between">
+            <Link href="/admin/production" className="font-semibold">
+              AI Recruiter Admin
+            </Link>
+            <Link
+              href="/admin/original-cv-approvals"
+              className="text-sm text-cyan-300"
+            >
+              CV approvals
+            </Link>
+            <form action={productionAdminSignOut}>
+              <button className="text-sm text-cyan-300">Sign out</button>
+            </form>
+          </div>
+        </nav>
+        {children}
+      </>
+    );
+  }
   return (
     <>
       <div className="border-b border-amber-500/20 bg-amber-500/5 px-5 py-3 text-slate-200">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-          <span className="font-semibold text-amber-200">
-            Admin staging
-          </span>
+          <span className="font-semibold text-amber-200">Admin staging</span>
 
           {links.map(([label, href]) => (
-            <Link
-              className="hover:text-amber-200"
-              href={href}
-              key={href}
-            >
+            <Link className="hover:text-amber-200" href={href} key={href}>
               {label}
             </Link>
           ))}

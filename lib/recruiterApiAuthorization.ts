@@ -1,4 +1,5 @@
 import "server-only";
+import { recruiterSearchProfilePrefetch } from "./recruiterSearchProfilePrefetch";
 
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
@@ -89,37 +90,48 @@ async function productionAuthorization(
   return authorizeRecruiterApiAccess({
     permission: policy.requiredPermission,
     routePolicyId: policy.id,
-    adapter: {
-      async getUser() {
-        const {
-          data: { user },
-          error,
-        } = await client.auth.getUser();
-        return { user: user ? { id: user.id } : null, error };
+    adapter: recruiterSearchProfilePrefetch(
+      {
+        async getUser() {
+          const {
+            data: { user },
+            error,
+          } = await client.auth.getUser();
+          return { user: user ? { id: user.id } : null, error };
+        },
+        async getProfile(authUserId) {
+          const { data, error } = await client
+            .from("user_profiles")
+            .select("id,auth_user_id,role,status,organization_id")
+            .eq("auth_user_id", authUserId)
+            .maybeSingle();
+          return {
+            profile: data
+              ? {
+                  id: String(data.id || ""),
+                  auth_user_id: String(data.auth_user_id || ""),
+                  role: String(data.role || ""),
+                  status: String(data.status || ""),
+                  organization_id:
+                    typeof data.organization_id === "string"
+                      ? data.organization_id
+                      : null,
+                }
+              : null,
+            error,
+          };
+        },
       },
-      async getProfile(authUserId) {
-        const { data, error } = await client
-          .from("user_profiles")
-          .select("id,auth_user_id,role,status,organization_id")
-          .eq("auth_user_id", authUserId)
-          .maybeSingle();
-        return {
-          profile: data
-            ? {
-                id: String(data.id || ""),
-                auth_user_id: String(data.auth_user_id || ""),
-                role: String(data.role || ""),
-                status: String(data.status || ""),
-                organization_id:
-                  typeof data.organization_id === "string"
-                    ? data.organization_id
-                    : null,
-              }
-            : null,
-          error,
-        };
+      async () => {
+        const { data, error } = await client.auth.getSession();
+        const subject = data.session?.user?.id;
+        return !error &&
+          typeof subject === "string" &&
+          /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(subject)
+          ? subject
+          : null;
       },
-    },
+    ),
     log(fields) {
       audit(request, policy, { decision: "denied", ...fields });
     },

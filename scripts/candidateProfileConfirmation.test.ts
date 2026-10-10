@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { normalizeActualCandidateSchema } from "../lib/candidate360SchemaNormalize";
 import { buildCandidate360Profile } from "../lib/candidate360Profile";
 import { buildCandidateProfileConfirmation } from "../lib/candidateProfileConfirmation";
 
@@ -25,6 +26,7 @@ const current = {
   projects: [
     {
       project: "S/4HANA Transformation",
+      project_type: "Implementation",
       client: "Client One",
       role: "FICO Consultant",
       start_date: "2022-01",
@@ -64,6 +66,85 @@ const accepted = buildCandidateProfileConfirmation({
   currentCandidate: current,
 });
 assert.equal(accepted.accepted, true);
+const namedDates = buildCandidateProfileConfirmation({
+  candidateId: current.id,
+  profile,
+  currentCandidate: current,
+  submittedFields: {
+    ...fields,
+    workExperience: JSON.stringify([
+      {
+        employer: "Employer One",
+        title: "SAP FICO Consultant",
+        start_date: "Sept 2025",
+        end_date: "Present",
+        current: true,
+      },
+      {
+        employer: "Employer Two",
+        title: "SAP FICO Consultant",
+        start_date: "June 2024",
+        end_date: "September 2025",
+        current: false,
+      },
+      {
+        employer: "Employer Three",
+        title: "SAP FICO Consultant",
+        start_date: "June 2024",
+        end_date: "August 2025",
+      },
+      {
+        employer: "Employer Four",
+        title: "SAP FICO Consultant",
+        start_date: "Feb 2022",
+        end_date: "June 2023",
+      },
+      {
+        employer: "Employer Five",
+        title: "SAP FICO Consultant",
+        start_date: "August 2018",
+        end_date: "February 2022",
+      },
+    ]),
+    projectExperience: JSON.stringify([
+      {
+        project: "SAP Rollout",
+        project_type: "Rollout",
+        client: "Client One",
+        role: "SAP FI Consultant",
+        start_date: "Jan 2022",
+        end_date: "Jun 2023",
+        current: false,
+      },
+    ]),
+  },
+});
+assert.equal(
+  namedDates.accepted,
+  true,
+  "parser month names and Present must be confirmable without manual date edits",
+);
+if (namedDates.accepted) {
+  assert.deepEqual(
+    namedDates.candidatePayload.languages,
+    [{ language: "English", proficiency: "Professional" }],
+    "confirmation RPC requires language records before converting to text[] storage",
+  );
+  assert.equal(namedDates.candidatePayload.experience[0].start_date, "2025-09");
+  assert.equal(namedDates.candidatePayload.experience[0].end_date, null);
+  assert.equal(
+    namedDates.candidatePayload.experience[0].current_end_label,
+    "Present",
+  );
+  assert.equal(
+    normalizeActualCandidateSchema(namedDates.candidatePayload)
+      .workExperience[0].endDate,
+    "Present",
+  );
+  assert.equal(namedDates.candidatePayload.experience[1].end_date, "2025-09");
+  assert.equal(namedDates.candidatePayload.projects[0].start_date, "2022-01");
+  assert.equal(namedDates.candidatePayload.projects[0].end_date, "2023-06");
+}
 if (accepted.accepted) {
   assert.equal(
     accepted.candidatePayload.experience[0].employer,
@@ -77,8 +158,113 @@ if (accepted.accepted) {
   assert.equal(accepted.searchRow.candidate_id, current.id);
   assert.equal(accepted.searchRow.primary_module, "FICO");
 }
+const currentProject = buildCandidateProfileConfirmation({
+  candidateId: current.id,
+  profile,
+  currentCandidate: current,
+  submittedFields: {
+    ...fields,
+    projectExperience: JSON.stringify([
+      {
+        ...current.projects[0],
+        start_date: "Jan 2025",
+        end_date: "Present",
+        current: true,
+        project_type: "Rollout",
+        employer: "Example Consulting",
+        description: "Source-owned project description",
+      },
+    ]),
+    languages: JSON.stringify([
+      { language: "Japanese", proficiency: "JLPT N2" },
+    ]),
+  },
+});
+assert.equal(currentProject.accepted, true);
+if (currentProject.accepted) {
+  assert.equal(currentProject.candidatePayload.projects[0].current, true);
+  assert.equal(currentProject.candidatePayload.projects[0].end_date, null);
+  assert.equal(
+    currentProject.candidatePayload.projects[0].project_type,
+    "Rollout",
+  );
+  assert.equal(
+    currentProject.candidatePayload.projects[0].employer,
+    "Example Consulting",
+  );
+  assert.equal(
+    currentProject.candidatePayload.languages[0].proficiency,
+    "JLPT N2",
+  );
+  const readback = normalizeActualCandidateSchema(
+    currentProject.candidatePayload,
+  );
+  assert.equal(readback.projectExperience[0].endDate, "Present");
+  assert.equal(readback.projectExperience[0].projectType, "Rollout");
+  assert.equal(readback.projectExperience[0].employer, "Example Consulting");
+}
+for (const marker of ["Until Now", "At the present"]) {
+  const result = buildCandidateProfileConfirmation({
+    candidateId: current.id,
+    profile,
+    currentCandidate: current,
+    submittedFields: {
+      ...fields,
+      workExperience: JSON.stringify([
+        { ...current.experience[0], end_date: marker, current: false },
+      ]),
+      projectExperience: JSON.stringify([
+        { ...current.projects[0], end_date: marker, current: false },
+      ]),
+    },
+  });
+  assert.equal(result.accepted, true);
+  if (result.accepted) {
+    const readback = normalizeActualCandidateSchema(result.candidatePayload);
+    assert.equal(readback.workExperience[0].endDate, marker);
+    assert.equal(readback.projectExperience[0].endDate, marker);
+  }
+}
+const undatedProjects = buildCandidateProfileConfirmation({
+  candidateId: current.id,
+  submittedFields: {
+    ...fields,
+    projectExperience: JSON.stringify([
+      {
+        project: "S/4HANA Transformation",
+        client: "Client One",
+        role: "FICO Consultant",
+      },
+    ]),
+  },
+  profile,
+  currentCandidate: current,
+});
+assert.equal(
+  undatedProjects.accepted,
+  false,
+  "candidate must supply missing project dates before confirming",
+);
 
 for (const [label, patch] of [
+  ["phone", { phone: "" }],
+  [
+    "project type",
+    {
+      projectExperience: JSON.stringify([
+        { ...current.projects[0], project_type: "" },
+      ]),
+    },
+  ],
+  ["phone country code", { phone: "0912345678" }],
+  [
+    "project client",
+    {
+      projectExperience: JSON.stringify([
+        { ...current.projects[0], client: "" },
+      ]),
+    },
+  ],
   ["sharing consent", { consentToShare: false }],
   ["skills", { techSkills: "" }],
   [
@@ -88,7 +274,7 @@ for (const [label, patch] of [
         {
           employer: "Employer One",
           title: "Consultant",
-          start_date: "May 2022",
+          start_date: "May 202222",
           current: true,
         },
       ]),
@@ -160,6 +346,11 @@ assert.match(transaction, /insert into public\.candidate_search_index/);
 assert.match(transaction, /p_accuracy_consent is distinct from true/);
 assert.match(transaction, /p_sharing_consent is distinct from true/);
 assert.match(transaction, /security invoker/);
+assert.match(
+  transaction,
+  /coalesce\(btrim\(row->>'start_date'\), ''\) = ''\s+and \(\s+coalesce\(btrim\(row->>'end_date'\), ''\) <> ''/,
+  "the future database confirmation contract must allow wholly undated projects",
+);
 assert.match(transaction, /set search_path = ''/);
 assert.match(
   transaction,
@@ -179,4 +370,132 @@ assert.match(
 assert.match(route, /apply_candidate_profile_confirmation/);
 assert.match(route, /candidate_profile_verified_email_required/);
 assert.doesNotMatch(route, /body\.candidateId|body\.candidate_id/);
+assert.match(
+  route,
+  /\.eq\("id", authorization\.scope\.candidateId\)/,
+  "confirmation must load only the candidate resolved from the authenticated ownership chain",
+);
+for (const [parameter, scopedValue] of [
+  ["p_auth_user_id", "authUserId"],
+  ["p_user_profile_id", "userProfileId"],
+  ["p_candidate_id", "candidateId"],
+  ["p_expected_updated_at", "candidateUpdatedAt"],
+] as const) {
+  assert.match(
+    route,
+    new RegExp(parameter + ": authorization\\.scope\\." + scopedValue),
+    parameter + " must come from the authenticated ownership scope",
+  );
+}
+assert.match(
+  transaction,
+  /where id = p_user_profile_id and auth_user_id = p_auth_user_id[\s\S]*?v_profile\.candidate_id is distinct from p_candidate_id/,
+  "the transaction must bind auth user, profile and candidate before mutation",
+);
+assert.match(
+  transaction,
+  /where user_profile_id = p_user_profile_id and candidate_id = p_candidate_id[\s\S]*?v_account\.status <> 'active'/,
+  "the candidate account mapping must be exact and active",
+);
+assert.match(
+  transaction,
+  /where id = p_candidate_id[\s\S]*?v_candidate\.updated_at is distinct from p_expected_updated_at/,
+  "the owned candidate row must still match the authorized version",
+);
+const preferences = {
+  workAuthorization: [
+    { country: "Singapore", status: "Citizen", sponsorship: "No" },
+  ],
+  currentSalary: { status: "Provided", currency: "SGD", amount: "7500" },
+  employmentType: "Both",
+  workingTypes: ["Remote"],
+  availability: "Available immediately",
+  permanent: { status: "Provided", currency: "SGD", amount: "9000" },
+  contract: { status: "Provided", currency: "USD", amount: "600" },
+};
+const preferenceConfirmation = buildCandidateProfileConfirmation({
+  candidateId: current.id,
+  submittedFields: {
+    ...fields,
+    jobPreferences: JSON.stringify(preferences),
+    confirmAccuracy: true,
+    consentToShare: true,
+  },
+  profile,
+  currentCandidate: current,
+});
+assert.equal(preferenceConfirmation.accepted, true);
+if (preferenceConfirmation.accepted) {
+  assert.equal(
+    preferenceConfirmation.candidatePayload.job_preferences?.contract?.basis,
+    "gross_daily",
+  );
+  assert.equal(
+    preferenceConfirmation.candidatePayload.job_preferences?.permanent?.amount,
+    "9000",
+  );
+}
+assert.equal(
+  buildCandidateProfileConfirmation({
+    candidateId: current.id,
+    submittedFields: {
+      ...fields,
+      jobPreferences: JSON.stringify({ ...preferences, contract: undefined }),
+      confirmAccuracy: true,
+      consentToShare: true,
+    },
+    profile,
+    currentCandidate: current,
+  }).accepted,
+  false,
+);
 console.log("candidateProfileConfirmation.test.ts passed");
+
+// Mononyms and confidential clients must not block otherwise complete confirmations.
+for (const client of ["NA", "na", "Confidential", "Not disclosed"]) {
+  const confirmed = buildCandidateProfileConfirmation({
+    candidateId: current.id,
+    profile,
+    currentCandidate: current,
+    submittedFields: {
+      ...fields,
+      displayName: "Gunawan",
+      projectExperience: JSON.stringify([
+        { ...current.projects[0], client, end_date: "Current", current: true },
+        {
+          ...current.projects[0],
+          project: "Parallel project",
+          client,
+          end_date: "Present",
+          current: true,
+        },
+      ]),
+    },
+  });
+  assert.equal(
+    confirmed.accepted,
+    true,
+    `mononym and ${client} with parallel projects`,
+  );
+  if (confirmed.accepted) {
+    assert.equal(confirmed.searchRow.display_name, "Gunawan");
+    assert.equal(
+      confirmed.candidatePayload.projects.filter((row) => row.current).length,
+      2,
+    );
+  }
+}
+
+for (const displayName of [
+  "Profile under review",
+  "SAP Consultant",
+  "alex@example.com",
+]) {
+  const rejected = buildCandidateProfileConfirmation({
+    candidateId: current.id,
+    profile,
+    currentCandidate: current,
+    submittedFields: { ...fields, displayName },
+  });
+  assert.equal(rejected.accepted, false, `reject noisy name ${displayName}`);
+}
