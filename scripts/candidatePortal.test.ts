@@ -1,3 +1,7 @@
+import {
+  candidateProfileRequiredReasons,
+  candidateProfileRowIssues,
+} from "../lib/candidateSelfConfirmSubmission";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import {
@@ -56,6 +60,48 @@ async function main() {
   assert.ok(candidateLanguageLevels("Japanese").includes("JLPT N2"));
   assert.ok(!candidateLanguageLevels("French").includes("JLPT N2"));
   assert.ok(candidateLanguageLevels("Korean").includes("TOPIK 6"));
+  for (const marker of ["Current", "Present", "Curr", "Now", "To date"]) {
+    assert.deepEqual(candidateDateParts(marker), {
+      year: "Current",
+      month: "Current",
+    });
+    assert.deepEqual(
+      candidateProfileRowIssues("workExperience", {
+        employer: "Example Consulting",
+        title: "SAP Consultant",
+        start_date: "Jul 2025",
+        end_date: marker,
+      }),
+      {},
+    );
+  }
+  assert.ok(candidateProfileRequiredReasons({ phone: "" }).phone);
+  assert.ok(
+    candidateProfileRowIssues("projectExperience", {
+      client: "Client",
+      role: "Consultant",
+      start_date: "2024-01",
+      end_date: "Present",
+    }).project_type,
+  );
+  assert.deepEqual(
+    candidateProfileRowIssues("projectExperience", {
+      client: "Client",
+      role: "Consultant",
+      project_type: "Custom delivery",
+      start_date: "2024-01",
+      end_date: "Curr",
+    }),
+    {},
+  );
+  assert.ok(
+    candidateProfileRowIssues("workExperience", {
+      employer: "E",
+      title: "SAP Consultant",
+      start_date: "2025-06",
+      end_date: "2024-01",
+    }).end_date,
+  );
   assert.deepEqual(candidateDateParts("1998"), { year: "1998", month: "" });
   assert.deepEqual(candidateDateParts("September 2025"), {
     year: "2025",

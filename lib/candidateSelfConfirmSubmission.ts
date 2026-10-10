@@ -1,3 +1,6 @@
+import { splitCandidateLocation } from "./candidateEditOptions";
+import { careerMonthIndex } from "./candidateCareerExperience";
+import { careerDateIsCurrent } from "./careerDateEvidence";
 import {
   Candidate360FieldSource as Source,
   Candidate360VerificationStatus as Status,
@@ -106,7 +109,13 @@ function rowValue(row: Record<string, any>, ...keys: string[]) {
 }
 function profileDate(value: string) {
   const match = value.match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/);
-  if (!match) return null;
+  if (!match) {
+    if (careerDateIsCurrent(value)) return null;
+    const month = careerMonthIndex(value);
+    return month === null
+      ? null
+      : Math.floor(month / 12) * 10000 + ((month % 12) + 1) * 100 + 1;
+  }
   const year = Number(match[1]);
   const month = match[2] ? Number(match[2]) : 1;
   const day = match[3] ? Number(match[3]) : 1;
@@ -127,14 +136,15 @@ function completeDatedRow(
 ) {
   const start = rowValue(row, "startDate", "start_date");
   const end = rowValue(row, "endDate", "end_date");
-  const current = row.current === true;
+  const current = row.current === true || careerDateIsCurrent(end);
   const startValue = profileDate(start);
   const endValue = end ? profileDate(end) : null;
   return Boolean(
     identity &&
       role &&
       startValue &&
-      ((current && !end) || (!current && endValue && endValue >= startValue)),
+      ((current && (!end || careerDateIsCurrent(end))) ||
+        (!current && endValue && endValue >= startValue)),
   );
 }
 function completeProjectRow(row: Record<string, any>) {
@@ -142,10 +152,20 @@ function completeProjectRow(row: Record<string, any>) {
   const role = Boolean(rowValue(row, "role", "title"));
   const start = rowValue(row, "startDate", "start_date");
   const end = rowValue(row, "endDate", "end_date");
-  if (!identity || !role || !start) return false;
+  if (
+    !identity ||
+    !role ||
+    !start ||
+    !rowValue(row, "project_type", "projectType")
+  )
+    return false;
   return completeDatedRow(row, identity, role);
 }
 function structuredRequirementReason(fieldName: string, value: unknown) {
+  if (fieldName === "location")
+    return splitCandidateLocation(text(value)).country
+      ? ""
+      : "Required — select your country.";
   if (fieldName === "phone")
     return /^\+[1-9]\d{6,14}$/.test(text(value).replace(/[ ()\-.]/g, ""))
       ? ""
@@ -155,7 +175,9 @@ function structuredRequirementReason(fieldName: string, value: unknown) {
       .split(/[,;|]+/)
       .some(Boolean)
       ? ""
-      : "At least one SAP module is required.";
+      : fieldName === "sapModules"
+        ? "At least one SAP module is required."
+        : "At least one skill is required.";
   const rows = structuredRows(value);
   if (fieldName === "workExperience") {
     const valid =
@@ -181,7 +203,7 @@ function structuredRequirementReason(fieldName: string, value: unknown) {
       });
     return valid
       ? ""
-      : "Every SAP project needs client, role, start date and an end date or Current. Missing source details must be supplied before confirmation; do not copy employment dates.";
+      : "Every SAP project needs client, role, project type, start date and an end date or Current. Missing source details must be supplied before confirmation; do not copy employment dates.";
   }
   if (fieldName === "education") {
     const valid =
@@ -192,7 +214,7 @@ function structuredRequirementReason(fieldName: string, value: unknown) {
         return Boolean(
           rowValue(row, "institution") ||
             rowValue(row, "qualification", "degree") ||
-            rowValue(row, "fieldOfStudy"),
+            rowValue(row, "fieldOfStudy", "field_of_study"),
         );
       });
     return valid ? "" : "At least one education record is required.";
@@ -208,6 +230,65 @@ function structuredRequirementReason(fieldName: string, value: unknown) {
     return valid ? "" : "At least one language is required.";
   }
   return "";
+}
+
+export function candidateProfileRowIssues(
+  fieldName: string,
+  row: Record<string, any>,
+) {
+  const issues: Record<string, string> = {};
+  if (fieldName === "workExperience" || fieldName === "projectExperience") {
+    const project = fieldName === "projectExperience";
+    const identityKey = project ? "client" : "employer";
+    const roleKey = project ? "role" : "title";
+    if (!rowValue(row, identityKey, project ? "customer" : "company"))
+      issues[identityKey] =
+        "Required — add " + (project ? "the project client." : "the employer.");
+    if (!rowValue(row, roleKey, project ? "title" : "role"))
+      issues[roleKey] = "Required — add your role.";
+    if (project && !rowValue(row, "project_type", "projectType"))
+      issues.project_type = "Required — choose or type the project type.";
+    const start = rowValue(row, "start_date", "startDate");
+    const end = rowValue(row, "end_date", "endDate");
+    const startValue = profileDate(start);
+    const current = row.current === true || careerDateIsCurrent(end);
+    const endValue = profileDate(end);
+    if (!startValue)
+      issues.start_date = "Required — choose a valid start date.";
+    if (current && end && !careerDateIsCurrent(end))
+      issues.end_date = "Choose Current or a dated end, not both.";
+    else if (!current && !endValue)
+      issues.end_date = "Required — choose an end date or Current.";
+    else if (!current && startValue && endValue && endValue < startValue)
+      issues.end_date = "End date must be after the start date.";
+  } else if (fieldName === "languages" && !rowValue(row, "language", "name"))
+    issues.language = "Required — choose or type a language.";
+  else if (
+    fieldName === "education" &&
+    !rowValue(
+      row,
+      "institution",
+      "qualification",
+      "degree",
+      "fieldOfStudy",
+      "field_of_study",
+    )
+  )
+    issues.institution = "Required — add an education record.";
+  return issues;
+}
+export function candidateProfileRequiredReasons(
+  fields: Record<string, unknown>,
+) {
+  const reasons: Record<string, string> = {};
+  for (const name of CANDIDATE_SELF_CONFIRM_REQUIRED_FIELDS) {
+    if (!text(fields[name])) reasons[name] = "Required — fill in this field.";
+    else {
+      const reason = structuredRequirementReason(name, fields[name]);
+      if (reason) reasons[name] = reason;
+    }
+  }
+  return reasons;
 }
 
 export function candidateSelfConfirmRequiredGaps(

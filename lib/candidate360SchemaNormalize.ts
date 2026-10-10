@@ -1,3 +1,4 @@
+import { careerDateIsCurrent } from "./careerDateEvidence";
 import { hasUsableEvidence } from "./candidate360EvidenceAvailability";
 import { nativeProjectCards } from "./nativeProjectCards";
 import {
@@ -1543,7 +1544,7 @@ function normalizeEmploymentLegacy(
       [item],
       ["start_date", "startDate", "from", "start"],
     );
-    const end = firstText([item], ["end_date", "endDate", "to", "end"]);
+    const end = firstText([item], ["end_date", "endDate", "to", "end", "current_end_label"]);
     const currentValue = unwrap(
       firstValue([item], ["current", "is_current", "isCurrent"]),
     );
@@ -1551,7 +1552,7 @@ function normalizeEmploymentLegacy(
       currentValue === true ||
       currentValue === 1 ||
       /^(true|yes)$/i.test(clean(currentValue)) ||
-      /present|current|now/i.test(end);
+      careerDateIsCurrent(end);
     if (!company && !title) return;
     const entry: EnterpriseEmployment = {
       id: firstText([item], ["id"]) || `employment-${index + 1}`,
@@ -1595,7 +1596,7 @@ function normalizeEmploymentLegacy(
       if (!company) continue;
       const start = match[1];
       const end = match[2];
-      const current = /present/i.test(end);
+      const current = careerDateIsCurrent(end);
       const entry: EnterpriseEmployment = {
         id: `resume-employment-${++index}`,
         company,
@@ -1634,7 +1635,7 @@ function normalizeEmploymentLegacy(
         const company = clean(careerMatch[2]);
         const start = clean(careerMatch[3]);
         const end = clean(careerMatch[4]);
-        const current = /present|current/i.test(end);
+        const current = careerDateIsCurrent(end);
         if (title && company)
           unique.set(`${company}|${title}|${start}|${end}`.toLowerCase(), {
             id: `resume-employment-${++careerIndex}`,
@@ -3220,7 +3221,7 @@ function normalizeProjects(
       [item],
       ["start_date", "startDate", "from", "start"],
     );
-    const explicitEnd = firstText([item], ["end_date", "endDate", "to", "end"]);
+    const explicitEnd = firstText([item], ["end_date", "endDate", "to", "end", "current_end_label"]);
     const currentFlag = unwrap(firstValue([item], ["current", "isCurrent", "is_current"]));
     const end = explicitEnd || (currentFlag === true || /^(?:true|yes|1)$/i.test(clean(currentFlag)) ? "Current" : "");
     return withProjectEvidence(

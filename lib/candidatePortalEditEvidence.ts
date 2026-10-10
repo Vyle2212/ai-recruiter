@@ -1,3 +1,4 @@
+import { careerDateIsCurrent } from "./careerDateEvidence";
 import { careerMonthIndex } from "./candidateCareerExperience";
 export const candidateMonths = [
   "Jan",
@@ -19,6 +20,7 @@ export function candidateDateParts(value: unknown) {
       ? (value.value ?? "")
       : (value ?? ""),
   ).trim();
+  if (careerDateIsCurrent(source)) return { year: "Current", month: "Current" };
   if (/^\d{4}$/.test(source)) return { year: source, month: "" };
   const index = careerMonthIndex(source);
   return index === null

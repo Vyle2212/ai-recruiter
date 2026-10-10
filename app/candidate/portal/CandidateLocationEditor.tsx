@@ -29,7 +29,7 @@ export default function CandidateLocationEditor({
           inputClass={
             location.country
               ? inputClass
-              : inputClass.replace("border-slate-700", "border-amber-400")
+              : inputClass.replace("border-slate-700", "border-red-400")
           }
           value={location.country}
           options={candidateCountries.map((item) => item.name)}
@@ -39,6 +39,11 @@ export default function CandidateLocationEditor({
               onChange(joinCandidateLocation("", country));
           }}
         />
+        {!location.country ? (
+          <p className="mt-1 text-xs font-medium text-red-300">
+            Required — select your country.
+          </p>
+        ) : null}
       </label>
       <label className="text-sm">
         City <span className="text-xs text-slate-400">Optional</span>

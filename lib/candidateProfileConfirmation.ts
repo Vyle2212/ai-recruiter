@@ -56,13 +56,16 @@ function confirmationDate(value: unknown) {
 function canonicalEmployment(value: unknown) {
   return rows(value).map((entry) => {
     const row = entry as Record<string, any>;
-    const end = fieldText(row.end_date ?? row.endDate);
+    const end =
+      fieldText(row.end_date ?? row.endDate) ||
+      fieldText(row.current_end_label);
     return {
       employer: fieldText(row.employer ?? row.company),
       title: fieldText(row.title ?? row.role),
       start_date: confirmationDate(row.start_date ?? row.startDate),
       end_date: careerDateIsCurrent(end) ? null : confirmationDate(end) || null,
       current: row.current === true || careerDateIsCurrent(end),
+      ...(careerDateIsCurrent(end) ? { current_end_label: end } : {}),
     };
   });
 }
@@ -70,7 +73,9 @@ function canonicalEmployment(value: unknown) {
 function canonicalProjects(value: unknown) {
   return rows(value).map((entry) => {
     const row = entry as Record<string, any>;
-    const end = fieldText(row.end_date ?? row.endDate);
+    const end =
+      fieldText(row.end_date ?? row.endDate) ||
+      fieldText(row.current_end_label);
     return {
       project: fieldText(row.project ?? row.projectName ?? row.name),
       client: fieldText(row.client ?? row.customer) || null,
@@ -81,6 +86,7 @@ function canonicalProjects(value: unknown) {
       start_date: confirmationDate(row.start_date ?? row.startDate),
       end_date: careerDateIsCurrent(end) ? null : confirmationDate(end) || null,
       current: row.current === true || careerDateIsCurrent(end),
+      ...(careerDateIsCurrent(end) ? { current_end_label: end } : {}),
     };
   });
 }

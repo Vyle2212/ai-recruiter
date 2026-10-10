@@ -26,6 +26,7 @@ const current = {
   projects: [
     {
       project: "S/4HANA Transformation",
+      project_type: "Implementation",
       client: "Client One",
       role: "FICO Consultant",
       start_date: "2022-01",
@@ -108,6 +109,7 @@ const namedDates = buildCandidateProfileConfirmation({
     projectExperience: JSON.stringify([
       {
         project: "SAP Rollout",
+        project_type: "Rollout",
         client: "Client One",
         role: "SAP FI Consultant",
         start_date: "Jan 2022",
@@ -130,6 +132,15 @@ if (namedDates.accepted) {
   );
   assert.equal(namedDates.candidatePayload.experience[0].start_date, "2025-09");
   assert.equal(namedDates.candidatePayload.experience[0].end_date, null);
+  assert.equal(
+    namedDates.candidatePayload.experience[0].current_end_label,
+    "Present",
+  );
+  assert.equal(
+    normalizeActualCandidateSchema(namedDates.candidatePayload)
+      .workExperience[0].endDate,
+    "Present",
+  );
   assert.equal(namedDates.candidatePayload.experience[1].end_date, "2025-09");
   assert.equal(namedDates.candidatePayload.projects[0].start_date, "2022-01");
   assert.equal(namedDates.candidatePayload.projects[0].end_date, "2023-06");
@@ -188,7 +199,7 @@ if (currentProject.accepted) {
   const readback = normalizeActualCandidateSchema(
     currentProject.candidatePayload,
   );
-  assert.equal(readback.projectExperience[0].endDate, "Current");
+  assert.equal(readback.projectExperience[0].endDate, "Present");
   assert.equal(readback.projectExperience[0].projectType, "Rollout");
   assert.equal(readback.projectExperience[0].employer, "Example Consulting");
 }
@@ -215,6 +226,14 @@ assert.equal(
 
 for (const [label, patch] of [
   ["phone", { phone: "" }],
+  [
+    "project type",
+    {
+      projectExperience: JSON.stringify([
+        { ...current.projects[0], project_type: "" },
+      ]),
+    },
+  ],
   ["phone country code", { phone: "0912345678" }],
   [
     "project client",

@@ -2310,7 +2310,7 @@ export function canonicalEmploymentTimeline(input: {
 }) {
   const extracted: EnterpriseEmployment[] = [];
   input.structuredRecords.forEach(({ record, sourceRef }) => {
-    const end = value(record, ["end_date", "endDate", "to", "end"]);
+    const end = value(record, ["end_date", "endDate", "to", "end", "current_end_label"]);
     const currentValue = ["current", "is_current", "isCurrent"]
       .map((key) => record[key])
       .find((item) => typeof item === "boolean" || Boolean(clean(item)));
