@@ -1,6 +1,7 @@
 import { careerMonthIndex } from "./candidateCareerExperience";
 import { sapProjectTypeEvidence } from "./candidatePortalEditEvidence";
 import { projectDateRange, projectDateIsCurrent } from "./projectDateEvidence";
+import { PROJECT_DATE_TOKEN_PATTERN } from "./projectDateEvidence";
 
 const monthName =
   "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
@@ -328,8 +329,67 @@ export function labelledResumeEmployment(text: string) {
   return records.length === anchors.length ? records : [];
 }
 
-/** Numbered cards often print Client before Project. Reorder only their
- * labelled fields inside the same card, never borrowing the next client. */
+/** Complete employment sentences scoped to career history. Decline mixed or
+ * unresolved layouts instead of replacing a fuller canonical history. */
+export function narrativeResumeEmployment(text: string) {
+  const lines = text.split(/\r?\n/).map(clean).filter(Boolean);
+  const start = lines.findIndex((line) =>
+    /^(?:work|working|employment|professional|career) (?:experience|history)\s*:?$/i.test(
+      line,
+    ),
+  );
+  if (start < 0) return [];
+  const body = lines.slice(start + 1);
+  const stop = body.findIndex((line) =>
+    /^(?:projects?(?: type| experience| history)?|duration|education|skills|languages)\s*:/i.test(
+      line,
+    ),
+  );
+  if (stop >= 0) body.splice(stop);
+  const employmentLines = body.filter((line) =>
+    /^(?:Worked|Working) (?:with|for)\b/i.test(line),
+  );
+  if (
+    body.some(
+      (line) => !employmentLines.includes(line) && projectDateRange(line),
+    )
+  )
+    return [];
+  const records = employmentLines.flatMap((line) => {
+    const m = line.match(
+      /^(Worked|Working) (?:with|for) (.+?) as (.+?) (?:from|since) (.+?)[.]?$/i,
+    );
+    if (
+      !m ||
+      !/\b(?:consultant|developer|engineer|architect|analyst|manager|recruiter|specialist)\b/i.test(
+        m[3],
+      )
+    )
+      return [];
+    const range = projectDateRange(m[4]);
+    // Past-tense employment with no end date cannot imply current employment.
+    const since =
+      !range &&
+      /^Working\b/i.test(m[1]) &&
+      /\bsince\b/i.test(line) &&
+      new RegExp(`^(?:${PROJECT_DATE_TOKEN_PATTERN})$`, "i").test(m[4]) &&
+      careerMonthIndex(m[4]) !== null;
+    if (!range && !since) return [];
+    return [
+      {
+        employer: m[2],
+        company: m[2],
+        title: m[3],
+        start_date: range?.[1] || m[4],
+        end_date: range?.[2] || "Current",
+        current: since || projectDateIsCurrent(range?.[2]),
+      },
+    ];
+  });
+  return records.length === employmentLines.length ? records : [];
+}
+
+/** Reorder client/project fields only inside the same numbered card. */
 export function projectFieldLayoutText(text: string) {
   const lines = text
     .replace(

@@ -2,6 +2,7 @@ import {
   nestedResumeHistory,
   institutionFirstEducation,
   labelledResumeEmployment,
+  narrativeResumeEmployment,
   projectFieldLayoutText,
 } from "./nestedResumeHistory";
 import {
@@ -760,6 +761,7 @@ export function enrichCandidateUpload(
 ) {
   const nested = nestedResumeHistory(rawText);
   const labelledEmployment = labelledResumeEmployment(rawText);
+  const narrativeEmployment = narrativeResumeEmployment(rawText);
   const structuredEducation = institutionFirstEducation(rawText);
   const positioned = positionedResumeSections(rawText);
   const trackedName = trackedHeaderName(
@@ -793,6 +795,7 @@ export function enrichCandidateUpload(
   const experience =
     nested?.experience ||
     (labelledEmployment.length ? labelledEmployment : null) ||
+    (narrativeEmployment.length ? narrativeEmployment : null) ||
     (pipeCards.length
       ? pipeCards
       : canonical.workExperience?.length
@@ -909,7 +912,10 @@ export function enrichCandidateUpload(
       positioned.country ||
       (pipeCards.length ? "" : full.locationCountry || candidate.country),
     current_title:
-      (nested || labelledEmployment.length || pipeCards.length) &&
+      (nested ||
+        labelledEmployment.length ||
+        narrativeEmployment.length ||
+        pipeCards.length) &&
       currentExperience
         ? currentExperience.title
         : full.extractedCurrentTitle && !full.isTitleSuspicious

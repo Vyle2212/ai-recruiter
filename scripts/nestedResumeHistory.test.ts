@@ -3,6 +3,47 @@ import assert from "node:assert/strict";
 import { enrichCandidateUpload } from "../lib/candidateUploadEnrichment";
 import { evaluateCandidateExtractionCoverage } from "../lib/candidateExtractionCoverage";
 import { nestedResumeHistory } from "../lib/nestedResumeHistory";
+import { narrativeResumeEmployment } from "../lib/nestedResumeHistory";
+
+const narrativeEmploymentSource = `WORK EXPERIENCE:
+Worked with Example Consulting as SuccessFactors Consultant (contract) from November 2016 to Dec 2018.
+Worked with Second Consulting Ltd. as Senior SuccessFactors Consultant from December 2018 – Oct 2019.
+Working with Confidential as Senior SuccessFactors Consultant since Oct 2019.
+Duration: Oct 2019 - Present
+Client: Example Customer
+`;
+const narrativeEmployment = narrativeResumeEmployment(
+  narrativeEmploymentSource,
+);
+assert.equal(narrativeEmployment.length, 3);
+assert.equal(narrativeEmployment[0].end_date, "Dec 2018");
+assert.equal(narrativeEmployment[0].current, false);
+assert.equal(narrativeEmployment[2].current, true);
+assert.equal(narrativeEmployment[2].end_date, "Current");
+assert.equal(narrativeEmployment[2].company, "Confidential");
+assert.equal(narrativeEmployment[2].start_date, "Oct 2019");
+assert.equal(
+  narrativeResumeEmployment(
+    "WORK EXPERIENCE:\nWorked with Undated Company as SAP Consultant since Jan 2015.",
+  ).length,
+  0,
+);
+assert.equal(
+  narrativeResumeEmployment(
+    narrativeEmploymentSource.replace(
+      "Duration:",
+      "Jan 2020 - Dec 2021\nDuration:",
+    ),
+  ).length,
+  0,
+  "Mixed employment layout cannot silently drop additional dated records",
+);
+assert.equal(
+  narrativeResumeEmployment(
+    "Client: X\nWorked with X as SAP Consultant from Jan 2020 - Dec 2021.",
+  ).length,
+  0,
+);
 
 // Anonymized institution-first CV with projects nested beneath legal employers.
 const source = `Example Person
