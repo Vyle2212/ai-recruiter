@@ -59,6 +59,7 @@ for (const text of [
   "Talent management (TM) in SAP SuccessFactors.",
   "No experience in SAP FSCM collections management.",
   "Configured SAP SD pricing rate tables and calculation sheets.",
+  "Configured SAP SD credit management.",
 ])
   assert.deepEqual(read(text), []);
 assert.equal(

@@ -1,3 +1,5 @@
+import { sourceSupportsSapModuleClaim } from "./sourceSapModuleClaims";
+
 /** Conservative task evidence; module names alone do not prove each specialty.
  * Source definitions: SAP Help FIN-FSCM and SAP Learning TM process overview.
  * https://help.sap.com/saphelp_em700_ehp01/helpdata/en/e9/2ed67bb7564b09ba1fcbe7fe143203/content.htm
@@ -22,7 +24,7 @@ const areas: Array<{
     module: "FSCM",
     label: "Credit Management",
     pattern:
-      /\b(?:credit management|credit segments?|credit exposure|UKM000)\b/i,
+      /\b(?:credit management|credit segments?|credit exposure|UKM000|UKM_BP)\b/i,
   },
   {
     module: "FSCM",
@@ -108,10 +110,7 @@ export function extractSapTaskSpecializations(
       if (
         area.module === "FSCM" &&
         area.label === "Credit Management" &&
-        /\b(?:classic(?:al)?\s+(?:SD\s+)?credit|credit control areas?|FD32)\b/i.test(
-          segment,
-        ) &&
-        !/\b(?:FSCM|UKM000)\b/i.test(segment)
+        !sourceSupportsSapModuleClaim("FSCM", segment)
       )
         continue;
       // "TM" also means Talent Management or a telecom company. A domain task

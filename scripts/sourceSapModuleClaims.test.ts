@@ -73,3 +73,41 @@ assert.equal(
 console.log(
   "Shared taxonomy does not reintroduce unsupported inferred modules: passed",
 );
+
+for (const source of [
+  "SAP SuccessFactors TM (Talent Management) Consultant",
+  "SAP HCM Consultant; TM means Talent Management",
+  "Worked at TM telecom; configured SAP FI",
+])
+  assert.equal(inferSapModulesFromText(source).modules.includes("TM"), false);
+for (const source of [
+  "SAP TM Consultant",
+  "SAP Transportation Management Consultant",
+])
+  assert.equal(inferSapModulesFromText(source).modules.includes("TM"), true);
+assert.equal(
+  inferSapModulesFromText(
+    "SAP SuccessFactors Talent Management; SAP TM transportation planning",
+  ).modules.includes("TM"),
+  true,
+);
+for (const source of [
+  "Configured classic SAP SD credit management with FD32",
+  "SAP SD Consultant: credit management and credit control areas",
+  "Bank collections management and dispute management",
+])
+  assert.equal(inferSapModulesFromText(source).modules.includes("FSCM"), false);
+for (const source of [
+  "SAP FSCM Consultant",
+  "SAP Financial Supply Chain Management",
+  "Configured SAP credit segments using UKM000",
+  "SAP S/4HANA Credit Management",
+  "Configured SAP collections management and dispute management",
+])
+  assert.equal(supports("FSCM", source), true);
+assert.ok(
+  enrichCandidateWithSapTaxonomy({
+    raw_text: "SAP SD classic credit management",
+    sap_modules: ["FSCM"],
+  }).sap_modules.includes("FSCM"),
+);
