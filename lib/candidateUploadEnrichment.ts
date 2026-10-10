@@ -404,6 +404,13 @@ function explicitProjectRecords(rawText: string) {
     return startIsDate && endIsDate ? ([start, end] as const) : null;
   };
   const boundedProjectBlock = (block: string) => {
+    // A standalone company followed by its employment title ends this card.
+    // Its role, dates and client must never be borrowed by the prior project.
+    const employerBoundary = block.match(
+      /\n[^\n]+\n[ \t]*Position Title[ \t]*:/i,
+    );
+    if (employerBoundary?.index !== undefined)
+      block = block.slice(0, employerBoundary.index);
     const boundary = block.match(
       /\n\s*(?:(?:work(?:ing)?|professional|career|employment)\s+(?:experience|history)|education|academic\s+(?:background|qualifications?)|qualifications?|certifications?|credentials?|skills?|technical\s+skills?|core\s+competencies|languages?|language\s+proficiency|personal\s+details|summary|profile|references?)\s*:?\s*(?:\n|$)/i,
     );
@@ -444,7 +451,12 @@ function explicitProjectRecords(rawText: string) {
         /(?:^|\n)\s*(?:project\s+role|role|position|designation)\s*:\s*([^\n]{2,160})/im,
       )?.[1],
     );
-    const role = colonRole || multilineRole;
+    const narrativeRole = projectFieldValue(
+      block.match(
+        /(?:^|\n)[ \t]*(?:[-•*][ \t]*)?(?:Involved|Worked|Working|Served) as[ \t]+([^\n]{2,160})/im,
+      )?.[1],
+    );
+    const role = colonRole || multilineRole || narrativeRole;
     const duration = labelledLineValue(
       block,
       "duration|period|project[ \\t]+dates?",

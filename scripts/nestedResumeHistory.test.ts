@@ -189,6 +189,25 @@ assert.equal(bankProject.role, "Associate Consultant / BI Support");
 
 assert.equal(careerMonthIndex("April 4th 2012"), 2012 * 12 + 3);
 assert.equal(careerMonthIndex("February 31st 2012"), null);
+const narrativeProject = enrichCandidateUpload({ name: "Example Person" }, `
+EMPLOYMENT HISTORY
+Example Consulting Ltd.
+Position Title: SAP ABAP Consultant
+Duration: Jan 2015 - Present
+Project: GST implementation
+- Involved as technical coordinator & ABAP developer
+- Environment: SAP FI/CO, SD & MM
+Other Services Ltd.
+Position Title: SAP BW Consultant
+Duration: Nov 2012 - Dec 2014
+Client: Must Not Borrow
+`);
+const gstProject = narrativeProject.projects.find(row => row.name === "GST implementation");
+assert.ok(gstProject, "Explicit narrative project role must not be omitted");
+assert.equal(gstProject.role, "technical coordinator & ABAP developer");
+assert.equal(gstProject.start_date, "", "Employment dates cannot fill undated project");
+assert.equal(gstProject.end_date, "");
+assert.equal(gstProject.client, "", "Next employer's client cannot fill prior project");
 assert.ok(
   evaluateCandidateExtractionCoverage(tableSource, {
     ...tableResult,
