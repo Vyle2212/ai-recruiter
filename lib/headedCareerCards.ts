@@ -39,7 +39,13 @@ function validate(
   start: string,
   end: string,
 ) {
-  const company = cleaned(companyInput);
+  // OCR can append a neighboring parent-brand logo after a complete legal
+  // entity ("Example Sdn. Bhd. the XYZ group"). Keep it in the excerpt while
+  // preserving the employer's printed legal name as the canonical company.
+  const company = cleaned(companyInput).replace(
+    /(\b(?:Sdn\.?\s*Bhd\.?|Pte\.?\s*Ltd\.?|Ltd\.?|Limited|Inc\.?|Corporation|Corp\.?|Berhad))\s+the\s+[A-Za-z0-9]{1,16}\s+group$/i,
+    "$1",
+  );
   const title = cleaned(titleInput);
   const first = careerMonthIndex(start);
   const last = careerMonthIndex(end, /^(?:Present|Current|Now)$/i.test(end));
@@ -80,6 +86,33 @@ type CardMatch = {
  * date. Other cards remain in review until their own row boundary is proven.
  */
 export function headedCareerCards(input: string): HeadedCareerCard[] {
+  const rolePeriodCard = new RegExp(
+    `(?:^|\\n)\\s*(?:Employment History|Work(?:ing)? Experiences?|Professional Experiences?)\\s*:?\\s*\\n\\s*([^\\n]{3,90})\\n\\s*([^\\n|]{3,105}?)\\s*\\|\\s*${period}\\s*(?=\\n|$)`,
+    "i",
+  ).exec(input.normalize("NFKC"));
+  if (
+    rolePeriodCard &&
+    /\b(?:Consulting|Technologies|Solutions|Systems|Limited|Ltd|Inc|Corporation|Berhad|Sdn|Pte)\b/i.test(
+      rolePeriodCard[1],
+    ) &&
+    /\bSAP\b/i.test(rolePeriodCard[2])
+  ) {
+    const owned = validate(
+      rolePeriodCard[1],
+      rolePeriodCard[2],
+      rolePeriodCard[3],
+      rolePeriodCard[4],
+    );
+    if (owned)
+      return [
+        {
+          ...owned,
+          start: rolePeriodCard[3],
+          end: rolePeriodCard[4],
+          excerpt: rolePeriodCard[0].trim().slice(0, 280),
+        },
+      ];
+  }
   // Two-column exports may put the ongoing endpoint after the next-line role.
   // Require the exact heading, employer/start row and explicit SAP role row.
   const splitCurrentCard = new RegExp(

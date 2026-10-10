@@ -395,3 +395,36 @@ for (const unsafe of [
   ),
 ])
   assert.deepEqual(headedCareerCards(unsafe), []);
+
+const rolePeriod =
+  "WORKING EXPERIENCE\n\nExample Associates Consulting Sdn. Bhd. the Example group\n\nApplication Support Analyst (SAP Treasury) | January 2018 - Present\n1. Go-Live Support (Project)";
+assert.deepEqual(
+  headedCareerCards(rolePeriod).map((x) => [
+    x.company,
+    x.title,
+    x.start,
+    x.end,
+  ]),
+  [
+    [
+      "Example Associates Consulting Sdn. Bhd.",
+      "Application Support Analyst (SAP Treasury)",
+      "January 2018",
+      "Present",
+    ],
+  ],
+);
+for (const unsafe of [
+  rolePeriod.replace("WORKING EXPERIENCE", "PROJECT EXPERIENCE"),
+  rolePeriod.replace(
+    "Example Associates Consulting Sdn. Bhd. the Example group",
+    "Client: Example Systems",
+  ),
+  rolePeriod.replace(
+    "Application Support Analyst (SAP Treasury)",
+    "Requirements gathering (SAP Treasury)",
+  ),
+  rolePeriod.replace("January 2018 - Present", "January 2025 - December 2024"),
+  rolePeriod.replace("| January 2018 - Present", "| January 2018 -"),
+])
+  assert.deepEqual(headedCareerCards(unsafe), []);
