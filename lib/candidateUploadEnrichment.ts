@@ -287,6 +287,7 @@ function explicitLanguages(rawText: string) {
   if (!section) return [];
   const known = [
     "English",
+    "Arabic",
     "Mandarin",
     "Chinese",
     "Japanese",
@@ -294,6 +295,7 @@ function explicitLanguages(rawText: string) {
     "Malay",
     "Bahasa Malaysia",
     "Bahasa Indonesia",
+    "Bahasa",
     "Indonesian",
     "Vietnamese",
     "Thai",
@@ -306,7 +308,7 @@ function explicitLanguages(rawText: string) {
   const anchors = known
     .flatMap((language) => {
       const match = new RegExp(
-        `\\b${language.replace(/\s+/g, "\\s+")}\\b`,
+        `\\b${language.replace(/\s+/g, "\\s+")}\\b${language === "Bahasa" ? "(?!\\s+(?:Malaysia|Indonesia)\\b)" : ""}`,
         "i",
       ).exec(section);
       return match
@@ -321,7 +323,7 @@ function explicitLanguages(rawText: string) {
     );
     const proficiency =
       bounded.match(
-        /\b(?:JLPT\s*N[1-5]|N[1-5]|HSK\s*[1-9]|TOPIK\s*[1-6]|(?:CEFR\s*)?[ABC][12]|IELTS\s*\d(?:\.\d)?|Native|Fluent|Advanced|Intermediate|Basic|Professional)\b/i,
+        /\b(?:JLPT\s*N[1-5]|N[1-5]|HSK\s*[1-9]|TOPIK\s*[1-6]|(?:CEFR\s*)?[ABC][12]|IELTS\s*\d(?:\.\d)?|Native|Fluent|Advanced|Intermediate|Basic|Professional|Fair|Simple)\b/i,
       )?.[0] || "";
     return { language: anchor.language, proficiency };
   });

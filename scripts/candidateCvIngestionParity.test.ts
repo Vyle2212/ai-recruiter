@@ -1305,3 +1305,24 @@ main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
+
+const sidebarLanguages = enrichCandidateUpload(
+  {
+    raw_text:
+      "Example Person\nLanguages\nENGLISH - Fair\nBAHASA - Fluent\nARABIC - Simple\nSkills\nSAP FI",
+  },
+  "Languages\nENGLISH - Fair\nBAHASA - Fluent\nARABIC - Simple\nSkills\nSAP FI",
+);
+assert.deepEqual(sidebarLanguages.languages, [
+  { language: "English", proficiency: "Fair" },
+  { language: "Bahasa", proficiency: "Fluent" },
+  { language: "Arabic", proficiency: "Simple" },
+]);
+const compoundBahasa = enrichCandidateUpload(
+  {},
+  "Languages\nBahasa Malaysia - Fluent\nBahasa Indonesia - Native\nSkills\nSAP FI",
+);
+assert.deepEqual(compoundBahasa.languages, [
+  { language: "Bahasa Malaysia", proficiency: "Fluent" },
+  { language: "Bahasa Indonesia", proficiency: "Native" },
+]);
