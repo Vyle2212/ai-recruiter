@@ -6,7 +6,7 @@ import { sourceSupportsSapModuleClaim } from "./sourceSapModuleClaims";
  * https://learning.sap.com/courses/planning-and-execution-in-sap-s-4hana-transportation-management/end-to-end-transportation-process
  */
 export type SapTaskEvidence = {
-  module: "FSCM" | "TRM" | "CASH_MANAGEMENT" | "TM";
+  module: "FSCM" | "TRM" | "CASH_MANAGEMENT" | "TM" | "EWM";
   specialization: string;
   involvement:
     | "delivery"
@@ -38,6 +38,23 @@ const areas: Array<{
     pattern: /\b(?:dispute management|dispute cases?)\b/i,
   },
   { module: "FSCM", label: "Biller Direct", pattern: /\bBiller Direct\b/i },
+  {
+    module: "EWM",
+    label: "Warehouse Structure and Storage Control",
+    pattern:
+      /\b(?:warehouse structur(?:e|ing)|storage control|storage types?|storage bins?)\b/i,
+  },
+  {
+    module: "EWM",
+    label: "Inbound Warehouse Processes",
+    pattern: /\b(?:inbound processes?|inbound deliver(?:y|ies)|putaway)\b/i,
+  },
+  {
+    module: "EWM",
+    label: "Outbound Warehouse Processes",
+    pattern:
+      /\b(?:outbound processes?|outbound deliver(?:y|ies)|picking|packing)\b/i,
+  },
   {
     module: "TRM",
     label: "Debt and Investment Management",
@@ -123,7 +140,7 @@ export function extractSapTaskSpecializations(
     heading = "";
     remaining = 0;
     if (
-      /^(?:(?:role|project|module)\s*:\s*)?SAP\s+(?:TM|Transportation Management|TRM|Treasury(?: and Risk Management)?|FSCM|Cash(?: and Liquidity)? Management)(?:\s+(?:(?:Functional|Technical)\s+)?(?:Consultant|Lead|Manager|Project))?\s*:?$/i.test(
+      /^(?:(?:role|project|module)\s*:\s*)?SAP\s+(?:EWM|Extended Warehouse Management|TM|Transportation Management|TRM|Treasury(?: and Risk Management)?|FSCM|Cash(?: and Liquidity)? Management)(?:\s+(?:(?:Functional|Technical)\s+)?(?:Consultant|Lead|Manager|Project))?\s*:?$/i.test(
         text,
       )
     ) {
@@ -149,7 +166,7 @@ export function extractSapTaskSpecializations(
         ? "exposure"
         : /\b(?:integrat\w*|interfaces?|liais\w*|coordinat\w*)\b/i.test(segment)
           ? "integration"
-          : /\b(?:configured|configuring|configuration|customiz\w*|customis\w*|implemented|implementing|designed|developed|debugged)\b/i.test(
+          : /\b(?:configured|configuring|configuration|customiz\w*|customis\w*|implemented|implementing|designed|developed|debugged|coded)\b/i.test(
                 segment,
               )
             ? "delivery"
@@ -165,8 +182,19 @@ export function extractSapTaskSpecializations(
       /\b(?:developed|debugged|coded|implemented)\b/i.test(segment)
     )
       involvement = "technical_delivery";
+    else if (
+      involvement === "delivery" &&
+      /\b(?:SAPUI5|UI5|RAP|CAP)\b/i.test(segment) &&
+      /\b(?:developed|debugged|coded)\b/i.test(segment)
+    )
+      involvement = "technical_delivery";
     for (const area of areas) {
       if (!area.pattern.test(segment)) continue;
+      if (
+        area.module === "EWM" &&
+        !/\b(?:EWM|Extended Warehouse Management)\b/i.test(segment)
+      )
+        continue;
       // A finance or procurement keyword alone does not establish SAP
       // treasury/cash/TM implementation experience.
       if (area.module === "TRM" && !/\b(?:TRM|treasury)\b/i.test(segment))

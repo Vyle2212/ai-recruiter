@@ -235,4 +235,58 @@ assert.deepEqual(
   ),
   [],
 );
-assert.deepEqual(read('SAP TM Consultant\n- Configured SAP MM procurement.\n- Configured tendering.'),[]);
+assert.deepEqual(
+  read(
+    "SAP TM Consultant\n- Configured SAP MM procurement.\n- Configured tendering.",
+  ),
+  [],
+);
+assert.deepEqual(
+  read(
+    "Configured SAP EWM storage control, inbound deliveries and picking.",
+  ).map((x) => [x.module, x.specialization]),
+  [
+    ["EWM", "Warehouse Structure and Storage Control"],
+    ["EWM", "Inbound Warehouse Processes"],
+    ["EWM", "Outbound Warehouse Processes"],
+  ],
+);
+assert.ok(
+  read("SAP EWM Consultant\n- Configured putaway and outbound processes.").some(
+    (x) => x.module === "EWM" && x.involvement === "delivery",
+  ),
+);
+assert.deepEqual(read("Configured SAP WM storage types and picking."), []);
+assert.deepEqual(read("Configured SAP MM inbound deliveries and packing."), []);
+assert.equal(
+  read("End-user operated SAP EWM picking.")[0].involvement,
+  "end_user",
+);
+assert.equal(
+  read("Integrated SAP EWM inbound deliveries with SAP TM.")[0].involvement,
+  "integration",
+);
+assert.equal(
+  enrichCandidateUpload(
+    {},
+    "Integrated SAP EWM inbound deliveries with SAP TM.",
+  ).skills.includes("SAP EWM: Inbound Warehouse Processes"),
+  false,
+);
+assert.equal(
+  read("Developed SAPUI5 app for SAP EWM outbound deliveries.")[0].involvement,
+  "technical_delivery",
+);
+assert.equal(
+  read("Developed CAP service for SAP EWM inbound deliveries.")[0].involvement,
+  "technical_delivery",
+);
+assert.equal(
+  read("Implemented SAP EWM outbound processes using Fiori apps.")[0]
+    .involvement,
+  "delivery",
+);
+assert.equal(
+  read("Coded RAP service for SAP EWM putaway.")[0].involvement,
+  "technical_delivery",
+);
