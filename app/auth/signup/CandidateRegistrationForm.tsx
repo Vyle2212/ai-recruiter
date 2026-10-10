@@ -1,6 +1,7 @@
 "use client";
 
 import Script from "next/script";
+import { Eye, EyeOff } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 type TurnstileApi = {
@@ -39,6 +40,8 @@ export default function CandidateRegistrationForm({
   const [complete, setComplete] = useState(false);
   const [message, setMessage] = useState("");
   const [captchaError, setCaptchaError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false);
 
   const renderCaptcha = useCallback(() => {
     if (!containerRef.current || !window.turnstile || widgetRef.current) return;
@@ -191,29 +194,53 @@ export default function CandidateRegistrationForm({
         </label>
         <label className="block text-sm text-slate-300">
           <span className="mb-2 block">Password</span>
-          <input
-            className={inputClass}
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            minLength={12}
-            maxLength={128}
-            required
-            disabled={pending || complete}
-          />
+          <div className="relative">
+            <input
+              className={`${inputClass} pr-12`}
+              name="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="new-password"
+              minLength={12}
+              maxLength={128}
+              required
+              disabled={pending || complete}
+            />
+            <button
+              type="button"
+              className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-lg text-slate-300 hover:text-cyan-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 disabled:opacity-50"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-pressed={showPassword}
+              disabled={pending || complete}
+              onClick={() => setShowPassword((visible) => !visible)}
+            >
+              {showPassword ? <EyeOff size={20} aria-hidden="true" /> : <Eye size={20} aria-hidden="true" />}
+            </button>
+          </div>
         </label>
         <label className="block text-sm text-slate-300">
           <span className="mb-2 block">Confirm password</span>
-          <input
-            className={inputClass}
-            name="passwordConfirmation"
-            type="password"
-            autoComplete="new-password"
-            minLength={12}
-            maxLength={128}
-            required
-            disabled={pending || complete}
-          />
+          <div className="relative">
+            <input
+              className={`${inputClass} pr-12`}
+              name="passwordConfirmation"
+              type={showPasswordConfirmation ? "text" : "password"}
+              autoComplete="new-password"
+              minLength={12}
+              maxLength={128}
+              required
+              disabled={pending || complete}
+            />
+            <button
+              type="button"
+              className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-lg text-slate-300 hover:text-cyan-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 disabled:opacity-50"
+              aria-label={showPasswordConfirmation ? "Hide confirmation password" : "Show confirmation password"}
+              aria-pressed={showPasswordConfirmation}
+              disabled={pending || complete}
+              onClick={() => setShowPasswordConfirmation((visible) => !visible)}
+            >
+              {showPasswordConfirmation ? <EyeOff size={20} aria-hidden="true" /> : <Eye size={20} aria-hidden="true" />}
+            </button>
+          </div>
         </label>
         <div ref={containerRef} aria-label="Bot protection challenge" />
         {captchaError ? (
