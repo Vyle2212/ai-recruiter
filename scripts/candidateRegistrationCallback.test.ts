@@ -3,6 +3,7 @@ import {
   candidateConfirmationCode,
   provisionCandidateRegistration,
   verifyCandidateConfirmation,
+  readVerifiedCandidateRegistrationIdentity,
 } from "../lib/candidateRegistrationCallback";
 
 async function main() {
@@ -73,6 +74,23 @@ async function main() {
     email: "candidate@example.invalid",
     fullName: "Synthetic Candidate",
   };
+  assert.deepEqual(
+    await readVerifiedCandidateRegistrationIdentity(auth.getUser),
+    { verified: true, ...identity },
+  );
+  for (const invalidUser of [
+    { ...user, email_confirmed_at: null },
+    { ...user, user_metadata: {} },
+    { ...user, is_anonymous: true },
+  ]) {
+    assert.deepEqual(
+      await readVerifiedCandidateRegistrationIdentity(async () => ({
+        data: { user: invalidUser },
+        error: null,
+      })),
+      { verified: false },
+    );
+  }
   let captured: unknown;
   assert.equal(
     await provisionCandidateRegistration(identity, async (args) => {
@@ -110,7 +128,7 @@ async function main() {
       await provisionCandidateRegistration(identity, async () => result),
       "temporarily_unavailable",
     );
-  assert.equal(reads, 1);
+  assert.equal(reads, 2);
   assert.deepEqual(
     await verifyCandidateConfirmation(code, {
       ...auth,

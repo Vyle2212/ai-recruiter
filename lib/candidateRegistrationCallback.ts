@@ -33,7 +33,24 @@ export async function verifyCandidateConfirmation(
   try {
     const exchange = await auth.exchangeCodeForSession(code);
     if (exchange.error) return { verified: false };
-    const result = await auth.getUser();
+    return readVerifiedCandidateRegistrationIdentity(auth.getUser);
+  } catch {
+    return { verified: false };
+  }
+}
+
+/** Shared with password-authenticated recovery after a failed PKCE callback. */
+export async function readVerifiedCandidateRegistrationIdentity(
+  getUser: () => Promise<{
+    data: { user: VerifiedUser | null };
+    error: unknown;
+  }>,
+): Promise<
+  | { verified: true; userId: string; email: string; fullName: string }
+  | { verified: false }
+> {
+  try {
+    const result = await getUser();
     const user = result.data.user;
     const email = user?.email?.trim().toLowerCase() || "";
     const fullName =

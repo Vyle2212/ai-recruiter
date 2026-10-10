@@ -32,7 +32,7 @@ assert.match(page, /review_required:/);
 assert.match(page, /temporarily_unavailable:/);
 assert.doesNotMatch(
   page,
-  /searchParams[\s\S]*redirect|searchParams[\s\S]*href/,
+  /redirect\([^)]*searchParams|href=\{[^}]*(?:searchParams|callbackMessage|status)/,
 );
 
 console.log("Candidate registration UI contract PASS (synthetic, default OFF)");

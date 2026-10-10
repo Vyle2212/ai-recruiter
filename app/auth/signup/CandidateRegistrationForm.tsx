@@ -62,7 +62,8 @@ export default function CandidateRegistrationForm({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!captchaToken || pending || complete) return;
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const password = String(form.get("password") || "");
     if (password !== String(form.get("passwordConfirmation") || "")) {
       setMessage("Passwords do not match.");
@@ -83,6 +84,11 @@ export default function CandidateRegistrationForm({
         }),
       });
       if (response.status === 202) {
+        formElement.reset();
+        if (widgetRef.current && window.turnstile) {
+          window.turnstile.remove(widgetRef.current);
+          widgetRef.current = null;
+        }
         setComplete(true);
         setMessage(
           "Check your email and open the verification link in this browser.",
@@ -104,6 +110,37 @@ export default function CandidateRegistrationForm({
       if (widgetRef.current && window.turnstile)
         window.turnstile.reset(widgetRef.current);
     }
+  }
+
+  if (complete) {
+    return (
+      <section
+        className="rounded-2xl border border-emerald-400/50 bg-emerald-950/40 p-6 shadow-xl"
+        role="status"
+        aria-live="polite"
+      >
+        <h2 className="text-2xl font-semibold text-emerald-200">
+          Check your email
+        </h2>
+        <p className="mt-3 text-base text-slate-100">
+          Check your email and open the verification link in this browser.
+        </p>
+        <ol className="mt-5 list-decimal space-y-3 pl-5 text-slate-200">
+          <li>Open the inbox for the email address you used to register.</li>
+          <li>
+            Find the verification email. Check Spam or Junk if it is not in your
+            inbox.
+          </li>
+          <li>
+            Open the verification link in this same browser, using the same
+            window if you registered in incognito mode.
+          </li>
+        </ol>
+        <p className="mt-5 text-sm text-slate-300">
+          After verifying your email, you can sign in and upload your CV.
+        </p>
+      </section>
+    );
   }
 
   return (

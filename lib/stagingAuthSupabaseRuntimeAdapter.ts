@@ -49,9 +49,7 @@ export type SupabaseStagingAuthClient = {
       SupabaseAuthResponse<{ session: SupabaseSessionLike | null }>
     >;
 
-    getUser(): Promise<
-      SupabaseAuthResponse<{ user: SupabaseUserLike | null }>
-    >;
+    getUser(): Promise<SupabaseAuthResponse<{ user: SupabaseUserLike | null }>>;
 
     signInWithPassword(input: {
       email: string;
@@ -80,7 +78,10 @@ export type SupabaseStagingAuthClient = {
 
   from(table: "user_profiles"): {
     select(columns: string): {
-      eq(column: "auth_user_id", value: string): {
+      eq(
+        column: "auth_user_id",
+        value: string,
+      ): {
         maybeSingle(): Promise<{
           data: UserProfileRow | null;
           error: {
@@ -96,6 +97,10 @@ export type SupabaseStagingAuthClient = {
 export type SupabaseStagingRuntimeAdapterOptions = {
   explicitlyEnabled?: boolean;
   createClient?: () => Promise<SupabaseStagingAuthClient>;
+  recoverCandidateRegistration?: (
+    client: SupabaseStagingAuthClient,
+    userId: string,
+  ) => Promise<boolean>;
 };
 
 const allowedRoles = new Set<StagingAuthActorRole>([
@@ -239,13 +244,9 @@ async function loadIdentity(
     userId: user.id,
     emailMasked: maskAuthEmail(user.email || data.email),
     role: normalizeRole(data.role),
-    ...(data.organization_id
-      ? { organizationId: data.organization_id }
-      : {}),
+    ...(data.organization_id ? { organizationId: data.organization_id } : {}),
     ...(data.client_id ? { clientId: data.client_id } : {}),
-    ...(data.candidate_id
-      ? { candidateId: data.candidate_id }
-      : {}),
+    ...(data.candidate_id ? { candidateId: data.candidate_id } : {}),
     source: "supabase_staging",
     authenticated: true,
     realUser: true,
@@ -255,52 +256,49 @@ async function loadIdentity(
 export function createSupabaseStagingRuntimeAdapter(
   options: SupabaseStagingRuntimeAdapterOptions = {},
 ): StagingAuthRuntimeAdapter {
-  if (
-    options.explicitlyEnabled !== true ||
-    !options.createClient
-  ) {
+  if (options.explicitlyEnabled !== true || !options.createClient) {
     return {
       provider: "disabled",
 
       getSession: async () =>
-        blocked("get_session", [
-          "supabase_staging_runtime_disabled",
-        ], noSession()),
+        blocked(
+          "get_session",
+          ["supabase_staging_runtime_disabled"],
+          noSession(),
+        ),
 
       getUser: async () =>
-        blocked("get_user", [
-          "supabase_staging_runtime_disabled",
-        ], null),
+        blocked("get_user", ["supabase_staging_runtime_disabled"], null),
 
       getProfile: async () =>
-        blocked("get_profile", [
-          "supabase_staging_runtime_disabled",
-        ], null),
+        blocked("get_profile", ["supabase_staging_runtime_disabled"], null),
 
       signIn: async () =>
-        blocked("sign_in", [
-          "supabase_staging_runtime_disabled",
-        ], noSession()),
+        blocked("sign_in", ["supabase_staging_runtime_disabled"], noSession()),
 
       signOut: async () =>
-        blocked("sign_out", [
-          "supabase_staging_runtime_disabled",
-        ], null),
+        blocked("sign_out", ["supabase_staging_runtime_disabled"], null),
 
       requestPasswordReset: async () =>
-        blocked("request_password_reset", [
-          "supabase_staging_runtime_disabled",
-        ], null),
+        blocked(
+          "request_password_reset",
+          ["supabase_staging_runtime_disabled"],
+          null,
+        ),
 
       acceptInvitation: async () =>
-        blocked("accept_invitation", [
-          "supabase_invitation_runtime_not_implemented",
-        ], null),
+        blocked(
+          "accept_invitation",
+          ["supabase_invitation_runtime_not_implemented"],
+          null,
+        ),
 
       refreshSession: async () =>
-        blocked("refresh_session", [
-          "supabase_staging_runtime_disabled",
-        ], noSession()),
+        blocked(
+          "refresh_session",
+          ["supabase_staging_runtime_disabled"],
+          noSession(),
+        ),
     };
   }
 
@@ -327,17 +325,11 @@ export function createSupabaseStagingRuntimeAdapter(
           return success("get_session", noSession());
         }
 
-        const identity = await loadIdentity(
-          client,
-          data.session.user,
-        );
+        const identity = await loadIdentity(client, data.session.user);
 
         return success(
           "get_session",
-          sessionSnapshot(
-            data.session,
-            identity || undefined,
-          ),
+          sessionSnapshot(data.session, identity || undefined),
         );
       } catch (error) {
         return failed(
@@ -367,10 +359,7 @@ export function createSupabaseStagingRuntimeAdapter(
           return success("get_user", null);
         }
 
-        const identity = await loadIdentity(
-          client,
-          data.user,
-        );
+        const identity = await loadIdentity(client, data.user);
 
         if (!identity) {
           return failed(
@@ -406,10 +395,7 @@ export function createSupabaseStagingRuntimeAdapter(
           );
         }
 
-        const identity = await loadIdentity(
-          client,
-          data.user,
-        );
+        const identity = await loadIdentity(client, data.user);
 
         if (!identity) {
           return failed(
@@ -423,8 +409,7 @@ export function createSupabaseStagingRuntimeAdapter(
         return success("get_profile", {
           userId: identity.userId,
           role: identity.role,
-          organizationId:
-            identity.organizationId || null,
+          organizationId: identity.organizationId || null,
           clientId: identity.clientId || null,
           candidateId: identity.candidateId || null,
         });
@@ -442,12 +427,13 @@ export function createSupabaseStagingRuntimeAdapter(
       try {
         const client = await createClient();
 
-        const { data, error } =
-          await client.auth.signInWithPassword({
-            email: input.email,
-            password: input.password,
-            ...(input.captchaToken ? { options: { captchaToken: input.captchaToken } } : {}),
-          });
+        const { data, error } = await client.auth.signInWithPassword({
+          email: input.email,
+          password: input.password,
+          ...(input.captchaToken
+            ? { options: { captchaToken: input.captchaToken } }
+            : {}),
+        });
 
         if (error || !data.session || !data.user) {
           return failed(
@@ -458,10 +444,17 @@ export function createSupabaseStagingRuntimeAdapter(
           );
         }
 
-        const identity = await loadIdentity(
-          client,
-          data.user,
-        );
+        let identity = await loadIdentity(client, data.user);
+
+        if (
+          !identity &&
+          options.recoverCandidateRegistration &&
+          (await options
+            .recoverCandidateRegistration(client, data.user.id)
+            .catch(() => false))
+        ) {
+          identity = await loadIdentity(client, data.user);
+        }
 
         if (!identity) {
           await client.auth.signOut();
@@ -474,10 +467,7 @@ export function createSupabaseStagingRuntimeAdapter(
           );
         }
 
-        return success(
-          "sign_in",
-          sessionSnapshot(data.session, identity),
-        );
+        return success("sign_in", sessionSnapshot(data.session, identity));
       } catch (error) {
         return failed(
           "sign_in",
@@ -511,15 +501,10 @@ export function createSupabaseStagingRuntimeAdapter(
       }
     },
 
-    requestPasswordReset: async (
-      input: StagingPasswordResetInput,
-    ) => {
+    requestPasswordReset: async (input: StagingPasswordResetInput) => {
       try {
         const client = await createClient();
-        const { error } =
-          await client.auth.resetPasswordForEmail(
-            input.email,
-          );
+        const { error } = await client.auth.resetPasswordForEmail(input.email);
 
         return error
           ? failed(
@@ -539,9 +524,7 @@ export function createSupabaseStagingRuntimeAdapter(
       }
     },
 
-    acceptInvitation: async (
-      _input: StagingInvitationInput,
-    ) =>
+    acceptInvitation: async (_input: StagingInvitationInput) =>
       blocked(
         "accept_invitation",
         ["supabase_invitation_runtime_not_implemented"],
@@ -551,8 +534,7 @@ export function createSupabaseStagingRuntimeAdapter(
     refreshSession: async () => {
       try {
         const client = await createClient();
-        const { data, error } =
-          await client.auth.refreshSession();
+        const { data, error } = await client.auth.refreshSession();
 
         if (error || !data.session || !data.user) {
           return failed(
@@ -563,17 +545,11 @@ export function createSupabaseStagingRuntimeAdapter(
           );
         }
 
-        const identity = await loadIdentity(
-          client,
-          data.user,
-        );
+        const identity = await loadIdentity(client, data.user);
 
         return success(
           "refresh_session",
-          sessionSnapshot(
-            data.session,
-            identity || undefined,
-          ),
+          sessionSnapshot(data.session, identity || undefined),
         );
       } catch (error) {
         return failed(
