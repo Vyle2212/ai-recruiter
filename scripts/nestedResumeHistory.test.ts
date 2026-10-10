@@ -448,3 +448,135 @@ assert.equal(
   ),
   false,
 );
+
+const clientSiteCards = `SAP Consultant
+Employment History
+Example Employer
+Position Title: Senior Analyst
+Duration: Jan 2011 - Current
+Exposure\tClient: Example Manufacturing
+(Client’s Site)\tPosition Title: SAP Data Migration Consultant
+Job Role: Data/Functional MM and PM
+Duration: Nov 2017 - Current
+Exposure\tClient: Example Retail
+(Client's Site)\tPosition Title: SAP Data Team
+Job Role: Data Conversion
+Duration: Jan 2017 - Oct 2017
+Client: Example Energy
+Job Role: Compliance Analyst
+Duration: Oct 2016 - Dec 2016
+Next Employer
+Position Title: Must Not Borrow
+Duration: Jan 2020 - Present
+Education
+Bachelor of Computing`;
+const siteProjects = enrichCandidateUpload({}, clientSiteCards).projects;
+for (const [client, role, start] of [
+  ["Example Manufacturing", "SAP Data Migration Consultant", "Nov 2017"],
+  ["Example Retail", "SAP Data Team", "Jan 2017"],
+  ["Example Energy", "Compliance Analyst", "Oct 2016"],
+]) {
+  const row = siteProjects.find(
+    (row) => row.client === client && row.role === role,
+  );
+  assert.ok(row);
+  assert.equal(row.start_date, start);
+}
+assert.equal(
+  siteProjects.some((row) => row.role === "Must Not Borrow"),
+  false,
+);
+const roleBeforeClient = `SAP ABAP Consultant
+Role: SAP ABAP Consultant
+Environment: SAP ECC6
+Client: Example Telecom
+Project duration: Jan 2014 - Jun 2014
+Role: SAP ABAP Consultant
+Environment: SAP ECC6
+Client: Example Oil
+Project duration: Aug 2012 - Oct 2013
+Education
+Bachelor of Computing`;
+const beforeClientProjects = enrichCandidateUpload(
+  {},
+  roleBeforeClient,
+).projects;
+for (const [client, start] of [
+  ["Example Telecom", "Jan 2014"],
+  ["Example Oil", "Aug 2012"],
+]) {
+  const row = beforeClientProjects.find(
+    (row) => row.client === client && row.role === "SAP ABAP Consultant",
+  );
+  assert.ok(row);
+  assert.equal(row.start_date, start);
+}
+assert.equal(
+  enrichCandidateUpload(
+    {},
+    roleBeforeClient.replace("Jan 2014 - Jun 2014", "unreadable dates"),
+  ).projects.some((row) => row.client === "Example Telecom"),
+  false,
+);
+assert.equal(
+  enrichCandidateUpload(
+    {},
+    `Client: Example Customer
+Role: SAP Consultant
+Project Duration: unreadable dates
+Responsibilities:
+Testing Jan 2014 - Jun 2014`,
+  ).projects.some((row) => row.client === "Example Customer"),
+  false,
+);
+assert.equal(
+  enrichCandidateUpload(
+    {},
+    `Employment History
+Example Employer
+Position held: Consultant
+Duration: Jan 2010 - Dec 2011
+Client: Example Customer
+Education`,
+  ).projects.some((row) => row.role === "Consultant"),
+  false,
+);
+
+for (const [duration, expectedStart, expectedEnd] of [
+  ["18 months / Project", "", ""],
+  ["Seven Days", "", ""],
+  ["7 Man Days.", "", ""],
+  ["from joining date with the company", "", ""],
+  ["February 2007 August 2007", "February 2007", "August 2007"],
+  ["(02/2013) till current date", "02/2013", "current date"],
+  ["Nov-14 to March 31,2015", "Nov-14", "March 31 2015"],
+  ["7 December 2009 – 11 December 2009", "7 December 2009", "11 December 2009"],
+  ["May2011 to Ogos2011", "May2011", "August2011"],
+  ["Mac2008 to May2008", "March2008", "May2008"],
+  ["11 Mei 2009 - 15 Mei 2009", "11 May 2009", "15 May 2009"],
+]) {
+  const rows = enrichCandidateUpload(
+    {},
+    `Client: Example Client
+Role: SAP Consultant
+Duration: ${duration}
+Responsibilities:
+Supported SAP Jan 2020 - Dec 2020`,
+  ).projects;
+  const row = rows.find(
+    (row) => row.client === "Example Client" && row.role === "SAP Consultant",
+  );
+  assert.ok(row, duration);
+  assert.equal(row.start_date, expectedStart, duration);
+  assert.equal(row.end_date, expectedEnd, duration);
+  assert.equal(row.current, expectedEnd === "current date", duration);
+}
+assert.equal(
+  enrichCandidateUpload(
+    {},
+    `Client: Example Client
+Role: SAP Consultant
+Duration: 31 April 2011 - 2 May 2011`,
+  ).projects.some((row) => row.client === "Example Client"),
+  false,
+);

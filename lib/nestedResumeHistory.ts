@@ -577,7 +577,19 @@ export function narrativeResumeEmployment(text: string) {
 
 /** Reorder client/project fields only inside the same numbered card. */
 export function projectFieldLayoutText(text: string) {
+  const roleClientCard =
+    /^([ \t]*Role[ \t]*:[^\n]+)\r?\n(?:[ \t]*\r?\n)*([ \t]*Environment[ \t]*:[^\n]+)\r?\n(?:[ \t]*\r?\n)*([ \t]*Client[ \t]*:[^\n]+)\r?\n(?:[ \t]*\r?\n)*(?=[ \t]*Project[ \t]+duration[ \t]*:)/gim;
+  // Repeated explicit role/environment/client/duration cards own the role
+  // immediately before Client. Reorder locally without inheriting a job title.
+  if ([...text.matchAll(roleClientCard)].length >= 2)
+    text = text.replace(roleClientCard, "$3\n$1\n$2\n");
   const lines = text
+    // These are literal client-site table labels, not inferred employers.
+    .replace(/^[ \t]*Exposure[ \t]+(Client[ \t]*:)/gim, "$1")
+    .replace(
+      /^[ \t]*\(Client[’']s[ \t]+Site\)[ \t]+(Position[ \t]+Title[ \t]*:)/gim,
+      "$1",
+    )
     .replace(
       /^(\s*(?:client|customer|project|duration|period|position|designation|role))\t+[ \t]*([^\n]+)/gim,
       "$1: $2",

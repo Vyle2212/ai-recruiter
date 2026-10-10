@@ -347,19 +347,35 @@ function explicitProjectRecords(rawText: string) {
   ];
   const markers = projectMarkers.length ? projectMarkers : clientMarkers;
   const rangePattern = new RegExp(
-    `\\b(${PROJECT_DATE_TOKEN_PATTERN})\\s*(?:-|–|—|to|~)\\s*(${PROJECT_DATE_TOKEN_PATTERN}|${PROJECT_CURRENT_TOKEN_PATTERN})\\b`,
+    `(?<![\\w.])(${PROJECT_DATE_TOKEN_PATTERN})\\s*(?:-|–|—|to|until|till|~)\\s*(${PROJECT_DATE_TOKEN_PATTERN}|${PROJECT_CURRENT_TOKEN_PATTERN})\\b`,
     "i",
   );
   const dateValue = (value: string) => clean(value.replace(/[’‘']/g, " "));
   // An invalid or partial date claim is not an undated assignment. Preserve
   // that claim only in the source text until it can be reviewed.
-  const unresolvedDateClaim = (block: string, start: string, end: string) =>
-    !start &&
-    !end &&
-    (/(?:^|\n)\s*(?:duration|period|project\s+dates?|(?:project\s+)?(?:start|end)(?:ing)?\s+date|date\s+(?:from|to)|from|to)\s*(?::|\n|$)/im.test(
+  const elapsedDuration = (value: string) =>
+    /^(?:\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten)[ \t]*(?:man[ \t]+)?(?:days?|weeks?|months?|years?)(?:[ \t]*\/[ \t]*project)?[.]?$/i.test(
+      value,
+    );
+  const unresolvedDateClaim = (block: string, start: string, end: string) => {
+    const duration = labelledLineValue(
       block,
-    ) ||
-      rangePattern.test(block));
+      "duration|period|project[ \\t]+(?:dates?|duration)",
+    );
+    if (
+      elapsedDuration(duration) ||
+      /^from joining date with the company\b/i.test(duration)
+    )
+      return false;
+    return (
+      !start &&
+      !end &&
+      (/(?:^|\n)\s*(?:duration|period|project\s+(?:dates?|duration)|(?:project\s+)?(?:start|end)(?:ing)?\s+date|date\s+(?:from|to)|from|to)\s*(?::|\n|$)/im.test(
+        block,
+      ) ||
+        rangePattern.test(block))
+    );
+  };
   const projectFieldValue = (value: unknown) => {
     const normalized = clean(value);
     return /^(?:project(?:[ \t]+(?:name|title|role|dates?|duration|type))?|end[ \t]+client|client|customer|role|position|designation|duration|period|(?:project[ \t]+)?start(?:ing)?[ \t]+date|(?:project[ \t]+)?end(?:ing)?[ \t]+date|date[ \t]+(?:from|to)|from|to|sap[ \t]+modules?|modules?|type|education|skills?)[ \t]*(?::|$)/i.test(
@@ -412,8 +428,13 @@ function explicitProjectRecords(rawText: string) {
   const boundedProjectBlock = (block: string) => {
     // A standalone company followed by its employment title ends this card.
     // Its role, dates and client must never be borrowed by the prior project.
-    const employerBoundary = block.match(
-      /\n[^\n]+\n[ \t]*Position Title[ \t]*:/i,
+    const employerBoundary = [
+      ...block.matchAll(/\n([^\n]+)\n[ \t]*Position Title[ \t]*:/gi),
+    ].find(
+      (match) =>
+        !/^[ \t]*(?:client|customer|project|duration|period|environment)[ \t]*:/i.test(
+          match[1],
+        ),
     );
     if (employerBoundary?.index !== undefined)
       block = block.slice(0, employerBoundary.index);
@@ -450,7 +471,7 @@ function explicitProjectRecords(rawText: string) {
     );
     const multilineRole = nextLabelLine(
       block,
-      "project[ \\t]+role|role|position|designation",
+      "project[ \\t]+role|job[ \\t]+role|role|position(?:[ \\t]+title)?|designation",
     );
     const combinedModuleRole = labelledLineValue(
       block,
@@ -469,7 +490,7 @@ function explicitProjectRecords(rawText: string) {
         : "";
     const colonRole = projectFieldValue(
       block.match(
-        /(?:^|\n)\s*(?:project\s+role|role|position|designation)\s*:\s*([^\n]{2,160})/im,
+        /(?:^|\n)\s*(?:project\s+role|job\s+role|role|position(?:\s+title)?|designation)\s*:\s*([^\n]{2,160})/im,
       )?.[1] || supportedCombinedRole,
     );
     const narrativeRole = projectFieldValue(
@@ -482,9 +503,30 @@ function explicitProjectRecords(rawText: string) {
       block,
       "duration|period|project[ \\t]+(?:dates?|duration)",
     );
-    const range =
-      duration.match(rangePattern) ||
-      (colonRole ? block.match(rangePattern) : null);
+    const calendarDuration = duration
+      .replace(/\((\d{1,2}\/\d{2,4})\)/g, "$1")
+      .replace(
+        /\b([A-Za-z]+)[ \t]*(\d{1,2}),[ \t]*((?:19|20)\d{2})\b/g,
+        "$1 $2 $3",
+      )
+      .replace(
+        /\b(Mac|Ogos|Mei|Disember)(?=\s|(?:19|20)\d{2})/gi,
+        (token) =>
+          ({ mac: "March", ogos: "August", mei: "May", disember: "December" })[
+            token.toLowerCase()
+          ] || token,
+      );
+    const adjacentDates = calendarDuration.match(
+      new RegExp(
+        `^(${PROJECT_DATE_TOKEN_PATTERN})[ \\t]+(${PROJECT_DATE_TOKEN_PATTERN}|${PROJECT_CURRENT_TOKEN_PATTERN})$`,
+        "i",
+      ),
+    );
+    const range = duration
+      ? calendarDuration.match(rangePattern) || adjacentDates
+      : colonRole
+        ? block.match(rangePattern)
+        : null;
     const splitRange = splitDateRange(block);
     const startDate = range?.[1] || splitRange?.[0] || "";
     const endDate = range?.[2] || splitRange?.[1] || "";
@@ -517,6 +559,9 @@ function explicitProjectRecords(rawText: string) {
       start_date: dateValue(startDate),
       end_date: dateValue(endDate),
       current: projectDateIsCurrent(endDate),
+      ...(!startDate && !endDate && duration
+        ? { duration_text: duration }
+        : {}),
       modules: unique(moduleLine.split(/[,;|/]+/)),
       project_type: projectType,
     });
