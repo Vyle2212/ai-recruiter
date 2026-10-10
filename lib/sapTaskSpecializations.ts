@@ -95,7 +95,46 @@ export function extractSapTaskSpecializations(
   source: string,
 ): SapTaskEvidence[] {
   const result: SapTaskEvidence[] = [];
-  for (const segment of source.normalize("NFKC").split(/[\n;]|(?<=[.!?])\s+/)) {
+  // Inherit only an explicit SAP domain heading into its immediately adjacent
+  // bullet list. Blank lines, prose, employers and new headings stop ownership.
+  const segments: string[] = [];
+  let heading = "";
+  let remaining = 0;
+  for (const line of source.normalize("NFKC").split(/\r?\n/)) {
+    const text = line.trim();
+    if (!text) {
+      heading = "";
+      remaining = 0;
+      continue;
+    }
+    if (/^[-*•]\s+/.test(text)) {
+      segments.push(
+        heading && remaining > 0 && !/\b(?:SAP|S\/?4HANA)\b/i.test(text)
+          ? `${heading}: ${text}`
+          : text,
+      );
+      remaining = Math.max(0, remaining - 1);
+      if (/\b(?:SAP|S\/?4HANA)\b/i.test(text)) {
+        heading = "";
+        remaining = 0;
+      }
+      continue;
+    }
+    heading = "";
+    remaining = 0;
+    if (
+      /^(?:(?:role|project|module)\s*:\s*)?SAP\s+(?:TM|Transportation Management|TRM|Treasury(?: and Risk Management)?|FSCM|Cash(?: and Liquidity)? Management)(?:\s+(?:(?:Functional|Technical)\s+)?(?:Consultant|Lead|Manager|Project))?\s*:?$/i.test(
+        text,
+      )
+    ) {
+      heading = text;
+      remaining = 8;
+    }
+    segments.push(text);
+  }
+  for (const segment of segments.flatMap((text) =>
+    text.split(/;|(?<=[.!?])\s+/),
+  )) {
     if (!/\b(?:SAP|S\/?4HANA|FSCM)\b/i.test(segment)) continue;
     if (
       /\b(?:no|without|lack(?:ing)?)\s+(?:hands[- ]on\s+)?(?:experience|exposure|knowledge)\b/i.test(

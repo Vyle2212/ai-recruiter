@@ -192,3 +192,47 @@ assert.equal(
   ),
   false,
 );
+assert.ok(
+  read("SAP TM Consultant\n- Configured freight settlement documents.").some(
+    (x) => x.module === "TM" && x.involvement === "delivery",
+  ),
+);
+assert.ok(
+  read("SAP TRM Consultant\n- Configured hedge accounting.").some(
+    (x) => x.module === "TRM",
+  ),
+);
+assert.ok(
+  read("SAP Cash Management\n- Configured liquidity planning.").some(
+    (x) => x.module === "CASH_MANAGEMENT",
+  ),
+);
+for (const boundary of [
+  "",
+  "Employer: Other Company",
+  "Project: Microsoft Dynamics",
+  "Education",
+]) {
+  assert.deepEqual(
+    read(`SAP TM Consultant\n${boundary}\n- Configured tendering.`),
+    [],
+  );
+}
+assert.deepEqual(read("SAP TM Consultant\nConfigured tendering."), []);
+assert.deepEqual(
+  read("SAP TM Consultant\n- Configured SAP MM procurement tendering."),
+  [],
+);
+assert.deepEqual(
+  read("SAP SuccessFactors TM Consultant\n- Configured tendering."),
+  [],
+);
+assert.deepEqual(
+  read(
+    "SAP TM Consultant\n" +
+      Array(8).fill("- Reviewed notes.").join("\n") +
+      "\n- Configured tendering.",
+  ),
+  [],
+);
+assert.deepEqual(read('SAP TM Consultant\n- Configured SAP MM procurement.\n- Configured tendering.'),[]);
