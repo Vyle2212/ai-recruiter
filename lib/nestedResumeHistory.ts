@@ -1,11 +1,36 @@
+import { careerMonthIndex } from "./candidateCareerExperience";
 import { sapProjectTypeEvidence } from "./candidatePortalEditEvidence";
 import { projectDateRange, projectDateIsCurrent } from "./projectDateEvidence";
+
+const monthName =
+  "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
+function cardDateRange(value: string) {
+  const full =
+    projectDateRange(value) ||
+    projectDateRange(value.replace(/\buntil\b/gi, "to"));
+  if (full) return full;
+  const shared = value.match(
+    new RegExp(
+      `\\b(${monthName})\\s*[-–—]\\s*(${monthName})\\s+((?:19|20)\\d{2})\\b`,
+      "i",
+    ),
+  );
+  if (!shared) return null;
+  // A trailing shared year is only unambiguous for a forward same-year range.
+  const start = `${shared[1]} ${shared[3]}`;
+  const end = `${shared[2]} ${shared[3]}`;
+  if (
+    (careerMonthIndex(start) ?? Infinity) > (careerMonthIndex(end) ?? -Infinity)
+  )
+    return null;
+  return projectDateRange(`${start} - ${end}`);
+}
 
 const clean = (value: string) => value.replace(/\s+/g, " ").trim();
 const sectionEnd =
   /^(?:education|additional information|skills?|languages?|certifications?|references?)\s*:?$/i;
 const projectHeading =
-  /^(?:Migration\s+SAP\b|SAP\b.*\b(?:implementation|roll\s*out|migration|upgrade|support)\b|Application Management Services? (?:Division|Department))/i;
+  /^(?:Project(?:\s+(?:Name|Title))?\s*:|Migration\s+SAP\b|SAP\b.*\b(?:implementation|roll\s*out|migration|upgrade|support)\b|Application Management Services? (?:Division|Department))/i;
 
 /** Count source cards independently of successful employer/role parsing so
  * coverage still reports omissions when this reader cannot resolve an owner. */
@@ -29,7 +54,7 @@ export function nestedProjectEvidenceCount(text: string) {
       projectHeading.test(line) &&
       history
         .slice(index, index + 4)
-        .some((row) => Boolean(projectDateRange(row))),
+        .some((row) => Boolean(cardDateRange(row))),
   ).length;
 }
 
@@ -67,7 +92,7 @@ export function nestedResumeHistory(text: string) {
       .trim();
     // An inline dated legal-company header, rather than a sentence or project.
     if (
-      !/^(?:PT\.?\s|[\p{L}\p{N} &.,'()-]+\b(?:Ltd\.?|Limited|Inc\.?|LLC|GmbH|Pte\.?|Corporation|Consulting|Technologies|Solutions|Company)\b)/iu.test(
+      !/^(?:PT\.?\s|[\p{L}\p{N} &.,'()-]+\b(?:Ltd\.?|Limited|Inc\.?|LLC|GmbH|Pte\.?|Corporation|Consulting|Technologies|Solutions|Company|Sdn\.?\s+Bhd\.?|Bhd\.?)\b)/iu.test(
         employer,
       ) ||
       /\b(?:at|for|implementation|roll\s*out|migration|GPA|responsibilities)\b/i.test(
@@ -110,29 +135,55 @@ export function nestedResumeHistory(text: string) {
       );
       const dateIndex = card
         .slice(0, 4)
-        .findIndex((line) => Boolean(projectDateRange(line)));
-      if (dateIndex < 1) continue;
-      const dates = projectDateRange(card[dateIndex])!;
-      const name = clean(card.slice(0, dateIndex).join(" "));
-      const body = card.slice(dateIndex + 1).join(" ");
+        .findIndex((line) => Boolean(cardDateRange(line)));
+      const dates = dateIndex >= 0 ? cardDateRange(card[dateIndex]) : null;
+      const name = clean(
+        card
+          .slice(0, dateIndex > 0 ? dateIndex : 1)
+          .filter(
+            (line) =>
+              !/^(?:Client|Customer|Role|Position|Designation|Software|Duration|Period)\s*:/i.test(
+                line,
+              ),
+          )
+          .join(" "),
+      ).replace(/^Project(?:\s+(?:Name|Title))?\s*:\s*/i, "");
+      const body = card.slice(Math.max(1, dateIndex + 1)).join(" ");
+      const labelRole = card
+        .join("\n")
+        .match(
+          /(?:^|\n)(?:Project Role|Role|Position|Designation)\s*:\s*([^\n]+)/i,
+        )?.[1];
+      const scopedRole = block
+        .slice(0, anchors[0] ?? block.length)
+        .join(" ")
+        .match(/Assigned as (?:a|an) (.+?) to (?:the )?projects?\b/i)?.[1];
       const role =
         body
           .match(
             /^As\s+(?:a|an)\s+(.+?),?\s*responsibilities\s+include(?:d|s)?\s*:/i,
           )?.[1]
           ?.replace(/[,;]+$/, "")
-          .trim() || "";
+          .trim() ||
+        labelRole ||
+        scopedRole ||
+        "";
       projects.push({
         project_type: /^Application Management Services? /i.test(name)
           ? "AMS"
           : sapProjectTypeEvidence(name),
         name,
         employer: owner.employer,
-        client: name.match(/\s+at\s+(.+)$/i)?.[1] || "",
+        client:
+          card
+            .join("\n")
+            .match(/(?:^|\n)(?:Client|Customer)\s*:\s*([^\n]+)/i)?.[1] ||
+          name.match(/\s+at\s+(.+)$/i)?.[1] ||
+          "",
         role,
-        start_date: dates[1],
-        end_date: dates[2],
-        current: projectDateIsCurrent(dates[2]),
+        start_date: dates?.[1] || "",
+        end_date: dates?.[2] || "",
+        current: projectDateIsCurrent(dates?.[2]),
         description: body,
         evidence_source: "nested_employer_project_card",
       });

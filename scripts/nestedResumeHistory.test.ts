@@ -97,3 +97,45 @@ assert.equal(
   null,
 );
 console.log("nested employer/project history regressions passed");
+
+const labelled = `Example Person
+EXPERIENCE
+Example Services Sdn. Bhd. Oct 2012 - Present
+Senior Analyst
+Project: SAP BI implementation
+Duration: October - November 2012
+Roles and responsibilities:
+Installed and configured SAP BI.
+Project: SAP PI upgrade
+Client: Example Manufacturing
+Duration: December 2012 - Present
+Role: SAP BASIS Consultant
+Configured the application landscape.
+Previous Consulting (SEA) Jun 2011 - Sept 2012
+SAP BASIS Consultant
+Assigned as a SAP BASIS support consultant to the projects below:
+Project: Finance Transformation
+Client: Example Semiconductors
+Duration: January 2012 until August 2012
+Installed SAP systems.
+EDUCATION
+Bachelor of Computing`;
+const labelledResult = enrichCandidateUpload({}, labelled);
+assert.equal(labelledResult.experience.length, 2);
+assert.equal(labelledResult.projects.length, 3);
+assert.equal(labelledResult.projects[0].name, "SAP BI implementation");
+assert.equal(labelledResult.projects[0].start_date, "October 2012");
+assert.equal(labelledResult.projects[0].end_date, "November 2012");
+assert.equal(labelledResult.projects[0].role, ""); // Keep identified partial cards; do not invent a project role.
+assert.equal(labelledResult.projects[1].name, "SAP PI upgrade");
+assert.equal(labelledResult.projects[1].client, "Example Manufacturing");
+assert.equal(labelledResult.projects[1].role, "SAP BASIS Consultant");
+assert.equal(labelledResult.projects[2].role, "SAP BASIS support consultant");
+assert.equal(labelledResult.projects[2].employer, "Previous Consulting (SEA)");
+assert.equal(labelledResult.projects[2].end_date, "August 2012");
+assert.ok(
+  evaluateCandidateExtractionCoverage(
+    labelled,
+    labelledResult,
+  ).missedObservedSections.includes("projects"),
+);

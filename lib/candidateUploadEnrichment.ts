@@ -824,17 +824,17 @@ export function enrichCandidateUpload(
   // alone must not discard a distinct explicit project or a canonical one.
   // Match role, project/client and either the same period or both undated
   // records before deduplicating. Never copy employment dates to a project.
-  const projects = mergeGroundedProjects(
-    nested?.projects || canonicalProjects,
-    nested
-      ? []
-      : [
+  const projects = nested
+    ? nested.projects
+    : mergeGroundedProjects(
+        canonicalProjects,
+        [
           ...explicitProjects,
           ...positioned.projects,
           ...embeddedSapEmploymentProjects(rawText),
         ],
-    rawText,
-  );
+        rawText,
+      );
   const education = structuredEducation.length
     ? structuredEducation
     : positioned.education.length
