@@ -2,6 +2,8 @@ import { extractSapTaskSpecializations } from "./sapTaskSpecializations";
 import {
   nestedResumeHistory,
   institutionFirstEducation,
+  labelledResumeEducation,
+  datedSelectedProjectTitles,
   labelledResumeEmployment,
   narrativeResumeEmployment,
   projectFieldLayoutText,
@@ -765,7 +767,10 @@ export function enrichCandidateUpload(
   const nested = nestedResumeHistory(rawText);
   const labelledEmployment = labelledResumeEmployment(rawText);
   const narrativeEmployment = narrativeResumeEmployment(rawText);
-  const structuredEducation = institutionFirstEducation(rawText);
+  const institutionEducation = institutionFirstEducation(rawText);
+  const structuredEducation = institutionEducation.length
+    ? institutionEducation
+    : labelledResumeEducation(rawText);
   const positioned = positionedResumeSections(rawText);
   const trackedName = trackedHeaderName(
     rawText,
@@ -858,6 +863,19 @@ export function enrichCandidateUpload(
         ],
         rawText,
       );
+  for (const draft of datedSelectedProjectTitles(rawText)) {
+    if (
+      !projects.some(
+        (row) =>
+          projectKey(row.name) === projectKey(draft.name) &&
+          careerMonthIndex(row.start_date) ===
+            careerMonthIndex(draft.start_date) &&
+          careerMonthIndex(row.end_date, projectDateIsCurrent(row.end_date)) ===
+            careerMonthIndex(draft.end_date, draft.current),
+      )
+    )
+      projects.push(draft);
+  }
   const education = structuredEducation.length
     ? structuredEducation
     : positioned.education.length

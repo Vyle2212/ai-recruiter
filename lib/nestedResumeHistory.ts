@@ -1,6 +1,10 @@
 import { careerMonthIndex } from "./candidateCareerExperience";
 import { sapProjectTypeEvidence } from "./candidatePortalEditEvidence";
-import { projectDateRange, projectDateIsCurrent } from "./projectDateEvidence";
+import {
+  projectDateRange,
+  projectDateIsCurrent,
+  validProjectDateRange,
+} from "./projectDateEvidence";
 import { PROJECT_DATE_TOKEN_PATTERN } from "./projectDateEvidence";
 
 const monthName =
@@ -32,6 +36,55 @@ const sectionEnd =
   /^(?:education|additional information|skills?|languages?|certifications?|references?)\s*:?$/i;
 const projectHeading =
   /^(?:Project(?:\s+(?:Name|Title))?\s*:|Migration\s+SAP\b|SAP\b.*\b(?:implementation|roll\s*out|migration|upgrade|support)\b|Application Management Services? (?:Division|Department))/i;
+
+/** Date-bearing titles in selected-project ledgers are useful draft evidence
+ * even without a per-project role. Keep them incomplete, with no inferred
+ * client/employer/title from the surrounding employment or shared task list. */
+export function datedSelectedProjectTitles(text: string) {
+  const lines = text
+    .normalize("NFKC")
+    .split(/\r?\n/)
+    .map(clean)
+    .filter(Boolean);
+  const start = lines.findIndex((line) =>
+    /^selected project experience\s*:?$/i.test(line),
+  );
+  if (start < 0) return [];
+  const rows = [];
+  for (const line of lines.slice(start + 1)) {
+    if (
+      sectionEnd.test(line) ||
+      /^(?:(?:work|professional|employment|career) (?:experience|history))\s*:?$/i.test(
+        line,
+      )
+    )
+      break;
+    const range = projectDateRange(line);
+    if (!range || !validProjectDateRange(range[1], range[2])) continue;
+    const name = clean(line.replace(range[0], "")).replace(/[\s,;|–—-]+$/, "");
+    if (
+      !/\b(?:SAP|BW\d*|BI\d*)\b/i.test(name) ||
+      !/\b(?:reporting|implementation|migration|rollout|upgrade|track)\b/i.test(
+        name,
+      ) ||
+      name.length > 160 ||
+      /^[•*·-]/.test(name)
+    )
+      continue;
+    rows.push({
+      name,
+      client: "",
+      employer: "",
+      role: "",
+      start_date: range[1],
+      end_date: range[2],
+      current: projectDateIsCurrent(range[2]),
+      modules: [],
+      project_type: "",
+    });
+  }
+  return rows;
+}
 
 /** Count source cards independently of successful employer/role parsing so
  * coverage still reports omissions when this reader cannot resolve an owner. */
@@ -203,6 +256,110 @@ export function nestedResumeHistory(text: string) {
     })),
     projects,
   };
+}
+
+/** Explicit qualification fields and adjacent institution/degree pairs. Dates
+ * belong to the same education card; employment and certification dates never
+ * fill missing graduation years. */
+export function labelledResumeEducation(text: string) {
+  const lines = text
+    .normalize("NFKC")
+    .split(/\r?\n/)
+    .map(clean)
+    .filter(Boolean);
+  const rows: Array<{
+    institution: string;
+    qualification: string;
+    field_of_study: string;
+    graduation_year: string;
+  }> = [];
+  const degree =
+    /^(?:Bachelor[’']?s?|Master[’']?s?|Diploma|Doctor|PhD|Professional Degree|Primary\/Secondary School)\b/i;
+  const school = /\b(?:university|universiti|college|institute|universitas)\b/i;
+  const add = (
+    qualification: string,
+    institution: string,
+    field = "",
+    year = "",
+  ) => {
+    if (
+      !degree.test(qualification) ||
+      !institution ||
+      /^(?:client|employer|project|role|qualification)\s*:/i.test(institution)
+    )
+      return;
+    const row = {
+      qualification,
+      institution,
+      field_of_study: field,
+      graduation_year: year,
+    };
+    if (
+      !rows.some((existing) => JSON.stringify(existing) === JSON.stringify(row))
+    )
+      rows.push(row);
+  };
+  const flat = lines.join(" ");
+  const fields =
+    /\bQualification\s*:\s*(.{2,160}?)\s+Field of Study\s*:\s*(.{1,160}?)\s+Major\s*:\s*.{1,160}?\s+Institute\s*\/\s*University\s*:\s*(.{2,180}?)\s+Grade\s*:\s*.{1,100}?\s+Graduation Date\s*:\s*((?:19|20)\d{2})(?=\s|$)/gi;
+  for (const match of flat.matchAll(fields))
+    add(match[1], match[3], match[2], match[4]);
+  for (let index = 0; index < lines.length; index++) {
+    // Word tables can serialize all four labels before all four values.
+    if (
+      /^qualification$/i.test(lines[index]) &&
+      /^major$/i.test(lines[index + 1] || "") &&
+      /^university$/i.test(lines[index + 2] || "") &&
+      /^graduation year$/i.test(lines[index + 3] || "")
+    ) {
+      const values = lines
+        .slice(index + 4, index + 8)
+        .map((line) => line.replace(/^:\s*/, ""));
+      if (values.length === 4 && /^(?:19|20)\d{2}$/.test(values[3]))
+        add(values[0], values[2], values[1], values[3]);
+    }
+    if (/^qualification\s*:?$/i.test(lines[index])) {
+      const qualification = lines[index + 1] || "";
+      if (
+        /^(?:college|university|institution)\s*:?$/i.test(
+          lines[index + 2] || "",
+        )
+      ) {
+        const graduation = /^graduation (?:date|year)\s*:?$/i.test(
+          lines[index + 4] || "",
+        )
+          ? lines[index + 5] || ""
+          : "";
+        add(
+          qualification,
+          lines[index + 3] || "",
+          "",
+          graduation.match(/\b(?:19|20)\d{2}\b/)?.[0] || "",
+        );
+      } else if (school.test(lines[index + 2] || "")) {
+        const institution = lines[index + 2];
+        const range = projectDateRange(institution);
+        add(
+          qualification,
+          institution.replace(/\s*\([^)]*\)\s*$/, ""),
+          "",
+          range?.[2].match(/\b(?:19|20)\d{2}\b/)?.[0] || "",
+        );
+      }
+    }
+    // Institution and dated degree on adjacent lines remain explicit even if
+    // Word floating text boxes interleave Education and Certification headings.
+    if (
+      school.test(lines[index]) &&
+      lines[index].length < 160 &&
+      !/\b(?:client|project|training|certification)\b/i.test(lines[index])
+    ) {
+      const next = lines[index + 1] || "";
+      const datedDegree = next.match(/^(.+?)\s+[—–-]\s*((?:19|20)\d{2})$/);
+      if (datedDegree) add(datedDegree[1], lines[index], "", datedDegree[2]);
+    }
+  }
+  return rows;
 }
 
 export function institutionFirstEducation(text: string) {

@@ -307,3 +307,102 @@ assert.equal(
   ),
   false,
 );
+
+// Source-owned education layouts; no institution or year from neighbouring jobs.
+const educationLayouts = [
+  `Qualification
+Qualification: Professional Degree Field of Study: Computer Science Major: IT Institute/University: Example University Grade: Grade B Graduation Date: 2001
+Qualification: Primary/Secondary School/SPM/"O" Level Field of Study: Science Major: - Institute/University: Example Secondary School Grade: Grade A Graduation Date: 1995`,
+  `Qualification:
+Qualification
+Major
+University
+Graduation Year
+: Bachelor of Accountancy (Hons)
+: Accountancy
+: Example University, Malaysia.
+: 2000
+Professional Certification:
+Certification Date: 2010`,
+  `Education
+Qualification
+Bachelor's Degree of Computer Science
+College
+Example College
+Graduation Date
+March 2005
+Languages
+English`,
+  `Education
+Qualification
+Bachelor’s Degree (Hons) of IT
+Example University, Example City (May 2002 - May 2006)
+Experience
+SAP Consultant Jan 2009 - Present`,
+  `EDUCATION
+CERTIFICATION
+SAP Support Associate — 2011
+Example College
+Diploma in Software Engineering — 2002`,
+];
+for (const [index, text] of educationLayouts.entries()) {
+  const rows = enrichCandidateUpload({}, text).education;
+  assert.equal(rows.length, index === 0 ? 2 : 1);
+  assert.ok(typeof rows[0] === "object" && "graduation_year" in rows[0]);
+  assert.equal(
+    rows[0].graduation_year,
+    ["2001", "2000", "2005", "2006", "2002"][index],
+  );
+}
+const undatedEducation = enrichCandidateUpload(
+  {},
+  `Education
+Qualification
+Bachelor of Computing
+College
+Example College
+Employment History
+Example Consulting
+Jan 2018 - Present`,
+).education;
+assert.ok(
+  typeof undatedEducation[0] === "object" &&
+    "graduation_year" in undatedEducation[0],
+);
+assert.equal(undatedEducation[0].graduation_year, "");
+
+const projectLedger = `Senior BI Consultant
+Employment History
+Example Services
+Jan 2014 - Present
+Selected project experience
+Example Automotive Customer
+SVCRM - BW7.4/BI4.2 Reporting – Track R3.1 June 2016 – May 2017
+SVCRM - BW7.5 on HANA/BI4.2 Reporting – Track R4.0 April 2016 – Now
+SVCRM - BW7.5 on HANA/BI4.2 Reporting – Track R4.1 Aug 2017 – Now
+• Implemented SAP reporting Jan 2010 - Dec 2011
+Education
+SAP BW Reporting Track Training Jan 2020 - Present`;
+const ledger = enrichCandidateUpload({}, projectLedger).projects;
+const tracks = ledger.filter((row) => String(row.name).includes("Track R"));
+assert.equal(tracks.length, 3);
+assert.equal(tracks.filter((row) => row.current === true).length, 2);
+for (const row of tracks) {
+  assert.equal(row.role, "");
+  assert.equal(row.client, "");
+  assert.equal(row.employer, "");
+}
+assert.equal(
+  enrichCandidateUpload(
+    {},
+    projectLedger.replace("Selected project experience", "Employment History"),
+  ).projects.some((row) => String(row.name).includes("Track R")),
+  false,
+);
+assert.equal(
+  enrichCandidateUpload(
+    {},
+    projectLedger.replace("June 2016 – May 2017", "June 2018 – May 2017"),
+  ).projects.some((row) => String(row.name).includes("R3.1")),
+  false,
+);
