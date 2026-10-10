@@ -9,6 +9,49 @@ import { enrichCandidateUpload } from "../lib/candidateUploadEnrichment";
 import { isValidProjectEntry } from "../lib/candidateProfileIngestion";
 import { evaluateCandidateExtractionCoverage } from "../lib/candidateExtractionCoverage";
 import { derivePrimaryModule } from "../lib/cv-parser";
+import { classifyCandidateText } from "../lib/candidateFileGuards";
+
+const unspecifiedTechnicalSource = `Example Person
+example@example.invalid
+Phone +60123456789
+Career history\tSAP Senior Technical Consultant at Example Services
+Jan 2015 - Present
+SAP Technical Consultant at Example Services
+Jun 2012 - Present
+Skills
+Education
+`;
+assert.equal(
+  classifyCandidateText(`Example Person
+Email example@example.invalid
+Phone +60123456789
+WORK EXPERIENCE
+Tax Associate responsible for GST implementation and tax advice.
+Internship: entered journals into SAP accounting system.
+EDUCATION
+Bachelor of Accounting
+`).shouldSave,
+  false,
+  "Generic tax implementation cannot lend SAP delivery evidence to an unrelated end-user internship",
+);
+assert.equal(
+  classifyCandidateText(unspecifiedTechnicalSource).recordType,
+  "SAP_CV",
+);
+assert.ok(
+  classifyCandidateText(unspecifiedTechnicalSource).signals.includes(
+    "sap_career_role_module_unspecified",
+  ),
+);
+assert.equal(
+  classifyCandidateText(
+    unspecifiedTechnicalSource
+      .replaceAll("SAP ", "")
+      .replace("Skills", "Sage X3 implementation\nSkills"),
+  ).shouldSave,
+  false,
+  "Generic technical ERP title cannot prove SAP or ABAP",
+);
 
 assert.equal(
   derivePrimaryModule(
