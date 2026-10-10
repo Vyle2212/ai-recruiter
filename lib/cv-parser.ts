@@ -1,3 +1,4 @@
+import { sourcePhoneIsNumericDate } from "./cvPhoneEvidence";
 import { sanitizeCandidateSourceText } from "./candidateSourcePreservation";
 /* FINAL SAP CV Parser - recruiter-grade extraction
    Fixes:
@@ -247,10 +248,11 @@ export function extractEmail(text: string) {
 }
 
 export function extractPhone(text: string) {
-  const matches = String(text || "").match(/(?:\+?\d[\d\s().-]{7,}\d)/g) || [];
+  const matches = String(text || "").match(/(?:\+?\d[\d \t().-]{7,}\d)/g) || [];
   const valid = matches
     .map((m) => m.replace(/\s+/g, " ").trim())
     .filter((m) => {
+      if (sourcePhoneIsNumericDate(m)) return false;
       const digits = m.replace(/\D/g, "");
       if (digits.length < 8 || digits.length > 15) return false;
       if (/^(19|20)\d{2}/.test(digits) && digits.length < 10) return false;

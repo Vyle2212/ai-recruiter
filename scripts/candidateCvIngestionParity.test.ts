@@ -8,7 +8,7 @@ import {
 import { enrichCandidateUpload } from "../lib/candidateUploadEnrichment";
 import { isValidProjectEntry } from "../lib/candidateProfileIngestion";
 import { evaluateCandidateExtractionCoverage } from "../lib/candidateExtractionCoverage";
-import { derivePrimaryModule } from "../lib/cv-parser";
+import { extractPhone, derivePrimaryModule } from "../lib/cv-parser";
 import { classifyCandidateText } from "../lib/candidateFileGuards";
 
 const unspecifiedTechnicalSource = `Example Person
@@ -1326,3 +1326,13 @@ assert.deepEqual(compoundBahasa.languages, [
   { language: "Bahasa Malaysia", proficiency: "Fluent" },
   { language: "Bahasa Indonesia", proficiency: "Native" },
 ]);
+
+// Numeric dates cannot become contact information or swallow a later phone.
+for (const numericDate of ["01.01.2020", "31-12-1999", "2020-01-01", "2019 - 2024"]) {
+  assert.equal(extractPhone(numericDate), null);
+  assert.ok(!enrichCandidateUpload({}, `Date of birth: ${numericDate}\nSAP Consultant`).phone);
+}
+assert.equal(extractPhone("01.01.2020\n+65 9123 4567"), "+65 9123 4567");
+assert.equal(extractPhone("Mobile: 0812 3456 7890"), "0812 3456 7890");
+assert.equal(enrichCandidateUpload({phone: "0812 3456 7890"}, "SAP Consultant").phone, "0812 3456 7890");
+assert.ok(!enrichCandidateUpload({}, "Phone: 01.01.2020\nSAP Consultant").phone);

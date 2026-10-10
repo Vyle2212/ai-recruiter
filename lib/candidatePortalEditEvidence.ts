@@ -1,3 +1,4 @@
+import { sourcePhoneIsNumericDate } from "./cvPhoneEvidence";
 import { careerDateIsCurrent } from "./careerDateEvidence";
 import { careerMonthIndex } from "./candidateCareerExperience";
 export const candidateMonths = [
@@ -51,7 +52,7 @@ export function contactHeaderPhone(text: string) {
       /(?:phone|mobile|tel(?:ephone)?|contact number)\s*[:.]\s*([\d ()\-.]{7,25})/i,
     )?.[1]
     ?.trim();
-  return local && local.replace(/\D/g, "").length >= 7 ? local : undefined;
+  return local && !sourcePhoneIsNumericDate(local) && local.replace(/\D/g, "").length >= 7 ? local : undefined;
 }
 export const candidateProjectTypes = [
   "Implementation",
