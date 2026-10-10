@@ -194,7 +194,7 @@ function splitTextList(value: string): string[] {
     .filter(Boolean);
 }
 
-function toStringArray(value: unknown): string[] {
+function toStringArray(value: unknown, preserveRecord = false): string[] {
   const parsedValue = parseJsonValue(value);
 
   const result: string[] = [];
@@ -204,7 +204,9 @@ function toStringArray(value: unknown): string[] {
       return;
     }
 
-    for (const item of splitTextList(text)) {
+    for (const item of preserveRecord
+      ? [text.trim()].filter(Boolean)
+      : splitTextList(text)) {
       if (!result.includes(item)) {
         result.push(item);
       }
@@ -484,13 +486,16 @@ function normalizeCandidate(rawCandidate: UnknownRecord): UnknownRecord {
     ]),
   );
 
-  const certifications = findArray(rawCandidate, [
-    "professionalCertifications",
-    "professional_certifications",
-    "certifications",
-    "certificates",
-    "certification",
-  ]);
+  const certifications = toStringArray(
+    deepFindValue(rawCandidate, [
+      "professionalCertifications",
+      "professional_certifications",
+      "certifications",
+      "certificates",
+      "certification",
+    ]),
+    true,
+  );
 
   const availability = findText(rawCandidate, [
     "availability",

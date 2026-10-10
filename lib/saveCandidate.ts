@@ -22,7 +22,10 @@ import {
 } from "./resumeQualityGate";
 import { originalCvReference } from "./originalCvArchiveKey";
 import { resolveCandidateIngestion } from "./candidateProfileIngestion";
-import { trackedHeaderName } from "./positionedResumeEvidence";
+import {
+  contactHeaderName,
+  trackedHeaderName,
+} from "./positionedResumeEvidence";
 import { candidateLanguagesForStorage } from "./candidateLanguageEvidence";
 
 type AnyRecord = Record<string, any>;
@@ -1887,7 +1890,9 @@ export async function saveCandidate(candidate: any) {
     cleanCandidate.email || signals.email,
   );
 
+  const verifiedContactName = contactHeaderName(rawText);
   const finalName =
+    verifiedContactName ||
     trackedHeaderName(
       rawText,
       String(cleanCandidate.file_name || cleanCandidate.source_file || ""),
@@ -1899,7 +1904,9 @@ export async function saveCandidate(candidate: any) {
         : signals.name);
 
   const weakCandidateName =
-    isWeakCandidateNameProduction(finalName) || isWeakCandidateName(finalName);
+    !verifiedContactName &&
+    (isWeakCandidateNameProduction(finalName) ||
+      isWeakCandidateName(finalName));
 
   const safeProfileQualityScore = weakCandidateName
     ? Math.min(Number(signals.profileQualityScore || 60), 60)

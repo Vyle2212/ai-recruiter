@@ -1,3 +1,4 @@
+import { evaluateCandidateProfileCompletion } from "../lib/candidateProfileIngestion";
 import { supportedLinkedInProfileUrl } from "../lib/linkedinProfileUrl";
 import { buildSearchV2RecruiterCandidateDetail } from "../lib/searchV2CandidateDetailContract";
 import { buildCandidateSearchV2ProfilePreview } from "../lib/candidateSearchV2ProfilePreview";
@@ -243,6 +244,67 @@ async function main() {
   );
   assert.deepEqual(candidateLanguagesForStorage(["English"]), ["English"]);
   assert.ok(!JSON.stringify(profile.languages).includes("[object Object]"));
+  const singleNameSource = [
+    "Aruna",
+    "Open to Permanent and Contract Roles",
+    "test@example.invalid | linkedin.com/in/aruna-mba-pmp-123/",
+    "PROFILE SUMMARY",
+    "SAP Finance implementation and configuration delivering",
+    "organisational value.",
+    "PROFESSIONAL EXPERIENCE",
+    "SAP Finance Team Lead | Example Consulting | Jul 2025 – Present",
+    "SAP FICO implementation design configuration UAT SIT support.",
+    "EDUCATION",
+    "• Master of Business Administration – Example University | 1998",
+    "Certifications & Training",
+    "• Project Management Professional (PMP) – Example Institute | 2016 (Active)",
+    "• SAP Business Planning and Consolidation – SAP | 2021",
+  ].join("\n");
+  const mononym = enrichCandidateUpload(
+    {
+      name: "Organisational Value.",
+      email: "test@example.invalid",
+      primary_module: "FICO",
+      raw_text: singleNameSource,
+    },
+    singleNameSource,
+  );
+  await saveCandidate({
+    ...mononym,
+    profile_source_type: "candidate_upload",
+    candidate_owned_update_context: {
+      auth_user_id: id,
+      user_profile_id: id,
+      candidate_id: id,
+      expected_updated_at: "2026-10-09T00:00:00Z",
+    },
+  });
+  assert.equal(
+    persisted.name,
+    "Aruna",
+    "Source-backed single-token name survives the save boundary",
+  );
+  const readback = normalizeActualCandidateSchema(persisted);
+  assert.equal(
+    readback.certifications.length,
+    2,
+    "Credential year must not become a separate credential",
+  );
+  assert.ok(readback.certifications[0].includes("2016 (Active)"));
+  const candidateProfile = buildCandidate360Profile(
+    normalizeForTest({ ...persisted, ...readback }),
+  );
+  assert.equal(candidateProfile.displayName.value, "Aruna");
+  assert.equal(candidateProfile.certifications.length, 2);
+  assert.ok(candidateProfile.certifications[0].includes("2016"));
+  assert.ok(
+    evaluateCandidateProfileCompletion({
+      ...persisted,
+      is_sap_profile: true,
+      projects: candidateProfile.projectExperience,
+    }).missingRequiredFields.includes("project_history"),
+    "SAP readiness must name the missing project section",
+  );
   console.log(
     "Candidate CV save, canonical readback and portal language evidence passed.",
   );

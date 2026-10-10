@@ -509,7 +509,7 @@ function recordLists(
   return output;
 }
 
-function stringList(values: unknown[]): string[] {
+function stringList(values: unknown[], preserveRecord = false): string[] {
   const output: string[] = [];
   const seen = new Set<string>();
   const add = (value: unknown) => {
@@ -540,7 +540,7 @@ function stringList(values: unknown[]): string[] {
       return;
     }
     for (const item of clean(current)
-      .split(/[,;|\n]/)
+      .split(preserveRecord ? /[\n]/ : /[,;|\n]/)
       .map((entry) => entry.trim())
       .filter(Boolean)) {
       const key = item.toLowerCase();
@@ -3818,13 +3818,16 @@ function normalizeCertifications(sourceScopes: CandidateSchemaRecord[]) {
       "SAP Data Medium Exchange",
     );
   };
-  const structured = allStrings(sourceScopes, [
-    "certifications",
-    "certification",
-    "certificates",
-    "professional_certifications",
-    "professionalCertifications",
-  ]).map(completeSourceToken);
+  const structured = stringList(
+    sourceScopes.flatMap((scope) => [
+      scope.certifications,
+      scope.certification,
+      scope.certificates,
+      scope.professional_certifications,
+      scope.professionalCertifications,
+    ]),
+    true,
+  ).map(completeSourceToken);
   if (structured.length) return structured;
   const section = resumeSection(
     sourceScopes,
