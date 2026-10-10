@@ -3,7 +3,7 @@ import { projectDateRange, projectDateIsCurrent } from "./projectDateEvidence";
 const linesOf = (text: string) =>
   text.split(/\r?\n/).map((line) => line.trim());
 const heading =
-  /^(?:professional summary|professional experience|work experience|employment history|education|courses|certifications?|languages?(?: skills)?|skills?|technical skills?|sap skills?|expertise|functional expertise|core competencies|key achievements|project summary experience)\s*:?[\s]*$/i;
+  /^(?:professional summary|professional experience|work experience|employment history|education|courses|certifications?(?:\s*(?:&|and)\s*training)?|earlier career experience|languages?(?: skills)?|skills?|technical skills?|sap skills?|expertise|functional expertise|core competencies|key achievements|project summary experience)\s*:?[\s]*$/i;
 
 function section(text: string, label: RegExp): string[] {
   const lines = text.split(/\r?\n/);
@@ -42,42 +42,107 @@ export function trackedHeaderName(
   return name.join(" ");
 }
 
+/** Read bounded employment headers, including two/three pipe cells and
+ * year-only earlier-career bullets. Never reuse a neighbouring card's dates. */
 export function pipeEmploymentCards(text: string) {
   const lines = linesOf(text);
-  return lines.flatMap((line, index) => {
-    const card = line.match(/^([^|]+)\s*\|\s*([^|]+)$/);
+  let employmentScope = true;
+  return lines.flatMap((original, index) => {
+    if (heading.test(original)) {
+      employmentScope =
+        /^(?:professional experience|work experience|employment history|earlier career experience)$/i.test(
+          original,
+        );
+      return [];
+    }
+    if (!employmentScope) return [];
+    const line = original.replace(/^[•●▪\uf0b7*-]\s*/, "");
+    const cells = line.split(/\s*\|\s*/);
+    if (cells.length < 2 || cells.length > 3) return [];
+    let title = cells[0];
+    let employer = cells[1];
+    let period = cells[2] || "";
+    // Earlier career: Title – Employer | 2009. The delimiter is structural,
+    // not the hyphen inside a job title or company name.
     if (
-      !card ||
-      !/\b(?:SAP|Consultant|Engineer|Analyst|Manager|Developer)\b/i.test(
-        card[1],
+      cells.length === 2 &&
+      /^(?:19|20)\d{2}(?:\s*[–—-]\s*(?:19|20)\d{2})?$/.test(employer)
+    ) {
+      const split = title.match(/^(.+?)\s+[–—]\s+(.+)$/);
+      if (!split) return [];
+      title = split[1];
+      period = employer;
+      employer = split[2];
+    }
+    if (
+      !/\b(?:SAP|Consultant|Engineer|Analyst|Manager|Developer|Architect|Auditor)\b/i.test(
+        title,
       )
     )
       return [];
-    let employer = card[2].trim();
-    let range = projectDateRange(employer);
-    for (let offset = 1; !range && offset <= 2; offset++) {
+    let dated = period || employer;
+    let range = projectDateRange(dated);
+    for (let offset = 1; !period && !range && offset <= 2; offset++) {
       const next = lines[index + offset] || "";
-      if (!next || /^[•*-]|\||:/.test(next) || heading.test(next)) break;
+      if (!next || /^[•●▪\uf0b7*-]|\||:/.test(next) || heading.test(next))
+        break;
       employer += " " + next;
-      range = projectDateRange(employer);
+      dated = employer;
+      range = projectDateRange(dated);
     }
-    if (!range || range.index === undefined) return [];
-    employer = employer
-      .slice(0, range.index)
-      .replace(/[\s(]+$/, "")
-      .trim();
+    const year = period.match(/^((?:19|20)\d{2})$/);
+    if (!range && !year) return [];
+    if (!period && range?.index !== undefined)
+      employer = employer.slice(0, range.index).replace(/[\s(]+$/, "");
+    employer = employer.trim();
     if (!employer || employer.length > 120) return [];
     return [
       {
         employer,
         company: employer,
-        title: card[1].trim(),
-        start_date: range[1],
-        end_date: range[2],
-        current: projectDateIsCurrent(range[2]),
+        title: title.trim(),
+        start_date: range?.[1] || year![1],
+        end_date: range?.[2] || year![1],
+        current: projectDateIsCurrent(range?.[2]),
       },
     ];
   });
+}
+
+/** A single-token name needs independent contact-header evidence. */
+export function contactHeaderName(text: string) {
+  const lines = linesOf(text).filter(Boolean);
+  const first = lines[0] || "";
+  if (!/^[\p{L}][\p{L}'’-]{3,35}$/u.test(first)) return undefined;
+  if (
+    /^(?:resume|summary|profile|education|skills|experience|certifications?|curriculum)$/i.test(
+      first,
+    )
+  )
+    return undefined;
+  const contact = lines.slice(1, 5).join(" ");
+  const slug = contact.match(/linkedin\.com\/in\/([^/\s]+)/i)?.[1] || "";
+  if (
+    !contact.includes("@") ||
+    !slug
+      .split(/[-_]/)
+      .some((token) => token.toLowerCase() === first.toLowerCase())
+  )
+    return undefined;
+  return first;
+}
+
+/** Location requires an address/contact claim, never a country in employment,
+ * project delivery, education, phone prefix or the profile summary. */
+export function explicitContactLocation(text: string) {
+  const header = text.split(
+    /(?:^|\n)\s*(?:PROFILE SUMMARY|PROFESSIONAL SUMMARY|KEY HIGHLIGHTS|PROFESSIONAL EXPERIENCE|WORK EXPERIENCE|EDUCATION)\s*(?:\n|$)/i,
+  )[0];
+  return header
+    .match(
+      /(?:^|\n)\s*(?:current location|location|address|based in)\s*[:–-]\s*([^\n]+)/i,
+    )?.[1]
+    ?.trim();
 }
 
 export function positionedResumeSections(text: string) {
@@ -111,14 +176,39 @@ export function positionedResumeSections(text: string) {
       graduation_year: date?.[2] || "",
     };
   });
-  const certificationLines = section(text, /^CERTIFICATIONS?$/i);
+  const inlineEducation = educationLines.flatMap((line) => {
+    const row = line
+      .replace(/^[•●▪\uf0b7*-]\s*/, "")
+      .match(
+        /^((?:Master|Bachelor|Doctorate|Diploma).+?)\s+[–—]\s+(.+?)\s*\|\s*((?:19|20)\d{2})$/i,
+      );
+    if (!row) return [];
+    return [
+      {
+        qualification: row[1],
+        institution: row[2].replace(
+          /,\s*(?:Australia|Indonesia|Singapore|India|Malaysia|Vietnam|Philippines)\s*$/i,
+          "",
+        ),
+        field_of_study: "",
+        graduation_year: row[3],
+      },
+    ];
+  });
+  education.push(...inlineEducation);
+  const certificationLines = section(
+    text,
+    /^CERTIFICATIONS?(?:\s*(?:&|and)\s*TRAINING)?$/i,
+  );
   const certifications: string[] = [];
   for (const line of certificationLines) {
     if (
-      /^(?:[•*-]\s*)?(?:SAP Certified|Certified|Certification)/i.test(line) ||
+      /^[•●▪\uf0b7*-]\s*|^(?:SAP Certified|Certified|Certification)/i.test(
+        line,
+      ) ||
       !certifications.length
     )
-      certifications.push(line.replace(/^[•*-]\s*/, ""));
+      certifications.push(line.replace(/^[•●▪\uf0b7*-]\s*/, ""));
     else certifications[certifications.length - 1] += " " + line;
   }
   const languageLines = section(text, /^LANGUAGES?(?: SKILLS)?$/i);

@@ -1,3 +1,4 @@
+import { pipeEmploymentCards } from "./positionedResumeEvidence";
 import {
   evaluateCandidateProfileCompletion,
   hasMeaningfulCandidateValue,
@@ -123,7 +124,7 @@ function explicitEmploymentCount(rawText: string): number {
       ),
     ) || []
   ).length;
-  return inline + nextLine;
+  return Math.max(inline + nextLine, pipeEmploymentCards(rawText).length);
 }
 
 /** Count repeated project-entry labels without double-counting Client + Project in one entry. */
@@ -164,7 +165,7 @@ const OBSERVED_PATTERNS: Record<
   education:
     /(?:^|\n)\s*(?:education|academic background|academic qualification|qualifications?)\s*:?(?:\n|$)/im,
   certifications:
-    /(?:^|\n)\s*(?:certifications?|licenses?\s*(?:&|and)\s*certifications?|credentials?)\s*:?(?:\n|$)/im,
+    /(?:^|\n)\s*(?:certifications?(?:\s*(?:&|and)\s*training)?|licenses?\s*(?:&|and)\s*certifications?|credentials?)\s*:?(?:\n|$)/im,
   skills:
     /(?:^|\n)\s*(?:skills?|technical skills?|core competencies|sap skills?|expertise)\s*:?(?:\n|$)/im,
   languages:

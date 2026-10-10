@@ -2783,7 +2783,7 @@ function narrativeProjects(
     );
     let name = clean(
       segment.match(
-        /\b(?:projects?|program(?:me)?)\s*[:\-]\s*([\s\S]{2,180}?)(?=\s+(?:role|client|system|year|highlights?|project\s+duration)\s*:|[.;|]|$)/i,
+        /\b(?:projects?|program(?:me)?)\s*(?::\s*|\s+[–—-]\s+)([\s\S]{2,180}?)(?=\s+(?:role|client|system|year|highlights?|project\s+duration)\s*:|[.;|]|$)/i,
       )?.[1] || "",
     );
     let client = rawClient;

@@ -123,6 +123,28 @@ function normalizeCertifications(items: any[]) {
 }
 
 type EditorColumn = { key: string; label: string; placeholder: string };
+const fieldLabels: Record<string, string> = {
+  display_name: "Full name",
+  displayName: "Full name",
+  current_title: "Current title",
+  currentTitle: "Current title",
+  current_company: "Current employer",
+  currentCompany: "Current employer",
+  location: "Location / country",
+  workExperience: "Employment history",
+  experience: "Employment history",
+  employment: "Employment history",
+  projectExperience: "SAP project history",
+  projects: "SAP project history",
+  education: "Education",
+  languages: "Languages",
+  sap_modules: "SAP modules",
+  sapModules: "SAP modules",
+  skills: "Skills",
+  techSkills: "Skills",
+  candidate_accuracy_confirmation: "Review and confirm accuracy",
+  candidate_sharing_consent: "Consent to profile sharing",
+};
 
 function StructuredEditor({
   title,
@@ -149,10 +171,23 @@ function StructuredEditor({
     <section className={panel}>
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold">{title}</h2>
+          <h2 className="text-xl font-semibold">
+            {title}
+            {required ? (
+              <span className="ml-2 text-sm text-amber-200">* Required</span>
+            ) : (
+              <span className="ml-2 text-sm text-slate-400">Optional</span>
+            )}
+          </h2>
           {required ? (
             <p className="mt-1 text-xs text-amber-100">
-              At least one complete row is required.
+              {title === "Employment history"
+                ? "Every row needs employer, job title and dates, or Current. Check all jobs against your CV."
+                : title === "SAP project history"
+                  ? "Every row needs a project or client and your role. Dates are optional when the CV does not state them. Do not copy employment dates."
+                  : title === "Languages"
+                    ? "Add at least one language. If your CV does not state it, enter it yourself."
+                    : "Add at least one education record. Check the institution, qualification and year against your CV."}
             </p>
           ) : null}
         </div>
@@ -175,6 +210,16 @@ function StructuredEditor({
                 {columns.map((column) => (
                   <label className="text-sm" key={column.key}>
                     {column.label}
+                    {required &&
+                    ((title === "Employment history" &&
+                      ["employer", "title", "start_date", "end_date"].includes(
+                        column.key,
+                      )) ||
+                      (title === "SAP project history" &&
+                        column.key === "role") ||
+                      (title === "Languages" && column.key === "language")) ? (
+                      <span className="ml-1 text-amber-200">*</span>
+                    ) : null}
                     <input
                       className={input}
                       value={String(row[column.key] ?? "")}
@@ -457,7 +502,9 @@ export default function CandidatePortalClient({
                 <div>
                   <h2 className="text-xl font-semibold">Profile readiness</h2>
                   <p className="mt-2 text-sm text-slate-400">
-                    Status: {data.profileStatus || "Not confirmed"}
+                    {data.searchable
+                      ? "Profile confirmed"
+                      : "Review needed before recruiters can find you"}
                   </p>
                 </div>
                 <span
@@ -468,7 +515,12 @@ export default function CandidatePortalClient({
               </div>
               {data.missingRequiredFields.length ? (
                 <p className="mt-4 text-sm text-amber-100">
-                  Required gaps: {data.missingRequiredFields.join(", ")}
+                  Complete or check:{" "}
+                  {data.missingRequiredFields
+                    .map(
+                      (field) => fieldLabels[field] || field.replace(/_/g, " "),
+                    )
+                    .join(", ")}
                 </p>
               ) : null}
             </section>
@@ -498,7 +550,12 @@ export default function CandidatePortalClient({
             </section>
 
             <section className={panel}>
-              <h2 className="text-xl font-semibold">Required information</h2>
+              <h2 className="text-xl font-semibold">Review your information</h2>
+              <p className="mt-2 text-sm text-slate-300">
+                <span className="text-amber-200">* Required</span> · Check every
+                extracted value against your CV. Correct any mistakes before
+                confirming. Leave optional information blank if unknown.
+              </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 {[
                   ["displayName", "Full name"],
@@ -512,8 +569,16 @@ export default function CandidatePortalClient({
                 ].map(([name, label]) => (
                   <label className="text-sm" key={name}>
                     {label}
+                    {name !== "email" && name !== "phone" ? (
+                      <span className="ml-1 text-amber-200">*</span>
+                    ) : (
+                      <span className="ml-1 text-xs text-slate-400">
+                        {name === "email" ? "Verified" : "Optional"}
+                      </span>
+                    )}
                     <input
-                      className={input}
+                      aria-required={name !== "email" && name !== "phone"}
+                      className={`${input} ${name !== "email" && name !== "phone" && !String(fields[name] ?? "").trim() ? "border-amber-400" : ""}`}
                       value={String(fields[name] ?? "")}
                       disabled={name === "email"}
                       onChange={(event) => set(name, event.target.value)}
@@ -661,7 +726,9 @@ export default function CandidatePortalClient({
                   checked={accuracy}
                   onChange={(event) => setAccuracy(event.target.checked)}
                 />
-                I reviewed the extracted profile and confirm it is accurate.
+                * I checked my name, employment, SAP projects, education and
+                skills against my CV, corrected errors, and confirm the
+                information is accurate.
               </label>
               <label className="mt-3 flex gap-3 text-sm">
                 <input
@@ -669,7 +736,7 @@ export default function CandidatePortalClient({
                   checked={sharing}
                   onChange={(event) => setSharing(event.target.checked)}
                 />
-                I consent to sharing this profile with relevant recruiters and
+                * I consent to sharing this profile with relevant recruiters and
                 clients.
               </label>
               <button

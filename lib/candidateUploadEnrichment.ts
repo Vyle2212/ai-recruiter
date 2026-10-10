@@ -4,6 +4,8 @@ import { isValidProjectEntry } from "./candidateProfileIngestion";
 import { careerMonthIndex } from "./candidateCareerExperience";
 import {
   pipeEmploymentCards,
+  contactHeaderName,
+  explicitContactLocation,
   positionedResumeSections,
   trackedHeaderName,
 } from "./positionedResumeEvidence";
@@ -827,6 +829,7 @@ export function enrichCandidateUpload(
   return {
     ...candidate,
     name:
+      contactHeaderName(rawText) ||
       trackedName ||
       (full.extractedFullName && !full.isNameSuspicious
         ? full.extractedFullName
@@ -834,8 +837,13 @@ export function enrichCandidateUpload(
     email: full.extractedEmail || candidate.email,
     phone: full.extractedPhone || candidate.phone,
     linkedin_url: full.linkedInUrl || candidate.linkedin_url,
-    location: positioned.location || location,
-    country: positioned.country || full.locationCountry || candidate.country,
+    location:
+      explicitContactLocation(rawText) ||
+      positioned.location ||
+      (pipeCards.length ? "" : location),
+    country:
+      positioned.country ||
+      (pipeCards.length ? "" : full.locationCountry || candidate.country),
     current_title:
       pipeCards.length && currentExperience
         ? currentExperience.title
