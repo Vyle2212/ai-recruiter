@@ -114,6 +114,10 @@ async function main() {
     assert.deepEqual(payload.secondaryModules, payload.secondary_modules);
     assert.equal(payload.currentCompany, payload.current_company);
     assert.equal(payload.currentTitle, payload.current_title);
+    assert.ok(
+      !payload.sap_modules.includes("PP"),
+      "Manufacturing client name is not PP expertise",
+    );
   }
   assert.equal(
     candidate.candidatePayload.profile_source_type,
