@@ -13,7 +13,12 @@ export function candidateProjectStatuses(
   );
   if (ongoing.some(Boolean))
     return ongoing.map((value) => (value ? "Current" : ""));
-  const dates = ends.map((value) => careerMonthIndex(value));
+  // Status ranking depends on the supplied dates, not the browser clock.
+  // Career tenure deliberately rejects future dates; that rule must not hide
+  // a Latest badge while editing an explicit end month/year.
+  const dates = ends.map((value) =>
+    careerMonthIndex(value, false, new Date(Date.UTC(2100, 11, 1))),
+  );
   const latest = Math.max(...dates.filter((v): v is number => v !== null));
   return dates.map((value) =>
     value !== null && value === latest ? "Latest" : "",

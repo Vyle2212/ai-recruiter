@@ -228,8 +228,7 @@ function StructuredEditor({
           : row,
       ),
     );
-  const projectStatuses =
-    title === "SAP project history" ? candidateProjectStatuses(rows) : [];
+  const projectStatuses = currentable ? candidateProjectStatuses(rows) : [];
   return (
     <section className={panel}>
       <div className="flex items-center justify-between gap-3">
@@ -278,9 +277,10 @@ function StructuredEditor({
               className="rounded-xl border border-slate-800 bg-[#070A0F] p-4"
               key={`${title}-${index}`}
             >
-              {title === "SAP project history" && projectStatuses[index] ? (
+              {currentable && projectStatuses[index] ? (
                 <span className="mb-3 inline-block rounded-full border border-cyan-600 px-2 py-1 text-xs text-cyan-200">
-                  {projectStatuses[index]} project
+                  {projectStatuses[index]}{" "}
+                  {title === "Employment history" ? "role" : "project"}
                 </span>
               ) : null}
               <div className="grid gap-3 md:grid-cols-2">
@@ -400,7 +400,9 @@ function StructuredEditor({
                       }}
                     />
                     {title === "Employment history"
-                      ? "Current role"
+                      ? projectStatuses[index] === "Latest"
+                        ? "Latest role (from End date)"
+                        : "Current role"
                       : projectStatuses[index] === "Latest"
                         ? "Latest project (from End date)"
                         : "Current project"}

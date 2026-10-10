@@ -198,3 +198,28 @@ assert.deepEqual(
   }),
   {},
 );
+
+// Updating the latest employment/project from Current to a dated end recalculates immediately.
+const careerRows = [
+  { end_date: "Current", current: true },
+  { end_date: "2024-09", current: false },
+];
+assert.deepEqual(candidateProjectStatuses(careerRows), ["Current", ""]);
+careerRows[0] = { end_date: "2026-10", current: false };
+assert.deepEqual(candidateProjectStatuses(careerRows), ["Latest", ""]);
+careerRows.push({ end_date: "2026-10", current: false });
+assert.deepEqual(candidateProjectStatuses(careerRows), [
+  "Latest",
+  "",
+  "Latest",
+]);
+careerRows[2] = { end_date: "Now", current: true };
+assert.deepEqual(candidateProjectStatuses(careerRows), ["", "", "Current"]);
+
+assert.deepEqual(
+  candidateProjectStatuses([
+    { end_date: "2027-01", current: false },
+    { end_date: "2026-10", current: false },
+  ]),
+  ["Latest", ""],
+);

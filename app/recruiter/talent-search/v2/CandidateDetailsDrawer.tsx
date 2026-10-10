@@ -386,6 +386,7 @@ export default function CandidateDetailsDrawer({
 
   const enterprise = profile?.enterpriseProfile;
   const employment = enterprise?.employmentTimeline || [];
+  const employmentStatuses = candidateProjectStatuses(employment);
   const externalEmployment = candidate.externalProfile?.employmentRecords || [];
   const projects = enterprise?.projects || [];
   const projectStatuses = candidateProjectStatuses(projects);
@@ -946,11 +947,16 @@ export default function CandidateDetailsDrawer({
             <Panel title="Employment history">
               {employment.length ? (
                 <ol className="space-y-5">
-                  {employment.map((item) => (
+                  {employment.map((item, employmentIndex) => (
                     <li
                       key={item.id}
                       className="border-l border-slate-700 pl-4"
                     >
+                      {employmentStatuses[employmentIndex] ? (
+                        <span className="mb-2 inline-block rounded-full border border-cyan-600 px-2 py-1 text-xs text-cyan-200">
+                          {employmentStatuses[employmentIndex]} role
+                        </span>
+                      ) : null}
                       <h4 className="font-semibold text-white">
                         {text(item.title, "Role not provided")}
                       </h4>
