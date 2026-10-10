@@ -806,6 +806,7 @@ export function enrichCandidateUpload(
             employer: clean(item.company),
             company: clean(item.company),
             title: clean(item.title),
+            ...(clean(item.location) ? { location: clean(item.location) } : {}),
             start_date: clean(item.startDate),
             end_date: clean(item.endDate),
             current: item.current === true,

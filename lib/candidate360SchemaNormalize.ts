@@ -5028,6 +5028,7 @@ function normalizeActualCandidateSchemaFresh(
     id: item.id,
     company: item.company,
     title: item.title,
+    ...(item.location ? { location: item.location } : {}),
     startDate: item.start,
     endDate: item.end,
     description: "",

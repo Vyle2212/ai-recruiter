@@ -10,6 +10,7 @@ export type FlattenedEmployment = {
   current: boolean;
   excerpt: string;
   group: string;
+  location?: string;
 };
 const month = "(?:Jan|Feb|Mar|Mac|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*";
 const day = "\\d{1,2}(?:\\s*(?:st|nd|rd|th))?";
@@ -187,6 +188,91 @@ export function flattenedEmployment(
         "professional-position-ledger",
       );
       i += 2;
+    }
+  }
+
+  // Explicit three-column employment tables keep cell ownership even when
+  // dates are absent or only a start is printed. Never borrow project dates.
+  const tableSource = layoutSource.normalize("NFKC");
+  const tableScope = tableSource.match(
+    /(?:^|\n)\s*(?:Professional Experience|Employment History|Experience History)\s*:?\s*\n([\s\S]*?)(?=\n\s*(?:Education|Educational Qualifications|Technical Skills|Skills|References|Projects?|Project Experience|Project Undertaken)\b|$)/i,
+  )?.[1];
+  if (tableScope) {
+    const cells = tableScope
+      .split(/[\r\n\t]+/)
+      .map((x) => x.trim())
+      .filter(Boolean);
+    const header = cells.slice(0, 3).map((x) => x.toLowerCase());
+    const roleCell = new RegExp(
+      `^[A-Za-z0-9/&(). +,-]{0,100}\\b(?:${job}|Sales Representative)(?:\\s*\\([^)]{1,40}\\))?$`,
+      "i",
+    );
+    const periodCell = new RegExp(`^${range}$`, "i");
+    const startCell = new RegExp(`^${date}$`, "i");
+    const kind = header.join("|");
+    if (
+      [
+        "organization|designation|location",
+        "organisation|designation|location",
+        "date|company name|role",
+        "period|organization|designation",
+        "period|organisation|designation",
+      ].includes(kind)
+    ) {
+      for (let i = 3; i + 2 < cells.length; i += 3) {
+        const [first, second, third] = cells.slice(i, i + 3);
+        if (
+          /^(?:client|customer|projects?|references?|education)\b/i.test(first)
+        )
+          break;
+        if (kind.endsWith("|location")) {
+          if (
+            !roleCell.test(second) ||
+            !/^[\p{L} .'-]{2,60},\s*[\p{L} .'-]{2,60}$/u.test(third)
+          )
+            break;
+          const before = result.length;
+          add(
+            first,
+            second,
+            "",
+            "",
+            [first, second, third].join("\n"),
+            "undated-organization-role-location",
+            true,
+            false,
+            true,
+          );
+          if (result.length > before)
+            result[result.length - 1].location = third;
+        } else if (kind.startsWith("date|")) {
+          if (!startCell.test(first)) break;
+          if (/^\(Project\)/i.test(third)) continue;
+          if (!roleCell.test(third)) break;
+          add(
+            second,
+            third,
+            first,
+            "",
+            [first, second, third].join("\n"),
+            "start-only-company-role-table",
+            true,
+            true,
+          );
+        } else {
+          const match = periodCell.exec(first);
+          if (!match || !roleCell.test(third)) break;
+          add(
+            second,
+            third,
+            match[1],
+            match[2],
+            [first, second, third].join("\n"),
+            "period-organization-designation-table",
+            true,
+          );
+        }
+      }
     }
   }
 

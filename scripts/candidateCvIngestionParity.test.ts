@@ -1372,3 +1372,14 @@ assert.equal(
   reExtractCandidate(adjacentAddress).suggested.phone,
   "+65 9123 4567",
 );
+
+const explicitUndatedLocation = enrichCandidateUpload(
+  {},
+  "Professional Experience\nOrganization\nDesignation\nLocation\nExample Technology Sdn Bhd\nSAP ABAP Consultant\nExample City, Malaysia\nEducation",
+);
+assert.equal(
+  explicitUndatedLocation.employment_history[0].location,
+  "Example City, Malaysia",
+);
+assert.equal(explicitUndatedLocation.employment_history[0].start_date, "");
+assert.equal(explicitUndatedLocation.employment_history[0].end_date, "");

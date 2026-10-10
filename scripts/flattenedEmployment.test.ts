@@ -1360,3 +1360,58 @@ assert.deepEqual(
   [],
 );
 assert.equal(extractCanonicalEmploymentFromResume(positionLedger).length, 3);
+
+const undatedColumns =
+  "Professional Experience\nOrganization\nDesignation\nLocation\nExample Technology Sdn Bhd\nSAP ABAP Consultant\nExample City, Malaysia\nExample Systems Pvt Ltd\nSAP ABAP Consultant\nExample Town, India\nEducation";
+assert.deepEqual(
+  read(undatedColumns).map((x) => [
+    x.company,
+    x.title,
+    x.start,
+    x.end,
+    x.current,
+  ]),
+  [
+    ["Example Technology Sdn Bhd", "SAP ABAP Consultant", "", "", false],
+    ["Example Systems Pvt Ltd", "SAP ABAP Consultant", "", "", false],
+  ],
+);
+assert.equal(extractCanonicalEmploymentFromResume(undatedColumns).length, 2);
+const startColumns =
+  "Employment History:\nDate\tCompany Name\tRole\nFeb 2013\tExample Services Sdn Bhd\tSAP HANA Professional Consultant\nNov 2011\tExample Services Sdn Bhd\tProfessional Consultant\nSkills:";
+assert.deepEqual(
+  read(startColumns).map((x) => [x.start, x.end, x.current]),
+  [
+    ["Feb 2013", "", false],
+    ["Nov 2011", "", false],
+  ],
+);
+assert.equal(extractCanonicalEmploymentFromResume(startColumns).length, 2);
+const periodColumns =
+  "Professional Experience:\nPeriod\tOrganization\tDesignation\nNov'2009 to till date\nExample Technology Ltd\nSD Consultant\nMay'2008-Nov'2009\tExample Manufacturing Ltd\tSales Representative\nTechnical Skills:";
+assert.deepEqual(
+  read(periodColumns).map((x) => [x.company, x.start, x.end]),
+  [
+    ["Example Technology Ltd", "Nov 2009", "Present"],
+    ["Example Manufacturing Ltd", "May 2008", "Nov 2009"],
+  ],
+);
+for (const value of [
+  undatedColumns.replace("Professional Experience", "Project Experience"),
+  undatedColumns.replace(
+    "Example Technology Sdn Bhd",
+    "Client: Example Technology Sdn Bhd",
+  ),
+  startColumns.replace("Employment History", "Project History"),
+])
+  assert.deepEqual(read(value), []);
+assert.deepEqual(
+  read(startColumns.replace("Feb 2013", "Feb 2013 Mar 2014")),
+  [],
+);
+assert.equal(
+  extractCanonicalEmploymentFromResume(undatedColumns).find(
+    (row) => row.company === "Example Technology Sdn Bhd",
+  )?.location,
+  "Example City, Malaysia",
+);
