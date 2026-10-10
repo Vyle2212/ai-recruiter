@@ -157,3 +157,7 @@ assert.deepEqual(labelledCompanySpells("Work Experience Project Company Name: Bu
 assert.deepEqual(labelledCompanySpells("Work Experience Company Name: Example Integrator Ltd Position Title: SAP Consultant. From/To: 2022-2017"), []);
 
 console.log("Heading-bound career cards and SAP-only tenure: PASS");
+
+const annualCard = 'Work Experience\nExample Digital SDN BHD\n2018-2023\nSAP BPC, SEM-BCS Functional (Support & Project)\nResponsible for consolidation support.\nProject Experience\nClient Buyer\n2019-2022';
+assert.deepEqual(headedCareerCards(annualCard).map(({company,title,start,end})=>({company,title,start,end})), [{company:'Example Digital SDN BHD',title:'SAP BPC, SEM-BCS Functional (Support & Project)',start:'2018',end:'2023'}]);
+for (const invalid of [annualCard.replace('Work Experience','Project Experience'),annualCard.replace('2018-2023','2018'),annualCard.replace('2018-2023','2023-2018'),annualCard.replace('Example Digital SDN BHD','Client: Example Digital SDN BHD')]) assert.deepEqual(headedCareerCards(invalid), []);

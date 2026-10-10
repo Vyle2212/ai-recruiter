@@ -80,6 +80,17 @@ type CardMatch = {
  * date. Other cards remain in review until their own row boundary is proven.
  */
 export function headedCareerCards(input: string): HeadedCareerCard[] {
+  // Preserve line boundaries for an explicit employer / year range / role card.
+  // A lone year or a project heading is insufficient evidence of employment.
+  const lineCard = /(?:^|\n)\s*(?:Work(?:ing)? Experiences?|Professional Experiences?|Employment History|Career History)\s*\n\s*([^\n]{3,90})\n\s*((?:19|20)\d{2})\s*[-–—]\s*((?:19|20)\d{2}|Present|Current|Now)\s*\n\s*([^\n]{3,105})/i.exec(input.normalize("NFKC"));
+  if (lineCard && /\b(?:SDN BHD|Sdn\.?|Bhd\.?|Limited|Ltd\.?|Inc\.?|Corporation|Corp\.?|Pte\.?|Berhad)\b/i.test(lineCard[1])) {
+    const title = cleaned(lineCard[4]);
+    const titleWithJob = /\bFunctional\s*(?:\([^)]*\))?$/i.test(title)
+      ? `${title} Consultant`
+      : title;
+    const owned = validate(lineCard[1], titleWithJob, lineCard[2], lineCard[3]);
+    if (owned) return [{ company: owned.company, title, start: lineCard[2], end: lineCard[3], excerpt: lineCard[0].trim().slice(0, 280) }];
+  }
   const text = input.normalize("NFKC").replace(/\s+/g, " ");
   for (const foundHeading of text.matchAll(heading)) {
     if (
