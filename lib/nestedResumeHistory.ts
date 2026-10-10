@@ -577,6 +577,39 @@ export function narrativeResumeEmployment(text: string) {
 
 /** Reorder client/project fields only inside the same numbered card. */
 export function projectFieldLayoutText(text: string) {
+  // Customer / Company is a single split table label, not an employer.
+  if (
+    [...text.matchAll(/^[ \t]*Customer[ \t]*\r?\nCompany[ \t]*$/gim)].length >=
+    2
+  )
+    text = text.replace(
+      /^[ \t]*Customer[ \t]*\r?\nCompany[ \t]*\r?\n([^\n]+)\r?\n([\s\S]*?)(?=^[ \t]*Customer[ \t]*$|^[ \t]*Company[ \t]*$|(?![\s\S]))/gim,
+      (block: string, client: string, body: string) => {
+        const lines = body.split(/\r?\n/);
+        const field = (label: string) =>
+          lines.findIndex(
+            (line, i) =>
+              i < 16 && new RegExp(`^${label}[ \\t]*(?::|\\t)`, "i").test(line),
+          );
+        const project = field("Project"),
+          role = field("Roles?"),
+          duration = field("Duration");
+        if (project < 0 || role <= project || duration < 0) return block;
+        const val = (i: number) =>
+          lines[i].replace(/^[^:\t]+[:\t][ \t]*/, "").trim();
+        const roles = [val(role)];
+        let end = role + 1;
+        while (
+          end < lines.length &&
+          /^[ \t]*[^:\t]+\([^\n]*(?:team lead|team member)[^\n]*\)[ \t]*$/i.test(
+            lines[end],
+          )
+        )
+          roles.push(lines[end++].trim());
+        return `Project: ${val(project)}\nClient: ${client.trim()}\nDuration: ${val(duration)}\nRole: ${roles.join("; ")}\n${lines.slice(end).join("\n")}`;
+      },
+    );
+
   // Some native Word tables collapse literal field labels into one line.
   // Recover only the explicit Duration/Position pair and optional Project
   // label; Company is deliberately not reclassified as a project client.
@@ -663,10 +696,23 @@ export function projectFieldLayoutText(text: string) {
       /^([ \t]*(?:Duration|Period|Project[ \t]+Duration)[ \t]*:[ \t]*)([^\n]+)/gim,
       (_, label, duration) =>
         label +
-        duration.replace(
-          /(^|(?:to|until|till|[-–—~])[ \t]+)((?:19|20)\d{2})[ \t]+(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/gi,
-          "$1$3 $2",
-        ),
+        (() => {
+          // Only a whole forward same-year shorthand is unambiguous. Never
+          // collapse multiple separated periods into a continuous project.
+          if (
+            new RegExp(
+              `^${monthName}\\s*[-–—]\\s*${monthName}\\s+(?:19|20)\\d{2}$`,
+              "i",
+            ).test(duration.trim())
+          ) {
+            const range = cardDateRange(duration.trim());
+            if (range) return `${range[1]} - ${range[2]}`;
+          }
+          return duration.replace(
+            /(^|(?:to|until|till|[-–—~])[ \t]+)((?:19|20)\d{2})[ \t]+(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/gi,
+            "$1$3 $2",
+          );
+        })(),
     )
     .split(/\r?\n/);
   // A named project after Client is still the same explicit field table.

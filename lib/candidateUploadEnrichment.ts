@@ -354,7 +354,7 @@ function explicitProjectRecords(rawText: string) {
   // An invalid or partial date claim is not an undated assignment. Preserve
   // that claim only in the source text until it can be reviewed.
   const elapsedDuration = (value: string) =>
-    /^(?:\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten)[ \t]*(?:man[ \t]+)?(?:days?|weeks?|months?|years?)(?:[ \t]*\/[ \t]*project)?[.]?$/i.test(
+    /^(?:\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten)[ \t]*(?:man[ \t]+)?(?:days?|weeks?|months?|years?)(?:[ \t]*\/[ \t]*project)?(?:[ \t]*\((?:19|20)\d{2}\))?[.]?$/i.test(
       value,
     );
   const unresolvedDateClaim = (block: string, start: string, end: string) => {
@@ -448,6 +448,11 @@ function explicitProjectRecords(rawText: string) {
     );
     if (employerNarrative?.index !== undefined)
       block = block.slice(0, employerNarrative.index);
+    const companyOrNonSapBoundary = block.match(
+      /\n[ \t]*(?:Company|Non[- \t]*SAP[ \t]+Project[ \t]+Work[ \t]+Experience)[ \t]*:?[ \t]*\n/i,
+    );
+    if (companyOrNonSapBoundary?.index !== undefined)
+      block = block.slice(0, companyOrNonSapBoundary.index);
     const boundary = block.match(
       /\n\s*(?:(?:work(?:ing)?|professional|career|employment)\s+(?:experience|history)|education|academic\s+(?:background|qualifications?)|qualifications?|certifications?|credentials?|skills?|technical\s+skills?|core\s+competencies|languages?|language\s+proficiency|personal\s+details|summary|profile|references?)\s*:?\s*(?:\n|$)/i,
     );

@@ -778,3 +778,76 @@ assert.equal(clientFirstNamedProject[0].client, "First Example Client");
 assert.equal(clientFirstNamedProject[0].start_date, "June 2008");
 assert.equal(clientFirstNamedProject[1].client, "Second Example Client");
 assert.equal(clientFirstNamedProject[1].start_date, "Jan 2011");
+
+const sharedYear = enrichCandidateUpload(
+  {},
+  `Client: Example Client
+Role: SAP BW Consultant
+Duration: Jan – May 2018`,
+).projects;
+assert.equal(sharedYear[0].start_date, "Jan 2018");
+assert.equal(sharedYear[0].end_date, "May 2018");
+for (const period of ["Nov - Jan 2018", "Nov – Dec 2017; Apr-May 2018"]) {
+  assert.equal(
+    enrichCandidateUpload(
+      {},
+      `Client: Example Client\nRole: SAP BW Consultant\nDuration: ${period}`,
+    ).projects.length,
+    0,
+  );
+}
+const splitCustomer = enrichCandidateUpload(
+  {},
+  `Customer
+Company
+First Example Client
+Duration\t18 months (January 2009 – May 2012)
+Industry\tUtilities
+Project\tSAP implementation
+Description
+Role\tAR (Team lead)
+AP (Team lead)
+Responsibilities
+Configured SAP.
+Customer
+Company
+Second Example Client
+Duration\t7 months (2009)
+Industry\tUtilities
+Project\tSAP training
+Description
+Role\tSAP Trainer
+Responsibilities
+Delivered SAP training.
+Company
+Example Employer
+Job Position\tSAP Consultant
+Duration\tJan 2010 - Dec 2011`,
+).projects;
+assert.equal(splitCustomer.length, 2);
+assert.equal(splitCustomer[0].client, "First Example Client");
+assert.equal(splitCustomer[0].role, "AR (Team lead); AP (Team lead)");
+assert.equal(splitCustomer[0].start_date, "January 2009");
+assert.equal(splitCustomer[1].client, "Second Example Client");
+assert.equal(splitCustomer[1].start_date, "");
+assert.equal(splitCustomer[1].end_date, "");
+assert.equal(splitCustomer[1].duration_text, "7 months (2009)");
+console.log(
+  "Split Customer/Company headers and bounded shared-year periods: passed",
+);
+
+const laterNonSapCompany = enrichCandidateUpload(
+  {},
+  `Project: Example SAP Implementation
+Role: FI and CO Functional Consultant
+Responsibilities
+Configured SAP.
+Non-SAP Project Work Experience
+Company
+Example Employer
+Duration: January 2000 - August 2001
+Job Position: C++ Programmer`,
+).projects;
+assert.equal(laterNonSapCompany[0].start_date, "");
+assert.equal(laterNonSapCompany[0].end_date, "");
+assert.equal(laterNonSapCompany[0].role, "FI and CO Functional Consultant");
