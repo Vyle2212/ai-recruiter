@@ -580,3 +580,81 @@ Duration: 31 April 2011 - 2 May 2011`,
   ).projects.some((row) => row.client === "Example Client"),
   false,
 );
+
+const namedClientCards = enrichCandidateUpload(
+  {},
+  `PROJECTS
+Client Name\t: First Example Client
+Duration\t: April 2011 to March 2016
+Role\t: SAP Lead Consultant
+Client Name\t: Second Example Client\t\tDuration\t: January 2009 to June 2009
+Role\t: SAP Analyst
+`,
+).projects;
+assert.equal(namedClientCards.length, 2);
+assert.equal(namedClientCards[0].client, "First Example Client");
+assert.equal(namedClientCards[0].start_date, "April 2011");
+assert.equal(namedClientCards[1].client, "Second Example Client");
+assert.equal(namedClientCards[1].start_date, "January 2009");
+assert.equal(namedClientCards[1].end_date, "June 2009");
+
+const yearFirstCards = enrichCandidateUpload(
+  {},
+  `Project 1:
+Organization\tExample Consulting
+Client\tFirst Example Client
+Project\tImplementation
+Role\tSAP FICO Consultant
+Duration\tDecember 2014 to 2016 March
+Project 2
+Organization\tSecond Example Consulting
+Client\tSecond Example Client
+Project\tSupport
+Role\tSAP FICO Lead
+Duration\t2017 July to 2018 September
+Project 3
+Client\tUnresolved Example Client
+Duration\t2018 September till now
+`,
+).projects;
+assert.equal(yearFirstCards.length, 2);
+assert.equal(yearFirstCards[0].client, "First Example Client");
+assert.equal(yearFirstCards[0].start_date, "December 2014");
+assert.equal(yearFirstCards[0].end_date, "March 2016");
+assert.equal(yearFirstCards[1].client, "Second Example Client");
+assert.equal(yearFirstCards[1].start_date, "July 2017");
+assert.equal(yearFirstCards[1].end_date, "September 2018");
+assert.equal(
+  yearFirstCards.some((row) => row.client === "Unresolved Example Client"),
+  false,
+);
+console.log(
+  "Literal Client Name and year-first numbered project cards: passed",
+);
+
+const nextEmployerNarrative = enrichCandidateUpload(
+  {},
+  `Client Name\t: First Example Client
+Duration: July 13th 2015 to July 1st 2016
+Responsibilities:
+Configured SAP FI.
+Example Employer
+Worked as SAP FICO Consultant at Example Employer From May 5th 2014 to June 26th 2015
+Client Name\t: Second Example Client
+Duration: May 5th 2014 to June 26th 2015
+`,
+).projects;
+assert.equal(
+  nextEmployerNarrative.length,
+  0,
+  "A later employment narrative cannot supply either client's project role",
+);
+const tabColonRole = enrichCandidateUpload(
+  {},
+  `Client Name\t: Example Client
+Role\t\t: SAP Lead Consultant
+Duration\t: April 2011 to March 2016`,
+).projects;
+assert.equal(tabColonRole.length, 1);
+assert.equal(tabColonRole[0].role, "SAP Lead Consultant");
+console.log("Employer narrative boundary and tab/colon field values: passed");

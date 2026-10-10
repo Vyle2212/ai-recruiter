@@ -438,6 +438,16 @@ function explicitProjectRecords(rawText: string) {
     );
     if (employerBoundary?.index !== undefined)
       block = block.slice(0, employerBoundary.index);
+    // A dated employer narrative belongs to the next employment, not to
+    // the preceding client card's project role.
+    const employerNarrative = block.match(
+      new RegExp(
+        `\\n[ \\t]*(?:Worked|Working|Served)[ \\t]+(?:with|for|as[^\\n]+?[ \\t]+at)[ \\t]+[^\\n]+?[ \\t]+from[ \\t]+${PROJECT_DATE_TOKEN_PATTERN}`,
+        "i",
+      ),
+    );
+    if (employerNarrative?.index !== undefined)
+      block = block.slice(0, employerNarrative.index);
     const boundary = block.match(
       /\n\s*(?:(?:work(?:ing)?|professional|career|employment)\s+(?:experience|history)|education|academic\s+(?:background|qualifications?)|qualifications?|certifications?|credentials?|skills?|technical\s+skills?|core\s+competencies|languages?|language\s+proficiency|personal\s+details|summary|profile|references?)\s*:?\s*(?:\n|$)/i,
     );

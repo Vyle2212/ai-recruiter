@@ -577,6 +577,12 @@ export function narrativeResumeEmployment(text: string) {
 
 /** Reorder client/project fields only inside the same numbered card. */
 export function projectFieldLayoutText(text: string) {
+  // Literal Client Name is the same field as Client. Split inline table
+  // periods before whitespace normalization so they cannot enter the name.
+  text = text
+    .replace(/^[ \t]*Client[ \t]+Name[ \t]*:/gim, "Client:")
+    .replace(/(^[ \t]*Client:[^\n]*?)[ \t]{2,}(Duration[ \t]*:)/gim, "$1\n$2")
+    .replace(/^[ \t]*Project[ \t]+(\d+)[ \t]*:?[ \t]*$/gim, "Project $1:");
   const roleClientCard =
     /^([ \t]*Role[ \t]*:[^\n]+)\r?\n(?:[ \t]*\r?\n)*([ \t]*Environment[ \t]*:[^\n]+)\r?\n(?:[ \t]*\r?\n)*([ \t]*Client[ \t]*:[^\n]+)\r?\n(?:[ \t]*\r?\n)*(?=[ \t]*Project[ \t]+duration[ \t]*:)/gim;
   // Repeated explicit role/environment/client/duration cards own the role
@@ -592,7 +598,18 @@ export function projectFieldLayoutText(text: string) {
     )
     .replace(
       /^(\s*(?:client|customer|project|duration|period|position|designation|role))\t+[ \t]*([^\n]+)/gim,
-      "$1: $2",
+      (_, label, value) => `${label}: ${value.replace(/^[ \t]*:[ \t]*/, "")}`,
+    )
+    // Normalize only explicit duration endpoints for every project reader.
+    // The separator guard avoids reversing adjacent Month Year Month Year.
+    .replace(
+      /^([ \t]*(?:Duration|Period|Project[ \t]+Duration)[ \t]*:[ \t]*)([^\n]+)/gim,
+      (_, label, duration) =>
+        label +
+        duration.replace(
+          /(^|(?:to|until|till|[-–—~])[ \t]+)((?:19|20)\d{2})[ \t]+(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/gi,
+          "$1$3 $2",
+        ),
     )
     .split(/\r?\n/);
   const anchors = lines.flatMap((line, index) =>
