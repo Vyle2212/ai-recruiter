@@ -127,10 +127,13 @@ export function extractSapTaskSpecializations(
       /(?:^|\n)\s*(?:[-*•]|project\s*:|client\s*:|employer\s*:|ROLLOUT\b|IMPLEMENTATION\s*[–—-])/i.test(block) ||
       /\bSAP\s+(?:MM|SD|EWM|TM|HCM|PP|FICO)\b/i.test(joined)
     ) return block;
-    return joined.split(/(?<=[.!?])\s+/).map((sentence) =>
-      /\b(?:SAP|S\/?4HANA|FSCM)\b/i.test(sentence)
-        ? sentence : `SAP TRM: ${sentence}`,
-    ).join("\n");
+    let hasExplicitFocus = false;
+    return joined.split(/(?<=[.!?])\s+/).map((sentence) => {
+      if (/\bimplementation of FSCM module with focus (?:of|on) TRM\b/i.test(sentence))
+        hasExplicitFocus = true;
+      return hasExplicitFocus && !/\b(?:SAP|S\/?4HANA|FSCM)\b/i.test(sentence)
+        ? `SAP TRM: ${sentence}` : sentence;
+    }).join("\n");
   }).join("\n\n");
   for (const line of normalized.split(/\r?\n/)) {
     const text = line.trim();
@@ -175,7 +178,7 @@ export function extractSapTaskSpecializations(
     )
       continue;
     let involvement: SapTaskEvidence["involvement"] =
-      /\b(?:training in|trained in|course|certification|familiar with|awareness of|exposure to|observed)\b/i.test(
+      /\b(?:training in|training exercises|trained in|course|certification|familiar with|awareness of|exposure to|observed)\b/i.test(
         segment,
       )
         ? "exposure"
@@ -192,7 +195,7 @@ export function extractSapTaskSpecializations(
               : "exposure";
     // Training recipients are not the actor: a consultant conducting end-user
     // training may still be implementing the solution.
-    if (/(?:^|:\s*[-*•]?\s*)(?:as (?:an? )?)?end[- ]user\b|\bas an? end[- ]user\b/i.test(segment))
+    if (/(?:^|:\s*[-*•]?\s*)(?:as (?:an? )?)?end[- ]user\b(?!\s+(?:training|education|documentation|support))|\bas an? end[- ]user\b(?!\s+(?:training|education|documentation|support))/i.test(segment))
       involvement = "end_user";
     else if (
       involvement === "delivery" &&
