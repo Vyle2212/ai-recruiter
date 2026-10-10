@@ -153,7 +153,18 @@ export async function prepareCandidateCv(input: {
     source_file: input.fileName,
     file_name: input.fileName,
   });
-  const candidatePayload = enrichCandidateUpload(baseCandidatePayload, rawText);
+  const enriched = enrichCandidateUpload(baseCandidatePayload, rawText);
+  // The upload parser and enriched source reader expose two naming styles.
+  // Return one resolved value in both so consumers cannot select stale seeds.
+  // This is only the new CV ingestion path, never a candidate manual edit.
+  const candidatePayload = {
+    ...enriched,
+    primaryModule: enriched.primary_module,
+    sapModules: enriched.sap_modules,
+    secondaryModules: enriched.secondary_modules,
+    currentCompany: enriched.current_company,
+    currentTitle: enriched.current_title,
+  };
   const extractionCoverage = evaluateCandidateExtractionCoverage(
     rawText,
     candidatePayload,

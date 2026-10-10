@@ -529,7 +529,7 @@ function weightedModuleScores(text: string) {
     ABAP: countTerms(titleZone, ["abap", "technical consultant", "developer", "fiori"]) * 8 + countTerms(t, ["abap", "fiori", "odata", "bapi", "enhancement", "user exit", "debugging", "workflow"]),
     BASIS: countTerms(titleZone, ["basis"]) * 8 + countTerms(t, ["basis", "security", "transport", "hana admin"]),
     "IS-U": countTerms(titleZone, ["is-u", "isu", "utilities"]) * 8 + countTerms(t, ["is-u", "isu", "utilities", "meter", "contract account"]),
-    BW: countTerms(titleZone, ["bw", "bi", "hana lead"]) * 8 + countTerms(t, ["sap bw", "business warehouse", "bw4hana", "bi reporting"]),
+    BW: countTerms(titleZone, ["\\bbw\\b", "\\bbi\\b", "hana lead"]) * 8 + countTerms(t, ["sap bw", "business warehouse", "bw4hana", "bi reporting"]),
   };
 
   return score;

@@ -8,6 +8,21 @@ import {
 import { enrichCandidateUpload } from "../lib/candidateUploadEnrichment";
 import { isValidProjectEntry } from "../lib/candidateProfileIngestion";
 import { evaluateCandidateExtractionCoverage } from "../lib/candidateExtractionCoverage";
+import { derivePrimaryModule } from "../lib/cv-parser";
+
+assert.equal(
+  derivePrimaryModule(
+    "Business Integration Manager\n" +
+      "Business process integration\n".repeat(20) +
+      "SAP FI consultant delivering FSCM and treasury",
+  ),
+  "FICO",
+  "BI inside Business must not manufacture BW expertise",
+);
+assert.equal(
+  derivePrimaryModule("SAP BW Consultant\nBW modelling and BI reporting"),
+  "BW",
+);
 
 const source = `
 Jane Doe
@@ -93,6 +108,13 @@ async function main() {
     "admin and candidate CVs must use the exact same extraction/parser output",
   );
   assert.equal(admin.candidatePayload.profile_source_type, "admin_upload");
+  for (const payload of [admin.candidatePayload, candidate.candidatePayload]) {
+    assert.equal(payload.primaryModule, payload.primary_module);
+    assert.deepEqual(payload.sapModules, payload.sap_modules);
+    assert.deepEqual(payload.secondaryModules, payload.secondary_modules);
+    assert.equal(payload.currentCompany, payload.current_company);
+    assert.equal(payload.currentTitle, payload.current_title);
+  }
   assert.equal(
     candidate.candidatePayload.profile_source_type,
     "candidate_upload",
