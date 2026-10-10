@@ -175,6 +175,7 @@ jobs:
           node scripts/acceptanceCandidateRegistrationJourney.test.cjs
           node scripts/acceptanceCandidateRegistrationReport.test.cjs
           node --import tsx scripts/candidateRegistrationProvisionContract.test.ts
+          node --import tsx scripts/candidateCommercialPreferences.test.ts
           node --import tsx scripts/chatAuthorizationCore.test.ts
           node --import tsx scripts/candidateChatConsentBoundary.test.ts
           node --import tsx scripts/chatConversationStoreContract.test.ts
