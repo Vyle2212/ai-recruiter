@@ -6,6 +6,9 @@ import {
 } from "../lib/candidateJobPreferences";
 import { candidateProjectStatuses } from "../lib/candidateProjectStatus";
 const both = {
+  workAuthorization: [
+    { country: "Singapore", status: "Citizen", sponsorship: "No" },
+  ],
   currentSalary: { status: "Provided", currency: "SGD", amount: "7500" },
   employmentType: "Both",
   workingTypes: ["Hybrid", "Remote"],
@@ -177,3 +180,21 @@ assert.ok(
 );
 assert.equal(cleanSalaryInput("-100"), "-100");
 assert.equal(cleanSalaryInput("1e6"), "1e6");
+
+assert.ok(
+  jobPreferenceIssues({ ...both, workAuthorization: [] })
+    .workAuthorizationRequired,
+);
+assert.ok(
+  jobPreferenceIssues({ ...both, workAuthorization: undefined })
+    .workAuthorizationRequired,
+);
+assert.deepEqual(
+  jobPreferenceIssues({
+    ...both,
+    workAuthorization: [
+      { country: "Singapore", status: "Permanent resident", sponsorship: "No" },
+    ],
+  }),
+  {},
+);

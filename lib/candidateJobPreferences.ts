@@ -141,6 +141,9 @@ function validatePreferences(raw: unknown) {
   }
   if (p.currentSalary?.status && p.currentSalary.status !== "Provided")
     issues.currentSalary = "Enter your current gross monthly salary.";
+  if (!Array.isArray(p.workAuthorization) || !p.workAuthorization.length)
+    issues.workAuthorizationRequired =
+      "Add at least one work country, authorization status and sponsorship answer.";
   if (
     p.workAuthorization &&
     (!Array.isArray(p.workAuthorization) || p.workAuthorization.length > 20)

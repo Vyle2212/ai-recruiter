@@ -403,6 +403,9 @@ assert.match(
   "the owned candidate row must still match the authorized version",
 );
 const preferences = {
+  workAuthorization: [
+    { country: "Singapore", status: "Citizen", sponsorship: "No" },
+  ],
   currentSalary: { status: "Provided", currency: "SGD", amount: "7500" },
   employmentType: "Both",
   workingTypes: ["Remote"],

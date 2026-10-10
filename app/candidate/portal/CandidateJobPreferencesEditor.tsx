@@ -319,12 +319,18 @@ export default function CandidateJobPreferencesEditor({
           </label>
         ) : null}
         <h3 className="font-semibold">
-          Work authorization / Visa status (Optional)
+          Work authorization / Visa status * Required
         </h3>
         <p className="text-xs text-slate-400">
           Specify the country you want to work in. A visa/pass and employer
           sponsorship are separate details.
         </p>
+        {issues.workAuthorizationRequired ? (
+          <p className="rounded-lg border border-red-400/60 p-3 text-sm text-red-300">
+            Add at least one work country and choose Citizen, Permanent resident
+            (PR), or your visa status, plus sponsorship.
+          </p>
+        ) : null}
         {(p.workAuthorization || []).map((r, i) => {
           const rowUpdate = (key: string, v: string) =>
             onChange((current) => ({
@@ -353,7 +359,7 @@ export default function CandidateJobPreferencesEditor({
             >
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="text-sm">
-                  Work country
+                  Work country *
                   <CandidateFieldPicker
                     placeholder="Work country"
                     value={r.country}
@@ -364,7 +370,7 @@ export default function CandidateJobPreferencesEditor({
                   />
                 </label>
                 <label className="text-sm">
-                  Status
+                  Status *
                   <CandidateFieldPicker
                     placeholder="Visa status"
                     value={r.status}
@@ -392,7 +398,7 @@ export default function CandidateJobPreferencesEditor({
                   />
                 </label>
                 <label className="text-sm">
-                  Employer sponsorship required?
+                  Employer sponsorship required? *
                   <select
                     className={inputClass}
                     value={r.sponsorship || ""}
