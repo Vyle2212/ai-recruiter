@@ -1,3 +1,4 @@
+import { extractSapTaskSpecializations } from "./sapTaskSpecializations";
 import {
   nestedResumeHistory,
   institutionFirstEducation,
@@ -874,6 +875,16 @@ export function enrichCandidateUpload(
       ? explicitLanguageValues
       : canonical.languages || [];
   const skills = unique([
+    ...extractSapTaskSpecializations(rawText)
+      .filter(
+        (item) =>
+          item.involvement === "delivery" ||
+          item.involvement === "technical_delivery",
+      )
+      .map(
+        (item) =>
+          `SAP ${item.module}: ${item.specialization}${item.involvement === "technical_delivery" ? " (technical)" : ""}`,
+      ),
     ...(candidate.skills || []),
     ...(canonical.skills || []),
     ...(full.sapSkills || []),
@@ -969,6 +980,7 @@ export function enrichCandidateUpload(
     education,
     certifications,
     languages,
+    sap_task_evidence: extractSapTaskSpecializations(rawText),
     extraction_review_classification: full.reviewClassification,
     extraction_review_reasons: full.reviewReasons,
   };
