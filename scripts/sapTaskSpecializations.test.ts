@@ -290,3 +290,14 @@ assert.equal(
   read("Coded RAP service for SAP EWM putaway.")[0].involvement,
   "technical_delivery",
 );
+
+// Soft-wrapped implementation responsibilities retain their own explicit focus.
+const wrappedTreasury = "Consultant led the implementation of\nFSCM module with focus of TRM. From requirements and solution design,\nthe consultant conducted End User Training and implemented financial\ninstruments.";
+assert.deepEqual(read(wrappedTreasury), [{
+  module: "TRM", specialization: "Debt and Investment Management", involvement: "delivery",
+}]);
+assert.equal(read("Configured SAP TRM financial instruments and conducted End User Training.")[0].involvement, "delivery");
+assert.equal(read("As an end-user configured SAP TRM financial instruments.")[0].involvement, "end_user");
+assert.deepEqual(read("Consultant led the implementation of FSCM module with focus of TRM.\n\nImplemented financial instruments."), []);
+assert.deepEqual(read("Consultant led the implementation of FSCM module with focus of TRM.\nProject: another implementation\nImplemented financial instruments."), []);
+assert.deepEqual(read("Consultant led the implementation of FSCM module with focus of TRM. Configured SAP MM procurement. Implemented financial instruments."), []);

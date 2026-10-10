@@ -117,7 +117,22 @@ export function extractSapTaskSpecializations(
   const segments: string[] = [];
   let heading = "";
   let remaining = 0;
-  for (const line of source.normalize("NFKC").split(/\r?\n/)) {
+  // Recover soft-wrapped responsibility prose only when the paragraph itself
+  // explicitly identifies TRM as the focus of an FSCM implementation. Never
+  // carry this ownership across blank paragraphs, headings or another module.
+  const normalized = source.normalize("NFKC").split(/\n\s*\n/).map((block) => {
+    const joined = block.replace(/\r?\n/g, " ").trim();
+    if (
+      !/\bimplementation of FSCM module with focus (?:of|on) TRM\b/i.test(joined) ||
+      /(?:^|\n)\s*(?:[-*•]|project\s*:|client\s*:|employer\s*:|ROLLOUT\b|IMPLEMENTATION\s*[–—-])/i.test(block) ||
+      /\bSAP\s+(?:MM|SD|EWM|TM|HCM|PP|FICO)\b/i.test(joined)
+    ) return block;
+    return joined.split(/(?<=[.!?])\s+/).map((sentence) =>
+      /\b(?:SAP|S\/?4HANA|FSCM)\b/i.test(sentence)
+        ? sentence : `SAP TRM: ${sentence}`,
+    ).join("\n");
+  }).join("\n\n");
+  for (const line of normalized.split(/\r?\n/)) {
     const text = line.trim();
     if (!text) {
       heading = "";
@@ -170,12 +185,15 @@ export function extractSapTaskSpecializations(
                 segment,
               )
             ? "delivery"
-            : /\b(?:end[- ]user|processed|posted|used|operated|ran)\b/i.test(
+            : /\b(?:processed|posted|used|operated|ran)\b/i.test(
                   segment,
                 )
               ? "end_user"
               : "exposure";
-    if (/\bend[- ]user\b/i.test(segment)) involvement = "end_user";
+    // Training recipients are not the actor: a consultant conducting end-user
+    // training may still be implementing the solution.
+    if (/(?:^|:\s*[-*•]?\s*)(?:as (?:an? )?)?end[- ]user\b|\bas an? end[- ]user\b/i.test(segment))
+      involvement = "end_user";
     else if (
       involvement === "delivery" &&
       /\b(?:ABAP|BAdI|BAPI|custom code|enhancements?)\b/i.test(segment) &&
