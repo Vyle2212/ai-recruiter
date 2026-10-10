@@ -851,3 +851,175 @@ Job Position: C++ Programmer`,
 assert.equal(laterNonSapCompany[0].start_date, "");
 assert.equal(laterNonSapCompany[0].end_date, "");
 assert.equal(laterNonSapCompany[0].role, "FI and CO Functional Consultant");
+
+// Anonymized project tables: preserve local labels and do not reinterpret
+// ambiguous or invalid numeric dates using an assumed candidate locale.
+const numericProject = (duration: string) =>
+  enrichCandidateUpload(
+    {},
+    `Client\nExample Client\nRole\nSAP FICO Consultant\nDuration\n${duration}`,
+  ).projects;
+assert.equal(
+  numericProject("From 01/08/2018 to 31/01/2020")[0].start_date,
+  "1 August 2018",
+);
+assert.equal(
+  numericProject("From 01/08/2018 to 31/01/2020")[0].end_date,
+  "31 January 2020",
+);
+assert.equal(numericProject("01/08/2018 to 03/09/2020").length, 0);
+assert.equal(numericProject("31/02/2018 to 31/01/2020").length, 0);
+
+const nestedAndExplicit = enrichCandidateUpload(
+  {},
+  source.replace(
+    "Additional Information",
+    `Project: Example Explicit SAP Support
+Client: Example Support Client
+Role: SAP FI Consultant
+Duration: Jan 2025 - Dec 2025
+Additional Information`,
+  ),
+);
+assert.equal(nestedAndExplicit.experience.length, 2);
+assert.equal(
+  nestedAndExplicit.projects.filter(
+    (row: any) => row.client === "Example Support Client",
+  ).length,
+  1,
+);
+assert.equal(
+  nestedAndExplicit.projects.find(
+    (row: any) => row.client === "Example Support Client",
+  )?.start_date,
+  "Jan 2025",
+);
+
+const roleFirstAssignment = enrichCandidateUpload(
+  {},
+  `Role
+SAP Project Lead
+Employer
+Example Consulting
+Client
+First Example Client - Apr 2024 - Present
+Project
+Example Implementation
+Job Scope
+Managed SAP configuration.
+Role
+SAP Delivery Lead
+Employer
+Other Example Consulting
+Client
+Second Example Client - Jan 2023 - Dec 2023
+Project
+Example Support
+Job Scope
+Delivered SAP support.`,
+).projects;
+assert.equal(roleFirstAssignment.length, 2);
+assert.equal(roleFirstAssignment[0].client, "First Example Client");
+assert.equal(roleFirstAssignment[0].role, "SAP Project Lead");
+assert.equal(roleFirstAssignment[0].start_date, "Apr 2024");
+assert.equal(roleFirstAssignment[1].client, "Second Example Client");
+assert.equal(roleFirstAssignment[1].role, "SAP Delivery Lead");
+
+const mixedClientSupport = enrichCandidateUpload(
+  {},
+  `WORK EXPERIENCE
+Client: Example Employer Operations
+Role: SAP Support Consultant
+Duration: Jan 2020 - Dec 2020
+Client: Example Interface Client
+Role: SAP PI Developer
+Duration: Jan 2021 - Dec 2021
+Responsibilities:
+Developed and tested SAP PI interfaces.
+Project: Example Later Project
+Client: Example Later Client
+Role: SAP FI Consultant
+Duration: Jan 2022 - Dec 2022`,
+).projects;
+assert.equal(
+  mixedClientSupport.filter(
+    (row: any) => row.client === "Example Employer Operations",
+  ).length,
+  0,
+);
+assert.equal(
+  mixedClientSupport.filter(
+    (row: any) => row.client === "Example Interface Client",
+  ).length,
+  1,
+);
+
+const localProjectDuration = enrichCandidateUpload(
+  {},
+  `Client: Example Upgrade Client
+Project Duration
+Mac 2012 - Aug 2012
+Role
+MM Consultant
+Responsibilities
+Configured purchasing.
+Project: Example Later Upgrade
+Client: Example Later Client
+Role: SAP MM Consultant
+Duration: Jan 2013 - Dec 2013`,
+).projects;
+assert.equal(
+  localProjectDuration.find(
+    (row: any) => row.client === "Example Upgrade Client",
+  )?.start_date,
+  "March 2012",
+);
+
+const clientRoleBeforeProject = enrichCandidateUpload(
+  {},
+  `Client: First Example Maintenance Client
+Duration: Aug 2010 - Jan 2011
+Role: Technical Coordinator
+Project: Maintenance and Support
+Responsibilities:
+Delivered service.
+Client: Second Example Maintenance Client
+Duration: Aug 2009 - July 2010
+Role: Technical Coordinator
+Project: Operations and Maintenance
+Responsibilities:
+Delivered service.`,
+).projects;
+assert.equal(
+  clientRoleBeforeProject[0].client,
+  "First Example Maintenance Client",
+);
+assert.equal(clientRoleBeforeProject[0].start_date, "Aug 2010");
+assert.equal(
+  clientRoleBeforeProject[1].client,
+  "Second Example Maintenance Client",
+);
+assert.equal(clientRoleBeforeProject[1].start_date, "Aug 2009");
+const projectHeadingOnly = enrichCandidateUpload(
+  {},
+  `Client: Example Reporting Client
+Duration: Nov 2011 - Apr 2013
+Role: SAP BW Consultant
+Project
+Responsibilities:
+Developed SAP BW reports and tested interfaces.
+Project: Example Later Assignment
+Client: Example Later Client
+Duration: Jan 2014 - Dec 2014
+Role: SAP FI Consultant`,
+).projects;
+assert.equal(
+  projectHeadingOnly.some((row: any) => /^Responsibilities/i.test(row.name)),
+  false,
+);
+assert.equal(
+  projectHeadingOnly.find(
+    (row: any) => row.client === "Example Reporting Client",
+  )?.start_date,
+  "Nov 2011",
+);

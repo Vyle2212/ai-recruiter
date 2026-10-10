@@ -577,6 +577,36 @@ export function narrativeResumeEmployment(text: string) {
 
 /** Reorder client/project fields only inside the same numbered card. */
 export function projectFieldLayoutText(text: string) {
+  // Role-first Word cards have all four literal fields before Job Scope.
+  // Reorder this bounded header so the following assignment cannot lend its
+  // role or client to the preceding Project marker.
+  text = text.replace(
+    /^[ \t]*Role[ \t]*\r?\n(?:[ \t]*\r?\n)*([^\n]+)\r?\n(?:[ \t]*\r?\n)*Employer[ \t]*\r?\n(?:[ \t]*\r?\n)*([^\n]+)\r?\n(?:[ \t]*\r?\n)*Client[ \t]*\r?\n(?:[ \t]*\r?\n)*([^\n]+)\r?\n(?:[ \t]*\r?\n)*Project[ \t]*\r?\n(?:[ \t]*\r?\n)*([^\n]+)/gim,
+    (
+      _block: string,
+      role: string,
+      employer: string,
+      client: string,
+      project: string,
+    ) => {
+      const range = projectDateRange(client);
+      const suffix = range
+        ? client.slice(range.index! + range[0].length).trim()
+        : "";
+      const dated =
+        range &&
+        range.index !== undefined &&
+        validProjectDateRange(range[1], range[2]) &&
+        (!suffix || /^\([^\n()]*\)$/.test(suffix));
+      const identity = dated
+        ? client
+            .slice(0, range!.index)
+            .replace(/[ \t–—-]+$/, "")
+            .trim() + (suffix ? ` ${suffix}` : "")
+        : client.trim();
+      return `Project: ${project.trim()}\nClient: ${identity}\nRole: ${role.trim()}\n${dated ? `Duration: ${range![0]}\n` : ""}Employer: ${employer.trim()}`;
+    },
+  );
   // Customer / Company is a single split table label, not an employer.
   if (
     [...text.matchAll(/^[ \t]*Customer[ \t]*\r?\nCompany[ \t]*$/gim)].length >=
@@ -665,7 +695,88 @@ export function projectFieldLayoutText(text: string) {
 
   // Literal Client Name is the same field as Client. Split inline table
   // periods before whitespace normalization so they cannot enter the name.
+  // Word tables often extract a literal field label onto its own line.
+  // Join only an explicit value, never the following label or section heading.
+  text = text.replace(
+    /^([^\n]+)\r?\n(Client|Customer)[ \t]*\r?\n([^\n]+)$/gim,
+    (block: string, period: string, label: string, client: string) => {
+      const range = projectDateRange(period.trim());
+      if (
+        !range ||
+        range[0] !== period.trim() ||
+        !validProjectDateRange(range[1], range[2]) ||
+        /^(?:project|role|duration|period|company|employer)\b/i.test(
+          client.trim(),
+        )
+      )
+        return block;
+      return `${label}: ${client.trim()}\nDuration: ${period.trim()}`;
+    },
+  );
+  text = text.replace(
+    /^[ \t]*(Client(?:s|[ \t]+Name)?|Customer|Project(?:[ \t]+(?:Name|Title))?|Duration|Period)[ \t]*\r?\n(?:[ \t]*\r?\n)*([^\n]+)$/gim,
+    (block: string, label: string, value: string) => {
+      if (
+        /^[ \t]*(?:client|customer|company|organization|employer|project|role|position|designation|duration|period|version|platform|environment|module|team|responsibilit\w*|description|education|experience|skills?)\b[ \t]*(?::|$)/i.test(
+          value,
+        )
+      )
+        return block;
+      const key = /^clients?$/i.test(label) ? "Client" : label;
+      if (/^(?:Client|Customer)$/i.test(key)) {
+        const range = projectDateRange(value);
+        if (
+          range &&
+          validProjectDateRange(range[1], range[2]) &&
+          range.index !== undefined
+        ) {
+          const client = value
+            .slice(0, range.index)
+            .replace(/[ \t–—-]+$/, "")
+            .trim();
+          if (
+            client &&
+            value.slice(range.index + range[0].length).trim() === ""
+          )
+            return `${key}: ${client}\nDuration: ${range[0]}`;
+        }
+      }
+      return `${key}: ${value.trim()}`;
+    },
+  );
   text = text
+    .replace(
+      /(^[ \t]*(?:Duration|Period)[ \t]*(?::|\t)[ \t]*(?:From[ \t]+)?)(\d{1,2})[/.](\d{1,2})[/.]((?:19|20)\d{2})[ \t]*(?:to|[-–—])[ \t]*(\d{1,2})[/.](\d{1,2})[/.]((?:19|20)\d{2})[ \t]*$/gim,
+      (
+        line: string,
+        prefix: string,
+        d1: string,
+        m1: string,
+        y1: string,
+        d2: string,
+        m2: string,
+        y2: string,
+      ) => {
+        // Both endpoints belong to this one explicit period. A day above 12
+        // establishes day/month order; ambiguous numeric periods stay under review.
+        if (Number(d1) <= 12 && Number(d2) <= 12) return line;
+        const date = (d: string, m: string, y: string) => {
+          const value = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
+          if (
+            value.getUTCFullYear() !== Number(y) ||
+            value.getUTCMonth() !== Number(m) - 1 ||
+            value.getUTCDate() !== Number(d)
+          )
+            return null;
+          return `${Number(d)} ${["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][Number(m) - 1]} ${y}`;
+        };
+        const start = date(d1, m1, y1),
+          end = date(d2, m2, y2);
+        return start && end && validProjectDateRange(start, end)
+          ? `${prefix}${start} - ${end}`
+          : line;
+      },
+    )
     .replace(/^[ \t]*Client[ \t]+Name[ \t]*:/gim, "Client:")
     .replace(/(^[ \t]*Client:[^\n]*?)[ \t]{2,}(Duration[ \t]*:)/gim, "$1\n$2")
     .replace(/^[ \t]*Project[ \t]+(\d+)[ \t]*:?[ \t]*$/gim, "Project $1:");
@@ -734,14 +845,35 @@ export function projectFieldLayoutText(text: string) {
       }
     const header = lines.slice(start, end);
     const named = header.findIndex((line) =>
-      /^[ \t]*Project[ \t]+(?:Name|Title)[ \t]*:[ \t]*\S/i.test(line),
+      /^[ \t]*Project(?:[ \t]+(?:Name|Title))?[ \t]*:[ \t]*\S/i.test(line),
     );
     const role = header.findIndex((line) =>
-      /^[ \t]*(?:Role|Position|Designation)[ \t]*:[ \t]*\S/i.test(line),
+      /^[ \t]*(?:Role|Position|Designation)[ \t]*(?::[ \t]*\S|$)/i.test(line),
     );
     if (
       named > 0 &&
-      role > named &&
+      (role > named ||
+        (role >= 0 &&
+          role < named &&
+          /^(?:Tools|Responsibilities|Roles?\s*&|Job\s+Scope|Environment|Description)\b/i.test(
+            lines
+              .slice(start + named + 1)
+              .find((line) => line.trim())
+              ?.trim() || "",
+          ) &&
+          header
+            .slice(0, named)
+            .some((line) =>
+              /^[ \t]*(?:Project[ \t]+)?(?:Duration|Period)[ \t]*(?::|$)/i.test(
+                line,
+              ),
+            ) &&
+          !/^[ \t]*Project(?:[ \t]+(?:Name|Title))?[ \t]*:[ \t]*\S/i.test(
+            lines
+              .slice(0, start)
+              .filter((line) => line.trim())
+              .at(-1) || "",
+          ))) &&
       header.slice(0, named).filter((line) => line.trim()).length <= 8
     ) {
       const [field] = lines.splice(start + named, 1);

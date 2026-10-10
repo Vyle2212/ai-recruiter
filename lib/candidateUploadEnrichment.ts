@@ -29,6 +29,7 @@ import {
   PROJECT_DATE_TOKEN_PATTERN,
   projectDateIsCurrent,
   projectDateRange,
+  validProjectDateRange,
 } from "./projectDateEvidence";
 
 const clean = (value: unknown) =>
@@ -136,6 +137,14 @@ function mergeGroundedProjects(
   explicit: Array<Record<string, unknown>>,
   rawText: string,
 ) {
+  // A section heading after an empty Project label is not a project identity.
+  // Discard these reader artefacts rather than borrowing a later assignment.
+  const isHeading = (row: Record<string, unknown>) =>
+    /^(?:Responsibilities|Roles?\s*(?:and|&)\s*Responsibilities|Job\s+Scope|Deliverables)[ \t]*:?[ \t]*$/i.test(
+      clean(row.name),
+    );
+  canonical = canonical.filter((row) => !isHeading(row));
+  explicit = explicit.filter((row) => !isHeading(row));
   const exactUnique = (rows: Array<Record<string, unknown>>) => {
     const seen = new Set<string>();
     return rows.filter((row) => {
@@ -449,17 +458,31 @@ function explicitProjectRecords(rawText: string) {
     if (employerNarrative?.index !== undefined)
       block = block.slice(0, employerNarrative.index);
     const companyOrNonSapBoundary = block.match(
-      /\n[ \t]*(?:Company|Non[- \t]*SAP[ \t]+Project[ \t]+Work[ \t]+Experience)[ \t]*:?[ \t]*\n/i,
+      /\n[ \t]*(?:Employer|Company|Non[- \t]*SAP[ \t]+Project[ \t]+Work[ \t]+Experience)[ \t]*:?[ \t]*\n/i,
     );
     if (companyOrNonSapBoundary?.index !== undefined)
       block = block.slice(0, companyOrNonSapBoundary.index);
     const boundary = block.match(
-      /\n\s*(?:(?:work(?:ing)?|professional|career|employment)\s+(?:experience|history)|education|academic\s+(?:background|qualifications?)|qualifications?|certifications?|credentials?|skills?|technical\s+skills?|core\s+competencies|languages?|language\s+proficiency|personal\s+details|summary|profile|references?)\s*:?\s*(?:\n|$)/i,
+      /\n\s*(?:(?:previous\s+)?(?:work(?:ing)?|professional|career|employment)\s+(?:experience|history)|education|academic\s+(?:background|qualifications?)|qualifications?|certifications?|credentials?|skills?|technical\s+skills?|core\s+competencies|languages?|language\s+proficiency|personal\s+details|summary|profile|references?)\s*:?\s*(?:\n|$)/i,
     );
     return boundary?.index === undefined
       ? block
       : block.slice(0, boundary.index);
   };
+  const calendarDurationValue = (duration: string) =>
+    duration
+      .replace(/\((\d{1,2}\/\d{2,4})\)/g, "$1")
+      .replace(
+        /\b([A-Za-z]+)[ \t]*(\d{1,2}),[ \t]*((?:19|20)\d{2})\b/g,
+        "$1 $2 $3",
+      )
+      .replace(
+        /\b(Mac|Ogos|Mei|Disember)(?=\s|(?:19|20)\d{2})/gi,
+        (token) =>
+          ({ mac: "March", ogos: "August", mei: "May", disember: "December" })[
+            token.toLowerCase()
+          ] || token,
+      );
   const records: Array<Record<string, unknown>> = [];
   for (const [index, marker] of markers.entries()) {
     const start = marker.index || 0;
@@ -518,19 +541,7 @@ function explicitProjectRecords(rawText: string) {
       block,
       "duration|period|project[ \\t]+(?:dates?|duration)",
     );
-    const calendarDuration = duration
-      .replace(/\((\d{1,2}\/\d{2,4})\)/g, "$1")
-      .replace(
-        /\b([A-Za-z]+)[ \t]*(\d{1,2}),[ \t]*((?:19|20)\d{2})\b/g,
-        "$1 $2 $3",
-      )
-      .replace(
-        /\b(Mac|Ogos|Mei|Disember)(?=\s|(?:19|20)\d{2})/gi,
-        (token) =>
-          ({ mac: "March", ogos: "August", mei: "May", disember: "December" })[
-            token.toLowerCase()
-          ] || token,
-      );
+    const calendarDuration = calendarDurationValue(duration);
     const adjacentDates = calendarDuration.match(
       new RegExp(
         `^(${PROJECT_DATE_TOKEN_PATTERN})[ \\t]+(${PROJECT_DATE_TOKEN_PATTERN}|${PROJECT_CURRENT_TOKEN_PATTERN})$`,
@@ -608,8 +619,9 @@ function explicitProjectRecords(rawText: string) {
         (priorProjectHeading?.index === undefined
           ? undefined
           : priorProjectHeading.index + priorProjectHeading[0].length);
-      if (anchor === undefined || start - anchor > 2400) continue;
       if (
+        anchor !== undefined &&
+        start - anchor <= 2400 &&
         /(?:^|\n)\s*(?:(?:work(?:ing)?|professional|employment)\s+(?:experience|history)|education|academic\s+(?:background|qualifications?)|skills?|languages?|references?)\s*:?\s*(?:\n|$)/i.test(
           normalized.slice(anchor, start),
         )
@@ -632,12 +644,35 @@ function explicitProjectRecords(rawText: string) {
       );
       const dated =
         block.match(
-          /(?:^|\n)[ \t]*(?:duration|period|project[ \t]+dates?)[ \t]*:[ \t]*([^\n]{3,120})/im,
-        )?.[1] || nextLabelLine(block, "duration|period|project[ \\t]+dates?");
-      const range = dated?.match(rangePattern);
+          /(?:^|\n)[ \t]*(?:duration|period|project[ \t]+(?:dates?|duration))[ \t]*:[ \t]*([^\n]{3,120})/im,
+        )?.[1] ||
+        nextLabelLine(
+          block,
+          "duration|period|project[ \\t]+(?:dates?|duration)",
+        );
+      const range = calendarDurationValue(dated || "").match(rangePattern);
       const splitRange = splitDateRange(block);
       const startDate = range?.[1] || splitRange?.[0] || "";
       const endDate = range?.[2] || splitRange?.[1] || "";
+      const scopeText = block.replace(
+        /(?:^|\n)[ \t]*(?:role|position|designation)[ \t]*(?::[ \t]*[^\n]+|\n(?:[ \t]*\n)*[^\n]+)/gim,
+        "\n",
+      );
+      // A self-contained literal Client/Role/Duration card is sufficient
+      // evidence even when a distant Project marker exists elsewhere in the CV.
+      // Without a nearby project section, require this card's complete period.
+      if (
+        (anchor === undefined || start - anchor > 2400) &&
+        (!validProjectDateRange(startDate, endDate) ||
+          !(
+            /(?:^|\n)[ \t]*project[ \t]+duration[ \t]*(?::|\n)/i.test(block) ||
+            (/\b(?:SAP|S\/4HANA)\b/i.test(scopeText) &&
+              /\b(?:project|implementation|rollout|upgrade|configuration|interfaces?|cutover|testing|support)\b/i.test(
+                scopeText,
+              ))
+          ))
+      )
+        continue;
       if (
         !client ||
         !role ||
@@ -931,17 +966,15 @@ export function enrichCandidateUpload(
   // alone must not discard a distinct explicit project or a canonical one.
   // Match role, project/client and either the same period or both undated
   // records before deduplicating. Never copy employment dates to a project.
-  const projects = nested
-    ? nested.projects
-    : mergeGroundedProjects(
-        canonicalProjects,
-        [
-          ...explicitProjects,
-          ...positioned.projects,
-          ...embeddedSapEmploymentProjects(rawText),
-        ],
-        rawText,
-      );
+  const projects = mergeGroundedProjects(
+    nested ? nested.projects : canonicalProjects,
+    [
+      ...explicitProjects,
+      ...positioned.projects,
+      ...embeddedSapEmploymentProjects(rawText),
+    ],
+    rawText,
+  );
   for (const draft of datedSelectedProjectTitles(rawText)) {
     if (
       !projects.some(
