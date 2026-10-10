@@ -7,7 +7,7 @@ const clean = (value: unknown) => typeof value === "string" ? value.normalize("N
 export function careerMonthIndex(value: unknown, current = false, now = new Date()): number | null {
   const currentMonth = now.getUTCFullYear() * 12 + now.getUTCMonth();
   const source = clean(value);
-  const currentEndpoint = /^(?:present|current|curr|now|(?:till|to)(?:\s+to)?\s+date)$/i.test(source);
+  const currentEndpoint = /^(?:present|current|curr|now|until\s+now|at\s+the\s+present|(?:till|to)(?:\s+to)?\s+date)$/i.test(source);
   // A current flag cannot override a printed, historical end date. Keep that
   // contradictory interval out of both validation and experience totals.
   if (current && source && !currentEndpoint) return null;

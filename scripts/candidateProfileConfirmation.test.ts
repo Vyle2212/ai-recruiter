@@ -203,6 +203,28 @@ if (currentProject.accepted) {
   assert.equal(readback.projectExperience[0].projectType, "Rollout");
   assert.equal(readback.projectExperience[0].employer, "Example Consulting");
 }
+for (const marker of ["Until Now", "At the present"]) {
+  const result = buildCandidateProfileConfirmation({
+    candidateId: current.id,
+    profile,
+    currentCandidate: current,
+    submittedFields: {
+      ...fields,
+      workExperience: JSON.stringify([
+        { ...current.experience[0], end_date: marker, current: false },
+      ]),
+      projectExperience: JSON.stringify([
+        { ...current.projects[0], end_date: marker, current: false },
+      ]),
+    },
+  });
+  assert.equal(result.accepted, true);
+  if (result.accepted) {
+    const readback = normalizeActualCandidateSchema(result.candidatePayload);
+    assert.equal(readback.workExperience[0].endDate, marker);
+    assert.equal(readback.projectExperience[0].endDate, marker);
+  }
+}
 const undatedProjects = buildCandidateProfileConfirmation({
   candidateId: current.id,
   submittedFields: {

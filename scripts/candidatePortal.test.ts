@@ -60,7 +60,15 @@ async function main() {
   assert.ok(candidateLanguageLevels("Japanese").includes("JLPT N2"));
   assert.ok(!candidateLanguageLevels("French").includes("JLPT N2"));
   assert.ok(candidateLanguageLevels("Korean").includes("TOPIK 6"));
-  for (const marker of ["Current", "Present", "Curr", "Now", "To date"]) {
+  for (const marker of [
+    "Current",
+    "Present",
+    "Curr",
+    "Now",
+    "Until Now",
+    "At the present",
+    "To date",
+  ]) {
     assert.deepEqual(candidateDateParts(marker), {
       year: "Current",
       month: "Current",
