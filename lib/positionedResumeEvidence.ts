@@ -252,3 +252,86 @@ export function positionedResumeSections(text: string) {
     country: address ? "Indonesia" : undefined,
   };
 }
+
+/** Recover named SAP delivery activities inside a bounded employment card.
+ * The employment establishes role/employer, not client or project dates.
+ * Aggregate counts, generic support/skills and project-wide adjectives do not
+ * establish individual projects. Keep the original sentence as evidence. */
+export function embeddedSapEmploymentProjects(text: string) {
+  const lines = linesOf(text.replace(/\f/g, "\n"));
+  const records: Array<Record<string, unknown>> = [];
+  let owner: ReturnType<typeof pipeEmploymentCards>[number] | undefined;
+  let narrative: string[] = [];
+  const flush = () => {
+    if (!owner) return;
+    const paragraphs = narrative
+      .join("\n")
+      .split(
+        /(?:^|\n)\s*[•●▪\uf0b7*]\s*|\n(?=(?:Architected|Led|Delivered|Implemented|Deployed|Pioneered|Spearheaded|Directed|Facilitated)\b)/i,
+      );
+    const seen = new Set<string>();
+    for (const paragraph of paragraphs) {
+      const sentence = paragraph.replace(/\s+/g, " ").trim();
+      // An explicit delivery noun must follow SAP/S4, within the same clause.
+      const match = sentence.match(
+        /\b(?:SAP\s+S\/4HANA|SAP|S\/4HANA)\s+[^,;.!?]{0,90}?\b(?:integration|implementation|automation|enhancements?|assessment and design phase)\b/i,
+      );
+      if (
+        !match ||
+        !/^(?:Architected|Led|Delivered|Implemented|Deployed|Pioneered|Spearheaded|Directed|Facilitated)\b/i.test(
+          sentence,
+        ) ||
+        /\b(?:\d+|multiple|several|various)\s+(?:E2E\s+)?$/i.test(
+          sentence.slice(0, match.index),
+        )
+      )
+        continue;
+      const rest = sentence.slice((match.index || 0) + match[0].length);
+      if (
+        /^s\b/i.test(rest) ||
+        /^(?:\s+and)?\s+(?:enhancement )?workstreams?\b/i.test(rest)
+      )
+        continue;
+      const name = match[0].trim();
+      if (seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      records.push({
+        name,
+        employer: owner.employer,
+        client: "",
+        role: owner.title,
+        start_date: "",
+        end_date: "",
+        description: sentence,
+        evidence_source: "employment_narrative",
+        evidence_confidence: 0.8,
+      });
+    }
+  };
+  for (const line of lines) {
+    const card = pipeEmploymentCards(line)[0];
+    if (card) {
+      flush();
+      owner = card;
+      narrative = [];
+      continue;
+    }
+    if (
+      /^(?:project(?:\s+(?:name|title|experience|history))?|client|end client)\s*:/i.test(
+        line,
+      ) ||
+      heading.test(line) ||
+      /^(?:key highlights|key skills|functional skills|profile summary)$/i.test(
+        line,
+      )
+    ) {
+      flush();
+      owner = undefined;
+      narrative = [];
+      continue;
+    }
+    if (owner && line) narrative.push(line);
+  }
+  flush();
+  return records;
+}

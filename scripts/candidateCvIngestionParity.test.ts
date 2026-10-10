@@ -43,6 +43,29 @@ English
 `;
 
 async function main() {
+  const embeddedSource = source
+    .replace(
+      "Delivered SAP S/4HANA implementations and regional rollouts.",
+      "Architected the SAP and BlackLine integration, improving close cycles.\nLed SAP FSCM Credit & Dispute Management automation, improving collections.",
+    )
+    .replace(/PROJECT EXPERIENCE[\s\S]*?(?=EDUCATION)/, "");
+  for (const uploadSource of ["admin_upload", "candidate_upload"] as const) {
+    const embedded = await prepareCandidateCv({
+      buffer: Buffer.from(embeddedSource),
+      fileName: "embedded-projects.txt",
+      source: uploadSource,
+    });
+    assert.equal(embedded.accepted, true);
+    if (!embedded.accepted) throw new Error("Embedded fixture rejected");
+    assert.equal(embedded.candidatePayload.project_history.length, 2);
+    for (const project of embedded.candidatePayload.project_history) {
+      assert.equal(project.employer, "Example Consulting");
+      assert.equal(project.role, "SAP MM Consultant");
+      assert.equal(project.client, "");
+      assert.equal(project.start_date, "");
+      assert.equal(project.end_date, "");
+    }
+  }
   const admin = await prepareCandidateCv({
     buffer: Buffer.from(source),
     fileName: "jane-doe.txt",

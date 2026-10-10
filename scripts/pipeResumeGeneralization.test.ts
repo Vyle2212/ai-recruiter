@@ -4,6 +4,7 @@ import { enrichCandidateUpload } from "../lib/candidateUploadEnrichment";
 import {
   contactHeaderName,
   pipeEmploymentCards,
+  embeddedSapEmploymentProjects,
 } from "../lib/positionedResumeEvidence";
 const source = `Aruna
 Open to Permanent and Contract Roles
@@ -66,8 +67,8 @@ assert.equal(
 assert.equal(result.certifications.length, 3);
 assert.equal(
   result.projects.length,
-  0,
-  "Project-wide adjective is not a named assignment; no invented seven projects",
+  2,
+  "Only two explicit SAP delivery activities; no Project-wide or seven invented projects",
 );
 assert.equal(
   contactHeaderName(source.replace("aruna-mba", "another-mba")),
@@ -84,3 +85,36 @@ assert.equal(
   0,
 );
 console.log("Pipe resume generalization and cross-section boundaries passed.");
+
+const embedded = embeddedSapEmploymentProjects(source);
+assert.equal(embedded.length, 2);
+assert.equal(
+  embedded[0].name,
+  "SAP FSCM Credit & Dispute Management automation",
+);
+assert.equal(embedded[0].employer, "Example Equipment (Australia)");
+assert.equal(embedded[0].client, "", "Employer must not become client");
+assert.equal(embedded[0].start_date, "", "Never borrow employment dates");
+assert.equal(embedded[0].end_date, "");
+assert.equal(embedded[0].role, result.experience[1].title);
+assert.ok(!embedded.some((row) => /Project-wide|7 E2E/.test(String(row.name))));
+assert.equal(
+  embeddedSapEmploymentProjects(
+    "PROFILE SUMMARY\nLed SAP Finance implementation.\nEDUCATION\nSAP Finance implementation",
+  ).length,
+  0,
+);
+assert.equal(
+  embeddedSapEmploymentProjects(
+    source
+      .replace(
+        "Led SAP FSCM Credit & Dispute Management automation.",
+        "Supported SAP FSCM user operations.",
+      )
+      .replace(
+        "Delivered an SAP Finance implementation.",
+        "Delivered multiple SAP Finance implementations.",
+      ),
+  ).length,
+  0,
+);

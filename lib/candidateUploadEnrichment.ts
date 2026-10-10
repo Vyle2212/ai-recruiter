@@ -4,6 +4,7 @@ import { isValidProjectEntry } from "./candidateProfileIngestion";
 import { careerMonthIndex } from "./candidateCareerExperience";
 import {
   pipeEmploymentCards,
+  embeddedSapEmploymentProjects,
   contactHeaderName,
   explicitContactLocation,
   positionedResumeSections,
@@ -793,7 +794,7 @@ export function enrichCandidateUpload(
   // records before deduplicating. Never copy employment dates to a project.
   const projects = mergeGroundedProjects(
     canonicalProjects,
-    [...explicitProjects, ...positioned.projects],
+    [...explicitProjects, ...positioned.projects, ...embeddedSapEmploymentProjects(rawText)],
     rawText,
   );
   const education = positioned.education.length
