@@ -266,8 +266,18 @@ export function labelledResumeEmployment(text: string) {
   if (stop >= 0) body.splice(stop);
   const anchors = body.flatMap((line, index) =>
     (/^(?:company|employer)(?: name)?(?:\s*:\s*.*)?$/i.test(line) &&
-      body.slice(index + 1, index + 12).some(row => /^(?:position title|designation|job title|role|position)\s*(?::|$)/i.test(row)) &&
-      body.slice(index + 1, index + 12).some(row => /^(?:duration|period|employment dates)\s*(?::|$)/i.test(row))) ||
+      body
+        .slice(index + 1, index + 12)
+        .some((row) =>
+          /^(?:position title|designation|job title|role|position)\s*(?::|$)/i.test(
+            row,
+          ),
+        ) &&
+      body
+        .slice(index + 1, index + 12)
+        .some((row) =>
+          /^(?:duration|period|employment dates)\s*(?::|$)/i.test(row),
+        )) ||
     (index + 1 < body.length && /^Position Title\s*:/i.test(body[index + 1]))
       ? [index]
       : [],
@@ -282,7 +292,9 @@ export function labelledResumeEmployment(text: string) {
   };
   const records = anchors.flatMap((anchor, index) => {
     const block = body.slice(anchor, anchors[index + 1] ?? body.length);
-    const employer = /^(?:company|employer)(?: name)?(?:\s*:\s*.*)?$/i.test(block[0])
+    const employer = /^(?:company|employer)(?: name)?(?:\s*:\s*.*)?$/i.test(
+      block[0],
+    )
       ? field(block, "company(?: name)?|employer(?: name)?")
       : block[0];
     const title = field(
