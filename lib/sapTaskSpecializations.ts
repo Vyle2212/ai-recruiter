@@ -6,7 +6,7 @@ import { sourceSupportsSapModuleClaim } from "./sourceSapModuleClaims";
  * https://learning.sap.com/courses/planning-and-execution-in-sap-s-4hana-transportation-management/end-to-end-transportation-process
  */
 export type SapTaskEvidence = {
-  module: "FSCM" | "TM";
+  module: "FSCM" | "TRM" | "CASH_MANAGEMENT" | "TM";
   specialization: string;
   involvement:
     | "delivery"
@@ -39,6 +39,29 @@ const areas: Array<{
   },
   { module: "FSCM", label: "Biller Direct", pattern: /\bBiller Direct\b/i },
   {
+    module: "TRM",
+    label: "Debt and Investment Management",
+    pattern:
+      /\b(?:debt management|investment management|financial instruments?|money market|securities)\b/i,
+  },
+  {
+    module: "TRM",
+    label: "Financial Risk and Hedging",
+    pattern:
+      /\b(?:hedge accounting|hedging|financial risk management|foreign exchange risk|interest rate risk)\b/i,
+  },
+  {
+    module: "CASH_MANAGEMENT",
+    label: "Cash Visibility and Bank Accounts",
+    pattern: /\b(?:cash visibility|cash positions?|bank account management)\b/i,
+  },
+  {
+    module: "CASH_MANAGEMENT",
+    label: "Liquidity Planning and Forecasting",
+    pattern:
+      /\b(?:liquidity planning|liquidity forecasting|cash forecasting|cash flow forecasting)\b/i,
+  },
+  {
     module: "TM",
     label: "Transportation Planning",
     pattern:
@@ -60,6 +83,12 @@ const areas: Array<{
     module: "TM",
     label: "Freight Settlement",
     pattern: /\bfreight settlement(?: documents?)?\b/i,
+  },
+  {
+    module: "TM",
+    label: "Carrier Management and Tendering",
+    pattern:
+      /\b(?:carrier management|carrier selection|freight tendering|tendering)\b/i,
   },
 ];
 export function extractSapTaskSpecializations(
@@ -99,6 +128,20 @@ export function extractSapTaskSpecializations(
       involvement = "technical_delivery";
     for (const area of areas) {
       if (!area.pattern.test(segment)) continue;
+      // A finance or procurement keyword alone does not establish SAP
+      // treasury/cash/TM implementation experience.
+      if (area.module === "TRM" && !/\b(?:TRM|treasury)\b/i.test(segment))
+        continue;
+      if (
+        area.module === "CASH_MANAGEMENT" &&
+        !/\b(?:cash management|cash and liquidity management)\b/i.test(segment)
+      )
+        continue;
+      if (
+        area.label === "Carrier Management and Tendering" &&
+        !/\b(?:TM|transportation|freight|carriers?)\b/i.test(segment)
+      )
+        continue;
       // Generic pricing terms also occur in SD and other products. Require
       // transportation context before assigning the TM charge specialty.
       if (

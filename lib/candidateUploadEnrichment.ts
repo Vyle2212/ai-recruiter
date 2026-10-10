@@ -883,7 +883,7 @@ export function enrichCandidateUpload(
       )
       .map(
         (item) =>
-          `SAP ${item.module}: ${item.specialization}${item.involvement === "technical_delivery" ? " (technical)" : ""}`,
+          `SAP ${item.module === "CASH_MANAGEMENT" ? "Cash Management" : item.module}: ${item.specialization}${item.involvement === "technical_delivery" ? " (technical)" : ""}`,
       ),
     ...(candidate.skills || []),
     ...(canonical.skills || []),

@@ -228,8 +228,10 @@ const route = fs.readFileSync(
     "utf8",
   );
 assert.match(route, /AI_GUIDED_SOURCING_PHASE1|guidedSourcingEnabled/);
-assert.match(route, /authorizeRecruiterJobsRead/);
-assert.match(route, /MAX_REQUESTS=6/);
+assert.match(route, /requireRecruiterSearchAuthorization/);
+assert.match(route, /permission:\s*"guided-intent:generate"/);
+assert.match(route, /recruiterSearchAuthorizationDenied\(authorization\)/);
+assert.match(route, /MAX_REQUESTS\s*=\s*6/);
 assert.match(
   provider,
   /GUIDED_SOURCING_TIMEOUT_MS = guidedSourcingTimeoutMs\(\)/,

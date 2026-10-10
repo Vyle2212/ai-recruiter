@@ -128,3 +128,67 @@ const technical = enrichCandidateUpload(
 );
 assert.ok(technical.skills.includes("SAP FSCM: Credit Management (technical)"));
 assert.equal(technical.skills.includes("SAP FSCM: Credit Management"), false);
+
+// JD domain requirements are separate capabilities, never implied by FSCM
+// or by working with Finance/Treasury stakeholders alone.
+assert.deepEqual(
+  read("SAP FSCM consultant working with CFOs and treasurers."),
+  [],
+);
+assert.deepEqual(
+  read("Configured SAP TRM debt management and hedge accounting.").map((x) => [
+    x.module,
+    x.specialization,
+    x.involvement,
+  ]),
+  [
+    ["TRM", "Debt and Investment Management", "delivery"],
+    ["TRM", "Financial Risk and Hedging", "delivery"],
+  ],
+);
+assert.deepEqual(
+  read(
+    "Configured SAP Cash Management cash positions and liquidity planning.",
+  ).map((x) => [x.module, x.specialization]),
+  [
+    ["CASH_MANAGEMENT", "Cash Visibility and Bank Accounts"],
+    ["CASH_MANAGEMENT", "Liquidity Planning and Forecasting"],
+  ],
+);
+assert.equal(
+  read("Integrated SAP Cash Management liquidity planning with SAP TRM.")[0]
+    .involvement,
+  "integration",
+);
+assert.equal(
+  read("End-user used SAP Cash Management cash positions.")[0].involvement,
+  "end_user",
+);
+assert.deepEqual(
+  read("Configured SAP FI hedge accounting and securities."),
+  [],
+);
+assert.deepEqual(
+  read(
+    "Treasurer managed financial instruments and liquidity forecasting in Excel.",
+  ),
+  [],
+);
+assert.deepEqual(read("Configured SAP MM procurement tendering."), []);
+assert.ok(
+  read("Configured SAP TM carrier management and tendering.").some(
+    (x) =>
+      x.specialization === "Carrier Management and Tendering" &&
+      x.involvement === "delivery",
+  ),
+);
+assert.deepEqual(read("SAP TM Lead - Manager"), []);
+assert.equal(
+  enrichCandidateUpload(
+    {},
+    "Configured SAP FSCM credit segments.",
+  ).sap_task_evidence.some(
+    (x: any) => x.module === "TRM" || x.module === "CASH_MANAGEMENT",
+  ),
+  false,
+);
