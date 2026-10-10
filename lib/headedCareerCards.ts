@@ -82,14 +82,31 @@ type CardMatch = {
 export function headedCareerCards(input: string): HeadedCareerCard[] {
   // Preserve line boundaries for an explicit employer / year range / role card.
   // A lone year or a project heading is insufficient evidence of employment.
-  const lineCard = /(?:^|\n)\s*(?:Work(?:ing)? Experiences?|Professional Experiences?|Employment History|Career History)\s*\n\s*([^\n]{3,90})\n\s*((?:19|20)\d{2})\s*[-–—]\s*((?:19|20)\d{2}|Present|Current|Now)\s*\n\s*([^\n]{3,105})/i.exec(input.normalize("NFKC"));
-  if (lineCard && /\b(?:SDN BHD|Sdn\.?|Bhd\.?|Limited|Ltd\.?|Inc\.?|Corporation|Corp\.?|Pte\.?|Berhad)\b/i.test(lineCard[1])) {
+  const lineCard =
+    /(?:^|\n)\s*(?:Work(?:ing)? Experiences?|Professional Experiences?|Employment History|Career History)\s*\n\s*([^\n]{3,90})\n\s*((?:19|20)\d{2})\s*[-–—]\s*((?:19|20)\d{2}|Present|Current|Now)\s*\n\s*([^\n]{3,105})/i.exec(
+      input.normalize("NFKC"),
+    );
+  if (
+    lineCard &&
+    /\b(?:SDN BHD|Sdn\.?|Bhd\.?|Limited|Ltd\.?|Inc\.?|Corporation|Corp\.?|Pte\.?|Berhad)\b/i.test(
+      lineCard[1],
+    )
+  ) {
     const title = cleaned(lineCard[4]);
     const titleWithJob = /\bFunctional\s*(?:\([^)]*\))?$/i.test(title)
       ? `${title} Consultant`
       : title;
     const owned = validate(lineCard[1], titleWithJob, lineCard[2], lineCard[3]);
-    if (owned) return [{ company: owned.company, title, start: lineCard[2], end: lineCard[3], excerpt: lineCard[0].trim().slice(0, 280) }];
+    if (owned)
+      return [
+        {
+          company: owned.company,
+          title,
+          start: lineCard[2],
+          end: lineCard[3],
+          excerpt: lineCard[0].trim().slice(0, 280),
+        },
+      ];
   }
   const text = input.normalize("NFKC").replace(/\s+/g, " ");
   for (const foundHeading of text.matchAll(heading)) {
@@ -238,16 +255,26 @@ export function headedCareerCards(input: string): HeadedCareerCard[] {
 /** Repeated employer / YEAR MONTH / role cards under one employment heading. */
 export function reversedMonthCareerCards(input: string): HeadedCareerCard[] {
   const text = input.normalize("NFKC").replace(/\s+/g, " ");
-  const heading = /\b(?:Employment History|Career History|Work(?:ing)? Experiences?|Professional Experiences?)\b/i.exec(text);
+  const heading =
+    /\b(?:Employment History|Career History|Work(?:ing)? Experiences?|Professional Experiences?)\b/i.exec(
+      text,
+    );
   if (!heading) return [];
   const raw = text.slice(heading.index + heading[0].length);
   const end = raw.search(stop);
-  const section = raw.slice(0, end < 0 ? 2200 : Math.min(end, 2200)).trimStart().replace(/^[:|–—-]+\s*/, "");
+  const section = raw
+    .slice(0, end < 0 ? 2200 : Math.min(end, 2200))
+    .trimStart()
+    .replace(/^[:|–—-]+\s*/, "");
   const company = "([A-Z][a-z]+(?:\\s+(?:[A-Z][a-z]+|Of)){1,5})";
   const reverseDate = `((?:19|20)\\d{2})\\s+(${month})`;
   const reversePeriod = `${reverseDate}\\s+(?:to|[-–—])\\s+(?:((?:19|20)\\d{2})\\s+(${month})|(present|current|now))`;
-  const title = "(Chiropractor(?:\\s+and\\s+(?:[A-Z][a-z]+\\s+){0,2}Manager)?|(?:[A-Za-z]+\\s+){0,5}(?:Consultant|Engineer|Developer|Analyst|Specialist|Manager|Therapist))";
-  const card = new RegExp(`(?:^|\\s)${company}\\s*[-–—]\\s*${reversePeriod}\\s+${title}(?=\\s+${duty}\\b)`, "g");
+  const title =
+    "(Chiropractor(?:\\s+and\\s+(?:[A-Z][a-z]+\\s+){0,2}Manager)?|(?:[A-Za-z]+\\s+){0,5}(?:Consultant|Engineer|Developer|Analyst|Specialist|Manager|Therapist))";
+  const card = new RegExp(
+    `(?:^|\\s)${company}\\s*[-–—]\\s*${reversePeriod}\\s+${title}(?=\\s+${duty}\\b)`,
+    "g",
+  );
   const matches = [...section.matchAll(card)];
   // A later card cannot prove that preceding unstructured text was employment.
   if (!matches.length || (matches[0].index || 0) > 5) return [];
@@ -257,7 +284,12 @@ export function reversedMonthCareerCards(input: string): HeadedCareerCard[] {
     const endDate = match[6] || `${match[5]} ${match[4]}`;
     const owned = validate(match[1], match[7], start, endDate);
     if (!owned) break;
-    result.push({ ...owned, start, end: endDate, excerpt: match[0].trim().slice(0, 280) });
+    result.push({
+      ...owned,
+      start,
+      end: endDate,
+      excerpt: match[0].trim().slice(0, 280),
+    });
   }
   return result;
 }
