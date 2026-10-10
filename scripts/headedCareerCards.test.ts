@@ -366,3 +366,32 @@ for (const unsafe of [
   ),
 ])
   assert.deepEqual(headedCareerCards(unsafe), []);
+
+const splitCurrent =
+  "Professional Experience\n\nExample-Outsource Asia May 2013 —\nSAP BW Senior Consultant Present\nProvide technical support.";
+assert.deepEqual(
+  headedCareerCards(splitCurrent).map((x) => [
+    x.company,
+    x.title,
+    x.start,
+    x.end,
+  ]),
+  [
+    [
+      "Example-Outsource Asia",
+      "SAP BW Senior Consultant",
+      "May 2013",
+      "Present",
+    ],
+  ],
+);
+for (const unsafe of [
+  splitCurrent.replace("Professional Experience", "Project Experience"),
+  splitCurrent.replace("Example-Outsource Asia", "Client: Example Systems"),
+  splitCurrent.replace(" Present", ""),
+  splitCurrent.replace(
+    "SAP BW Senior Consultant Present",
+    "Project details\nSAP BW Senior Consultant Present",
+  ),
+])
+  assert.deepEqual(headedCareerCards(unsafe), []);

@@ -80,6 +80,29 @@ type CardMatch = {
  * date. Other cards remain in review until their own row boundary is proven.
  */
 export function headedCareerCards(input: string): HeadedCareerCard[] {
+  // Two-column exports may put the ongoing endpoint after the next-line role.
+  // Require the exact heading, employer/start row and explicit SAP role row.
+  const splitCurrentCard = new RegExp(
+    `(?:^|\\n)\\s*(?:Employment History|Work(?:ing)? Experiences?|Professional Experiences?)\\s*:?\\s*\\n\\s*([^\\n]{3,90}?)\\s+(${date})\\s*[-–—]\\s*\\n\\s*(SAP\\s+${role})\\s+(Present|Current|Now)\\s*(?=\\n|$)`,
+    "i",
+  ).exec(input.normalize("NFKC"));
+  if (splitCurrentCard) {
+    const owned = validate(
+      splitCurrentCard[1],
+      splitCurrentCard[3],
+      splitCurrentCard[2],
+      splitCurrentCard[5],
+    );
+    if (owned)
+      return [
+        {
+          ...owned,
+          start: splitCurrentCard[2],
+          end: splitCurrentCard[5],
+          excerpt: splitCurrentCard[0].trim().slice(0, 280),
+        },
+      ];
+  }
   const parenthesizedCard = new RegExp(
     `(?:^|\\n)\\s*(?:Employment History(?:\\s*&\\s*Key Accomplishments)?|Work(?:ing)? Experiences?|Professional Experiences?)\\s*:?\\s*\\n\\s*([^\\n]{3,90}?)\\s*\\(${period}\\)\\s*\\n\\s*([^\\n]{3,105})`,
     "i",
