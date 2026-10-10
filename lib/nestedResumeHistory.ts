@@ -246,3 +246,102 @@ export function institutionFirstEducation(text: string) {
     ];
   });
 }
+
+/** Standalone table labels and company headers followed by Position/Duration.
+ * Stop at a project section; project clients cannot become company rows. */
+export function labelledResumeEmployment(text: string) {
+  const lines = text.split(/\r?\n/).map(clean).filter(Boolean);
+  const start = lines.findIndex((line) =>
+    /^(?:experience|(?:employment|work|working|professional|career) (?:history|experience))\s*:?$/i.test(
+      line,
+    ),
+  );
+  if (start < 0) return [];
+  const body = lines.slice(start + 1);
+  const stop = body.findIndex((line) =>
+    /^(?:professional experience|selected project experience|project experience|education|qualifications|skills|languages)\s*:?$/i.test(
+      line,
+    ),
+  );
+  if (stop >= 0) body.splice(stop);
+  const anchors = body.flatMap((line, index) =>
+    /^(?:company|employer)(?: name)?(?:\s*:\s*.*)?$/i.test(line) ||
+    (index + 1 < body.length && /^Position Title\s*:/i.test(body[index + 1]))
+      ? [index]
+      : [],
+  );
+  const field = (block: string[], label: string) => {
+    const pattern = new RegExp(`^(?:${label})\\s*(?::\\s*(.*))?$`, "i");
+    for (let i = 0; i < block.length; i++) {
+      const m = block[i].match(pattern);
+      if (m) return m[1]?.trim() || block[i + 1] || "";
+    }
+    return "";
+  };
+  const records = anchors.flatMap((anchor, index) => {
+    const block = body.slice(anchor, anchors[index + 1] ?? body.length);
+    const employer =
+      field(block, "company(?: name)?|employer(?: name)?") || block[0];
+    const title = field(
+      block,
+      "position title|designation|job title|role|position",
+    );
+    const duration = field(block, "duration|period|employment dates");
+    const dates = projectDateRange(duration);
+    if (
+      !employer ||
+      !title ||
+      !dates ||
+      [employer, title].some((value) =>
+        /^(?:Location|Designation|Duration|Position|Company|Employer|Role)\s*:?$/i.test(
+          value,
+        ),
+      )
+    )
+      return [];
+    return [
+      {
+        employer,
+        company: employer,
+        title,
+        start_date: dates[1],
+        end_date: dates[2],
+        current: projectDateIsCurrent(dates[2]),
+      },
+    ];
+  });
+  return records.length === anchors.length ? records : [];
+}
+
+/** Numbered cards often print Client before Project. Reorder only their
+ * labelled fields inside the same card, never borrowing the next client. */
+export function projectFieldLayoutText(text: string) {
+  const lines = text
+    .replace(
+      /^(\s*(?:client|customer|project|duration|period|position|designation|role))\t+[ \t]*([^\n]+)/gim,
+      "$1: $2",
+    )
+    .split(/\r?\n/);
+  const anchors = lines.flatMap((line, index) =>
+    /^\s*Project\s+\d+\s*:/i.test(line) ? [index] : [],
+  );
+  for (let i = anchors.length - 1; i >= 0; i--) {
+    const start = anchors[i],
+      end = anchors[i + 1] ?? lines.length;
+    const card = lines.slice(start, end);
+    const project = card.findIndex((line) =>
+      /^\s*Project\s*:\s*\S/i.test(line),
+    );
+    const client = card.findIndex((line) =>
+      /^\s*(?:Client|Customer)\s*:\s*\S/i.test(line),
+    );
+    if (client >= 0 && project > client) {
+      const [field] = card.splice(project, 1);
+      card.splice(client, 0, field);
+      lines.splice(start, end - start, ...card);
+    }
+  }
+  return lines
+    .join("\n")
+    .replace(/^[ \t]*Project[ \t]+\d+[ \t]*:[ \t]*$/gim, "");
+}

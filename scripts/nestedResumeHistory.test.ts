@@ -1,3 +1,4 @@
+import { careerMonthIndex } from "../lib/candidateCareerExperience";
 import assert from "node:assert/strict";
 import { enrichCandidateUpload } from "../lib/candidateUploadEnrichment";
 import { evaluateCandidateExtractionCoverage } from "../lib/candidateExtractionCoverage";
@@ -138,4 +139,60 @@ assert.ok(
     labelled,
     labelledResult,
   ).missedObservedSections.includes("projects"),
+);
+
+const tableSource = `Example Person
+Employment History:
+Company
+Example Technologies Ltd.
+Location
+Example City
+Designation
+Associate Consultant
+Duration
+April 4th 2012- May 29th 2015
+Professional Experience:
+Selected Project Experience
+Project 3:
+Client\tExample Bank, United Kingdom
+Project\tImplementation & Support - BO, BI
+Duration\tJAN‘13 – May’15
+Position\tAssociate Consultant / BI Support
+Responsibilities
+Configured SAP reporting systems.
+Project 2:
+Client\tExample Manufacturing
+Project\tSAP BI implementation
+Duration\tMay 2012 - Dec 2012
+Position\tBI Consultant
+Responsibilities
+Configured reporting systems.
+Education
+Bachelor of Computing`;
+const tableResult = enrichCandidateUpload({}, tableSource);
+assert.equal(tableResult.experience.length, 1);
+assert.equal(tableResult.experience[0].employer, "Example Technologies Ltd.");
+assert.equal(tableResult.experience[0].start_date, "April 4th 2012");
+assert.equal(tableResult.experience[0].end_date, "May 29th 2015");
+assert.equal(tableResult.projects.length, 2);
+const bankProject = tableResult.projects.find(
+  (row) => row.client === "Example Bank, United Kingdom",
+);
+assert.ok(bankProject);
+assert.equal(bankProject.start_date, "JAN 13");
+assert.equal(
+  tableResult.projects.find((row) => row.client === "Example Manufacturing")
+    ?.end_date,
+  "Dec 2012",
+);
+assert.equal(bankProject.role, "Associate Consultant / BI Support");
+
+assert.equal(careerMonthIndex("April 4th 2012"), 2012 * 12 + 3);
+assert.equal(careerMonthIndex("February 31st 2012"), null);
+assert.ok(
+  evaluateCandidateExtractionCoverage(tableSource, {
+    ...tableResult,
+    projects: [],
+    project_history: [],
+  }).missedObservedSections.includes("projects"),
 );

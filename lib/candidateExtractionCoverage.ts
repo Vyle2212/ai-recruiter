@@ -1,6 +1,7 @@
 import {
   nestedResumeHistory,
   nestedProjectEvidenceCount,
+  projectFieldLayoutText,
 } from "./nestedResumeHistory";
 import { pipeEmploymentCards } from "./positionedResumeEvidence";
 import {
@@ -133,6 +134,7 @@ function explicitEmploymentCount(rawText: string): number {
 
 /** Count repeated project-entry labels without double-counting Client + Project in one entry. */
 function explicitProjectCount(rawText: string): number {
+  rawText = projectFieldLayoutText(rawText);
   const labels = ["(?:client|customer)(?: name)?", "project(?: name| title)?"];
   const nextField =
     "(?:project(?: name| title| role| duration| dates?| experience)?|client(?: name)?|customer(?: name)?|role|position|designation|duration|period|start date|end date|education|skills?|languages?)";

@@ -1,6 +1,8 @@
 import {
   nestedResumeHistory,
   institutionFirstEducation,
+  labelledResumeEmployment,
+  projectFieldLayoutText,
 } from "./nestedResumeHistory";
 import {
   contactHeaderPhone,
@@ -325,7 +327,7 @@ function explicitLanguages(rawText: string) {
 }
 
 function explicitProjectRecords(rawText: string) {
-  const normalized = rawText
+  const normalized = projectFieldLayoutText(rawText)
     .normalize("NFKC")
     .replace(/\r/g, "")
     .replace(/[ \t]+/g, " ");
@@ -342,7 +344,7 @@ function explicitProjectRecords(rawText: string) {
     `\\b(${PROJECT_DATE_TOKEN_PATTERN})\\s*(?:-|–|—|to|~)\\s*(${PROJECT_DATE_TOKEN_PATTERN}|${PROJECT_CURRENT_TOKEN_PATTERN})\\b`,
     "i",
   );
-  const dateValue = (value: string) => clean(value.replace(/[’']/g, " "));
+  const dateValue = (value: string) => clean(value.replace(/[’‘']/g, " "));
   // An invalid or partial date claim is not an undated assignment. Preserve
   // that claim only in the source text until it can be reviewed.
   const unresolvedDateClaim = (block: string, start: string, end: string) =>
@@ -745,6 +747,7 @@ export function enrichCandidateUpload(
   rawText: string,
 ) {
   const nested = nestedResumeHistory(rawText);
+  const labelledEmployment = labelledResumeEmployment(rawText);
   const structuredEducation = institutionFirstEducation(rawText);
   const positioned = positionedResumeSections(rawText);
   const trackedName = trackedHeaderName(
@@ -777,6 +780,7 @@ export function enrichCandidateUpload(
   ).flatMap((line) => line.split(/[,;|•·▪]+/));
   const experience =
     nested?.experience ||
+    (labelledEmployment.length ? labelledEmployment : null) ||
     (pipeCards.length
       ? pipeCards
       : canonical.workExperience?.length
@@ -893,7 +897,8 @@ export function enrichCandidateUpload(
       positioned.country ||
       (pipeCards.length ? "" : full.locationCountry || candidate.country),
     current_title:
-      (nested || pipeCards.length) && currentExperience
+      (nested || labelledEmployment.length || pipeCards.length) &&
+      currentExperience
         ? currentExperience.title
         : full.extractedCurrentTitle && !full.isTitleSuspicious
           ? full.extractedCurrentTitle

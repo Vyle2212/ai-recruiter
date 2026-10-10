@@ -6,7 +6,7 @@ const clean = (value: unknown) => typeof value === "string" ? value.normalize("N
  * years use a fixed 00-30 => 2000-2030, 31-99 => 1931-1999 pivot. */
 export function careerMonthIndex(value: unknown, current = false, now = new Date()): number | null {
   const currentMonth = now.getUTCFullYear() * 12 + now.getUTCMonth();
-  const source = clean(value);
+  const source = clean(value).replace(/^(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2}(?:st|nd|rd|th)?)\s+((?:19|20)\d{2})$/i, "$2 $1 $3");
   const currentEndpoint = /^(?:present|current|curr|now|until\s+now|at\s+the\s+present|(?:till|to)(?:\s+to)?\s+date)$/i.test(source);
   // A current flag cannot override a printed, historical end date. Keep that
   // contradictory interval out of both validation and experience totals.
@@ -16,7 +16,7 @@ export function careerMonthIndex(value: unknown, current = false, now = new Date
   let year: number, month: number;
   const iso = source.match(/^(19\d{2}|20\d{2})(?:[-/](0?[1-9]|1[0-2]))?$/);
   const numeric = source.match(/^(0?[1-9]|1[0-2])\s*[/]\s*(\d{2}|19\d{2}|20\d{2})$/);
-  const named = source.match(/^(?:(\d{1,2})(?:st|nd|rd|th)?\s+)?(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[\s’'-]+(\d{2}|19\d{2}|20\d{2})$/i);
+  const named = source.match(/^(?:(\d{1,2})(?:st|nd|rd|th)?\s+)?(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[\s’‘'-]+(\d{2}|19\d{2}|20\d{2})$/i);
   if (iso) { year = Number(iso[1]); month = Number(iso[2] || 1) - 1; }
   else if (numeric) { year = Number(numeric[2]); month = Number(numeric[1]) - 1; }
   else if (named) { year = Number(named[3]); month = names.indexOf(named[2].slice(0,3).toLowerCase()); }
