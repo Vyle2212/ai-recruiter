@@ -11,7 +11,7 @@ type TurnstileApi = {
       theme: "dark";
       callback: (token: string) => void;
       "expired-callback": () => void;
-      "error-callback": () => void;
+      "error-callback": (code: string) => void;
     },
   ) => string;
   reset: (widgetId: string) => void;
@@ -38,15 +38,25 @@ export default function CandidateRegistrationForm({
   const [pending, setPending] = useState(false);
   const [complete, setComplete] = useState(false);
   const [message, setMessage] = useState("");
+  const [captchaError, setCaptchaError] = useState("");
 
   const renderCaptcha = useCallback(() => {
     if (!containerRef.current || !window.turnstile || widgetRef.current) return;
     widgetRef.current = window.turnstile.render(containerRef.current, {
       sitekey: siteKey,
       theme: "dark",
-      callback: setCaptchaToken,
+      callback: (token) => {
+        setCaptchaError("");
+        setCaptchaToken(token);
+      },
       "expired-callback": () => setCaptchaToken(""),
-      "error-callback": () => setCaptchaToken(""),
+      "error-callback": (code) => {
+        setCaptchaToken("");
+        const configurationError = ["110100", "110110", "110200", "400020", "400021", "400070"].includes(code);
+        setCaptchaError(configurationError
+          ? `Security verification is unavailable due to website configuration. Please contact support. Code: ${code}.`
+          : `Security verification could not connect or finish. Retry verification below without re-entering your details. Code: ${/^[0-9]{3,6}$/.test(code) ? code : "unknown"}.`);
+      },
     });
   }, [siteKey]);
 
@@ -150,6 +160,10 @@ export default function CandidateRegistrationForm({
         src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
         strategy="afterInteractive"
         onReady={renderCaptcha}
+        onError={() => {
+          setCaptchaToken("");
+          setCaptchaError("Security verification could not load. Check access to challenges.cloudflare.com, then retry verification.");
+        }}
       />
       <form className="space-y-4" onSubmit={submit}>
         <label className="block text-sm text-slate-300">
@@ -202,6 +216,22 @@ export default function CandidateRegistrationForm({
           />
         </label>
         <div ref={containerRef} aria-label="Bot protection challenge" />
+        {captchaError ? (
+          <div role="alert" className="rounded-lg border border-red-400/50 p-3 text-sm text-red-200">
+            <p>{captchaError}</p>
+            <button type="button" className="mt-2 rounded border border-cyan-500 px-3 py-2 text-cyan-200 disabled:opacity-50"
+              disabled={pending}
+              onClick={() => {
+                setCaptchaToken("");
+                if (widgetRef.current && window.turnstile) {
+                  setCaptchaError("");
+                  window.turnstile.reset(widgetRef.current);
+                } else {
+                  setCaptchaError("Security verification script is unavailable. Check your connection or browser blocking before reloading this page.");
+                }
+              }}>Retry verification</button>
+          </div>
+        ) : null}
         <button
           className="w-full rounded-lg bg-cyan-500 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
           type="submit"
