@@ -138,10 +138,17 @@ export function explicitContactLocation(text: string) {
   const header = text.split(
     /(?:^|\n)\s*(?:PROFILE SUMMARY|PROFESSIONAL SUMMARY|KEY HIGHLIGHTS|PROFESSIONAL EXPERIENCE|WORK EXPERIENCE|EDUCATION)\s*(?:\n|$)/i,
   )[0];
-  return header
+  const labelled = header
     .match(
       /(?:^|\n)\s*(?:current location|location|address|based in)\s*[:–-]\s*([^\n]+)/i,
     )?.[1]
+    ?.trim();
+  if (labelled) return labelled;
+  // A street-address line in the contact header is stronger residence evidence
+  // than city names attached to an employer or university.
+  return header
+    .split(/\r?\n/)
+    .find((line) => /^\s*(?:Jl\.?|Jalan|Street address)\s+/i.test(line))
     ?.trim();
 }
 

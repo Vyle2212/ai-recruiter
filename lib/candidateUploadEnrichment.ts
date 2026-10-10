@@ -1,4 +1,8 @@
 import {
+  nestedResumeHistory,
+  institutionFirstEducation,
+} from "./nestedResumeHistory";
+import {
   contactHeaderPhone,
   sapProjectTypeEvidence,
 } from "./candidatePortalEditEvidence";
@@ -254,9 +258,9 @@ function mergeGroundedProjects(
 }
 
 const SECTION_HEADINGS =
-  /^(?:work|professional|career|employment)\s+(?:experience|history)|projects?|client experience|education|academic background|academic qualifications?|qualifications?|certifications?|credentials?|skills?|technical skills?|core competencies|languages?|language proficiency|personal details|summary|profile|references?\s*:?[\s]*$/i;
+  /^(?:(?:work|professional|career|employment)\s+(?:experience|history)|experience|additional information|projects?|client experience|education|academic background|academic qualifications?|qualifications?|certifications?|credentials?|skills?|technical skills?|core competencies|languages?|language proficiency|personal details|summary|profile|references?)\s*:?[\s]*$/i;
 const PROJECT_SECTION_END_HEADINGS =
-  /^(?:(?:work(?:ing)?|professional|career|employment)\s+(?:experience|history)|education|academic\s+(?:background|qualifications?)|qualifications?|certifications?|credentials?|skills?|technical\s+skills?|core\s+competencies|languages?|language\s+proficiency|personal\s+details|summary|profile|references?)\s*:?\s*$/i;
+  /^(?:experience|additional information|(?:work(?:ing)?|professional|career|employment)\s+(?:experience|history)|education|academic\s+(?:background|qualifications?)|qualifications?|certifications?|credentials?|skills?|technical\s+skills?|core\s+competencies|languages?|language\s+proficiency|personal\s+details|summary|profile|references?)\s*:?\s*$/i;
 
 function explicitSectionLines(rawText: string, heading: RegExp) {
   const lines = rawText.split(/\r?\n/).map((line) => line.trim());
@@ -740,6 +744,8 @@ export function enrichCandidateUpload(
   candidate: Record<string, any>,
   rawText: string,
 ) {
+  const nested = nestedResumeHistory(rawText);
+  const structuredEducation = institutionFirstEducation(rawText);
   const positioned = positionedResumeSections(rawText);
   const trackedName = trackedHeaderName(
     rawText,
@@ -769,30 +775,32 @@ export function enrichCandidateUpload(
     rawText,
     /^(?:skills?|technical skills?|core competencies|sap skills?|expertise)\s*:?[\s]*$/i,
   ).flatMap((line) => line.split(/[,;|•·▪]+/));
-  const experience = pipeCards.length
-    ? pipeCards
-    : canonical.workExperience?.length
-      ? canonical.workExperience.map((item: any) => ({
-          employer: clean(item.company),
-          company: clean(item.company),
-          title: clean(item.title),
-          start_date: clean(item.startDate),
-          end_date: clean(item.endDate),
-          current: item.current === true,
-        }))
-      : (full.employerHistory || [])
-          .filter(
-            (item: any) => item.isEmployer !== false && clean(item.employer),
-          )
-          .map((item: any) => ({
-            employer: clean(item.employer),
-            company: clean(item.employer),
+  const experience =
+    nested?.experience ||
+    (pipeCards.length
+      ? pipeCards
+      : canonical.workExperience?.length
+        ? canonical.workExperience.map((item: any) => ({
+            employer: clean(item.company),
+            company: clean(item.company),
             title: clean(item.title),
             start_date: clean(item.startDate),
             end_date: clean(item.endDate),
-            current: item.isCurrent === true,
-            evidence_confidence: Number(item.confidence || 0),
-          }));
+            current: item.current === true,
+          }))
+        : (full.employerHistory || [])
+            .filter(
+              (item: any) => item.isEmployer !== false && clean(item.employer),
+            )
+            .map((item: any) => ({
+              employer: clean(item.employer),
+              company: clean(item.employer),
+              title: clean(item.title),
+              start_date: clean(item.startDate),
+              end_date: clean(item.endDate),
+              current: item.isCurrent === true,
+              evidence_confidence: Number(item.confidence || 0),
+            })));
   const currentExperience = experience.find(
     (item: any) => item.current === true && clean(item.employer),
   );
@@ -817,19 +825,23 @@ export function enrichCandidateUpload(
   // Match role, project/client and either the same period or both undated
   // records before deduplicating. Never copy employment dates to a project.
   const projects = mergeGroundedProjects(
-    canonicalProjects,
-    [
-      ...explicitProjects,
-      ...positioned.projects,
-      ...embeddedSapEmploymentProjects(rawText),
-    ],
+    nested?.projects || canonicalProjects,
+    nested
+      ? []
+      : [
+          ...explicitProjects,
+          ...positioned.projects,
+          ...embeddedSapEmploymentProjects(rawText),
+        ],
     rawText,
   );
-  const education = positioned.education.length
-    ? positioned.education
-    : explicitEducation.length
-      ? explicitEducation
-      : canonical.education || [];
+  const education = structuredEducation.length
+    ? structuredEducation
+    : positioned.education.length
+      ? positioned.education
+      : explicitEducation.length
+        ? explicitEducation
+        : canonical.education || [];
   const certifications = positioned.certifications.length
     ? positioned.certifications
     : explicitCertifications.length
@@ -857,6 +869,12 @@ export function enrichCandidateUpload(
 
   return {
     ...candidate,
+    ...(nested
+      ? {
+          currentCompany: clean(currentExperience?.employer) || null,
+          currentTitle: clean(currentExperience?.title) || null,
+        }
+      : {}),
     name:
       contactHeaderName(rawText) ||
       trackedName ||
@@ -875,7 +893,7 @@ export function enrichCandidateUpload(
       positioned.country ||
       (pipeCards.length ? "" : full.locationCountry || candidate.country),
     current_title:
-      pipeCards.length && currentExperience
+      (nested || pipeCards.length) && currentExperience
         ? currentExperience.title
         : full.extractedCurrentTitle && !full.isTitleSuspicious
           ? full.extractedCurrentTitle

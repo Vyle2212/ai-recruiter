@@ -1,3 +1,7 @@
+import {
+  nestedResumeHistory,
+  nestedProjectEvidenceCount,
+} from "./nestedResumeHistory";
 import { pipeEmploymentCards } from "./positionedResumeEvidence";
 import {
   evaluateCandidateProfileCompletion,
@@ -206,8 +210,15 @@ export function evaluateCandidateExtractionCoverage(
     "identity",
     "sap_modules",
   ]);
-  const projectAnchors = explicitProjectCount(rawText);
-  const employmentAnchors = explicitEmploymentCount(rawText);
+  const nested = nestedResumeHistory(rawText);
+  const projectAnchors = Math.max(
+    explicitProjectCount(rawText),
+    nestedProjectEvidenceCount(rawText),
+  );
+  const employmentAnchors = Math.max(
+    explicitEmploymentCount(rawText),
+    nested?.experience.length || 0,
+  );
   if (projectAnchors) observed.add("projects");
   if (employmentAnchors) observed.add("employment");
   for (const [section, pattern] of Object.entries(OBSERVED_PATTERNS)) {
