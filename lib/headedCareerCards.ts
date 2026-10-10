@@ -80,6 +80,32 @@ type CardMatch = {
  * date. Other cards remain in review until their own row boundary is proven.
  */
 export function headedCareerCards(input: string): HeadedCareerCard[] {
+  const parenthesizedCard = new RegExp(
+    `(?:^|\\n)\\s*(?:Employment History(?:\\s*&\\s*Key Accomplishments)?|Work(?:ing)? Experiences?|Professional Experiences?)\\s*:?\\s*\\n\\s*([^\\n]{3,90}?)\\s*\\(${period}\\)\\s*\\n\\s*([^\\n]{3,105})`,
+    "i",
+  ).exec(input.normalize("NFKC"));
+  if (
+    parenthesizedCard &&
+    /\b(?:Consulting|Technologies|Solutions|Systems|Limited|Ltd|Inc|Corporation|Berhad|Sdn|Pte)\b/i.test(
+      parenthesizedCard[1],
+    )
+  ) {
+    const owned = validate(
+      parenthesizedCard[1],
+      parenthesizedCard[4],
+      parenthesizedCard[2],
+      parenthesizedCard[3],
+    );
+    if (owned)
+      return [
+        {
+          ...owned,
+          start: parenthesizedCard[2],
+          end: parenthesizedCard[3],
+          excerpt: parenthesizedCard[0].trim().slice(0, 280),
+        },
+      ];
+  }
   // Preserve line boundaries for an explicit employer / year range / role card.
   // A lone year or a project heading is insufficient evidence of employment.
   const lineCard =

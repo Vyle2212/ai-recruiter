@@ -328,3 +328,41 @@ for (const invalid of [
   ),
 ])
   assert.deepEqual(headedCareerCards(invalid), []);
+
+const parenthesizedEmployment =
+  "Employment History & Key Accomplishments\n\nExample Consulting Malaysia (October 2018 — Current)\nConsultant SAP Security\nManaged authorizations.\nProject: Example Client";
+assert.deepEqual(
+  headedCareerCards(parenthesizedEmployment).map((x) => [
+    x.company,
+    x.title,
+    x.start,
+    x.end,
+  ]),
+  [
+    [
+      "Example Consulting Malaysia",
+      "Consultant SAP Security",
+      "October 2018",
+      "Current",
+    ],
+  ],
+);
+for (const unsafe of [
+  parenthesizedEmployment.replace(
+    "Employment History & Key Accomplishments",
+    "Project Experience",
+  ),
+  parenthesizedEmployment.replace(
+    "Example Consulting Malaysia",
+    "Client: Example Systems",
+  ),
+  parenthesizedEmployment.replace(
+    "Consultant SAP Security",
+    "Authorization maintenance",
+  ),
+  parenthesizedEmployment.replace(
+    "October 2018 — Current",
+    "October 2025 — March 2024",
+  ),
+])
+  assert.deepEqual(headedCareerCards(unsafe), []);
