@@ -406,3 +406,45 @@ assert.equal(
   ).projects.some((row) => String(row.name).includes("R3.1")),
   false,
 );
+
+const combinedCards = `SAP MM Consultant
+Project: SAP Implementation
+Client: Example Manufacturing
+Module / Role: MM / Functional Consultant
+Duration: Jan 2014 - Current
+Project: SAP Finance Rollout
+Client: Example Finance
+Module / Role: FI/CO / Lead Consultant
+Project Duration: Feb 2015 - Now
+Education
+Bachelor of Computing`;
+const combinedProjects = enrichCandidateUpload({}, combinedCards).projects;
+for (const [name, role, modules, start] of [
+  ["SAP Implementation", "Functional Consultant", ["MM"], "Jan 2014"],
+  ["SAP Finance Rollout", "Lead Consultant", ["FI", "CO"], "Feb 2015"],
+] as const) {
+  const row = combinedProjects.find(
+    (row) => row.name === name && row.role === role,
+  );
+  assert.ok(row);
+  assert.equal(row.start_date, start);
+  assert.equal(row.current, true);
+  assert.deepEqual(row.modules, [...modules]);
+}
+assert.equal(
+  enrichCandidateUpload(
+    {},
+    combinedCards.replace("MM / Functional Consultant", "MM / SD"),
+  ).projects.some((row) => row.role === "SD"),
+  false,
+);
+assert.equal(
+  enrichCandidateUpload(
+    {},
+    combinedCards.replace("Jan 2014 - Current", "Jan 2025 - Dec 2024"),
+  ).projects.some(
+    (row) =>
+      row.name === "SAP Implementation" && row.role === "Functional Consultant",
+  ),
+  false,
+);

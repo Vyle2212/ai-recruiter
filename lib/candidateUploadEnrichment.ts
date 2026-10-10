@@ -452,10 +452,25 @@ function explicitProjectRecords(rawText: string) {
       block,
       "project[ \\t]+role|role|position|designation",
     );
+    const combinedModuleRole = labelledLineValue(
+      block,
+      "(?:sap[ \\t]+)?modules?[ \\t]*/[ \\t]*role",
+    );
+    const combinedSeparator = combinedModuleRole.lastIndexOf("/");
+    const combinedRole =
+      combinedSeparator > 0
+        ? clean(combinedModuleRole.slice(combinedSeparator + 1))
+        : combinedModuleRole;
+    const supportedCombinedRole =
+      /\b(?:consultant|developer|analyst|architect|specialist|engineer|lead|manager|team member|PMO)\b/i.test(
+        combinedRole,
+      )
+        ? combinedRole
+        : "";
     const colonRole = projectFieldValue(
       block.match(
         /(?:^|\n)\s*(?:project\s+role|role|position|designation)\s*:\s*([^\n]{2,160})/im,
-      )?.[1],
+      )?.[1] || supportedCombinedRole,
     );
     const narrativeRole = projectFieldValue(
       block.match(
@@ -465,7 +480,7 @@ function explicitProjectRecords(rawText: string) {
     const role = colonRole || multilineRole || narrativeRole;
     const duration = labelledLineValue(
       block,
-      "duration|period|project[ \\t]+dates?",
+      "duration|period|project[ \\t]+(?:dates?|duration)",
     );
     const range =
       duration.match(rangePattern) ||
@@ -482,7 +497,10 @@ function explicitProjectRecords(rawText: string) {
     const moduleLine = clean(
       block.match(
         /(?:^|\n)\s*(?:sap\s+modules?|modules?)\s*:\s*([^\n]{1,160})/im,
-      )?.[1],
+      )?.[1] ||
+        (supportedCombinedRole && combinedSeparator > 0
+          ? combinedModuleRole.slice(0, combinedSeparator)
+          : ""),
     );
     const projectType = clean(
       block.match(
@@ -498,6 +516,7 @@ function explicitProjectRecords(rawText: string) {
       role,
       start_date: dateValue(startDate),
       end_date: dateValue(endDate),
+      current: projectDateIsCurrent(endDate),
       modules: unique(moduleLine.split(/[,;|/]+/)),
       project_type: projectType,
     });
