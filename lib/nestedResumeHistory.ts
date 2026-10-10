@@ -208,18 +208,47 @@ export function nestedResumeHistory(text: string) {
 export function institutionFirstEducation(text: string) {
   const lines = text
     .replace(/\f/g, "\n")
-    .split(/\r?\n/)
+    .split(/\r?\n|\t/)
     .map(clean)
     .filter(Boolean);
   const start = lines.findIndex((line) => /^education\s*:?$/i.test(line));
   if (start < 0) return [];
   const body = lines.slice(start + 1);
   const end = body.findIndex((line) =>
-    /^(?:experience|(?:work|professional|employment|career) (?:experience|history)|additional information|skills?|languages?|certifications?)\s*:?$/i.test(
+    /^(?:experience|(?:work|professional|employment|career) (?:experience|history)|project(?:s| undertaken| experience)?|additional information|(?:technical )?skills?|languages?|certifications?|references?)\s*:?$/i.test(
       line,
     ),
   );
   if (end >= 0) body.splice(end);
+  // Explicit two-column tables retain the source degree and institution even
+  // when the CV does not supply a graduation year. Never borrow project dates.
+  if (
+    /^qualification\s*:?$/i.test(body[0] || "") &&
+    /^institution\s*:?$/i.test(body[1] || "")
+  ) {
+    const rows = [];
+    for (let index = 2; index + 1 < body.length; index += 2) {
+      const qualification = body[index];
+      const institution = body[index + 1];
+      if (
+        !/^(?:Bachelor|Master|Diploma|Doctor)(?:\b|of\b)/i.test(
+          qualification,
+        ) ||
+        !/\b(?:university|college|institute|institut|universitas)\b/i.test(
+          institution,
+        ) ||
+        /\b(?:client|employer|project)\b/i.test(institution)
+      )
+        break;
+      rows.push({
+        institution,
+        qualification,
+        field_of_study: "",
+        graduation_year: "",
+      });
+    }
+    return rows;
+  }
   const anchors = body.flatMap((line, index) =>
     /^(?:INSTITUT|INSTITUTE|UNIVERSITAS|UNIVERSITY|COLLEGE)\b/i.test(line) &&
     !/\b(?:19|20)\d{2}\b/.test(line)

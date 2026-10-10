@@ -276,3 +276,34 @@ assert.ok(
     project_history: [],
   }).missedObservedSections.includes("projects"),
 );
+
+// Deidentified qualification-first table: absent years remain absent.
+const degreeTable = `SAP Consultant
+Education
+Qualification	Institution
+Masterof Computer Application	Example University
+Bachelor of Computer Application	Second University
+Project Undertaken
+Bachelor of Project Management	Client University
+Jan 2020 - Present`;
+const degrees = enrichCandidateUpload({}, degreeTable).education;
+assert.equal(degrees.length, 2);
+assert.ok(
+  typeof degrees[0] === "object" &&
+    "qualification" in degrees[0] &&
+    "graduation_year" in degrees[0],
+);
+assert.ok(typeof degrees[1] === "object" && "graduation_year" in degrees[1]);
+assert.equal(degrees[0].qualification, "Masterof Computer Application");
+assert.equal(degrees[0].institution, "Example University");
+assert.equal(degrees[0].graduation_year, "");
+assert.equal(degrees[1].graduation_year, "");
+assert.equal(
+  enrichCandidateUpload(
+    {},
+    degreeTable.replace("Example University", "Client: Example University"),
+  ).education.some(
+    (row: any) => row.institution === "Client: Example University",
+  ),
+  false,
+);
