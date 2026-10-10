@@ -201,7 +201,10 @@ Other Services Ltd.
 Position Title: SAP BW Consultant
 Duration: Nov 2012 - Dec 2014
 Client: Must Not Borrow
+Declaration
+Company
 `);
+assert.equal(narrativeProject.experience.length, 2, "A stray Company label cannot suppress employment cards");
 const gstProject = narrativeProject.projects.find(row => row.name === "GST implementation");
 assert.ok(gstProject, "Explicit narrative project role must not be omitted");
 assert.equal(gstProject.role, "technical coordinator & ABAP developer");
