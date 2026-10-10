@@ -77,8 +77,6 @@ async function readShortlist(request: Request) {
         ids.length ? ids : ["00000000-0000-4000-8000-000000000000"],
       );
     else query = query.range((page - 1) * 50, page * 50 - 1);
-    const { data, error } = await query;
-    if (error) throw error;
     if (ids) {
       let countQuery = database
         .from(TABLE)
@@ -88,13 +86,18 @@ async function readShortlist(request: Request) {
       countQuery = auth.scope.organizationId
         ? countQuery.eq("organization_id", auth.scope.organizationId)
         : countQuery.is("organization_id", null);
-      const { count, error: countError } = await countQuery;
+      const [{ data, error }, { count, error: countError }] = await Promise.all(
+        [query, countQuery],
+      );
+      if (error) throw error;
       if (countError) throw countError;
       return json({
         candidateIds: (data || []).map((row) => row.candidate_id),
         count: count || 0,
       });
     }
+    const { data, error } = await query;
+    if (error) throw error;
     const rows = data || [];
     const eligible = await loadCandidateSearchMutationEligibility(
       database,
@@ -169,20 +172,32 @@ async function mutate(request: Request, method: "POST" | "DELETE") {
           { error: "The candidate is not available for shortlisting." },
           409,
         );
-      const { error } = await database.from(TABLE).upsert(
-        {
-          organization_id: auth.scope.organizationId,
-          owner_profile_id: auth.scope.profileId,
-          scope_key: selection.key,
-          job_id: selection.jobId,
-          candidate_id: candidateId.toLowerCase(),
-        },
-        {
-          onConflict: "owner_profile_id,scope_key,candidate_id",
-          ignoreDuplicates: true,
-        },
-      );
+      const { data: inserted, error } = await database
+        .from(TABLE)
+        .upsert(
+          {
+            organization_id: auth.scope.organizationId,
+            owner_profile_id: auth.scope.profileId,
+            scope_key: selection.key,
+            job_id: selection.jobId,
+            candidate_id: candidateId.toLowerCase(),
+          },
+          {
+            onConflict: "owner_profile_id,scope_key,candidate_id",
+            ignoreDuplicates: true,
+          },
+        )
+        .select("candidate_id,organization_id")
+        .maybeSingle();
       if (error) throw error;
+      // A returned insert is already scoped to this authorization. Avoid a
+      // redundant read for new saves; ignored duplicates still need the
+      // ownership check below (including reassignment to another organization).
+      if (
+        inserted?.candidate_id === candidateId.toLowerCase() &&
+        inserted.organization_id === auth.scope.organizationId
+      )
+        return json({ candidateId, shortlisted: true });
       // The unique constraint predates organization scope. A reassigned owner
       // can conflict with an old organization's row; ignoreDuplicates alone
       // would otherwise report success while the new shortlist stays empty.
@@ -196,7 +211,10 @@ async function mutate(request: Request, method: "POST" | "DELETE") {
       if (savedError) throw savedError;
       if (!saved)
         return json(
-          { error: "This candidate is already saved under a previous organization. Contact an admin to resolve ownership." },
+          {
+            error:
+              "This candidate is already saved under a previous organization. Contact an admin to resolve ownership.",
+          },
           409,
         );
       return json({ candidateId, shortlisted: true });
@@ -225,8 +243,14 @@ async function timedShortlist(operation: () => Promise<Response>) {
   const startedAt = performance.now();
   const response = await operation();
   const durationMs = performance.now() - startedAt;
-  response.headers.append("Server-Timing", `shortlist;dur=${durationMs.toFixed(1)}`);
-  console.info("[shortlist] request timing", JSON.stringify({ handlerMs: Math.round(durationMs) }));
+  response.headers.append(
+    "Server-Timing",
+    `shortlist;dur=${durationMs.toFixed(1)}`,
+  );
+  console.info(
+    "[shortlist] request timing",
+    JSON.stringify({ handlerMs: Math.round(durationMs) }),
+  );
   return response;
 }
 export async function GET(request: Request) {

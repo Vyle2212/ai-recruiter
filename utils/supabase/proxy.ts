@@ -1,3 +1,4 @@
+import { recruiterSearchProfilePrefetch } from "../../lib/recruiterSearchProfilePrefetch";
 import { supabaseServerCookieOptions } from "../../lib/supabaseServerCookiePolicy";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
@@ -199,7 +200,7 @@ export async function updateRecruiterApiSession(request: NextRequest) {
   const authorization = await authorizeRecruiterApiAccess({
     permission: policy.requiredPermission,
     routePolicyId: policy.id,
-    adapter: {
+    adapter: recruiterSearchProfilePrefetch({
       async getUser() {
         const {
           data: { user },
@@ -229,7 +230,14 @@ export async function updateRecruiterApiSession(request: NextRequest) {
           error,
         };
       },
-    },
+    }, async () => {
+      // Speculative RLS-bound read only; fresh getUser still authorizes.
+      const { data, error } = await supabase.auth.getSession();
+      const subject = data.session?.user?.id;
+      return !error && typeof subject === "string" &&
+        /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(subject)
+        ? subject : null;
+    }),
     log(fields) {
       console.warn(
         JSON.stringify({
