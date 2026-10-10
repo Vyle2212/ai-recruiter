@@ -21,6 +21,20 @@ Jun 2012 - Present
 Skills
 Education
 `;
+for (const product of ["SAP Cloud for Customer", "SAP B1"]) {
+  assert.equal(
+    classifyCandidateText(
+      `Example Person\nEmail example@example.invalid\nPhone +60123456789\nWORK EXPERIENCE\n${product} consultant performing configuration and integration.\nEducation\nBachelor of Computing`,
+    ).recordType,
+    "SAP_CV",
+  );
+}
+assert.equal(
+  classifyCandidateText(
+    `Example Person\nEmail example@example.invalid\nPhone +60123456789\nWORK EXPERIENCE\nI am currently working as a SAP certified solutions advisor.\nEducation\nBachelor of Computing`,
+  ).recordType,
+  "SAP_CV",
+);
 assert.equal(
   classifyCandidateText(`Example Person
 Email example@example.invalid
@@ -42,6 +56,18 @@ assert.ok(
   classifyCandidateText(unspecifiedTechnicalSource).signals.includes(
     "sap_career_role_module_unspecified",
   ),
+);
+assert.equal(
+  classifyCandidateText(`Example Person
+Email example@example.invalid
+Phone +60123456789
+WORK EXPERIENCE
+BI Solution Consultant
+Project: Migrate data from SAP R3 to ECC6 using SAP BO Data Services.
+Education: Bachelor of Computing
+`).recordType,
+  "SAP_CV",
+  "Source SAP migration verbs must retain a genuine SAP delivery profile",
 );
 assert.equal(
   classifyCandidateText(

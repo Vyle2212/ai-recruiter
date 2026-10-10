@@ -27,6 +27,8 @@ const SAP_MODULE_PATTERNS: Array<[string, RegExp]> = [
   ["ARIBA", /\b(SAP\s+ARIBA|ARIBA\b)\b/i],
   ["CONCUR", /\b(SAP\s+CONCUR|CONCUR\b)\b/i],
   ["MDG", /\b(SAP\s+MDG|MASTER\s+DATA\s+GOVERNANCE|\bMDG\b)\b/i],
+  ["C4C", /\b(?:SAP\s+Cloud\s+for\s+Customer|SAP\s+C4C|C4C|SAP\s+CX)\b/i],
+  ["B1", /\bSAP\s+(?:B1|Business\s+One)\b/i],
   ["GRC", /\b(SAP\s+GRC|GRC\b|AUTHORI[ZS]ATION|SAP\s+SECURITY)\b/i],
   ["SCM", /\b(SAP\s+SCM|SUPPLY\s+CHAIN\s+MANAGEMENT|APO|IBP|PPDS|PP\/DS)\b/i],
 ];
@@ -231,7 +233,7 @@ export function classifyCandidateText(rawText: string, fileName?: string): Candi
 
   // An explicit SAP career title confirms the product, not a specific module.
   // Generic Technical Consultant can mean any ERP and cannot imply ABAP.
-  const explicitSapCareerRole = String(rawText || "").split(/\r?\n/).some(line =>
+  const explicitSapCareerRole = /\bworking as (?:an? )?SAP (?:certified )?solutions? advisor\b/i.test(text) || String(rawText || "").split(/\r?\n/).some(line =>
     /^\s*(?:career history\s+|(?:title|position|current role)\s*:\s*)?SAP\s+(?:(?:senior|sr\.?|lead|principal|junior|associate)\s+)?(?:(?:technical|functional|support)\s+)?(?:consultant|developer|architect|administrator|engineer|analyst|specialist|manager)\b/i.test(line),
   );
 
@@ -239,7 +241,7 @@ export function classifyCandidateText(rawText: string, fileName?: string): Candi
   if (/\b(SAP|S\/4HANA|S4HANA|ECC|FIORI|ABAP|BASIS)\b/i.test(upper)) signals.push("sap_keyword");
   const sapDeliverySegment = String(rawText || "").split(/\n|[.!?](?:\s|$)/).some(segment =>
     /\b(?:SAP|S\/4HANA|S4HANA|ECC)\b/i.test(segment) &&
-    /\b(?:implementation|rollout|support|AMS|hypercare|migration|greenfield|brownfield)\b/i.test(segment),
+    /\b(?:implement(?:ation|ed|ing)?|roll[ -]?out|support(?:ed|ing)?|AMS|hypercare|migrat(?:e|ed|ing|ion)|greenfield|brownfield)\b/i.test(segment),
   );
   if (sapDeliverySegment) signals.push("sap_delivery_keyword");
 
