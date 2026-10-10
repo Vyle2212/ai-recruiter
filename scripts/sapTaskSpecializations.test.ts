@@ -292,17 +292,60 @@ assert.equal(
 );
 
 // Soft-wrapped implementation responsibilities retain their own explicit focus.
-const wrappedTreasury = "Consultant led the implementation of\nFSCM module with focus of TRM. From requirements and solution design,\nthe consultant conducted End User Training and implemented financial\ninstruments.";
-assert.deepEqual(read(wrappedTreasury), [{
-  module: "TRM", specialization: "Debt and Investment Management", involvement: "delivery",
-}]);
-assert.equal(read("Configured SAP TRM financial instruments and conducted End User Training.")[0].involvement, "delivery");
-assert.equal(read("As an end-user configured SAP TRM financial instruments.")[0].involvement, "end_user");
-assert.deepEqual(read("Consultant led the implementation of FSCM module with focus of TRM.\n\nImplemented financial instruments."), []);
-assert.deepEqual(read("Consultant led the implementation of FSCM module with focus of TRM.\nProject: another implementation\nImplemented financial instruments."), []);
-assert.deepEqual(read("Consultant led the implementation of FSCM module with focus of TRM. Configured SAP MM procurement. Implemented financial instruments."), []);
+const wrappedTreasury =
+  "Consultant led the implementation of\nFSCM module with focus of TRM. From requirements and solution design,\nthe consultant conducted End User Training and implemented financial\ninstruments.";
+assert.deepEqual(read(wrappedTreasury), [
+  {
+    module: "TRM",
+    specialization: "Debt and Investment Management",
+    involvement: "delivery",
+  },
+]);
+assert.equal(
+  read(
+    "Configured SAP TRM financial instruments and conducted End User Training.",
+  )[0].involvement,
+  "delivery",
+);
+assert.equal(
+  read("As an end-user configured SAP TRM financial instruments.")[0]
+    .involvement,
+  "end_user",
+);
+assert.deepEqual(
+  read(
+    "Consultant led the implementation of FSCM module with focus of TRM.\n\nImplemented financial instruments.",
+  ),
+  [],
+);
+assert.deepEqual(
+  read(
+    "Consultant led the implementation of FSCM module with focus of TRM.\nProject: another implementation\nImplemented financial instruments.",
+  ),
+  [],
+);
+assert.deepEqual(
+  read(
+    "Consultant led the implementation of FSCM module with focus of TRM. Configured SAP MM procurement. Implemented financial instruments.",
+  ),
+  [],
+);
 
 // Domain ownership starts at the explicit focus, never at earlier prose.
-assert.deepEqual(read("Implemented financial instruments. Consultant led the implementation of FSCM module with focus on TRM."), []);
-assert.equal(read("End User Training: configured SAP TRM financial instruments for training exercises.")[0].involvement, "exposure");
-assert.equal(read("SAP TRM Consultant\n- End-user configured financial instruments.")[0].involvement, "end_user");
+assert.deepEqual(
+  read(
+    "Implemented financial instruments. Consultant led the implementation of FSCM module with focus on TRM.",
+  ),
+  [],
+);
+assert.equal(
+  read(
+    "End User Training: configured SAP TRM financial instruments for training exercises.",
+  )[0].involvement,
+  "exposure",
+);
+assert.equal(
+  read("SAP TRM Consultant\n- End-user configured financial instruments.")[0]
+    .involvement,
+  "end_user",
+);

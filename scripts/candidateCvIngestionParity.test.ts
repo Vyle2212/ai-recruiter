@@ -1,3 +1,5 @@
+import { buildCandidateProfile } from "../lib/candidateProfile";
+import { reExtractCandidate } from "../lib/candidateReExtractionEngine";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
@@ -1328,11 +1330,45 @@ assert.deepEqual(compoundBahasa.languages, [
 ]);
 
 // Numeric dates cannot become contact information or swallow a later phone.
-for (const numericDate of ["01.01.2020", "31-12-1999", "2020-01-01", "2019 - 2024"]) {
+for (const numericDate of [
+  "01.01.2020",
+  "31-12-1999",
+  "2020-01-01",
+  "2019 - 2024",
+]) {
   assert.equal(extractPhone(numericDate), null);
-  assert.ok(!enrichCandidateUpload({}, `Date of birth: ${numericDate}\nSAP Consultant`).phone);
+  assert.ok(
+    !enrichCandidateUpload({}, `Date of birth: ${numericDate}\nSAP Consultant`)
+      .phone,
+  );
 }
 assert.equal(extractPhone("01.01.2020\n+65 9123 4567"), "+65 9123 4567");
 assert.equal(extractPhone("Mobile: 0812 3456 7890"), "0812 3456 7890");
-assert.equal(enrichCandidateUpload({phone: "0812 3456 7890"}, "SAP Consultant").phone, "0812 3456 7890");
-assert.ok(!enrichCandidateUpload({}, "Phone: 01.01.2020\nSAP Consultant").phone);
+assert.equal(
+  enrichCandidateUpload({ phone: "0812 3456 7890" }, "SAP Consultant").phone,
+  "0812 3456 7890",
+);
+assert.ok(
+  !enrichCandidateUpload({}, "Phone: 01.01.2020\nSAP Consultant").phone,
+);
+
+// Profile rendering and re-extraction share the same numeric-date exclusion.
+for (const numericDate of ["01.01.2020", "31-12-1999", "2020-01-01"]) {
+  const candidate = {
+    id: "synthetic-contact-boundary",
+    name: "Example Candidate",
+    raw_text: `Phone: ${numericDate}\nSAP Consultant`,
+  };
+  assert.equal(buildCandidateProfile(candidate).phone, null);
+  assert.equal(reExtractCandidate(candidate).suggested.phone, "");
+}
+const adjacentAddress = {
+  id: "synthetic-address-boundary",
+  name: "Example Candidate",
+  raw_text: "Phone: +65 9123 4567\n9 Example Road\nSAP Consultant",
+};
+assert.equal(buildCandidateProfile(adjacentAddress).phone, "+65 9123 4567");
+assert.equal(
+  reExtractCandidate(adjacentAddress).suggested.phone,
+  "+65 9123 4567",
+);

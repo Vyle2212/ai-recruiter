@@ -120,21 +120,39 @@ export function extractSapTaskSpecializations(
   // Recover soft-wrapped responsibility prose only when the paragraph itself
   // explicitly identifies TRM as the focus of an FSCM implementation. Never
   // carry this ownership across blank paragraphs, headings or another module.
-  const normalized = source.normalize("NFKC").split(/\n\s*\n/).map((block) => {
-    const joined = block.replace(/\r?\n/g, " ").trim();
-    if (
-      !/\bimplementation of FSCM module with focus (?:of|on) TRM\b/i.test(joined) ||
-      /(?:^|\n)\s*(?:[-*•]|project\s*:|client\s*:|employer\s*:|ROLLOUT\b|IMPLEMENTATION\s*[–—-])/i.test(block) ||
-      /\bSAP\s+(?:MM|SD|EWM|TM|HCM|PP|FICO)\b/i.test(joined)
-    ) return block;
-    let hasExplicitFocus = false;
-    return joined.split(/(?<=[.!?])\s+/).map((sentence) => {
-      if (/\bimplementation of FSCM module with focus (?:of|on) TRM\b/i.test(sentence))
-        hasExplicitFocus = true;
-      return hasExplicitFocus && !/\b(?:SAP|S\/?4HANA|FSCM)\b/i.test(sentence)
-        ? `SAP TRM: ${sentence}` : sentence;
-    }).join("\n");
-  }).join("\n\n");
+  const normalized = source
+    .normalize("NFKC")
+    .split(/\n\s*\n/)
+    .map((block) => {
+      const joined = block.replace(/\r?\n/g, " ").trim();
+      if (
+        !/\bimplementation of FSCM module with focus (?:of|on) TRM\b/i.test(
+          joined,
+        ) ||
+        /(?:^|\n)\s*(?:[-*•]|project\s*:|client\s*:|employer\s*:|ROLLOUT\b|IMPLEMENTATION\s*[–—-])/i.test(
+          block,
+        ) ||
+        /\bSAP\s+(?:MM|SD|EWM|TM|HCM|PP|FICO)\b/i.test(joined)
+      )
+        return block;
+      let hasExplicitFocus = false;
+      return joined
+        .split(/(?<=[.!?])\s+/)
+        .map((sentence) => {
+          if (
+            /\bimplementation of FSCM module with focus (?:of|on) TRM\b/i.test(
+              sentence,
+            )
+          )
+            hasExplicitFocus = true;
+          return hasExplicitFocus &&
+            !/\b(?:SAP|S\/?4HANA|FSCM)\b/i.test(sentence)
+            ? `SAP TRM: ${sentence}`
+            : sentence;
+        })
+        .join("\n");
+    })
+    .join("\n\n");
   for (const line of normalized.split(/\r?\n/)) {
     const text = line.trim();
     if (!text) {
@@ -188,14 +206,16 @@ export function extractSapTaskSpecializations(
                 segment,
               )
             ? "delivery"
-            : /\b(?:processed|posted|used|operated|ran)\b/i.test(
-                  segment,
-                )
+            : /\b(?:processed|posted|used|operated|ran)\b/i.test(segment)
               ? "end_user"
               : "exposure";
     // Training recipients are not the actor: a consultant conducting end-user
     // training may still be implementing the solution.
-    if (/(?:^|:\s*[-*•]?\s*)(?:as (?:an? )?)?end[- ]user\b(?!\s+(?:training|education|documentation|support))|\bas an? end[- ]user\b(?!\s+(?:training|education|documentation|support))/i.test(segment))
+    if (
+      /(?:^|:\s*[-*•]?\s*)(?:as (?:an? )?)?end[- ]user\b(?!\s+(?:training|education|documentation|support))|\bas an? end[- ]user\b(?!\s+(?:training|education|documentation|support))/i.test(
+        segment,
+      )
+    )
       involvement = "end_user";
     else if (
       involvement === "delivery" &&

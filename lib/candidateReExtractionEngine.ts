@@ -1,3 +1,4 @@
+import { sourcePhoneIsNumericDate } from "./cvPhoneEvidence";
 import { classifyCandidateSearchVisibility } from "./candidateSearchVisibility";
 import { classifySearchableProfileQuality } from "./searchableProfileQualityGate";
 import { cleanTalentSearchTitle, isTalentSearchBadDisplayName, isTalentSearchPlaceholderName, safeTalentSearchCompany } from "./talentSearchDisplay";
@@ -180,7 +181,7 @@ function extractPhone(candidate: AnyRecord, raw: string) {
     const digits = value.replace(/\D/g, "");
     const looksLikeDateRange = /\b(?:19|20)\d{2}\s*(?:-|\u2013|\u2014|to)\s*(?:19|20)\d{2}\b/i.test(evidenceText);
     const looksLikeCompactDate = /^(?:19|20)\d{6}$/.test(digits) || /^(?:19|20)\d{2}(?:19|20)\d{2}$/.test(digits);
-    if (digits.length >= 8 && digits.length <= 15 && !looksLikeDateRange && !looksLikeCompactDate) {
+    if (digits.length >= 8 && digits.length <= 15 && !looksLikeDateRange && !looksLikeCompactDate && !sourcePhoneIsNumericDate(value)) {
       return confidence(clean(value), 84, "resume_contact", evidenceText);
     }
   }
