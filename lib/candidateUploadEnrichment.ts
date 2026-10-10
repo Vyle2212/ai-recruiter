@@ -794,7 +794,11 @@ export function enrichCandidateUpload(
   // records before deduplicating. Never copy employment dates to a project.
   const projects = mergeGroundedProjects(
     canonicalProjects,
-    [...explicitProjects, ...positioned.projects, ...embeddedSapEmploymentProjects(rawText)],
+    [
+      ...explicitProjects,
+      ...positioned.projects,
+      ...embeddedSapEmploymentProjects(rawText),
+    ],
     rawText,
   );
   const education = positioned.education.length
